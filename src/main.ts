@@ -691,7 +691,9 @@ function render2d(): void {
 
   drawGrid(width, height);
   state.entities.filter(isRoom).forEach(drawRoom);
-  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach(drawWall2d);
+  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wall) => {
+    getVisibleWallSegments(wall).forEach(drawWall2d);
+  });
   state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
   state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   state.entities.filter(isFurniture).forEach(drawFurniture2d);
@@ -845,8 +847,20 @@ function drawFurniture2d(furniture: Furniture): void {
 function drawShape2d(shape: Shape): void {
   const selected = state.selectedId === shape.id;
   ctx.save();
-  ctx.strokeStyle = selected ? "#2775d1" : "#1e2430";
-  ctx.lineWidth = (selected ? 3.2 : 2.4) / view.zoom;
+  if (selected) {
+    ctx.strokeStyle = "rgba(39, 117, 209, 0.35)";
+    ctx.lineWidth = (WALL_THICKNESS_2D + 6) / view.zoom;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    if (shape.kind === "circle") {
+      ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
+    } else {
+      ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
+    }
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "#2f3b4d";
+  ctx.lineWidth = WALL_THICKNESS_2D / view.zoom;
   ctx.lineCap = "round";
   ctx.beginPath();
   if (shape.kind === "circle") {
@@ -929,7 +943,7 @@ function drawResizeHandles(entity: Room | Furniture): void {
 function rebuildThree(): void {
   disposeGroup(planGroup);
   const rooms = state.entities.filter(isRoom);
-  const bounds = getBounds((entity) => entity.type !== "shape");
+  const bounds = getBounds();
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
 
   if (rooms.length === 0) {
@@ -939,6 +953,7 @@ function rebuildThree(): void {
   }
 
   state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wall) => addWall3d(wall, center));
+  state.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center));
   state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach((door) => addDoor3d(door, center));
   state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach((windowEl) => addWindow3d(windowEl, center));
   state.entities.filter(isFurniture).forEach((furniture) => addFurniture3d(furniture, center));
@@ -968,31 +983,56 @@ function addRoom3d(room: Room, center: Point): void {
 }
 
 function addWall3d(wall: LinearElement, center: Point): void {
+  getVisibleWallSegments(wall).forEach((segment) => addStraightWall3d(segment, center, wall.id));
+}
+
+function addStraightWall3d(wall: LinearElement, center: Point, entityId = wall.id, showSelection = true): void {
   const length = distance(wall) * SCALE_3D;
-  const direction = lineDirection(wall);
-  const geometry = new THREE.BoxGeometry(
-    direction === "horizontal" ? length : WALL_THICKNESS_2D * SCALE_3D,
-    WALL_HEIGHT,
-    direction === "horizontal" ? WALL_THICKNESS_2D * SCALE_3D : length,
-  );
+  if (length <= 0.02) return;
+  const thickness = WALL_THICKNESS_2D * SCALE_3D;
+  const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
+  const geometry = new THREE.BoxGeometry(length, WALL_HEIGHT, thickness);
   const mesh = new THREE.Mesh(geometry, wallMaterial);
   const mid = midpoint(wall);
   const pos = to3d(mid.x, mid.y, center);
   mesh.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
+  mesh.rotation.y = -angle;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  markSelectable(mesh, wall.id);
+  markSelectable(mesh, entityId);
   planGroup.add(mesh);
 
   const cap = new THREE.Mesh(
-    new THREE.BoxGeometry(geometry.parameters.width + 0.01, 0.08, geometry.parameters.depth + 0.01),
+    new THREE.BoxGeometry(length + 0.01, 0.08, thickness + 0.01),
     wallCapMaterial,
   );
   cap.position.set(pos.x, WALL_HEIGHT + 0.04, pos.z);
+  cap.rotation.y = -angle;
   cap.castShadow = true;
-  markSelectable(cap, wall.id);
+  markSelectable(cap, entityId);
   planGroup.add(cap);
-  addSelectionBox(mesh, wall.id);
+  if (showSelection) {
+    addSelectionBox(mesh, entityId);
+  }
+}
+
+function addShapeWall3d(shape: Shape, center: Point): void {
+  const start = shape.kind === "circle" ? 0 : shape.startAngle;
+  const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - shape.startAngle);
+  const segmentCount = Math.max(12, Math.ceil((shape.r * sweep) / 24));
+  for (let index = 0; index < segmentCount; index += 1) {
+    const a1 = start + (sweep * index) / segmentCount;
+    const a2 = start + (sweep * (index + 1)) / segmentCount;
+    const segment: LinearElement = {
+      id: shape.id,
+      type: "wall",
+      x1: shape.x + Math.cos(a1) * shape.r,
+      y1: shape.y + Math.sin(a1) * shape.r,
+      x2: shape.x + Math.cos(a2) * shape.r,
+      y2: shape.y + Math.sin(a2) * shape.r,
+    };
+    addStraightWall3d(segment, center, shape.id, false);
+  }
 }
 
 function addDoor3d(door: LinearElement, center: Point): void {
@@ -1189,7 +1229,7 @@ function updateStats(): void {
   const walls = state.entities.filter((entity) => entity.type === "wall").length;
   const furniture = state.entities.filter(isFurniture).length;
   const shapes = state.entities.filter(isShape).length;
-  const threeParts = state.entities.filter((entity) => entity.type !== "shape").length;
+  const threeParts = state.entities.length;
   planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furniture}${shapes ? ` / 図形${shapes}` : ""}`;
   threeStats.textContent = `部屋${rooms}・部材${threeParts}を自動変換`;
 }
@@ -1628,6 +1668,78 @@ function midpoint(entity: LinearElement): Point {
 
 function distance(entity: LinearElement): number {
   return Math.hypot(entity.x2 - entity.x1, entity.y2 - entity.y1);
+}
+
+interface WallOpening {
+  from: number;
+  to: number;
+}
+
+function getVisibleWallSegments(wall: LinearElement): LinearElement[] {
+  const direction = lineDirection(wall);
+  const wallFrom = direction === "horizontal" ? Math.min(wall.x1, wall.x2) : Math.min(wall.y1, wall.y2);
+  const wallTo = direction === "horizontal" ? Math.max(wall.x1, wall.x2) : Math.max(wall.y1, wall.y2);
+  const openings = getWallOpenings(wall, wallFrom, wallTo);
+  if (openings.length === 0) return [wall];
+
+  const merged = mergeOpenings(openings);
+  const intervals: WallOpening[] = [];
+  let cursor = wallFrom;
+  merged.forEach((opening) => {
+    if (opening.from - cursor > 2) {
+      intervals.push({ from: cursor, to: opening.from });
+    }
+    cursor = Math.max(cursor, opening.to);
+  });
+  if (wallTo - cursor > 2) {
+    intervals.push({ from: cursor, to: wallTo });
+  }
+
+  return intervals.map((interval) => intervalToWallSegment(wall, interval));
+}
+
+function getWallOpenings(wall: LinearElement, wallFrom: number, wallTo: number): WallOpening[] {
+  const direction = lineDirection(wall);
+  const wallLinePosition = direction === "horizontal" ? (wall.y1 + wall.y2) / 2 : (wall.x1 + wall.x2) / 2;
+  const tolerance = WALL_THICKNESS_2D * 1.4;
+  const clearance = WALL_THICKNESS_2D * 0.7;
+
+  return state.entities
+    .filter((entity): entity is LinearElement => entity.type === "door" || entity.type === "window")
+    .filter((opening) => lineDirection(opening) === direction)
+    .map((opening) => {
+      const openingLinePosition = direction === "horizontal" ? (opening.y1 + opening.y2) / 2 : (opening.x1 + opening.x2) / 2;
+      if (Math.abs(openingLinePosition - wallLinePosition) > tolerance) return null;
+      const openingFrom = direction === "horizontal" ? Math.min(opening.x1, opening.x2) : Math.min(opening.y1, opening.y2);
+      const openingTo = direction === "horizontal" ? Math.max(opening.x1, opening.x2) : Math.max(opening.y1, opening.y2);
+      const from = clamp(openingFrom - clearance, wallFrom, wallTo);
+      const to = clamp(openingTo + clearance, wallFrom, wallTo);
+      return to > from ? { from, to } : null;
+    })
+    .filter((opening): opening is WallOpening => Boolean(opening));
+}
+
+function mergeOpenings(openings: WallOpening[]): WallOpening[] {
+  const sorted = [...openings].sort((a, b) => a.from - b.from);
+  const merged: WallOpening[] = [];
+  sorted.forEach((opening) => {
+    const previous = merged[merged.length - 1];
+    if (!previous || opening.from > previous.to) {
+      merged.push({ ...opening });
+      return;
+    }
+    previous.to = Math.max(previous.to, opening.to);
+  });
+  return merged;
+}
+
+function intervalToWallSegment(wall: LinearElement, interval: WallOpening): LinearElement {
+  if (lineDirection(wall) === "horizontal") {
+    const y = (wall.y1 + wall.y2) / 2;
+    return { ...wall, x1: interval.from, y1: y, x2: interval.to, y2: y };
+  }
+  const x = (wall.x1 + wall.x2) / 2;
+  return { ...wall, x1: x, y1: interval.from, x2: x, y2: interval.to };
 }
 
 interface Bounds {
