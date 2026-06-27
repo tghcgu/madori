@@ -178,10 +178,12 @@ const roomMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
 const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78 });
 const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8 });
 const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x99683d, roughness: 0.72 });
+const doorFrameMaterial = new THREE.MeshStandardMaterial({ color: 0xd8d2c8, roughness: 0.74 });
+const windowFrameMaterial = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, roughness: 0.52, metalness: 0.08 });
 const windowMaterial = new THREE.MeshStandardMaterial({
   color: 0x78b8d8,
   transparent: true,
-  opacity: 0.52,
+  opacity: 0.42,
   roughness: 0.18,
   metalness: 0.05,
 });
@@ -1037,60 +1039,82 @@ function addShapeWall3d(shape: Shape, center: Point): void {
 
 function addDoor3d(door: LinearElement, center: Point): void {
   const length = Math.max(distance(door) * SCALE_3D, 0.7);
-  const direction = lineDirection(door);
-  const frameThickness = 0.08;
-  const frameHeight = 2.55;
+  const frameThickness = 0.1;
+  const frameHeight = 2.62;
+  const panelHeight = 2.42;
+  const panelThickness = 0.08;
+  const angle = lineAngle(door);
   const mid = midpoint(door);
-  const pos = to3d(mid.x, mid.y, center);
 
-  const slab = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      direction === "horizontal" ? length : frameThickness,
-      0.08,
-      direction === "horizontal" ? frameThickness : length,
-    ),
-    doorMaterial,
-  );
-  slab.position.set(pos.x, 0.08, pos.z);
-  slab.castShadow = true;
-  markSelectable(slab, door.id);
-  planGroup.add(slab);
-
-  const hingePoint = to3d(door.x1, door.y1, center);
-  const panel = new THREE.Mesh(new THREE.BoxGeometry(length, 0.06, 0.04), doorMaterial);
-  panel.position.set(
-    hingePoint.x + (direction === "horizontal" ? length / 2 : length / 2),
-    frameHeight / 2,
-    hingePoint.z + (direction === "horizontal" ? -length / 2 : length / 2),
-  );
-  panel.rotation.y = direction === "horizontal" ? Math.PI / 4 : -Math.PI / 4;
-  panel.scale.y = frameHeight / 0.06;
+  const panel = addOrientedBox(mid, center, length * 0.92, panelHeight, panelThickness, panelHeight / 2, angle, doorMaterial, door.id);
   panel.castShadow = true;
-  markSelectable(panel, door.id);
-  planGroup.add(panel);
-  addSelectionBox(slab, door.id);
+  panel.receiveShadow = true;
+
+  const handleOffset = localOffset3d(length * 0.34, panelThickness * 0.72, angle);
+  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.MeshStandardMaterial({ color: 0xd7b56d, roughness: 0.42, metalness: 0.25 }));
+  const panelPos = to3d(mid.x, mid.y, center);
+  handle.position.set(panelPos.x + handleOffset.x, 1.2, panelPos.z + handleOffset.z);
+  handle.castShadow = true;
+  markSelectable(handle, door.id);
+  planGroup.add(handle);
+
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.08, frameThickness, 0.04, angle, doorFrameMaterial, door.id);
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.12, frameThickness, frameHeight, angle, doorFrameMaterial, door.id);
+
+  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, frameHeight / 2, angle, doorFrameMaterial, door.id);
+  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, frameHeight / 2, angle, doorFrameMaterial, door.id);
+  addSelectionBox(panel, door.id);
 }
 
 function addWindow3d(windowEl: LinearElement, center: Point): void {
   const length = distance(windowEl) * SCALE_3D;
-  const direction = lineDirection(windowEl);
+  const angle = lineAngle(windowEl);
   const mid = midpoint(windowEl);
-  const pos = to3d(mid.x, mid.y, center);
-  const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(
-      direction === "horizontal" ? length : 0.05,
-      1.22,
-      direction === "horizontal" ? 0.05 : length,
-    ),
-    windowMaterial,
-  );
-  glass.position.set(pos.x, 1.62, pos.z);
-  markSelectable(glass, windowEl.id);
-  planGroup.add(glass);
-  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), edgeMaterial);
-  frame.position.copy(glass.position);
-  planGroup.add(frame);
+  const frameThickness = 0.08;
+  const frameDepth = 0.1;
+  const glassHeight = 1.08;
+  const glassY = 1.58;
+  const frameBottom = glassY - glassHeight / 2;
+  const frameTop = glassY + glassHeight / 2;
+
+  const glass = addOrientedBox(mid, center, Math.max(length - frameThickness * 1.2, 0.2), glassHeight, 0.04, glassY, angle, windowMaterial, windowEl.id);
+  glass.receiveShadow = true;
+
+  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameBottom, angle, windowFrameMaterial, windowEl.id);
+  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameTop, angle, windowFrameMaterial, windowEl.id);
+  addOrientedBox({ x: windowEl.x1, y: windowEl.y1 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
+  addOrientedBox({ x: windowEl.x2, y: windowEl.y2 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
+  addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
   addSelectionBox(glass, windowEl.id);
+}
+
+function addOrientedBox(
+  anchor: Point,
+  center: Point,
+  width: number,
+  height: number,
+  depth: number,
+  y: number,
+  angle: number,
+  material: THREE.Material,
+  entityId: string,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  const pos = to3d(anchor.x, anchor.y, center);
+  mesh.position.set(pos.x, y, pos.z);
+  mesh.rotation.y = -angle;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  markSelectable(mesh, entityId);
+  planGroup.add(mesh);
+  return mesh;
+}
+
+function localOffset3d(localX: number, localZ: number, angle: number): { x: number; z: number } {
+  return {
+    x: Math.cos(angle) * localX - Math.sin(angle) * localZ,
+    z: Math.sin(angle) * localX + Math.cos(angle) * localZ,
+  };
 }
 
 function addFurniture3d(furniture: Furniture, center: Point): void {
@@ -1657,6 +1681,10 @@ function isResizable(entity: Entity): entity is Room | Furniture {
 
 function lineDirection(entity: LinearElement): Direction {
   return Math.abs(entity.x2 - entity.x1) >= Math.abs(entity.y2 - entity.y1) ? "horizontal" : "vertical";
+}
+
+function lineAngle(entity: LinearElement): number {
+  return Math.atan2(entity.y2 - entity.y1, entity.x2 - entity.x1);
 }
 
 function midpoint(entity: LinearElement): Point {
