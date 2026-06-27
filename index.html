@@ -81,6 +81,14 @@
                 <i data-lucide="armchair"></i>
                 <span>家具</span>
               </button>
+              <button class="tool-button" type="button" data-tool="circle" title="円">
+                <i data-lucide="circle"></i>
+                <span>円</span>
+              </button>
+              <button class="tool-button" type="button" data-tool="arc" title="円弧">
+                <i data-lucide="rotate-cw"></i>
+                <span>円弧</span>
+              </button>
               <button class="tool-button" type="button" data-tool="erase" title="削除">
                 <i data-lucide="eraser"></i>
                 <span>削除</span>
@@ -101,12 +109,14 @@
           </section>
 
           <section class="tool-section">
-            <h2>雛形</h2>
-            <div class="template-list">
-              <button type="button" data-template="studio">ワンルーム</button>
-              <button type="button" data-template="oneLdk">1LDK</button>
-              <button type="button" data-template="twoLdk">2LDK</button>
-            </div>
+            <details class="template-details">
+              <summary>雛形</summary>
+              <div class="template-list">
+                <button type="button" data-template="studio">ワンルーム</button>
+                <button type="button" data-template="oneLdk">1LDK</button>
+                <button type="button" data-template="twoLdk">2LDK</button>
+              </div>
+            </details>
           </section>
 
           <section class="tool-section">
@@ -121,9 +131,15 @@
               <strong>2D</strong>
               <span id="planStats"></span>
             </div>
-            <button class="icon-button" id="fitButton" type="button" title="表示を整える" aria-label="表示を整える">
-              <i data-lucide="scan"></i>
-            </button>
+            <div class="pane-actions">
+              <button class="toggle-button is-active" id="dimensionToggle" type="button" title="幅・奥行を表示" aria-pressed="true">
+                <i data-lucide="ruler"></i>
+                <span>寸法</span>
+              </button>
+              <button class="icon-button" id="fitButton" type="button" title="表示を整える" aria-label="表示を整える">
+                <i data-lucide="scan"></i>
+              </button>
+            </div>
           </div>
           <canvas id="planCanvas" aria-label="2D間取り編集キャンバス"></canvas>
         </section>

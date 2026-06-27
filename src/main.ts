@@ -3,9 +3,10 @@ import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "erase";
-type EntityType = "room" | "wall" | "door" | "window" | "furniture";
+type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "circle" | "arc" | "erase";
+type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
 type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
+type ShapeKind = "circle" | "arc";
 type DragMode = "draw" | "move" | "resize" | "pan" | "none";
 type Direction = "horizontal" | "vertical";
 type ViewMode = "split" | "plan" | "three";
@@ -46,7 +47,18 @@ interface Furniture {
   rotation: number;
 }
 
-type Entity = Room | LinearElement | Furniture;
+interface Shape {
+  id: string;
+  type: "shape";
+  kind: ShapeKind;
+  x: number;
+  y: number;
+  r: number;
+  startAngle: number;
+  endAngle: number;
+}
+
+type Entity = Room | LinearElement | Furniture | Shape;
 
 interface PlanState {
   entities: Entity[];
@@ -80,6 +92,7 @@ const planStats = requiredElement<HTMLSpanElement>("#planStats");
 const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
 const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
+const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
 const canvasContext = planCanvas.getContext("2d");
 if (!canvasContext) {
   throw new Error("2D canvas is not supported.");
@@ -88,11 +101,12 @@ const ctx: CanvasRenderingContext2D = canvasContext;
 
 const STORAGE_KEY = "madori-quick-3d-plan";
 const VIEW_MODE_KEY = "madori-quick-3d-view-mode";
+const DIMENSION_LABELS_KEY = "madori-quick-3d-dimension-labels";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.03;
 const WALL_THICKNESS_2D = 10;
-const WALL_HEIGHT = 2.55;
+const WALL_HEIGHT = 3.18;
 const BASE_FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; color: number }> = {
   sofa: { label: "ソファ", w: 86, h: 42, color: 0x2b7bc0 },
   table: { label: "テーブル", w: 58, h: 42, color: 0xb98636 },
@@ -107,6 +121,7 @@ const ROOM_COLORS = ["#f5efe4", "#e8f2ed", "#e9eff8", "#f6e8e0", "#eef0e3", "#f0
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
 let viewMode: ViewMode = loadViewMode();
+let showDimensions = loadDimensionLabels();
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -206,6 +221,10 @@ function loadViewMode(): ViewMode {
   return stored === "plan" || stored === "three" || stored === "split" ? stored : "split";
 }
 
+function loadDimensionLabels(): boolean {
+  return localStorage.getItem(DIMENSION_LABELS_KEY) !== "hidden";
+}
+
 function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("button[data-view-mode]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -234,8 +253,18 @@ function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-template]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.template ?? "oneLdk";
+      if (!window.confirm("現在の間取りを雛形で置き換えます。実行しますか？")) {
+        return;
+      }
       replaceState({ entities: makeTemplate(key), selectedId: null }, true);
     });
+  });
+
+  dimensionToggle.addEventListener("click", () => {
+    showDimensions = !showDimensions;
+    localStorage.setItem(DIMENSION_LABELS_KEY, showDimensions ? "visible" : "hidden");
+    updateDimensionToggle();
+    render2d();
   });
 
   document.querySelector<HTMLButtonElement>("#undoButton")?.addEventListener("click", undo);
@@ -270,6 +299,7 @@ function setupUi(): void {
   appResizeObserver.observe(planCanvas);
   appResizeObserver.observe(threeCanvas);
   resizeCanvases();
+  updateDimensionToggle();
   updateUi();
 }
 
@@ -286,6 +316,11 @@ function syncPlanCursor(): void {
     return;
   }
   planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : "crosshair";
+}
+
+function updateDimensionToggle(): void {
+  dimensionToggle.classList.toggle("is-active", showDimensions);
+  dimensionToggle.setAttribute("aria-pressed", String(showDimensions));
 }
 
 function applyViewMode(nextMode: ViewMode, persist = true): void {
@@ -443,6 +478,8 @@ function handlePointerUp(event: PointerEvent): void {
     if (activeTool === "wall") addLineFromDrag("wall", start, end);
     if (activeTool === "door") addLineFromDrag("door", start, end);
     if (activeTool === "window") addLineFromDrag("window", start, end);
+    if (activeTool === "circle") addShapeFromDrag("circle", start, end);
+    if (activeTool === "arc") addShapeFromDrag("arc", start, end);
     commitState();
   }
 
@@ -571,6 +608,23 @@ function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Po
   state.selectedId = line.id;
 }
 
+function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
+  const radius = Math.max(GRID, snap(Math.hypot(end.x - start.x, end.y - start.y)));
+  const endAngle = kind === "arc" ? Math.atan2(end.y - start.y, end.x - start.x) : Math.PI * 2;
+  const shape: Shape = {
+    id: newId("shape"),
+    type: "shape",
+    kind,
+    x: snap(start.x),
+    y: snap(start.y),
+    r: radius,
+    startAngle: kind === "arc" ? -Math.PI / 2 : 0,
+    endAngle,
+  };
+  state.entities.push(shape);
+  state.selectedId = shape.id;
+}
+
 function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): void {
   const moveX = snap(dx);
   const moveY = snap(dy);
@@ -579,6 +633,10 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
     entity.y = snap(origin.y + moveY);
   }
   if (origin.type === "furniture" && entity.type === "furniture") {
+    entity.x = snap(origin.x + moveX);
+    entity.y = snap(origin.y + moveY);
+  }
+  if (origin.type === "shape" && entity.type === "shape") {
     entity.x = snap(origin.x + moveX);
     entity.y = snap(origin.y + moveY);
   }
@@ -637,6 +695,7 @@ function render2d(): void {
   state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
   state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   state.entities.filter(isFurniture).forEach(drawFurniture2d);
+  state.entities.filter(isShape).forEach(drawShape2d);
 
   if (drag.dragMode === "draw" && activeTool !== "furniture") {
     drawPreview(drag.startWorld, drag.currentWorld);
@@ -682,9 +741,11 @@ function drawRoom(room: Room): void {
   ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
   ctx.textBaseline = "top";
   ctx.fillText(room.name, room.x + 10, room.y + 10);
-  ctx.fillStyle = "#687386";
-  ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-  ctx.fillText(`${Math.round(room.w / 20) / 10}m x ${Math.round(room.h / 20) / 10}m`, room.x + 10, room.y + 30);
+  if (showDimensions) {
+    ctx.fillStyle = "#687386";
+    ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, room.x + 10, room.y + 30);
+  }
   if (selected) drawResizeHandles(room);
 }
 
@@ -702,34 +763,42 @@ function drawWindow2d(windowEl: LinearElement): void {
 }
 
 function drawDoor2d(door: LinearElement): void {
-  drawLineElement(door, "#af7142", 8);
-  const direction = lineDirection(door);
   ctx.save();
-  ctx.strokeStyle = "#af7142";
-  ctx.lineWidth = 2 / view.zoom;
-  if (direction === "horizontal") {
-    const x = Math.min(door.x1, door.x2);
-    const y = door.y1;
-    const size = Math.abs(door.x2 - door.x1);
-    ctx.beginPath();
-    ctx.arc(x, y, size, -Math.PI / 2, 0);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + size, y - size);
-    ctx.stroke();
-  } else {
-    const x = door.x1;
-    const y = Math.min(door.y1, door.y2);
-    const size = Math.abs(door.y2 - door.y1);
-    ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI / 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + size, y + size);
-    ctx.stroke();
-  }
+  const selected = state.selectedId === door.id;
+  const length = Math.max(distance(door), GRID);
+  const angle = Math.atan2(door.y2 - door.y1, door.x2 - door.x1);
+  const leafAngle = angle - Math.PI / 2;
+  const leafEnd = {
+    x: door.x1 + Math.cos(leafAngle) * length,
+    y: door.y1 + Math.sin(leafAngle) * length,
+  };
+
+  ctx.lineCap = "butt";
+  ctx.strokeStyle = "#fbfcfe";
+  ctx.lineWidth = (WALL_THICKNESS_2D + 5) / view.zoom;
+  ctx.beginPath();
+  ctx.moveTo(door.x1, door.y1);
+  ctx.lineTo(door.x2, door.y2);
+  ctx.stroke();
+
+  ctx.strokeStyle = selected ? "#2775d1" : "#1e2430";
+  ctx.lineWidth = (selected ? 3.2 : 2.4) / view.zoom;
+  ctx.beginPath();
+  ctx.moveTo(door.x1, door.y1);
+  ctx.lineTo(leafEnd.x, leafEnd.y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(door.x1, door.y1, length, leafAngle, angle, false);
+  ctx.stroke();
+
+  ctx.lineWidth = 4 / view.zoom;
+  ctx.beginPath();
+  ctx.moveTo(door.x1, door.y1);
+  ctx.lineTo(door.x1 + Math.cos(angle + Math.PI / 2) * 10, door.y1 + Math.sin(angle + Math.PI / 2) * 10);
+  ctx.moveTo(door.x2, door.y2);
+  ctx.lineTo(door.x2 + Math.cos(angle + Math.PI / 2) * 10, door.y2 + Math.sin(angle + Math.PI / 2) * 10);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -773,6 +842,30 @@ function drawFurniture2d(furniture: Furniture): void {
   if (selected) drawResizeHandles(furniture);
 }
 
+function drawShape2d(shape: Shape): void {
+  const selected = state.selectedId === shape.id;
+  ctx.save();
+  ctx.strokeStyle = selected ? "#2775d1" : "#1e2430";
+  ctx.lineWidth = (selected ? 3.2 : 2.4) / view.zoom;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  if (shape.kind === "circle") {
+    ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
+  } else {
+    ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
+  }
+  ctx.stroke();
+  if (selected) {
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#2775d1";
+    ctx.lineWidth = 2 / view.zoom;
+    const size = 8 / view.zoom;
+    ctx.fillRect(shape.x - size / 2, shape.y - size / 2, size, size);
+    ctx.strokeRect(shape.x - size / 2, shape.y - size / 2, size, size);
+  }
+  ctx.restore();
+}
+
 function drawPreview(start: Point, current: Point): void {
   ctx.save();
   ctx.setLineDash([8 / view.zoom, 6 / view.zoom]);
@@ -786,6 +879,15 @@ function drawPreview(start: Point, current: Point): void {
     const h = Math.abs(current.y - start.y);
     ctx.fillRect(x, y, w, h);
     ctx.strokeRect(x, y, w, h);
+  } else if (activeTool === "circle" || activeTool === "arc") {
+    const r = Math.max(1, Math.hypot(current.x - start.x, current.y - start.y));
+    ctx.beginPath();
+    if (activeTool === "circle") {
+      ctx.arc(start.x, start.y, r, 0, Math.PI * 2);
+    } else {
+      ctx.arc(start.x, start.y, r, -Math.PI / 2, Math.atan2(current.y - start.y, current.x - start.x));
+    }
+    ctx.stroke();
   } else {
     const line = constrainLine(start, current);
     ctx.beginPath();
@@ -827,7 +929,7 @@ function drawResizeHandles(entity: Room | Furniture): void {
 function rebuildThree(): void {
   disposeGroup(planGroup);
   const rooms = state.entities.filter(isRoom);
-  const bounds = getBounds();
+  const bounds = getBounds((entity) => entity.type !== "shape");
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
 
   if (rooms.length === 0) {
@@ -897,7 +999,7 @@ function addDoor3d(door: LinearElement, center: Point): void {
   const length = Math.max(distance(door) * SCALE_3D, 0.7);
   const direction = lineDirection(door);
   const frameThickness = 0.08;
-  const frameHeight = 2.1;
+  const frameHeight = 2.55;
   const mid = midpoint(door);
   const pos = to3d(mid.x, mid.y, center);
 
@@ -914,7 +1016,7 @@ function addDoor3d(door: LinearElement, center: Point): void {
   markSelectable(slab, door.id);
   planGroup.add(slab);
 
-  const hingePoint = direction === "horizontal" ? to3d(Math.min(door.x1, door.x2), door.y1, center) : to3d(door.x1, Math.min(door.y1, door.y2), center);
+  const hingePoint = to3d(door.x1, door.y1, center);
   const panel = new THREE.Mesh(new THREE.BoxGeometry(length, 0.06, 0.04), doorMaterial);
   panel.position.set(
     hingePoint.x + (direction === "horizontal" ? length / 2 : length / 2),
@@ -937,12 +1039,12 @@ function addWindow3d(windowEl: LinearElement, center: Point): void {
   const glass = new THREE.Mesh(
     new THREE.BoxGeometry(
       direction === "horizontal" ? length : 0.05,
-      0.95,
+      1.22,
       direction === "horizontal" ? 0.05 : length,
     ),
     windowMaterial,
   );
-  glass.position.set(pos.x, 1.35, pos.z);
+  glass.position.set(pos.x, 1.62, pos.z);
   markSelectable(glass, windowEl.id);
   planGroup.add(glass);
   const frame = new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), edgeMaterial);
@@ -956,7 +1058,7 @@ function addFurniture3d(furniture: Furniture, center: Point): void {
   const width = furniture.w * SCALE_3D;
   const depth = furniture.h * SCALE_3D;
   const material = new THREE.MeshStandardMaterial({ color: base.color, roughness: 0.64 });
-  const height = furniture.kind === "bed" ? 0.36 : furniture.kind === "kitchen" ? 0.86 : furniture.kind === "bath" ? 0.46 : 0.52;
+  const height = furniture.kind === "bed" ? 0.58 : furniture.kind === "kitchen" ? 1.1 : furniture.kind === "bath" ? 0.68 : 0.78;
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
   const pos = to3d(furniture.x + furniture.w / 2, furniture.y + furniture.h / 2, center);
   mesh.position.set(pos.x, height / 2 + 0.05, pos.z);
@@ -966,7 +1068,7 @@ function addFurniture3d(furniture: Furniture, center: Point): void {
   planGroup.add(mesh);
 
   if (furniture.kind === "sofa") {
-    addFurniturePart(mesh, width, 0.34, 0.12, 0, height * 0.65, -depth * 0.46, base.color);
+    addFurniturePart(mesh, width, 0.46, 0.14, 0, height * 0.58, -depth * 0.46, base.color);
   }
   if (furniture.kind === "table" || furniture.kind === "desk") {
     addLegs(mesh, width, depth, height, base.color);
@@ -1086,8 +1188,10 @@ function updateStats(): void {
   const rooms = state.entities.filter(isRoom).length;
   const walls = state.entities.filter((entity) => entity.type === "wall").length;
   const furniture = state.entities.filter(isFurniture).length;
-  planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furniture}`;
-  threeStats.textContent = `部屋${rooms}・部材${state.entities.length}を自動変換`;
+  const shapes = state.entities.filter(isShape).length;
+  const threeParts = state.entities.filter((entity) => entity.type !== "shape").length;
+  planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furniture}${shapes ? ` / 図形${shapes}` : ""}`;
+  threeStats.textContent = `部屋${rooms}・部材${threeParts}を自動変換`;
 }
 
 function updatePropertiesPanel(): void {
@@ -1136,6 +1240,36 @@ function updatePropertiesPanel(): void {
       selected.y1 += dy;
       selected.y2 += dy;
     });
+    return;
+  }
+
+  if (selected.type === "shape") {
+    const selectedShape = selected;
+    propertiesPanel.innerHTML = `
+      <div class="property-grid">
+        <label>種類
+          <select id="shapeKindInput">
+            <option value="circle" ${selectedShape.kind === "circle" ? "selected" : ""}>円</option>
+            <option value="arc" ${selectedShape.kind === "arc" ? "selected" : ""}>円弧</option>
+          </select>
+        </label>
+        <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" /></label>
+        <div class="two-col">
+          <label>開始 °<input id="shapeStartInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" /></label>
+          <label>終了 °<input id="shapeEndInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" /></label>
+        </div>
+      </div>
+    `;
+    bindSelect("#shapeKindInput", (value) => {
+      selectedShape.kind = value as ShapeKind;
+      if (selectedShape.kind === "circle") {
+        selectedShape.startAngle = 0;
+        selectedShape.endAngle = Math.PI * 2;
+      }
+    });
+    bindNumber("#shapeRadiusInput", (value) => (selectedShape.r = Math.max(GRID, snap(value))));
+    bindNumber("#shapeStartInput", (value) => (selectedShape.startAngle = degreesToRadians(value)));
+    bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
     return;
   }
 
@@ -1318,6 +1452,10 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
         return { entity, corner: null };
       }
+    } else if (entity.type === "shape") {
+      if (isPointNearShape(point, entity)) {
+        return { entity, corner: null };
+      }
     } else if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
       return { entity, corner: null };
     }
@@ -1465,6 +1603,10 @@ function isFurniture(entity: Entity): entity is Furniture {
   return entity.type === "furniture";
 }
 
+function isShape(entity: Entity): entity is Shape {
+  return entity.type === "shape";
+}
+
 function isLinear(entity: Entity): entity is LinearElement {
   return entity.type === "wall" || entity.type === "door" || entity.type === "window";
 }
@@ -1495,18 +1637,24 @@ interface Bounds {
   h: number;
 }
 
-function getBounds(): Bounds | null {
+function getBounds(includeEntity: (entity: Entity) => boolean = () => true): Bounds | null {
   if (state.entities.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   state.entities.forEach((entity) => {
+    if (!includeEntity(entity)) return;
     if (entity.type === "room" || entity.type === "furniture") {
       minX = Math.min(minX, entity.x);
       minY = Math.min(minY, entity.y);
       maxX = Math.max(maxX, entity.x + entity.w);
       maxY = Math.max(maxY, entity.y + entity.h);
+    } else if (entity.type === "shape") {
+      minX = Math.min(minX, entity.x - entity.r);
+      minY = Math.min(minY, entity.y - entity.r);
+      maxX = Math.max(maxX, entity.x + entity.r);
+      maxY = Math.max(maxY, entity.y + entity.r);
     } else {
       minX = Math.min(minX, entity.x1, entity.x2);
       minY = Math.min(minY, entity.y1, entity.y2);
@@ -1514,6 +1662,9 @@ function getBounds(): Bounds | null {
       maxY = Math.max(maxY, entity.y1, entity.y2);
     }
   });
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null;
+  }
   return { x: minX, y: minY, w: Math.max(GRID, maxX - minX), h: Math.max(GRID, maxY - minY) };
 }
 
@@ -1550,6 +1701,37 @@ function distanceToSegment(point: Point, start: Point, end: Point): number {
   const x = start.x + t * dx;
   const y = start.y + t * dy;
   return Math.hypot(point.x - x, point.y - y);
+}
+
+function isPointNearShape(point: Point, shape: Shape): boolean {
+  const threshold = Math.max(10 / view.zoom, 6);
+  const dist = Math.hypot(point.x - shape.x, point.y - shape.y);
+  if (Math.abs(dist - shape.r) > threshold) return false;
+  if (shape.kind === "circle") return true;
+  return isAngleOnArc(Math.atan2(point.y - shape.y, point.x - shape.x), shape.startAngle, shape.endAngle);
+}
+
+function isAngleOnArc(angle: number, start: number, end: number): boolean {
+  const sweep = normalizeAngle(end - start);
+  const offset = normalizeAngle(angle - start);
+  return offset <= sweep + 0.05;
+}
+
+function normalizeAngle(angle: number): number {
+  const full = Math.PI * 2;
+  return ((angle % full) + full) % full;
+}
+
+function formatMeters(value: number): string {
+  return `${Math.round(value / 20) / 10}m`;
+}
+
+function degreesToRadians(value: number): number {
+  return (value * Math.PI) / 180;
+}
+
+function radiansToDegrees(value: number): number {
+  return (value * 180) / Math.PI;
 }
 
 function snap(value: number): number {

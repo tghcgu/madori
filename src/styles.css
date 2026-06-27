@@ -106,6 +106,7 @@ select:focus-visible {
 .icon-button,
 .text-button,
 .tool-button,
+.toggle-button,
 .view-switch button,
 .segmented button,
 .template-list button {
@@ -122,6 +123,7 @@ select:focus-visible {
 .icon-button:hover,
 .text-button:hover,
 .tool-button:hover,
+.toggle-button:hover,
 .view-switch button:hover,
 .segmented button:hover,
 .template-list button:hover {
@@ -132,6 +134,7 @@ select:focus-visible {
 .icon-button:active,
 .text-button:active,
 .tool-button:active,
+.toggle-button:active,
 .view-switch button:active,
 .segmented button:active,
 .template-list button:active {
@@ -164,6 +167,7 @@ select:focus-visible {
 .icon-button svg,
 .text-button svg,
 .tool-button svg,
+.toggle-button svg,
 .view-switch svg {
   width: 18px;
   height: 18px;
@@ -286,6 +290,34 @@ select:focus-visible {
   gap: 8px;
 }
 
+.template-details {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.template-details summary {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.template-details[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.template-details .template-list {
+  padding: 10px;
+}
+
+.template-details:not([open]) .template-list {
+  display: none;
+}
+
 .properties-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -351,6 +383,31 @@ select:focus-visible {
   padding: 6px 10px 6px 14px;
   border-bottom: 1px solid var(--line);
   background: #fff;
+}
+
+.pane-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle-button {
+  min-width: 86px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.toggle-button.is-active {
+  background: rgba(39, 117, 209, 0.1);
+  border-color: rgba(39, 117, 209, 0.52);
+  color: #145da8;
+  font-weight: 700;
 }
 
 .pane-bar strong,
