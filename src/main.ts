@@ -7,7 +7,7 @@ type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "circ
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
 type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
 type ShapeKind = "circle" | "arc";
-type DragMode = "draw" | "move" | "resize" | "pan" | "none";
+type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
 type Direction = "horizontal" | "vertical";
 type ViewMode = "split" | "plan" | "three";
 
@@ -25,6 +25,8 @@ interface Room {
   w: number;
   h: number;
   color: string;
+  labelOffsetX?: number;
+  labelOffsetY?: number;
 }
 
 interface LinearElement {
@@ -384,7 +386,10 @@ function handlePointerDown(event: PointerEvent): void {
 
   if (activeTool === "select") {
     state.selectedId = hit.entity?.id ?? null;
-    if (hit.entity && hit.corner && isResizable(hit.entity)) {
+    if (hit.entity?.type === "room" && hit.corner === "label") {
+      drag.dragMode = "label";
+      planCanvas.style.cursor = "grabbing";
+    } else if (hit.entity && hit.corner && isResizable(hit.entity)) {
       drag.dragMode = "resize";
     } else if (hit.entity) {
       drag.dragMode = "move";
@@ -434,7 +439,7 @@ function handlePointerMove(event: PointerEvent): void {
   const point = screenToWorld(event);
   const hover = hitTest(point);
   if (activeTool === "select" && drag.dragMode === "none") {
-    planCanvas.style.cursor = hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
+    planCanvas.style.cursor = hover.corner === "label" ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
   }
 
   if (drag.pointerId !== event.pointerId || drag.dragMode === "none") {
@@ -448,6 +453,9 @@ function handlePointerMove(event: PointerEvent): void {
     if (!entity) return;
     if (drag.dragMode === "move") {
       moveEntity(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
+    }
+    if (drag.dragMode === "label") {
+      moveRoomLabel(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
     }
     if (drag.dragMode === "resize" && drag.resizeCorner) {
       resizeEntity(entity, drag.originEntity, drag.resizeCorner, point);
@@ -485,7 +493,7 @@ function handlePointerUp(event: PointerEvent): void {
     commitState();
   }
 
-  if ((drag.dragMode === "move" || drag.dragMode === "resize") && drag.originEntity) {
+  if ((drag.dragMode === "move" || drag.dragMode === "resize" || drag.dragMode === "label") && drag.originEntity) {
     const current = findEntity(drag.originEntity.id);
     if (current && JSON.stringify(current) !== JSON.stringify(drag.originEntity)) {
       commitState();
@@ -650,6 +658,12 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
   }
 }
 
+function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): void {
+  if (origin.type !== "room" || entity.type !== "room") return;
+  entity.labelOffsetX = (origin.labelOffsetX ?? 10) + dx;
+  entity.labelOffsetY = (origin.labelOffsetY ?? 10) + dy;
+}
+
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (origin.type === "room" && entity.type === "room") {
     let x1 = origin.x;
@@ -741,16 +755,28 @@ function drawRoom(room: Room): void {
   ctx.fillRect(room.x, room.y, room.w, room.h);
   ctx.strokeRect(room.x, room.y, room.w, room.h);
 
+  const label = getRoomLabelPosition(room);
   ctx.fillStyle = "#2e3746";
   ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
   ctx.textBaseline = "top";
-  ctx.fillText(room.name, room.x + 10, room.y + 10);
+  ctx.fillText(room.name, label.x, label.y);
   if (showDimensions) {
     ctx.fillStyle = "#687386";
     ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, room.x + 10, room.y + 30);
+    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + 20);
   }
+  if (selected) drawRoomLabelGuide(room);
   if (selected) drawResizeHandles(room);
+}
+
+function drawRoomLabelGuide(room: Room): void {
+  const bounds = getRoomLabelBounds(room);
+  ctx.save();
+  ctx.setLineDash([5 / view.zoom, 4 / view.zoom]);
+  ctx.strokeStyle = "rgba(39, 117, 209, 0.7)";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+  ctx.restore();
 }
 
 function drawWall2d(wall: LinearElement): void {
@@ -1510,7 +1536,20 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
   for (let i = state.entities.length - 1; i >= 0; i -= 1) {
     const entity = state.entities[i];
-    if (entity.type === "room" || entity.type === "furniture") {
+    if (entity.type === "room" && isPointInRoomLabel(point, entity)) {
+      return { entity, corner: "label" };
+    }
+  }
+
+  for (let i = state.entities.length - 1; i >= 0; i -= 1) {
+    const entity = state.entities[i];
+    if (entity.type === "room") {
+      const corner = getCornerHit(entity, point);
+      if (corner) return { entity, corner };
+      if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
+        return { entity, corner: null };
+      }
+    } else if (entity.type === "furniture") {
       const corner = getCornerHit(entity, point);
       if (corner) return { entity, corner };
       if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
@@ -1525,6 +1564,30 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     }
   }
   return { entity: null, corner: null };
+}
+
+function getRoomLabelPosition(room: Room): Point {
+  return {
+    x: room.x + (room.labelOffsetX ?? 10),
+    y: room.y + (room.labelOffsetY ?? 10),
+  };
+}
+
+function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: number } {
+  const position = getRoomLabelPosition(room);
+  const nameWidth = Math.max(36, room.name.length * 14);
+  const dimensionWidth = showDimensions ? 82 : 0;
+  return {
+    x: position.x - 6,
+    y: position.y - 5,
+    w: Math.max(nameWidth, dimensionWidth) + 12,
+    h: showDimensions ? 44 : 26,
+  };
+}
+
+function isPointInRoomLabel(point: Point, room: Room): boolean {
+  const bounds = getRoomLabelBounds(room);
+  return point.x >= bounds.x && point.x <= bounds.x + bounds.w && point.y >= bounds.y && point.y <= bounds.y + bounds.h;
 }
 
 function getCornerHit(entity: Room | Furniture, point: Point): string | null {
