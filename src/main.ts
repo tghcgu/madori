@@ -1,0 +1,1436 @@
+import { createIcons, icons } from "lucide";
+import "./styles.css";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+
+type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "erase";
+type EntityType = "room" | "wall" | "door" | "window" | "furniture";
+type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
+type DragMode = "draw" | "move" | "resize" | "none";
+type Direction = "horizontal" | "vertical";
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface Room {
+  id: string;
+  type: "room";
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string;
+}
+
+interface LinearElement {
+  id: string;
+  type: "wall" | "door" | "window";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+interface Furniture {
+  id: string;
+  type: "furniture";
+  kind: FurnitureKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+}
+
+type Entity = Room | LinearElement | Furniture;
+
+interface PlanState {
+  entities: Entity[];
+  selectedId: string | null;
+}
+
+interface PointerState {
+  dragMode: DragMode;
+  pointerId: number | null;
+  startWorld: Point;
+  currentWorld: Point;
+  originEntity: Entity | null;
+  resizeCorner: string | null;
+}
+
+function requiredElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Required DOM node is missing: ${selector}`);
+  }
+  return element;
+}
+
+const planCanvas = requiredElement<HTMLCanvasElement>("#planCanvas");
+const threeCanvas = requiredElement<HTMLCanvasElement>("#threeCanvas");
+const propertiesPanel = requiredElement<HTMLDivElement>("#propertiesPanel");
+const planStats = requiredElement<HTMLSpanElement>("#planStats");
+const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
+const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
+const importInput = requiredElement<HTMLInputElement>("#importInput");
+const canvasContext = planCanvas.getContext("2d");
+if (!canvasContext) {
+  throw new Error("2D canvas is not supported.");
+}
+const ctx: CanvasRenderingContext2D = canvasContext;
+
+const STORAGE_KEY = "madori-quick-3d-plan";
+const HISTORY_LIMIT = 60;
+const GRID = 20;
+const SCALE_3D = 0.03;
+const WALL_THICKNESS_2D = 10;
+const WALL_HEIGHT = 2.55;
+const BASE_FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; color: number }> = {
+  sofa: { label: "ソファ", w: 86, h: 42, color: 0x2b7bc0 },
+  table: { label: "テーブル", w: 58, h: 42, color: 0xb98636 },
+  bed: { label: "ベッド", w: 88, h: 128, color: 0x7f8ba1 },
+  desk: { label: "机", w: 72, h: 42, color: 0x53616e },
+  kitchen: { label: "キッチン", w: 116, h: 44, color: 0x4f9b80 },
+  bath: { label: "浴槽", w: 74, h: 48, color: 0x62a8c8 },
+};
+
+const ROOM_COLORS = ["#f5efe4", "#e8f2ed", "#e9eff8", "#f6e8e0", "#eef0e3", "#f0e9f4"];
+
+let activeTool: Tool = "select";
+let activeFurniture: FurnitureKind = "sofa";
+let state: PlanState = loadInitialState();
+let history: PlanState[] = [cloneState(state)];
+let historyIndex = 0;
+let view = { zoom: 1, x: 0, y: 0 };
+let appResizeObserver: ResizeObserver | null = null;
+let saveTimer: number | null = null;
+let drag: PointerState = {
+  dragMode: "none",
+  pointerId: null,
+  startWorld: { x: 0, y: 0 },
+  currentWorld: { x: 0, y: 0 },
+  originEntity: null,
+  resizeCorner: null,
+};
+
+const renderer = new THREE.WebGLRenderer({
+  canvas: threeCanvas,
+  antialias: true,
+  alpha: false,
+  preserveDrawingBuffer: true,
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe9edf3);
+const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.screenSpacePanning = false;
+controls.minDistance = 5;
+controls.maxDistance = 42;
+controls.maxPolarAngle = Math.PI * 0.48;
+
+const planGroup = new THREE.Group();
+scene.add(planGroup);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaeb7c3, 1.6);
+scene.add(hemiLight);
+const sunLight = new THREE.DirectionalLight(0xffffff, 2.4);
+sunLight.position.set(8, 14, 10);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+scene.add(sunLight);
+
+const roomMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78 });
+const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8 });
+const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x99683d, roughness: 0.72 });
+const windowMaterial = new THREE.MeshStandardMaterial({
+  color: 0x78b8d8,
+  transparent: true,
+  opacity: 0.52,
+  roughness: 0.18,
+  metalness: 0.05,
+});
+const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x405064, transparent: true, opacity: 0.55 });
+
+createIcons({ icons });
+setupUi();
+fitPlanToCanvas();
+render2d();
+rebuildThree();
+animate3d();
+
+function loadInitialState(): PlanState {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as PlanState;
+      if (Array.isArray(parsed.entities)) {
+        return {
+          entities: parsed.entities,
+          selectedId: parsed.selectedId ?? null,
+        };
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+  return {
+    entities: makeTemplate("oneLdk"),
+    selectedId: null,
+  };
+}
+
+function setupUi(): void {
+  document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeTool = button.dataset.tool as Tool;
+      setActiveButton("[data-tool]", activeTool);
+      planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : "crosshair";
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-furniture]").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeFurniture = button.dataset.furniture as FurnitureKind;
+      setActiveButton("[data-furniture]", activeFurniture);
+      activeTool = "furniture";
+      setActiveButton("[data-tool]", activeTool);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-template]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.template ?? "oneLdk";
+      replaceState({ entities: makeTemplate(key), selectedId: null }, true);
+    });
+  });
+
+  document.querySelector<HTMLButtonElement>("#undoButton")?.addEventListener("click", undo);
+  document.querySelector<HTMLButtonElement>("#redoButton")?.addEventListener("click", redo);
+  document.querySelector<HTMLButtonElement>("#fitButton")?.addEventListener("click", () => {
+    fitPlanToCanvas();
+    render2d();
+  });
+  document.querySelector<HTMLButtonElement>("#resetButton")?.addEventListener("click", () => {
+    replaceState({ entities: [], selectedId: null }, true);
+  });
+  document.querySelector<HTMLButtonElement>("#exportButton")?.addEventListener("click", exportPlan);
+  document.querySelector<HTMLButtonElement>("#importButton")?.addEventListener("click", () => importInput.click());
+  importInput.addEventListener("change", importPlan);
+
+  planCanvas.addEventListener("pointerdown", handlePointerDown);
+  planCanvas.addEventListener("pointermove", handlePointerMove);
+  planCanvas.addEventListener("pointerup", handlePointerUp);
+  planCanvas.addEventListener("pointercancel", handlePointerUp);
+  planCanvas.addEventListener("wheel", handleWheel, { passive: false });
+  planCanvas.addEventListener("dblclick", handleDoubleClick);
+  window.addEventListener("keydown", handleKeyDown);
+
+  appResizeObserver = new ResizeObserver(() => {
+    resizeCanvases();
+    render2d();
+    render3dOnce();
+  });
+  appResizeObserver.observe(planCanvas);
+  appResizeObserver.observe(threeCanvas);
+  resizeCanvases();
+  updateUi();
+}
+
+function setActiveButton(selector: string, value: string): void {
+  document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
+    const dataValue = button.dataset.tool ?? button.dataset.furniture;
+    button.classList.toggle("is-active", dataValue === value);
+  });
+}
+
+function handlePointerDown(event: PointerEvent): void {
+  const point = screenToWorld(event);
+  const hit = hitTest(point);
+  planCanvas.setPointerCapture(event.pointerId);
+  drag.pointerId = event.pointerId;
+  drag.startWorld = point;
+  drag.currentWorld = point;
+  drag.originEntity = hit.entity ? cloneEntity(hit.entity) : null;
+  drag.resizeCorner = hit.corner;
+
+  if (activeTool === "erase") {
+    if (hit.entity) {
+      state.entities = state.entities.filter((entity) => entity.id !== hit.entity?.id);
+      if (state.selectedId === hit.entity.id) state.selectedId = null;
+      commitState();
+      redrawAll();
+    }
+    drag.dragMode = "none";
+    return;
+  }
+
+  if (activeTool === "select") {
+    state.selectedId = hit.entity?.id ?? null;
+    if (hit.entity && hit.corner && isResizable(hit.entity)) {
+      drag.dragMode = "resize";
+    } else if (hit.entity) {
+      drag.dragMode = "move";
+    } else {
+      drag.dragMode = "none";
+    }
+    updateUi();
+    render2d();
+    return;
+  }
+
+  drag.dragMode = "draw";
+  state.selectedId = null;
+
+  if (activeTool === "furniture") {
+    const base = BASE_FURNITURE[activeFurniture];
+    const entity: Furniture = {
+      id: newId("furniture"),
+      type: "furniture",
+      kind: activeFurniture,
+      x: snap(point.x - base.w / 2),
+      y: snap(point.y - base.h / 2),
+      w: base.w,
+      h: base.h,
+      rotation: 0,
+    };
+    state.entities.push(entity);
+    state.selectedId = entity.id;
+    drag.originEntity = cloneEntity(entity);
+    drag.dragMode = "move";
+    commitState();
+    redrawAll();
+    return;
+  }
+
+  render2d();
+}
+
+function handlePointerMove(event: PointerEvent): void {
+  const point = screenToWorld(event);
+  const hover = hitTest(point);
+  if (activeTool === "select" && drag.dragMode === "none") {
+    planCanvas.style.cursor = hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
+  }
+
+  if (drag.pointerId !== event.pointerId || drag.dragMode === "none") {
+    return;
+  }
+
+  drag.currentWorld = point;
+
+  if (activeTool === "select" && drag.originEntity) {
+    const entity = findEntity(drag.originEntity.id);
+    if (!entity) return;
+    if (drag.dragMode === "move") {
+      moveEntity(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
+    }
+    if (drag.dragMode === "resize" && drag.resizeCorner) {
+      resizeEntity(entity, drag.originEntity, drag.resizeCorner, point);
+    }
+    redrawAll(false);
+    return;
+  }
+
+  if (activeTool === "furniture" && drag.originEntity) {
+    const entity = findEntity(drag.originEntity.id);
+    if (!entity) return;
+    moveEntity(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
+    redrawAll(false);
+    return;
+  }
+
+  render2d();
+}
+
+function handlePointerUp(event: PointerEvent): void {
+  if (drag.pointerId !== event.pointerId) return;
+  planCanvas.releasePointerCapture(event.pointerId);
+
+  const end = drag.currentWorld;
+  const start = drag.startWorld;
+  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+
+  if (drag.dragMode === "draw" && distance > 8) {
+    if (activeTool === "room") addRoomFromDrag(start, end);
+    if (activeTool === "wall") addLineFromDrag("wall", start, end);
+    if (activeTool === "door") addLineFromDrag("door", start, end);
+    if (activeTool === "window") addLineFromDrag("window", start, end);
+    commitState();
+  }
+
+  if ((drag.dragMode === "move" || drag.dragMode === "resize") && drag.originEntity) {
+    const current = findEntity(drag.originEntity.id);
+    if (current && JSON.stringify(current) !== JSON.stringify(drag.originEntity)) {
+      commitState();
+    }
+  }
+
+  drag = {
+    dragMode: "none",
+    pointerId: null,
+    startWorld: { x: 0, y: 0 },
+    currentWorld: { x: 0, y: 0 },
+    originEntity: null,
+    resizeCorner: null,
+  };
+  redrawAll();
+}
+
+function handleDoubleClick(event: MouseEvent): void {
+  const hit = hitTest(screenToWorld(event));
+  if (!hit.entity) return;
+  state.selectedId = hit.entity.id;
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  updateUi();
+  render2d();
+}
+
+function handleWheel(event: WheelEvent): void {
+  event.preventDefault();
+  const before = screenToWorld(event);
+  const factor = event.deltaY > 0 ? 0.9 : 1.1;
+  view.zoom = clamp(view.zoom * factor, 0.35, 3.6);
+  const after = screenToWorld(event);
+  view.x += (after.x - before.x) * view.zoom;
+  view.y += (after.y - before.y) * view.zoom;
+  render2d();
+}
+
+function handleKeyDown(event: KeyboardEvent): void {
+  const target = event.target as HTMLElement | null;
+  const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT";
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    event.shiftKey ? redo() : undo();
+    return;
+  }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+    event.preventDefault();
+    redo();
+    return;
+  }
+  if (!isEditing && (event.key === "Delete" || event.key === "Backspace") && state.selectedId) {
+    state.entities = state.entities.filter((entity) => entity.id !== state.selectedId);
+    state.selectedId = null;
+    commitState();
+    redrawAll();
+  }
+}
+
+function addRoomFromDrag(start: Point, end: Point): void {
+  const x = snap(Math.min(start.x, end.x));
+  const y = snap(Math.min(start.y, end.y));
+  const w = snap(Math.abs(end.x - start.x));
+  const h = snap(Math.abs(end.y - start.y));
+  if (w < GRID * 2 || h < GRID * 2) return;
+  const room: Room = {
+    id: newId("room"),
+    type: "room",
+    name: `部屋 ${state.entities.filter((entity) => entity.type === "room").length + 1}`,
+    x,
+    y,
+    w,
+    h,
+    color: ROOM_COLORS[state.entities.length % ROOM_COLORS.length],
+  };
+  state.entities.push(room);
+  state.selectedId = room.id;
+}
+
+function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Point): void {
+  const snappedStart = { x: snap(start.x), y: snap(start.y) };
+  const snappedEnd = constrainLine(snappedStart, { x: snap(end.x), y: snap(end.y) });
+  const length = Math.hypot(snappedEnd.x - snappedStart.x, snappedEnd.y - snappedStart.y);
+  if (length < GRID) return;
+  const line: LinearElement = {
+    id: newId(type),
+    type,
+    x1: snappedStart.x,
+    y1: snappedStart.y,
+    x2: snappedEnd.x,
+    y2: snappedEnd.y,
+  };
+  state.entities.push(line);
+  state.selectedId = line.id;
+}
+
+function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): void {
+  const moveX = snap(dx);
+  const moveY = snap(dy);
+  if (origin.type === "room" && entity.type === "room") {
+    entity.x = snap(origin.x + moveX);
+    entity.y = snap(origin.y + moveY);
+  }
+  if (origin.type === "furniture" && entity.type === "furniture") {
+    entity.x = snap(origin.x + moveX);
+    entity.y = snap(origin.y + moveY);
+  }
+  if (isLinear(origin) && isLinear(entity)) {
+    entity.x1 = snap(origin.x1 + moveX);
+    entity.y1 = snap(origin.y1 + moveY);
+    entity.x2 = snap(origin.x2 + moveX);
+    entity.y2 = snap(origin.y2 + moveY);
+  }
+}
+
+function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
+  if (origin.type === "room" && entity.type === "room") {
+    let x1 = origin.x;
+    let y1 = origin.y;
+    let x2 = origin.x + origin.w;
+    let y2 = origin.y + origin.h;
+    if (corner.includes("w")) x1 = snap(point.x);
+    if (corner.includes("e")) x2 = snap(point.x);
+    if (corner.includes("n")) y1 = snap(point.y);
+    if (corner.includes("s")) y2 = snap(point.y);
+    entity.x = Math.min(x1, x2);
+    entity.y = Math.min(y1, y2);
+    entity.w = Math.max(GRID * 2, Math.abs(x2 - x1));
+    entity.h = Math.max(GRID * 2, Math.abs(y2 - y1));
+  }
+
+  if (origin.type === "furniture" && entity.type === "furniture") {
+    let x1 = origin.x;
+    let y1 = origin.y;
+    let x2 = origin.x + origin.w;
+    let y2 = origin.y + origin.h;
+    if (corner.includes("w")) x1 = snap(point.x);
+    if (corner.includes("e")) x2 = snap(point.x);
+    if (corner.includes("n")) y1 = snap(point.y);
+    if (corner.includes("s")) y2 = snap(point.y);
+    entity.x = Math.min(x1, x2);
+    entity.y = Math.min(y1, y2);
+    entity.w = Math.max(GRID, Math.abs(x2 - x1));
+    entity.h = Math.max(GRID, Math.abs(y2 - y1));
+  }
+}
+
+function render2d(): void {
+  const { width, height } = resizePlanCanvas();
+  const ratio = getCanvasPixelRatio();
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.save();
+  ctx.translate(view.x, view.y);
+  ctx.scale(view.zoom, view.zoom);
+
+  drawGrid(width, height);
+  state.entities.filter(isRoom).forEach(drawRoom);
+  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach(drawWall2d);
+  state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
+  state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
+  state.entities.filter(isFurniture).forEach(drawFurniture2d);
+
+  if (drag.dragMode === "draw" && activeTool !== "furniture") {
+    drawPreview(drag.startWorld, drag.currentWorld);
+  }
+
+  ctx.restore();
+}
+
+function drawGrid(canvasWidth: number, canvasHeight: number): void {
+  const left = -view.x / view.zoom;
+  const top = -view.y / view.zoom;
+  const right = left + canvasWidth / view.zoom;
+  const bottom = top + canvasHeight / view.zoom;
+  const startX = Math.floor(left / GRID) * GRID;
+  const startY = Math.floor(top / GRID) * GRID;
+
+  ctx.lineWidth = 1 / view.zoom;
+  for (let x = startX; x <= right; x += GRID) {
+    ctx.beginPath();
+    ctx.strokeStyle = x % (GRID * 5) === 0 ? "#d8dee8" : "#edf0f5";
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.stroke();
+  }
+  for (let y = startY; y <= bottom; y += GRID) {
+    ctx.beginPath();
+    ctx.strokeStyle = y % (GRID * 5) === 0 ? "#d8dee8" : "#edf0f5";
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+  }
+}
+
+function drawRoom(room: Room): void {
+  const selected = state.selectedId === room.id;
+  ctx.fillStyle = room.color;
+  ctx.strokeStyle = selected ? "#2775d1" : "#aeb7c4";
+  ctx.lineWidth = selected ? 3 / view.zoom : 1.4 / view.zoom;
+  ctx.fillRect(room.x, room.y, room.w, room.h);
+  ctx.strokeRect(room.x, room.y, room.w, room.h);
+
+  ctx.fillStyle = "#2e3746";
+  ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+  ctx.textBaseline = "top";
+  ctx.fillText(room.name, room.x + 10, room.y + 10);
+  ctx.fillStyle = "#687386";
+  ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+  ctx.fillText(`${Math.round(room.w / 20) / 10}m x ${Math.round(room.h / 20) / 10}m`, room.x + 10, room.y + 30);
+  if (selected) drawResizeHandles(room);
+}
+
+function drawWall2d(wall: LinearElement): void {
+  drawLineElement(wall, "#2f3b4d", WALL_THICKNESS_2D);
+}
+
+function drawWindow2d(windowEl: LinearElement): void {
+  drawLineElement(windowEl, "#4aa9d6", 8);
+  const mid = midpoint(windowEl);
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(mid.x, mid.y, 3.5 / view.zoom, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawDoor2d(door: LinearElement): void {
+  drawLineElement(door, "#af7142", 8);
+  const direction = lineDirection(door);
+  ctx.save();
+  ctx.strokeStyle = "#af7142";
+  ctx.lineWidth = 2 / view.zoom;
+  if (direction === "horizontal") {
+    const x = Math.min(door.x1, door.x2);
+    const y = door.y1;
+    const size = Math.abs(door.x2 - door.x1);
+    ctx.beginPath();
+    ctx.arc(x, y, size, -Math.PI / 2, 0);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + size, y - size);
+    ctx.stroke();
+  } else {
+    const x = door.x1;
+    const y = Math.min(door.y1, door.y2);
+    const size = Math.abs(door.y2 - door.y1);
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI / 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + size, y + size);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLineElement(entity: LinearElement, color: string, width: number): void {
+  const selected = state.selectedId === entity.id;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = (selected ? width + 6 : width) / view.zoom;
+  ctx.strokeStyle = selected ? "rgba(39, 117, 209, 0.35)" : color;
+  ctx.beginPath();
+  ctx.moveTo(entity.x1, entity.y1);
+  ctx.lineTo(entity.x2, entity.y2);
+  ctx.stroke();
+  ctx.lineWidth = width / view.zoom;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(entity.x1, entity.y1);
+  ctx.lineTo(entity.x2, entity.y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFurniture2d(furniture: Furniture): void {
+  const selected = state.selectedId === furniture.id;
+  const base = BASE_FURNITURE[furniture.kind];
+  ctx.save();
+  ctx.translate(furniture.x + furniture.w / 2, furniture.y + furniture.h / 2);
+  ctx.rotate((furniture.rotation * Math.PI) / 180);
+  roundedRect(-furniture.w / 2, -furniture.h / 2, furniture.w, furniture.h, 8);
+  ctx.fillStyle = `#${base.color.toString(16).padStart(6, "0")}`;
+  ctx.fill();
+  ctx.strokeStyle = selected ? "#2775d1" : "rgba(34, 41, 54, 0.28)";
+  ctx.lineWidth = selected ? 3 / view.zoom : 1.5 / view.zoom;
+  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `${Math.max(11, 12 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+  ctx.fillText(base.label, 0, 0);
+  ctx.restore();
+  if (selected) drawResizeHandles(furniture);
+}
+
+function drawPreview(start: Point, current: Point): void {
+  ctx.save();
+  ctx.setLineDash([8 / view.zoom, 6 / view.zoom]);
+  ctx.lineWidth = 2 / view.zoom;
+  ctx.strokeStyle = "#2775d1";
+  ctx.fillStyle = "rgba(39, 117, 209, 0.08)";
+  if (activeTool === "room") {
+    const x = Math.min(start.x, current.x);
+    const y = Math.min(start.y, current.y);
+    const w = Math.abs(current.x - start.x);
+    const h = Math.abs(current.y - start.y);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+  } else {
+    const line = constrainLine(start, current);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(line.x, line.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function roundedRect(x: number, y: number, w: number, h: number, radius: number): void {
+  const r = Math.min(radius, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawResizeHandles(entity: Room | Furniture): void {
+  const handles = [
+    { x: entity.x, y: entity.y },
+    { x: entity.x + entity.w, y: entity.y },
+    { x: entity.x, y: entity.y + entity.h },
+    { x: entity.x + entity.w, y: entity.y + entity.h },
+  ];
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 2 / view.zoom;
+  const size = 8 / view.zoom;
+  handles.forEach((handle) => {
+    ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
+    ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
+  });
+}
+
+function rebuildThree(): void {
+  disposeGroup(planGroup);
+  const rooms = state.entities.filter(isRoom);
+  const bounds = getBounds();
+  const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
+
+  if (rooms.length === 0) {
+    addGroundPlaceholder(center);
+  } else {
+    rooms.forEach((room) => addRoom3d(room, center));
+  }
+
+  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wall) => addWall3d(wall, center));
+  state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach((door) => addDoor3d(door, center));
+  state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach((windowEl) => addWindow3d(windowEl, center));
+  state.entities.filter(isFurniture).forEach((furniture) => addFurniture3d(furniture, center));
+
+  addSubtleGrid(bounds, center);
+  frameCamera(bounds);
+  updateUi();
+}
+
+function addRoom3d(room: Room, center: Point): void {
+  const width = room.w * SCALE_3D;
+  const depth = room.h * SCALE_3D;
+  const geometry = new THREE.BoxGeometry(width, 0.06, depth);
+  const material = roomMaterial(room.color);
+  const mesh = new THREE.Mesh(geometry, material);
+  const pos = to3d(room.x + room.w / 2, room.y + room.h / 2, center);
+  mesh.position.set(pos.x, 0, pos.z);
+  mesh.receiveShadow = true;
+  mesh.castShadow = false;
+  planGroup.add(mesh);
+
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
+  edge.position.copy(mesh.position);
+  planGroup.add(edge);
+}
+
+function addWall3d(wall: LinearElement, center: Point): void {
+  const length = distance(wall) * SCALE_3D;
+  const direction = lineDirection(wall);
+  const geometry = new THREE.BoxGeometry(
+    direction === "horizontal" ? length : WALL_THICKNESS_2D * SCALE_3D,
+    WALL_HEIGHT,
+    direction === "horizontal" ? WALL_THICKNESS_2D * SCALE_3D : length,
+  );
+  const mesh = new THREE.Mesh(geometry, wallMaterial);
+  const mid = midpoint(wall);
+  const pos = to3d(mid.x, mid.y, center);
+  mesh.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  planGroup.add(mesh);
+
+  const cap = new THREE.Mesh(
+    new THREE.BoxGeometry(geometry.parameters.width + 0.01, 0.08, geometry.parameters.depth + 0.01),
+    wallCapMaterial,
+  );
+  cap.position.set(pos.x, WALL_HEIGHT + 0.04, pos.z);
+  cap.castShadow = true;
+  planGroup.add(cap);
+}
+
+function addDoor3d(door: LinearElement, center: Point): void {
+  const length = Math.max(distance(door) * SCALE_3D, 0.7);
+  const direction = lineDirection(door);
+  const frameThickness = 0.08;
+  const frameHeight = 2.1;
+  const mid = midpoint(door);
+  const pos = to3d(mid.x, mid.y, center);
+
+  const slab = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      direction === "horizontal" ? length : frameThickness,
+      0.08,
+      direction === "horizontal" ? frameThickness : length,
+    ),
+    doorMaterial,
+  );
+  slab.position.set(pos.x, 0.08, pos.z);
+  slab.castShadow = true;
+  planGroup.add(slab);
+
+  const hingePoint = direction === "horizontal" ? to3d(Math.min(door.x1, door.x2), door.y1, center) : to3d(door.x1, Math.min(door.y1, door.y2), center);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(length, 0.06, 0.04), doorMaterial);
+  panel.position.set(
+    hingePoint.x + (direction === "horizontal" ? length / 2 : length / 2),
+    frameHeight / 2,
+    hingePoint.z + (direction === "horizontal" ? -length / 2 : length / 2),
+  );
+  panel.rotation.y = direction === "horizontal" ? Math.PI / 4 : -Math.PI / 4;
+  panel.scale.y = frameHeight / 0.06;
+  panel.castShadow = true;
+  planGroup.add(panel);
+}
+
+function addWindow3d(windowEl: LinearElement, center: Point): void {
+  const length = distance(windowEl) * SCALE_3D;
+  const direction = lineDirection(windowEl);
+  const mid = midpoint(windowEl);
+  const pos = to3d(mid.x, mid.y, center);
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      direction === "horizontal" ? length : 0.05,
+      0.95,
+      direction === "horizontal" ? 0.05 : length,
+    ),
+    windowMaterial,
+  );
+  glass.position.set(pos.x, 1.35, pos.z);
+  planGroup.add(glass);
+  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), edgeMaterial);
+  frame.position.copy(glass.position);
+  planGroup.add(frame);
+}
+
+function addFurniture3d(furniture: Furniture, center: Point): void {
+  const base = BASE_FURNITURE[furniture.kind];
+  const width = furniture.w * SCALE_3D;
+  const depth = furniture.h * SCALE_3D;
+  const material = new THREE.MeshStandardMaterial({ color: base.color, roughness: 0.64 });
+  const height = furniture.kind === "bed" ? 0.36 : furniture.kind === "kitchen" ? 0.86 : furniture.kind === "bath" ? 0.46 : 0.52;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+  const pos = to3d(furniture.x + furniture.w / 2, furniture.y + furniture.h / 2, center);
+  mesh.position.set(pos.x, height / 2 + 0.05, pos.z);
+  mesh.rotation.y = (-furniture.rotation * Math.PI) / 180;
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  planGroup.add(mesh);
+
+  if (furniture.kind === "sofa") {
+    addFurniturePart(mesh, width, 0.34, 0.12, 0, height * 0.65, -depth * 0.46, base.color);
+  }
+  if (furniture.kind === "table" || furniture.kind === "desk") {
+    addLegs(mesh, width, depth, height, base.color);
+  }
+  if (furniture.kind === "bath") {
+    const tub = new THREE.Mesh(new THREE.BoxGeometry(width * 0.76, 0.05, depth * 0.62), new THREE.MeshStandardMaterial({ color: 0xe9f6fb, roughness: 0.25 }));
+    tub.position.set(0, height / 2 + 0.03, 0);
+    mesh.add(tub);
+  }
+}
+
+function addFurniturePart(parent: THREE.Mesh, width: number, height: number, depth: number, x: number, y: number, z: number, color: number): void {
+  const part = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
+  part.position.set(x, y, z);
+  part.castShadow = true;
+  parent.add(part);
+}
+
+function addLegs(parent: THREE.Mesh, width: number, depth: number, height: number, color: number): void {
+  const legMaterial = new THREE.MeshStandardMaterial({ color: shadeColor(color, -0.25), roughness: 0.72 });
+  const positions = [
+    [-width * 0.38, -depth * 0.34],
+    [width * 0.38, -depth * 0.34],
+    [-width * 0.38, depth * 0.34],
+    [width * 0.38, depth * 0.34],
+  ];
+  positions.forEach(([x, z]) => {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, height, 0.07), legMaterial);
+    leg.position.set(x, -height * 0.42, z);
+    leg.castShadow = true;
+    parent.add(leg);
+  });
+}
+
+function addGroundPlaceholder(center: Point): void {
+  const geometry = new THREE.BoxGeometry(7, 0.05, 5);
+  const material = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.8 });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(center.x, 0, center.y);
+  mesh.receiveShadow = true;
+  planGroup.add(mesh);
+}
+
+function addSubtleGrid(bounds: Bounds | null, center: Point): void {
+  const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D + 4 : 10;
+  const grid = new THREE.GridHelper(size, Math.max(8, Math.round(size)), 0xb9c2cd, 0xdde3eb);
+  grid.position.y = 0.012;
+  grid.position.x = to3d(center.x, center.y, center).x;
+  grid.position.z = to3d(center.x, center.y, center).z;
+  planGroup.add(grid);
+}
+
+function frameCamera(bounds: Bounds | null): void {
+  const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 7;
+  const distanceToFit = clamp(size * 1.5, 7, 28);
+  camera.position.set(distanceToFit * 0.9, distanceToFit * 0.78, distanceToFit);
+  controls.target.set(0, 0.45, 0);
+  controls.update();
+}
+
+function render3dOnce(): void {
+  const rect = threeCanvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return;
+  renderer.setSize(rect.width, rect.height, false);
+  camera.aspect = rect.width / rect.height;
+  camera.updateProjectionMatrix();
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function animate3d(): void {
+  requestAnimationFrame(animate3d);
+  render3dOnce();
+}
+
+function redrawAll(rebuild = true): void {
+  render2d();
+  if (rebuild) rebuildThree();
+  updateUi();
+}
+
+function updateUi(): void {
+  updateStats();
+  updatePropertiesPanel();
+  document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", historyIndex <= 0);
+  document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", historyIndex >= history.length - 1);
+}
+
+function updateStats(): void {
+  const rooms = state.entities.filter(isRoom).length;
+  const walls = state.entities.filter((entity) => entity.type === "wall").length;
+  const furniture = state.entities.filter(isFurniture).length;
+  planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furniture}`;
+  threeStats.textContent = `部屋${rooms}・部材${state.entities.length}を自動変換`;
+}
+
+function updatePropertiesPanel(): void {
+  const selected = state.selectedId ? findEntity(state.selectedId) : null;
+  if (!selected) {
+    propertiesPanel.innerHTML = `<p class="empty-state">選択ツールで部屋・壁・家具を選ぶと、名前や寸法を調整できます。</p>`;
+    return;
+  }
+
+  if (selected.type === "room") {
+    propertiesPanel.innerHTML = `
+      <div class="property-grid">
+        <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" /></label>
+        <div class="two-col">
+          <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" /></label>
+          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" /></label>
+        </div>
+        <label>色<input id="roomColorInput" type="color" value="${selected.color}" /></label>
+      </div>
+    `;
+    bindInput("#roomNameInput", (value) => (selected.name = value || "部屋"));
+    bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
+    bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
+    bindInput("#roomColorInput", (value) => (selected.color = value));
+    return;
+  }
+
+  if (isLinear(selected)) {
+    const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? "ドア" : "窓";
+    propertiesPanel.innerHTML = `
+      <div class="property-grid">
+        <p class="empty-state">${typeLabel} / 長さ ${Math.round(distance(selected))} cm</p>
+        <div class="two-col">
+          <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
+          <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" /></label>
+        </div>
+      </div>
+    `;
+    bindNumber("#lineXInput", (value) => {
+      const dx = snap(value) - selected.x1;
+      selected.x1 += dx;
+      selected.x2 += dx;
+    });
+    bindNumber("#lineYInput", (value) => {
+      const dy = snap(value) - selected.y1;
+      selected.y1 += dy;
+      selected.y2 += dy;
+    });
+    return;
+  }
+
+  const selectedFurniture = selected as Furniture;
+  propertiesPanel.innerHTML = `
+    <div class="property-grid">
+      <label>種類
+        <select id="furnitureKindInput">
+          ${Object.entries(BASE_FURNITURE)
+            .map(([key, value]) => `<option value="${key}" ${key === selectedFurniture.kind ? "selected" : ""}>${value.label}</option>`)
+            .join("")}
+        </select>
+      </label>
+      <div class="two-col">
+        <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" /></label>
+        <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" /></label>
+      </div>
+      <label>回転<input id="furnitureRotationInput" type="number" step="15" value="${selectedFurniture.rotation}" /></label>
+    </div>
+  `;
+  bindSelect("#furnitureKindInput", (value) => (selectedFurniture.kind = value as FurnitureKind));
+  bindNumber("#furnitureWInput", (value) => (selectedFurniture.w = Math.max(GRID, snap(value))));
+  bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(GRID, snap(value))));
+  bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
+}
+
+function bindInput(selector: string, update: (value: string) => void): void {
+  const input = propertiesPanel.querySelector<HTMLInputElement>(selector);
+  input?.addEventListener("change", () => {
+    update(input.value);
+    commitState();
+    redrawAll();
+  });
+}
+
+function bindNumber(selector: string, update: (value: number) => void): void {
+  const input = propertiesPanel.querySelector<HTMLInputElement>(selector);
+  input?.addEventListener("change", () => {
+    update(Number(input.value));
+    commitState();
+    redrawAll();
+  });
+}
+
+function bindSelect(selector: string, update: (value: string) => void): void {
+  const input = propertiesPanel.querySelector<HTMLSelectElement>(selector);
+  input?.addEventListener("change", () => {
+    update(input.value);
+    commitState();
+    redrawAll();
+  });
+}
+
+function resizeCanvases(): void {
+  resizePlanCanvas();
+}
+
+function resizePlanCanvas(): { width: number; height: number } {
+  const rect = planCanvas.getBoundingClientRect();
+  const ratio = getCanvasPixelRatio();
+  const width = Math.max(1, Math.floor(rect.width * ratio));
+  const height = Math.max(1, Math.floor(rect.height * ratio));
+  if (planCanvas.width !== width || planCanvas.height !== height) {
+    planCanvas.width = width;
+    planCanvas.height = height;
+  }
+  return { width: rect.width, height: rect.height };
+}
+
+function getCanvasPixelRatio(): number {
+  return Math.min(globalThis.devicePixelRatio || 1, 2);
+}
+
+function fitPlanToCanvas(): void {
+  const bounds = getBounds();
+  const rect = planCanvas.getBoundingClientRect();
+  if (!bounds || rect.width === 0 || rect.height === 0) {
+    view = { zoom: 1, x: rect.width / 2, y: rect.height / 2 };
+    return;
+  }
+  const padding = 70;
+  const zoomX = (rect.width - padding * 2) / bounds.w;
+  const zoomY = (rect.height - padding * 2) / bounds.h;
+  const zoom = clamp(Math.min(zoomX, zoomY), 0.45, 2.2);
+  view.zoom = zoom;
+  view.x = rect.width / 2 - (bounds.x + bounds.w / 2) * zoom;
+  view.y = rect.height / 2 - (bounds.y + bounds.h / 2) * zoom;
+}
+
+function commitState(): void {
+  history = history.slice(0, historyIndex + 1);
+  history.push(cloneState(state));
+  if (history.length > HISTORY_LIMIT) {
+    history.shift();
+  } else {
+    historyIndex += 1;
+  }
+  persistState();
+  updateUi();
+}
+
+function replaceState(next: PlanState, pushHistory: boolean): void {
+  state = cloneState(next);
+  if (pushHistory) commitState();
+  persistState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
+function undo(): void {
+  if (historyIndex <= 0) return;
+  historyIndex -= 1;
+  state = cloneState(history[historyIndex]);
+  persistState();
+  redrawAll();
+}
+
+function redo(): void {
+  if (historyIndex >= history.length - 1) return;
+  historyIndex += 1;
+  state = cloneState(history[historyIndex]);
+  persistState();
+  redrawAll();
+}
+
+function persistState(): void {
+  saveStatus.textContent = "保存中...";
+  if (saveTimer) window.clearTimeout(saveTimer);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  saveTimer = window.setTimeout(() => {
+    saveStatus.textContent = "保存済み";
+  }, 320);
+}
+
+function exportPlan(): void {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `madori-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function importPlan(): void {
+  const file = importInput.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    try {
+      const parsed = JSON.parse(String(reader.result)) as PlanState;
+      if (!Array.isArray(parsed.entities)) throw new Error("Invalid plan");
+      replaceState({ entities: parsed.entities, selectedId: null }, true);
+    } catch {
+      saveStatus.textContent = "読み込み失敗";
+      window.setTimeout(() => {
+        saveStatus.textContent = "保存済み";
+      }, 1400);
+    } finally {
+      importInput.value = "";
+    }
+  });
+  reader.readAsText(file);
+}
+
+function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
+  const rect = planCanvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left - view.x) / view.zoom,
+    y: (event.clientY - rect.top - view.y) / view.zoom,
+  };
+}
+
+function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
+  for (let i = state.entities.length - 1; i >= 0; i -= 1) {
+    const entity = state.entities[i];
+    if (entity.type === "room" || entity.type === "furniture") {
+      const corner = getCornerHit(entity, point);
+      if (corner) return { entity, corner };
+      if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
+        return { entity, corner: null };
+      }
+    } else if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
+      return { entity, corner: null };
+    }
+  }
+  return { entity: null, corner: null };
+}
+
+function getCornerHit(entity: Room | Furniture, point: Point): string | null {
+  const size = 12 / view.zoom;
+  const corners = [
+    { key: "nw", x: entity.x, y: entity.y },
+    { key: "ne", x: entity.x + entity.w, y: entity.y },
+    { key: "sw", x: entity.x, y: entity.y + entity.h },
+    { key: "se", x: entity.x + entity.w, y: entity.y + entity.h },
+  ];
+  const hit = corners.find((corner) => Math.abs(point.x - corner.x) <= size && Math.abs(point.y - corner.y) <= size);
+  return hit?.key ?? null;
+}
+
+function constrainLine(start: Point, end: Point): Point {
+  return Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
+    ? { x: end.x, y: start.y }
+    : { x: start.x, y: end.y };
+}
+
+function to3d(x: number, y: number, center: Point): { x: number; z: number } {
+  return {
+    x: (x - center.x) * SCALE_3D,
+    z: (y - center.y) * SCALE_3D,
+  };
+}
+
+function makeTemplate(key: string): Entity[] {
+  if (key === "studio") {
+    return [
+      room("LDK", 0, 0, 360, 300, "#e9eff8"),
+      room("水回り", 360, 0, 140, 160, "#e8f2ed"),
+      wall(0, 0, 500, 0),
+      wall(500, 0, 500, 300),
+      wall(500, 300, 0, 300),
+      wall(0, 300, 0, 0),
+      wall(360, 0, 360, 160),
+      door(330, 300, 390, 300),
+      windowLine(80, 0, 220, 0),
+      furniture("sofa", 60, 172, 92, 44),
+      furniture("table", 178, 170, 62, 46),
+      furniture("kitchen", 372, 20, 112, 44),
+      furniture("bath", 390, 92, 72, 50),
+    ];
+  }
+
+  if (key === "twoLdk") {
+    return [
+      room("LDK", 0, 0, 380, 280, "#f5efe4"),
+      room("洋室 1", 380, 0, 220, 200, "#e9eff8"),
+      room("洋室 2", 0, 280, 240, 200, "#eef0e3"),
+      room("水回り", 240, 280, 180, 200, "#e8f2ed"),
+      room("玄関", 420, 200, 180, 280, "#f6e8e0"),
+      wall(0, 0, 600, 0),
+      wall(600, 0, 600, 480),
+      wall(600, 480, 0, 480),
+      wall(0, 480, 0, 0),
+      wall(380, 0, 380, 200),
+      wall(0, 280, 420, 280),
+      wall(240, 280, 240, 480),
+      wall(420, 200, 600, 200),
+      door(340, 280, 400, 280),
+      door(380, 130, 380, 190),
+      door(214, 280, 274, 280),
+      door(420, 340, 420, 400),
+      windowLine(80, 0, 250, 0),
+      windowLine(440, 0, 560, 0),
+      windowLine(40, 480, 190, 480),
+      furniture("sofa", 50, 150, 100, 46),
+      furniture("table", 192, 144, 70, 48),
+      furniture("bed", 426, 38, 94, 124),
+      furniture("bed", 40, 326, 94, 124),
+      furniture("kitchen", 242, 20, 118, 44),
+      furniture("bath", 284, 340, 76, 54),
+    ];
+  }
+
+  return [
+    room("LDK", 0, 0, 380, 300, "#f5efe4"),
+    room("寝室", 380, 0, 220, 220, "#e9eff8"),
+    room("水回り", 380, 220, 220, 160, "#e8f2ed"),
+    room("玄関", 0, 300, 240, 80, "#f6e8e0"),
+    wall(0, 0, 600, 0),
+    wall(600, 0, 600, 380),
+    wall(600, 380, 0, 380),
+    wall(0, 380, 0, 0),
+    wall(380, 0, 380, 380),
+    wall(380, 220, 600, 220),
+    wall(0, 300, 380, 300),
+    door(340, 300, 400, 300),
+    door(380, 150, 380, 210),
+    door(480, 220, 540, 220),
+    windowLine(70, 0, 250, 0),
+    windowLine(430, 0, 560, 0),
+    furniture("sofa", 54, 162, 98, 46),
+    furniture("table", 194, 154, 70, 48),
+    furniture("bed", 440, 48, 94, 126),
+    furniture("kitchen", 234, 22, 116, 44),
+    furniture("bath", 442, 278, 76, 54),
+  ];
+}
+
+function room(name: string, x: number, y: number, w: number, h: number, color: string): Room {
+  return { id: newId("room"), type: "room", name, x, y, w, h, color };
+}
+
+function wall(x1: number, y1: number, x2: number, y2: number): LinearElement {
+  return { id: newId("wall"), type: "wall", x1, y1, x2, y2 };
+}
+
+function door(x1: number, y1: number, x2: number, y2: number): LinearElement {
+  return { id: newId("door"), type: "door", x1, y1, x2, y2 };
+}
+
+function windowLine(x1: number, y1: number, x2: number, y2: number): LinearElement {
+  return { id: newId("window"), type: "window", x1, y1, x2, y2 };
+}
+
+function furniture(kind: FurnitureKind, x: number, y: number, w: number, h: number): Furniture {
+  return { id: newId("furniture"), type: "furniture", kind, x, y, w, h, rotation: 0 };
+}
+
+function cloneState(value: PlanState): PlanState {
+  return JSON.parse(JSON.stringify(value)) as PlanState;
+}
+
+function cloneEntity(value: Entity): Entity {
+  return JSON.parse(JSON.stringify(value)) as Entity;
+}
+
+function findEntity(id: string): Entity | undefined {
+  return state.entities.find((entity) => entity.id === id);
+}
+
+function isRoom(entity: Entity): entity is Room {
+  return entity.type === "room";
+}
+
+function isFurniture(entity: Entity): entity is Furniture {
+  return entity.type === "furniture";
+}
+
+function isLinear(entity: Entity): entity is LinearElement {
+  return entity.type === "wall" || entity.type === "door" || entity.type === "window";
+}
+
+function isResizable(entity: Entity): entity is Room | Furniture {
+  return entity.type === "room" || entity.type === "furniture";
+}
+
+function lineDirection(entity: LinearElement): Direction {
+  return Math.abs(entity.x2 - entity.x1) >= Math.abs(entity.y2 - entity.y1) ? "horizontal" : "vertical";
+}
+
+function midpoint(entity: LinearElement): Point {
+  return {
+    x: (entity.x1 + entity.x2) / 2,
+    y: (entity.y1 + entity.y2) / 2,
+  };
+}
+
+function distance(entity: LinearElement): number {
+  return Math.hypot(entity.x2 - entity.x1, entity.y2 - entity.y1);
+}
+
+interface Bounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function getBounds(): Bounds | null {
+  if (state.entities.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  state.entities.forEach((entity) => {
+    if (entity.type === "room" || entity.type === "furniture") {
+      minX = Math.min(minX, entity.x);
+      minY = Math.min(minY, entity.y);
+      maxX = Math.max(maxX, entity.x + entity.w);
+      maxY = Math.max(maxY, entity.y + entity.h);
+    } else {
+      minX = Math.min(minX, entity.x1, entity.x2);
+      minY = Math.min(minY, entity.y1, entity.y2);
+      maxX = Math.max(maxX, entity.x1, entity.x2);
+      maxY = Math.max(maxY, entity.y1, entity.y2);
+    }
+  });
+  return { x: minX, y: minY, w: Math.max(GRID, maxX - minX), h: Math.max(GRID, maxY - minY) };
+}
+
+function roomMaterial(color: string): THREE.MeshStandardMaterial {
+  const cached = roomMaterialCache.get(color);
+  if (cached) return cached;
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.82 });
+  roomMaterialCache.set(color, material);
+  return material;
+}
+
+function disposeGroup(group: THREE.Group): void {
+  while (group.children.length > 0) {
+    const child = group.children.pop();
+    if (!child) continue;
+    child.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) mesh.geometry.dispose();
+      const material = mesh.material;
+      if (Array.isArray(material)) {
+        material.forEach((item) => item.dispose());
+      } else if (material) {
+        material.dispose();
+      }
+    });
+  }
+}
+
+function distanceToSegment(point: Point, start: Point, end: Point): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (dx === 0 && dy === 0) return Math.hypot(point.x - start.x, point.y - start.y);
+  const t = clamp(((point.x - start.x) * dx + (point.y - start.y) * dy) / (dx * dx + dy * dy), 0, 1);
+  const x = start.x + t * dx;
+  const y = start.y + t * dy;
+  return Math.hypot(point.x - x, point.y - y);
+}
+
+function snap(value: number): number {
+  return Math.round(value / GRID) * GRID;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function shadeColor(color: number, amount: number): number {
+  const threeColor = new THREE.Color(color);
+  threeColor.offsetHSL(0, 0, amount);
+  return threeColor.getHex();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function newId(prefix: EntityType): string {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
