@@ -6,7 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture";
 type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
-type DragMode = "draw" | "move" | "resize" | "none";
+type DragMode = "draw" | "move" | "resize" | "pan" | "none";
 type Direction = "horizontal" | "vertical";
 type ViewMode = "split" | "plan" | "three";
 
@@ -56,6 +56,8 @@ interface PlanState {
 interface PointerState {
   dragMode: DragMode;
   pointerId: number | null;
+  startScreen: Point;
+  startView: Point;
   startWorld: Point;
   currentWorld: Point;
   originEntity: Entity | null;
@@ -114,6 +116,8 @@ let saveTimer: number | null = null;
 let drag: PointerState = {
   dragMode: "none",
   pointerId: null,
+  startScreen: { x: 0, y: 0 },
+  startView: { x: 0, y: 0 },
   startWorld: { x: 0, y: 0 },
   currentWorld: { x: 0, y: 0 },
   originEntity: null,
@@ -213,7 +217,7 @@ function setupUi(): void {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
       setActiveButton("[data-tool]", activeTool);
-      planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : "crosshair";
+      syncPlanCursor();
     });
   });
 
@@ -223,6 +227,7 @@ function setupUi(): void {
       setActiveButton("[data-furniture]", activeFurniture);
       activeTool = "furniture";
       setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
     });
   });
 
@@ -251,6 +256,7 @@ function setupUi(): void {
   planCanvas.addEventListener("pointerup", handlePointerUp);
   planCanvas.addEventListener("pointercancel", handlePointerUp);
   planCanvas.addEventListener("wheel", handleWheel, { passive: false });
+  planCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
   planCanvas.addEventListener("dblclick", handleDoubleClick);
   threeCanvas.addEventListener("pointerdown", handleThreePointerDown);
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
@@ -274,6 +280,14 @@ function setActiveButton(selector: string, value: string): void {
   });
 }
 
+function syncPlanCursor(): void {
+  if (drag.dragMode === "pan") {
+    planCanvas.style.cursor = "grabbing";
+    return;
+  }
+  planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : "crosshair";
+}
+
 function applyViewMode(nextMode: ViewMode, persist = true): void {
   viewMode = nextMode;
   workspace.dataset.viewMode = viewMode;
@@ -292,10 +306,29 @@ function applyViewMode(nextMode: ViewMode, persist = true): void {
 }
 
 function handlePointerDown(event: PointerEvent): void {
+  if (event.button === 2) {
+    event.preventDefault();
+    planCanvas.setPointerCapture(event.pointerId);
+    drag = {
+      dragMode: "pan",
+      pointerId: event.pointerId,
+      startScreen: { x: event.clientX, y: event.clientY },
+      startView: { x: view.x, y: view.y },
+      startWorld: screenToWorld(event),
+      currentWorld: screenToWorld(event),
+      originEntity: null,
+      resizeCorner: null,
+    };
+    planCanvas.style.cursor = "grabbing";
+    return;
+  }
+
   const point = screenToWorld(event);
   const hit = hitTest(point);
   planCanvas.setPointerCapture(event.pointerId);
   drag.pointerId = event.pointerId;
+  drag.startScreen = { x: event.clientX, y: event.clientY };
+  drag.startView = { x: view.x, y: view.y };
   drag.startWorld = point;
   drag.currentWorld = point;
   drag.originEntity = hit.entity ? cloneEntity(hit.entity) : null;
@@ -354,6 +387,13 @@ function handlePointerDown(event: PointerEvent): void {
 }
 
 function handlePointerMove(event: PointerEvent): void {
+  if (drag.pointerId === event.pointerId && drag.dragMode === "pan") {
+    view.x = drag.startView.x + event.clientX - drag.startScreen.x;
+    view.y = drag.startView.y + event.clientY - drag.startScreen.y;
+    render2d();
+    return;
+  }
+
   const point = screenToWorld(event);
   const hover = hitTest(point);
   if (activeTool === "select" && drag.dragMode === "none") {
@@ -416,11 +456,14 @@ function handlePointerUp(event: PointerEvent): void {
   drag = {
     dragMode: "none",
     pointerId: null,
+    startScreen: { x: 0, y: 0 },
+    startView: { x: 0, y: 0 },
     startWorld: { x: 0, y: 0 },
     currentWorld: { x: 0, y: 0 },
     originEntity: null,
     resizeCorner: null,
   };
+  syncPlanCursor();
   redrawAll();
 }
 
