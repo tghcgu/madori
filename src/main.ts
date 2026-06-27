@@ -8,6 +8,7 @@ type EntityType = "room" | "wall" | "door" | "window" | "furniture";
 type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
 type DragMode = "draw" | "move" | "resize" | "none";
 type Direction = "horizontal" | "vertical";
+type ViewMode = "split" | "plan" | "three";
 
 interface Point {
   x: number;
@@ -71,6 +72,7 @@ function requiredElement<T extends Element>(selector: string): T {
 
 const planCanvas = requiredElement<HTMLCanvasElement>("#planCanvas");
 const threeCanvas = requiredElement<HTMLCanvasElement>("#threeCanvas");
+const workspace = requiredElement<HTMLElement>(".workspace");
 const propertiesPanel = requiredElement<HTMLDivElement>("#propertiesPanel");
 const planStats = requiredElement<HTMLSpanElement>("#planStats");
 const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
@@ -83,6 +85,7 @@ if (!canvasContext) {
 const ctx: CanvasRenderingContext2D = canvasContext;
 
 const STORAGE_KEY = "madori-quick-3d-plan";
+const VIEW_MODE_KEY = "madori-quick-3d-view-mode";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.03;
@@ -101,6 +104,7 @@ const ROOM_COLORS = ["#f5efe4", "#e8f2ed", "#e9eff8", "#f6e8e0", "#eef0e3", "#f0
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
+let viewMode: ViewMode = loadViewMode();
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -115,6 +119,7 @@ let drag: PointerState = {
   originEntity: null,
   resizeCorner: null,
 };
+let threePointerDown: Point | null = null;
 
 const renderer = new THREE.WebGLRenderer({
   canvas: threeCanvas,
@@ -139,6 +144,8 @@ controls.maxPolarAngle = Math.PI * 0.48;
 
 const planGroup = new THREE.Group();
 scene.add(planGroup);
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
 
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0xaeb7c3, 1.6);
 scene.add(hemiLight);
@@ -166,6 +173,7 @@ setupUi();
 fitPlanToCanvas();
 render2d();
 rebuildThree();
+applyViewMode(viewMode, false);
 animate3d();
 
 function loadInitialState(): PlanState {
@@ -189,7 +197,18 @@ function loadInitialState(): PlanState {
   };
 }
 
+function loadViewMode(): ViewMode {
+  const stored = localStorage.getItem(VIEW_MODE_KEY);
+  return stored === "plan" || stored === "three" || stored === "split" ? stored : "split";
+}
+
 function setupUi(): void {
+  document.querySelectorAll<HTMLButtonElement>("button[data-view-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyViewMode(button.dataset.viewMode as ViewMode);
+    });
+  });
+
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
@@ -233,6 +252,8 @@ function setupUi(): void {
   planCanvas.addEventListener("pointercancel", handlePointerUp);
   planCanvas.addEventListener("wheel", handleWheel, { passive: false });
   planCanvas.addEventListener("dblclick", handleDoubleClick);
+  threeCanvas.addEventListener("pointerdown", handleThreePointerDown);
+  threeCanvas.addEventListener("pointerup", handleThreePointerUp);
   window.addEventListener("keydown", handleKeyDown);
 
   appResizeObserver = new ResizeObserver(() => {
@@ -248,8 +269,25 @@ function setupUi(): void {
 
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
-    const dataValue = button.dataset.tool ?? button.dataset.furniture;
+    const dataValue = button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
     button.classList.toggle("is-active", dataValue === value);
+  });
+}
+
+function applyViewMode(nextMode: ViewMode, persist = true): void {
+  viewMode = nextMode;
+  workspace.dataset.viewMode = viewMode;
+  workspace.classList.remove("is-active");
+  setActiveButton("button[data-view-mode]", viewMode);
+  if (persist) {
+    localStorage.setItem(VIEW_MODE_KEY, viewMode);
+  }
+  requestAnimationFrame(() => {
+    resizeCanvases();
+    if (viewMode !== "three") {
+      render2d();
+    }
+    render3dOnce();
   });
 }
 
@@ -394,6 +432,31 @@ function handleDoubleClick(event: MouseEvent): void {
   setActiveButton("[data-tool]", activeTool);
   updateUi();
   render2d();
+}
+
+function handleThreePointerDown(event: PointerEvent): void {
+  threePointerDown = { x: event.clientX, y: event.clientY };
+}
+
+function handleThreePointerUp(event: PointerEvent): void {
+  if (!threePointerDown) return;
+  const moved = Math.hypot(event.clientX - threePointerDown.x, event.clientY - threePointerDown.y);
+  threePointerDown = null;
+  if (moved > 6) return;
+
+  const rect = threeCanvas.getBoundingClientRect();
+  pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointerNdc, camera);
+  const hits = raycaster.intersectObjects(planGroup.children, true);
+  const entityId = hits.map((hit) => entityIdFromObject(hit.object)).find((id): id is string => Boolean(id)) ?? null;
+
+  state.selectedId = entityId;
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  updateUi();
+  render2d();
+  rebuildThree();
 }
 
 function handleWheel(event: WheelEvent): void {
@@ -750,11 +813,13 @@ function addRoom3d(room: Room, center: Point): void {
   mesh.position.set(pos.x, 0, pos.z);
   mesh.receiveShadow = true;
   mesh.castShadow = false;
+  markSelectable(mesh, room.id);
   planGroup.add(mesh);
 
   const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
   edge.position.copy(mesh.position);
   planGroup.add(edge);
+  addSelectionBox(mesh, room.id);
 }
 
 function addWall3d(wall: LinearElement, center: Point): void {
@@ -771,6 +836,7 @@ function addWall3d(wall: LinearElement, center: Point): void {
   mesh.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  markSelectable(mesh, wall.id);
   planGroup.add(mesh);
 
   const cap = new THREE.Mesh(
@@ -779,7 +845,9 @@ function addWall3d(wall: LinearElement, center: Point): void {
   );
   cap.position.set(pos.x, WALL_HEIGHT + 0.04, pos.z);
   cap.castShadow = true;
+  markSelectable(cap, wall.id);
   planGroup.add(cap);
+  addSelectionBox(mesh, wall.id);
 }
 
 function addDoor3d(door: LinearElement, center: Point): void {
@@ -800,6 +868,7 @@ function addDoor3d(door: LinearElement, center: Point): void {
   );
   slab.position.set(pos.x, 0.08, pos.z);
   slab.castShadow = true;
+  markSelectable(slab, door.id);
   planGroup.add(slab);
 
   const hingePoint = direction === "horizontal" ? to3d(Math.min(door.x1, door.x2), door.y1, center) : to3d(door.x1, Math.min(door.y1, door.y2), center);
@@ -812,7 +881,9 @@ function addDoor3d(door: LinearElement, center: Point): void {
   panel.rotation.y = direction === "horizontal" ? Math.PI / 4 : -Math.PI / 4;
   panel.scale.y = frameHeight / 0.06;
   panel.castShadow = true;
+  markSelectable(panel, door.id);
   planGroup.add(panel);
+  addSelectionBox(slab, door.id);
 }
 
 function addWindow3d(windowEl: LinearElement, center: Point): void {
@@ -829,10 +900,12 @@ function addWindow3d(windowEl: LinearElement, center: Point): void {
     windowMaterial,
   );
   glass.position.set(pos.x, 1.35, pos.z);
+  markSelectable(glass, windowEl.id);
   planGroup.add(glass);
   const frame = new THREE.LineSegments(new THREE.EdgesGeometry(glass.geometry), edgeMaterial);
   frame.position.copy(glass.position);
   planGroup.add(frame);
+  addSelectionBox(glass, windowEl.id);
 }
 
 function addFurniture3d(furniture: Furniture, center: Point): void {
@@ -860,6 +933,33 @@ function addFurniture3d(furniture: Furniture, center: Point): void {
     tub.position.set(0, height / 2 + 0.03, 0);
     mesh.add(tub);
   }
+  markSelectable(mesh, furniture.id);
+  addSelectionBox(mesh, furniture.id);
+}
+
+function markSelectable(object: THREE.Object3D, entityId: string): void {
+  object.userData.entityId = entityId;
+  object.traverse((child) => {
+    child.userData.entityId = entityId;
+  });
+}
+
+function addSelectionBox(object: THREE.Object3D, entityId: string): void {
+  if (state.selectedId !== entityId) return;
+  const helper = new THREE.BoxHelper(object, 0x2775d1);
+  helper.userData.ignoreSelection = true;
+  planGroup.add(helper);
+}
+
+function entityIdFromObject(object: THREE.Object3D): string | null {
+  let current: THREE.Object3D | null = object;
+  while (current) {
+    if (!current.userData.ignoreSelection && typeof current.userData.entityId === "string") {
+      return current.userData.entityId;
+    }
+    current = current.parent;
+  }
+  return null;
 }
 
 function addFurniturePart(parent: THREE.Mesh, width: number, height: number, depth: number, x: number, y: number, z: number, color: number): void {

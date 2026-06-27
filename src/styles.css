@@ -106,6 +106,7 @@ select:focus-visible {
 .icon-button,
 .text-button,
 .tool-button,
+.view-switch button,
 .segmented button,
 .template-list button {
   min-height: 36px;
@@ -121,6 +122,7 @@ select:focus-visible {
 .icon-button:hover,
 .text-button:hover,
 .tool-button:hover,
+.view-switch button:hover,
 .segmented button:hover,
 .template-list button:hover {
   border-color: var(--line-strong);
@@ -130,6 +132,7 @@ select:focus-visible {
 .icon-button:active,
 .text-button:active,
 .tool-button:active,
+.view-switch button:active,
 .segmented button:active,
 .template-list button:active {
   transform: translateY(1px);
@@ -160,11 +163,44 @@ select:focus-visible {
 
 .icon-button svg,
 .text-button svg,
-.tool-button svg {
+.tool-button svg,
+.view-switch svg {
   width: 18px;
   height: 18px;
   stroke-width: 2.1;
   flex: 0 0 auto;
+}
+
+.view-switch {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(66px, 1fr));
+  min-width: 218px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.view-switch button {
+  min-width: 0;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.view-switch button:last-child {
+  border-right: 0;
+}
+
+.view-switch button.is-active {
+  background: rgba(39, 117, 209, 0.1);
+  color: #145da8;
+  font-weight: 700;
 }
 
 .workspace {
@@ -173,6 +209,21 @@ select:focus-visible {
   grid-template-columns: 284px minmax(430px, 1fr) minmax(430px, 1fr);
   gap: 1px;
   background: var(--line);
+}
+
+.workspace[data-view-mode="plan"],
+.workspace[data-view-mode="three"] {
+  grid-template-columns: 284px minmax(0, 1fr);
+}
+
+.workspace[data-view-mode="plan"] .three-pane,
+.workspace[data-view-mode="three"] .plan-pane {
+  display: none;
+}
+
+.workspace[data-view-mode="plan"] .plan-pane,
+.workspace[data-view-mode="three"] .three-pane {
+  grid-column: 2;
 }
 
 .tool-panel {
@@ -326,6 +377,14 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+#threeCanvas {
+  cursor: grab;
+}
+
+#threeCanvas:active {
+  cursor: grabbing;
+}
+
 .three-pane {
   overflow: hidden;
   background: #e9edf3;
@@ -353,12 +412,23 @@ select:focus-visible {
     grid-template-rows: minmax(420px, 1fr) minmax(360px, 0.86fr);
   }
 
+  .workspace[data-view-mode="plan"],
+  .workspace[data-view-mode="three"] {
+    grid-template-columns: 248px minmax(360px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
   .tool-panel {
     grid-row: 1 / 3;
   }
 
   .three-pane {
     grid-column: 2;
+  }
+
+  .workspace[data-view-mode="plan"] .tool-panel,
+  .workspace[data-view-mode="three"] .tool-panel {
+    grid-row: 1;
   }
 }
 
@@ -384,11 +454,22 @@ select:focus-visible {
     padding-bottom: 2px;
   }
 
+  .view-switch {
+    min-width: 204px;
+    grid-template-columns: repeat(3, 68px);
+  }
+
   .workspace {
     height: auto;
     min-height: calc(100vh - 112px);
     grid-template-columns: 1fr;
     grid-template-rows: auto 62vh 58vh;
+  }
+
+  .workspace[data-view-mode="plan"],
+  .workspace[data-view-mode="three"] {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(68vh, 1fr);
   }
 
   .tool-panel {
