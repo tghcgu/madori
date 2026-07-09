@@ -2722,7 +2722,8 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
 }
 
 function getLineEndpointHit(entity: LinearElement, point: Point): string | null {
-  const size = 12 / view.zoom;
+  // 短い線でも中央部をドラッグで移動できるよう、端点判定は線長の1/4までに制限する
+  const size = Math.min(12 / view.zoom, distance(entity) * 0.25);
   if (Math.abs(point.x - entity.x1) <= size && Math.abs(point.y - entity.y1) <= size) return "p1";
   if (Math.abs(point.x - entity.x2) <= size && Math.abs(point.y - entity.y2) <= size) return "p2";
   return null;
@@ -3090,7 +3091,8 @@ function getWallOpenings(wallItem: LinearElement, wallFrom: number, wallTo: numb
   const direction = lineDirection(wallItem);
   const wallLinePosition = direction === "horizontal" ? (wallItem.y1 + wallItem.y2) / 2 : (wallItem.x1 + wallItem.x2) / 2;
   const tolerance = WALL_THICKNESS_2D * 1.4;
-  const clearance = WALL_THICKNESS_2D * 0.7;
+  // 壁線は端が半分張り出す（lineCap: square）ため、張り出しと同量だけ余分に切ると面一になる
+  const clearance = WALL_THICKNESS_2D * 0.5;
 
   return entities
     .filter((entity): entity is LinearElement => entity.type === "door" || entity.type === "window")
