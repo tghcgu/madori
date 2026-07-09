@@ -751,7 +751,7 @@ function handlePointerDown(event: PointerEvent): void {
     if (hit.entity?.type === "room" && hit.corner === "label") {
       drag.dragMode = "label";
       planCanvas.style.cursor = "grabbing";
-    } else if (hit.entity && hit.corner && isResizable(hit.entity)) {
+    } else if (hit.entity && hit.corner && (isResizable(hit.entity) || isLinear(hit.entity))) {
       drag.dragMode = "resize";
     } else if (hit.entity) {
       drag.dragMode = "move";
@@ -1073,6 +1073,19 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
     entity.w = Math.max(GRID, Math.abs(x2 - x1));
     entity.h = Math.max(GRID, Math.abs(y2 - y1));
   }
+
+  if (isLinear(origin) && isLinear(entity) && (corner === "p1" || corner === "p2")) {
+    const fixed = corner === "p1" ? { x: origin.x2, y: origin.y2 } : { x: origin.x1, y: origin.y1 };
+    const moved = constrainLine(fixed, { x: snap(point.x), y: snap(point.y) });
+    if (Math.hypot(moved.x - fixed.x, moved.y - fixed.y) < GRID) return;
+    if (corner === "p1") {
+      entity.x1 = moved.x;
+      entity.y1 = moved.y;
+    } else {
+      entity.x2 = moved.x;
+      entity.y2 = moved.y;
+    }
+  }
 }
 
 function render2d(): void {
@@ -1188,6 +1201,23 @@ function drawRoomLabelGuide(room: Room): void {
 
 function drawWall2d(wallItem: LinearElement): void {
   drawLineElement(wallItem, wallItem.color ?? INK, WALL_THICKNESS_2D);
+  if (state.selectedId === wallItem.id) drawLineHandles(wallItem);
+}
+
+function drawLineHandles(entity: LinearElement): void {
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 2 / view.zoom;
+  const size = 8 / view.zoom;
+  [
+    { x: entity.x1, y: entity.y1 },
+    { x: entity.x2, y: entity.y2 },
+  ].forEach((end) => {
+    ctx.fillRect(end.x - size / 2, end.y - size / 2, size, size);
+    ctx.strokeRect(end.x - size / 2, end.y - size / 2, size, size);
+  });
+  ctx.restore();
 }
 
 function drawWindow2d(windowEl: LinearElement): void {
@@ -1218,6 +1248,7 @@ function drawWindow2d(windowEl: LinearElement): void {
   ctx.lineTo(length / 2, 0);
   ctx.stroke();
   ctx.restore();
+  if (selected) drawLineHandles(windowEl);
 }
 
 function drawDoorWipe2d(door: LinearElement): void {
@@ -1271,6 +1302,7 @@ function drawDoor2d(door: LinearElement): void {
     ctx.restore();
   });
   ctx.restore();
+  if (selected) drawLineHandles(door);
 }
 
 function drawLineElement(entity: LinearElement, color: string, width: number): void {
@@ -1814,6 +1846,10 @@ function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
 
   addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
   addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
+
+  // 開口で切り抜かれた壁を埋める垂れ壁（ドア上部）
+  const headerHeight = WALL_HEIGHT - frameHeight;
+  addOrientedBox(mid, center, length + 0.15, headerHeight, WALL_THICKNESS_2D * SCALE_3D, yBase + frameHeight + headerHeight / 2, angle, wallMaterial, door.id);
   addSelectionBox(panel, door.id);
 }
 
@@ -1836,7 +1872,13 @@ function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): voi
   addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameTop, angle, frameMaterial, windowEl.id);
   addOrientedBox({ x: windowEl.x1, y: windowEl.y1 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
   addOrientedBox({ x: windowEl.x2, y: windowEl.y2 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
-  addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, frameMaterial, windowEl.id);
+
+  // 開口で切り抜かれた壁を埋める腰壁（下）と垂れ壁（上）
+  const wallDepth = WALL_THICKNESS_2D * SCALE_3D;
+  const sillHeight = frameBottom - yBase;
+  const headerHeight = yBase + WALL_HEIGHT - frameTop;
+  addOrientedBox(mid, center, length + 0.15, sillHeight, wallDepth, yBase + sillHeight / 2, angle, wallMaterial, windowEl.id);
+  addOrientedBox(mid, center, length + 0.15, headerHeight, wallDepth, frameTop + headerHeight / 2, angle, wallMaterial, windowEl.id);
   addSelectionBox(glass, windowEl.id);
 }
 
@@ -2587,11 +2629,22 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       if (isPointNearShape(point, entity)) {
         return { entity, corner: null };
       }
-    } else if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
-      return { entity, corner: null };
+    } else if (isLinear(entity)) {
+      const endpoint = getLineEndpointHit(entity, point);
+      if (endpoint) return { entity, corner: endpoint };
+      if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
+        return { entity, corner: null };
+      }
     }
   }
   return { entity: null, corner: null };
+}
+
+function getLineEndpointHit(entity: LinearElement, point: Point): string | null {
+  const size = 12 / view.zoom;
+  if (Math.abs(point.x - entity.x1) <= size && Math.abs(point.y - entity.y1) <= size) return "p1";
+  if (Math.abs(point.x - entity.x2) <= size && Math.abs(point.y - entity.y2) <= size) return "p2";
+  return null;
 }
 
 function getRoomLabelPosition(room: Room): Point {
