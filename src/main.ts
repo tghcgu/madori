@@ -411,6 +411,17 @@ function applyLightSettings(): void {
   sunLight.position.set(x, y, z);
   // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
   sunLight.shadow.intensity = shadowsEnabled ? 1 : 0;
+  if (shadowsEnabled) {
+    // 通常: 太陽光で立体感を出す
+    sunLight.intensity = 2.4;
+    hemiLight.intensity = 1.6;
+    hemiLight.groundColor.set(0xaeb7c3);
+  } else {
+    // 影オフ: 面の明暗もほぼ無くしたフラットな見た目にする
+    sunLight.intensity = 0.35;
+    hemiLight.intensity = 3.3;
+    hemiLight.groundColor.set(0xf4f4f4);
+  }
 }
 
 function activeFloor(): Floor {
