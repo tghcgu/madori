@@ -230,6 +230,32 @@ select:focus-visible {
   grid-column: 2;
 }
 
+.workspace[data-panel="hidden"] .tool-panel {
+  display: none;
+}
+
+.workspace[data-panel="hidden"] {
+  grid-template-columns: minmax(430px, 1fr) minmax(430px, 1fr);
+}
+
+.workspace[data-panel="hidden"] .plan-pane {
+  grid-column: 1;
+}
+
+.workspace[data-panel="hidden"] .three-pane {
+  grid-column: 2;
+}
+
+.workspace[data-view-mode="plan"][data-panel="hidden"],
+.workspace[data-view-mode="three"][data-panel="hidden"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace[data-view-mode="plan"][data-panel="hidden"] .plan-pane,
+.workspace[data-view-mode="three"][data-panel="hidden"] .three-pane {
+  grid-column: 1;
+}
+
 .tool-panel {
   min-width: 0;
   overflow: auto;
@@ -472,6 +498,20 @@ select:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+
+.property-grid label.check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.property-grid label.check input {
+  width: auto;
+  min-height: 0;
 }
 
 .plan-pane,
