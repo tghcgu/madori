@@ -456,6 +456,39 @@ select:focus-visible {
   display: none;
 }
 
+.shortcut-list {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.shortcut-row > span:first-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.shortcut-list kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
 .properties-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
