@@ -1256,13 +1256,20 @@ function drawDoor2d(door: LinearElement): void {
   ctx.arc(door.x1, door.y1, length, leafAngle, angle, false);
   ctx.stroke();
 
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(door.x1, door.y1);
-  ctx.lineTo(door.x1 + Math.cos(angle + Math.PI / 2) * 10, door.y1 + Math.sin(angle + Math.PI / 2) * 10);
-  ctx.moveTo(door.x2, door.y2);
-  ctx.lineTo(door.x2 + Math.cos(angle + Math.PI / 2) * 10, door.y2 + Math.sin(angle + Math.PI / 2) * 10);
-  ctx.stroke();
+  // 開口両端の戸当たりブロック（壁厚に収まるように中心合わせで描く）
+  const jambLength = 7;
+  const jambDepth = WALL_THICKNESS_2D + 2;
+  ctx.fillStyle = selected ? "#2775d1" : door.color ?? INK;
+  [
+    { x: door.x1, y: door.y1 },
+    { x: door.x2, y: door.y2 },
+  ].forEach((end) => {
+    ctx.save();
+    ctx.translate(end.x, end.y);
+    ctx.rotate(angle);
+    ctx.fillRect(-jambLength / 2, -jambDepth / 2, jambLength, jambDepth);
+    ctx.restore();
+  });
   ctx.restore();
 }
 
@@ -2307,7 +2314,8 @@ function updatePropertiesPanel(): void {
     const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? "ドア" : "窓";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        <p class="empty-state">${typeLabel} / 長さ ${Math.round(distance(selected))} cm</p>
+        <p class="empty-state">${typeLabel}</p>
+        <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" /></label>
         <div class="two-col">
           <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
           <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" /></label>
@@ -2315,6 +2323,12 @@ function updatePropertiesPanel(): void {
         <label>色<input id="lineColorInput" type="color" value="${selected.color ?? "#000000"}" /></label>
       </div>
     `;
+    bindNumber("#lineLengthInput", (value) => {
+      const newLength = Math.max(GRID, Math.round(value));
+      const angle = lineAngle(selected);
+      selected.x2 = Math.round(selected.x1 + Math.cos(angle) * newLength);
+      selected.y2 = Math.round(selected.y1 + Math.sin(angle) * newLength);
+    });
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
