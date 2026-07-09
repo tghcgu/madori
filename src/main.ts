@@ -981,8 +981,8 @@ function handleKeyDown(event: KeyboardEvent): void {
   }
   if (!isEditing && event.key.toLowerCase() === "r" && state.selectedId) {
     const selected = findEntity(state.selectedId);
-    if (selected?.type === "furniture") {
-      selected.rotation = (selected.rotation + 90) % 360;
+    if (selected) {
+      rotateEntity90(selected);
       commitState();
       redrawAll();
     }
@@ -1059,6 +1059,50 @@ function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
   };
   activeEntities().push(shape);
   state.selectedId = shape.id;
+}
+
+function rotateEntity90(entity: Entity): void {
+  if (entity.type === "furniture") {
+    entity.rotation = (entity.rotation + 90) % 360;
+    return;
+  }
+  if (entity.type === "room") {
+    const cx = entity.x + entity.w / 2;
+    const cy = entity.y + entity.h / 2;
+    const newW = entity.h;
+    const newH = entity.w;
+    entity.x = snap(cx - newW / 2);
+    entity.y = snap(cy - newH / 2);
+    entity.w = newW;
+    entity.h = newH;
+    return;
+  }
+  if (isLinear(entity)) {
+    const mid = midpoint(entity);
+    const x1 = mid.x - (entity.y1 - mid.y);
+    const y1 = mid.y + (entity.x1 - mid.x);
+    const x2 = mid.x - (entity.y2 - mid.y);
+    const y2 = mid.y + (entity.x2 - mid.x);
+    entity.x1 = snap(x1);
+    entity.y1 = snap(y1);
+    entity.x2 = snap(x2);
+    entity.y2 = snap(y2);
+    return;
+  }
+  if (entity.type === "shape") {
+    entity.startAngle += Math.PI / 2;
+    entity.endAngle += Math.PI / 2;
+  }
+}
+
+function rotateLineTo(entity: LinearElement, degrees: number): void {
+  const mid = midpoint(entity);
+  const length = distance(entity);
+  const rad = degreesToRadians(degrees);
+  entity.x1 = Math.round(mid.x - (Math.cos(rad) * length) / 2);
+  entity.y1 = Math.round(mid.y - (Math.sin(rad) * length) / 2);
+  entity.x2 = Math.round(mid.x + (Math.cos(rad) * length) / 2);
+  entity.y2 = Math.round(mid.y + (Math.sin(rad) * length) / 2);
 }
 
 function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): void {
@@ -2385,6 +2429,7 @@ function updatePropertiesPanel(): void {
           <label>色 2D<input id="roomColorInput" type="color" value="${selected.color}" /></label>
           <label>色 3D<input id="roomColor3dInput" type="color" value="${selected.color3d ?? selected.color}" /></label>
         </div>
+        <button type="button" class="prop-button" id="roomRotateButton">90°回転（Rキー）</button>
       </div>
     `;
     bindInput("#roomNameInput", (value) => (selected.name = value || "部屋"));
@@ -2392,6 +2437,7 @@ function updatePropertiesPanel(): void {
     bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
     bindInput("#roomColorInput", (value) => (selected.color = value));
     bindInput("#roomColor3dInput", (value) => (selected.color3d = value));
+    bindButton("#roomRotateButton", () => rotateEntity90(selected));
     return;
   }
 
@@ -2409,11 +2455,15 @@ function updatePropertiesPanel(): void {
     propertiesPanel.innerHTML = `
       <div class="property-grid">
         <p class="empty-state">${typeLabel}</p>
-        <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" /></label>
+        <div class="two-col">
+          <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" /></label>
+          <label>角度 °<input id="lineAngleInput" type="number" step="15" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" /></label>
+        </div>
         <div class="two-col">
           <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
           <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" /></label>
         </div>
+        <button type="button" class="prop-button" id="lineRotateButton">90°回転（Rキー）</button>
         ${doorFlipRow}
         ${mullionRow}
         <div class="two-col">
@@ -2428,6 +2478,8 @@ function updatePropertiesPanel(): void {
       selected.x2 = Math.round(selected.x1 + Math.cos(angle) * newLength);
       selected.y2 = Math.round(selected.y1 + Math.sin(angle) * newLength);
     });
+    bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
+    bindButton("#lineRotateButton", () => rotateEntity90(selected));
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
@@ -2553,6 +2605,15 @@ function bindCheckbox(selector: string, update: (checked: boolean) => void): voi
   const input = propertiesPanel.querySelector<HTMLInputElement>(selector);
   input?.addEventListener("change", () => {
     update(input.checked);
+    commitState();
+    redrawAll();
+  });
+}
+
+function bindButton(selector: string, action: () => void): void {
+  const button = propertiesPanel.querySelector<HTMLButtonElement>(selector);
+  button?.addEventListener("click", () => {
+    action();
     commitState();
     redrawAll();
   });

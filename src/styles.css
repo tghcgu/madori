@@ -509,6 +509,20 @@ select:focus-visible {
   font-size: 13px;
 }
 
+.property-grid .prop-button {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.property-grid .prop-button:hover {
+  border-color: var(--line-strong);
+  background: #f9fafc;
+}
+
 .property-grid label.check input {
   width: auto;
   min-height: 0;
