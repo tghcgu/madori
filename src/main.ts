@@ -395,6 +395,9 @@ function loadDimensionLabels(): boolean {
 }
 
 function loadShadowsEnabled(): boolean {
+  const param = new URLSearchParams(window.location.search).get("shadows");
+  if (param === "off") return false;
+  if (param === "on") return true;
   return localStorage.getItem(SHADOWS_KEY) !== "off";
 }
 
@@ -406,19 +409,8 @@ function loadLightDirection(): LightDirection {
 function applyLightSettings(): void {
   const [x, y, z] = LIGHT_POSITIONS[lightDirection];
   sunLight.position.set(x, y, z);
-  sunLight.castShadow = shadowsEnabled;
-  renderer.shadowMap.enabled = shadowsEnabled;
-  renderer.shadowMap.needsUpdate = true;
-  // shadowMap.enabled の切替は既存マテリアルに反映されないため再コンパイルを強制する
-  scene.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    const material = mesh.material as THREE.Material | THREE.Material[] | undefined;
-    if (Array.isArray(material)) {
-      material.forEach((item) => (item.needsUpdate = true));
-    } else if (material) {
-      material.needsUpdate = true;
-    }
-  });
+  // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
+  sunLight.shadow.intensity = shadowsEnabled ? 1 : 0;
 }
 
 function activeFloor(): Floor {
