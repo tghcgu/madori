@@ -417,10 +417,10 @@ function applyLightSettings(): void {
     hemiLight.intensity = 1.6;
     hemiLight.groundColor.set(0xaeb7c3);
   } else {
-    // 影オフ: 面の明暗もほぼ無くしたフラットな見た目にする
-    sunLight.intensity = 0.35;
-    hemiLight.intensity = 3.3;
-    hemiLight.groundColor.set(0xf4f4f4);
+    // 影オフ: 太陽光を完全に消し、均一な環境光のみのフラットな見た目にする
+    sunLight.intensity = 0;
+    hemiLight.intensity = 3.5;
+    hemiLight.groundColor.set(0xffffff);
   }
 }
 
@@ -726,6 +726,8 @@ function updateShadowToggle(): void {
   const button = document.querySelector<HTMLButtonElement>("#shadowToggle");
   button?.classList.toggle("is-active", shadowsEnabled);
   button?.setAttribute("aria-pressed", String(shadowsEnabled));
+  const lightSelect = document.querySelector<HTMLSelectElement>("#lightDirectionSelect");
+  if (lightSelect) lightSelect.disabled = !shadowsEnabled;
 }
 
 function applyViewMode(nextMode: ViewMode, persist = true): void {
