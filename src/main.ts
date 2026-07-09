@@ -5,8 +5,33 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 type Tool = "select" | "room" | "wall" | "door" | "window" | "furniture" | "circle" | "arc" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
-type FurnitureKind = "sofa" | "table" | "bed" | "desk" | "kitchen" | "bath";
+type FurnitureKind =
+  | "sofa"
+  | "armchair"
+  | "table"
+  | "tv"
+  | "plant"
+  | "diningTable"
+  | "chair"
+  | "kitchen"
+  | "fridge"
+  | "bed"
+  | "bedDouble"
+  | "desk"
+  | "shelf"
+  | "bath"
+  | "toilet"
+  | "washbasin"
+  | "washer"
+  | "closet"
+  | "wardrobe"
+  | "stairs"
+  | "stairsU"
+  | "stairsSpiral"
+  | "car";
 type ShapeKind = "circle" | "arc";
+type RoofKind = "none" | "gable" | "hip" | "flat";
+type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
 type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
 type Direction = "horizontal" | "vertical";
 type ViewMode = "split" | "plan" | "three";
@@ -36,6 +61,7 @@ interface LinearElement {
   y1: number;
   x2: number;
   y2: number;
+  color?: string;
 }
 
 interface Furniture {
@@ -47,6 +73,7 @@ interface Furniture {
   w: number;
   h: number;
   rotation: number;
+  color?: string;
 }
 
 interface Shape {
@@ -58,13 +85,22 @@ interface Shape {
   r: number;
   startAngle: number;
   endAngle: number;
+  color?: string;
 }
 
 type Entity = Room | LinearElement | Furniture | Shape;
 
-interface PlanState {
+interface Floor {
+  id: string;
+  name: string;
   entities: Entity[];
+}
+
+interface PlanState {
+  floors: Floor[];
+  activeFloor: number;
   selectedId: string | null;
+  roof: RoofKind;
 }
 
 interface PointerState {
@@ -95,6 +131,8 @@ const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
 const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
 const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
+const furniturePicker = requiredElement<HTMLDivElement>("#furniturePicker");
+const floorTabs = requiredElement<HTMLDivElement>("#floorTabs");
 const canvasContext = planCanvas.getContext("2d");
 if (!canvasContext) {
   throw new Error("2D canvas is not supported.");
@@ -104,26 +142,94 @@ const ctx: CanvasRenderingContext2D = canvasContext;
 const STORAGE_KEY = "madori-quick-3d-plan";
 const VIEW_MODE_KEY = "madori-quick-3d-view-mode";
 const DIMENSION_LABELS_KEY = "madori-quick-3d-dimension-labels";
+const SHADOWS_KEY = "madori-quick-3d-shadows";
+const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
-const SCALE_3D = 0.03;
+const SCALE_3D = 0.01;
 const WALL_THICKNESS_2D = 10;
-const WALL_HEIGHT = 3.18;
-const BASE_FURNITURE: Record<FurnitureKind, { label: string; w: number; h: number; color: number }> = {
-  sofa: { label: "ソファ", w: 86, h: 42, color: 0x2b7bc0 },
-  table: { label: "テーブル", w: 58, h: 42, color: 0xb98636 },
-  bed: { label: "ベッド", w: 88, h: 128, color: 0x7f8ba1 },
-  desk: { label: "机", w: 72, h: 42, color: 0x53616e },
-  kitchen: { label: "キッチン", w: 116, h: 44, color: 0x4f9b80 },
-  bath: { label: "浴槽", w: 74, h: 48, color: 0x62a8c8 },
+const WALL_HEIGHT = 2.6;
+const FLOOR_SLAB = 0.15;
+const FLOOR_SPACING = WALL_HEIGHT + FLOOR_SLAB;
+const MAX_FLOORS = 4;
+
+const INK = "#000000";
+const INK_SOFT = "#5b6470";
+const GHOST = "#d4d9e0";
+
+interface FurnitureDef {
+  label: string;
+  w: number;
+  h: number;
+}
+
+const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
+  sofa: { label: "ソファ", w: 170, h: 80 },
+  armchair: { label: "1人掛け", w: 80, h: 80 },
+  table: { label: "ローテーブル", w: 100, h: 50 },
+  tv: { label: "テレビ台", w: 120, h: 40 },
+  plant: { label: "観葉植物", w: 40, h: 40 },
+  diningTable: { label: "ダイニングセット", w: 160, h: 160 },
+  chair: { label: "椅子", w: 45, h: 45 },
+  kitchen: { label: "キッチン", w: 240, h: 65 },
+  fridge: { label: "冷蔵庫", w: 65, h: 65 },
+  bed: { label: "シングルベッド", w: 100, h: 200 },
+  bedDouble: { label: "ダブルベッド", w: 140, h: 200 },
+  desk: { label: "机", w: 120, h: 60 },
+  shelf: { label: "棚・本棚", w: 90, h: 30 },
+  bath: { label: "浴槽", w: 160, h: 75 },
+  toilet: { label: "トイレ", w: 45, h: 75 },
+  washbasin: { label: "洗面台", w: 75, h: 55 },
+  washer: { label: "洗濯機", w: 65, h: 65 },
+  closet: { label: "クローゼット", w: 160, h: 60 },
+  wardrobe: { label: "タンス", w: 120, h: 45 },
+  stairs: { label: "直階段", w: 100, h: 280 },
+  stairsU: { label: "折返し階段", w: 180, h: 180 },
+  stairsSpiral: { label: "らせん階段", w: 140, h: 140 },
+  car: { label: "車", w: 180, h: 460 },
 };
 
-const ROOM_COLORS = ["#f5efe4", "#e8f2ed", "#e9eff8", "#f6e8e0", "#eef0e3", "#f0e9f4"];
+const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
+  { label: "リビング", kinds: ["sofa", "armchair", "table", "tv", "plant"] },
+  { label: "ダイニング・キッチン", kinds: ["diningTable", "chair", "kitchen", "fridge"] },
+  { label: "寝室・書斎", kinds: ["bed", "bedDouble", "desk", "shelf"] },
+  { label: "水回り", kinds: ["bath", "toilet", "washbasin", "washer"] },
+  { label: "収納", kinds: ["closet", "wardrobe"] },
+  { label: "階段", kinds: ["stairs", "stairsU", "stairsSpiral"] },
+  { label: "屋外", kinds: ["car"] },
+];
+
+const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
+
+// 2D画面の上が北（3Dの-z）。値は「光が差す方角」に太陽を置く位置。
+const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
+  n: [0, 12, -14],
+  ne: [10, 12, -10],
+  e: [14, 12, 0],
+  se: [10, 12, 10],
+  s: [0, 12, 14],
+  sw: [-10, 12, 10],
+  w: [-14, 12, 0],
+  nw: [-10, 12, -10],
+  top: [0.6, 18, 0.6],
+};
+
+// 3D palette
+const COLOR_WOOD = 0xb59a76;
+const COLOR_WOOD_DARK = 0x8a6f52;
+const COLOR_FABRIC = 0x8ea0b5;
+const COLOR_WHITE = 0xf3f4f2;
+const COLOR_STEEL = 0xd7dbde;
+const COLOR_GREEN = 0x6f9e63;
+const COLOR_CERAMIC = 0xf0f4f5;
+const COLOR_DARK = 0x2c3238;
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
 let viewMode: ViewMode = loadViewMode();
 let showDimensions = loadDimensionLabels();
+let shadowsEnabled = loadShadowsEnabled();
+let lightDirection: LightDirection = loadLightDirection();
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -141,6 +247,8 @@ let drag: PointerState = {
   resizeCorner: null,
 };
 let threePointerDown: Point | null = null;
+let pendingCameraFrame = true;
+const hiddenFloorIds = new Set<string>();
 
 const renderer = new THREE.WebGLRenderer({
   canvas: threeCanvas,
@@ -159,8 +267,8 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = false;
-controls.minDistance = 5;
-controls.maxDistance = 42;
+controls.minDistance = 4;
+controls.maxDistance = 48;
 controls.maxPolarAngle = Math.PI * 0.48;
 
 const planGroup = new THREE.Group();
@@ -174,6 +282,10 @@ const sunLight = new THREE.DirectionalLight(0xffffff, 2.4);
 sunLight.position.set(8, 14, 10);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.left = -14;
+sunLight.shadow.camera.right = 14;
+sunLight.shadow.camera.top = 14;
+sunLight.shadow.camera.bottom = -14;
 scene.add(sunLight);
 
 const roomMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
@@ -190,6 +302,8 @@ const windowMaterial = new THREE.MeshStandardMaterial({
   metalness: 0.05,
 });
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x405064, transparent: true, opacity: 0.55 });
+const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d6773, roughness: 0.86, side: THREE.DoubleSide });
+const slabMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.85 });
 
 createIcons({ icons });
 setupUi();
@@ -199,24 +313,68 @@ rebuildThree();
 applyViewMode(viewMode, false);
 animate3d();
 
+function isRoofKind(value: unknown): value is RoofKind {
+  return value === "none" || value === "gable" || value === "hip" || value === "flat";
+}
+
+function normalizePlan(parsed: unknown): PlanState | null {
+  const data = parsed as Partial<PlanState> & { entities?: Entity[] };
+  if (data && Array.isArray(data.floors)) {
+    const floors: Floor[] = data.floors
+      .filter((floor): floor is Floor => Boolean(floor) && Array.isArray((floor as Floor).entities))
+      .map((floor, index) => ({
+        id: floor.id ?? newId("room"),
+        name: `${index + 1}F`,
+        entities: floor.entities,
+      }));
+    if (floors.length === 0) return null;
+    return {
+      floors,
+      activeFloor: clamp(Math.round(Number(data.activeFloor ?? 0)) || 0, 0, floors.length - 1),
+      selectedId: data.selectedId ?? null,
+      roof: isRoofKind(data.roof) ? data.roof : "none",
+    };
+  }
+  if (data && Array.isArray(data.entities)) {
+    return {
+      floors: [{ id: newId("floor"), name: "1F", entities: data.entities }],
+      activeFloor: 0,
+      selectedId: data.selectedId ?? null,
+      roof: "none",
+    };
+  }
+  return null;
+}
+
 function loadInitialState(): PlanState {
+  const params = new URLSearchParams(window.location.search);
+  const templateKey = params.get("template");
+  if (templateKey) {
+    const plan = makeTemplate(templateKey);
+    const floorParam = Number(params.get("floor"));
+    if (Number.isFinite(floorParam) && floorParam >= 1) {
+      plan.activeFloor = clamp(Math.round(floorParam) - 1, 0, plan.floors.length - 1);
+    }
+    return plan;
+  }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
-      const parsed = JSON.parse(raw) as PlanState;
-      if (Array.isArray(parsed.entities)) {
-        return {
-          entities: parsed.entities,
-          selectedId: parsed.selectedId ?? null,
-        };
-      }
+      const normalized = normalizePlan(JSON.parse(raw));
+      if (normalized) return normalized;
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
   }
+  return makeTemplate("oneLdk");
+}
+
+function emptyState(): PlanState {
   return {
-    entities: makeTemplate("oneLdk"),
+    floors: [{ id: newId("floor"), name: "1F", entities: [] }],
+    activeFloor: 0,
     selectedId: null,
+    roof: "none",
   };
 }
 
@@ -226,7 +384,34 @@ function loadViewMode(): ViewMode {
 }
 
 function loadDimensionLabels(): boolean {
-  return localStorage.getItem(DIMENSION_LABELS_KEY) !== "hidden";
+  return localStorage.getItem(DIMENSION_LABELS_KEY) === "visible";
+}
+
+function loadShadowsEnabled(): boolean {
+  return localStorage.getItem(SHADOWS_KEY) !== "off";
+}
+
+function loadLightDirection(): LightDirection {
+  const stored = localStorage.getItem(LIGHT_DIRECTION_KEY);
+  return stored && stored in LIGHT_POSITIONS ? (stored as LightDirection) : "se";
+}
+
+function applyLightSettings(): void {
+  sunLight.castShadow = shadowsEnabled;
+  const [x, y, z] = LIGHT_POSITIONS[lightDirection];
+  sunLight.position.set(x, y, z);
+}
+
+function activeFloor(): Floor {
+  return state.floors[state.activeFloor];
+}
+
+function activeEntities(): Entity[] {
+  return activeFloor().entities;
+}
+
+function setActiveEntities(entities: Entity[]): void {
+  activeFloor().entities = entities;
 }
 
 function setupUi(): void {
@@ -244,13 +429,13 @@ function setupUi(): void {
     });
   });
 
-  document.querySelectorAll<HTMLButtonElement>("[data-furniture]").forEach((button) => {
+  buildFurniturePicker();
+
+  document.querySelectorAll<HTMLButtonElement>("[data-roof]").forEach((button) => {
     button.addEventListener("click", () => {
-      activeFurniture = button.dataset.furniture as FurnitureKind;
-      setActiveButton("[data-furniture]", activeFurniture);
-      activeTool = "furniture";
-      setActiveButton("[data-tool]", activeTool);
-      syncPlanCursor();
+      state.roof = button.dataset.roof as RoofKind;
+      commitState();
+      rebuildThree();
     });
   });
 
@@ -260,7 +445,7 @@ function setupUi(): void {
       if (!window.confirm("現在の間取りを雛形で置き換えます。実行しますか？")) {
         return;
       }
-      replaceState({ entities: makeTemplate(key), selectedId: null }, true);
+      replaceState(makeTemplate(key), true);
     });
   });
 
@@ -271,14 +456,32 @@ function setupUi(): void {
     render2d();
   });
 
+  document.querySelector<HTMLButtonElement>("#shadowToggle")?.addEventListener("click", () => {
+    shadowsEnabled = !shadowsEnabled;
+    localStorage.setItem(SHADOWS_KEY, shadowsEnabled ? "on" : "off");
+    applyLightSettings();
+    updateShadowToggle();
+  });
+
+  const lightSelect = document.querySelector<HTMLSelectElement>("#lightDirectionSelect");
+  if (lightSelect) {
+    lightSelect.value = lightDirection;
+    lightSelect.addEventListener("change", () => {
+      lightDirection = lightSelect.value as LightDirection;
+      localStorage.setItem(LIGHT_DIRECTION_KEY, lightDirection);
+      applyLightSettings();
+    });
+  }
+
   document.querySelector<HTMLButtonElement>("#undoButton")?.addEventListener("click", undo);
   document.querySelector<HTMLButtonElement>("#redoButton")?.addEventListener("click", redo);
   document.querySelector<HTMLButtonElement>("#fitButton")?.addEventListener("click", () => {
     fitPlanToCanvas();
     render2d();
+    frameCamera(getGlobalBounds());
   });
   document.querySelector<HTMLButtonElement>("#resetButton")?.addEventListener("click", () => {
-    replaceState({ entities: [], selectedId: null }, true);
+    replaceState(emptyState(), true);
   });
   document.querySelector<HTMLButtonElement>("#exportButton")?.addEventListener("click", exportPlan);
   document.querySelector<HTMLButtonElement>("#importButton")?.addEventListener("click", () => importInput.click());
@@ -304,12 +507,165 @@ function setupUi(): void {
   appResizeObserver.observe(threeCanvas);
   resizeCanvases();
   updateDimensionToggle();
+  updateShadowToggle();
+  applyLightSettings();
   updateUi();
+}
+
+function buildFurniturePicker(): void {
+  furniturePicker.innerHTML = "";
+
+  const fittings = document.createElement("details");
+  fittings.className = "furniture-category";
+  fittings.open = true;
+  const fittingsSummary = document.createElement("summary");
+  fittingsSummary.textContent = "建具（ドア・窓）";
+  fittings.appendChild(fittingsSummary);
+  const fittingsItems = document.createElement("div");
+  fittingsItems.className = "furniture-items";
+  ([
+    ["door", "ドア"],
+    ["window", "窓"],
+  ] as [Tool, string][]).forEach(([tool, label]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.tool = tool;
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      activeTool = tool;
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+    });
+    fittingsItems.appendChild(button);
+  });
+  fittings.appendChild(fittingsItems);
+  furniturePicker.appendChild(fittings);
+
+  FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
+    const details = document.createElement("details");
+    details.className = "furniture-category";
+    if (categoryIndex === 0) details.open = true;
+    const summary = document.createElement("summary");
+    summary.textContent = category.label;
+    details.appendChild(summary);
+    const items = document.createElement("div");
+    items.className = "furniture-items";
+    category.kinds.forEach((kind) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.furniture = kind;
+      button.textContent = FURNITURE_DEFS[kind].label;
+      if (kind === activeFurniture) button.classList.add("is-active");
+      button.addEventListener("click", () => {
+        activeFurniture = kind;
+        setActiveButton("[data-furniture]", activeFurniture);
+        activeTool = "furniture";
+        setActiveButton("[data-tool]", activeTool);
+        syncPlanCursor();
+      });
+      items.appendChild(button);
+    });
+    details.appendChild(items);
+    furniturePicker.appendChild(details);
+  });
+}
+
+function renderFloorTabs(): void {
+  floorTabs.innerHTML = "";
+  state.floors.forEach((floor, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `floor-tab${index === state.activeFloor ? " is-active" : ""}`;
+    button.textContent = floor.name;
+    button.title = `${floor.name}を編集`;
+    button.addEventListener("click", () => setActiveFloorIndex(index));
+    floorTabs.appendChild(button);
+  });
+  if (state.floors.length < MAX_FLOORS) {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "floor-tab floor-tab-ghost";
+    add.textContent = "＋";
+    add.title = "上の階を追加";
+    add.addEventListener("click", addFloorAbove);
+    floorTabs.appendChild(add);
+  }
+  if (state.floors.length > 1) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "floor-tab floor-tab-ghost";
+    remove.textContent = "×";
+    remove.title = "表示中の階を削除";
+    remove.addEventListener("click", removeActiveFloor);
+    floorTabs.appendChild(remove);
+  }
+}
+
+function renderFloorVisibility(): void {
+  const container = document.querySelector<HTMLSpanElement>("#floorVisibility");
+  if (!container) return;
+  container.innerHTML = "";
+  if (state.floors.length <= 1) return;
+  state.floors.forEach((floor) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    const visible = !hiddenFloorIds.has(floor.id);
+    button.className = `mini-toggle${visible ? " is-active" : ""}`;
+    button.textContent = floor.name;
+    button.title = visible ? `${floor.name}を3Dから一時的に隠す` : `${floor.name}を3Dに表示`;
+    button.setAttribute("aria-pressed", String(visible));
+    button.addEventListener("click", () => {
+      if (hiddenFloorIds.has(floor.id)) {
+        hiddenFloorIds.delete(floor.id);
+      } else {
+        hiddenFloorIds.add(floor.id);
+      }
+      rebuildThree();
+    });
+    container.appendChild(button);
+  });
+}
+
+function setActiveFloorIndex(index: number): void {
+  if (index === state.activeFloor || index < 0 || index >= state.floors.length) return;
+  state.activeFloor = index;
+  state.selectedId = null;
+  persistState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
+function addFloorAbove(): void {
+  if (state.floors.length >= MAX_FLOORS) return;
+  state.floors.push({ id: newId("floor"), name: `${state.floors.length + 1}F`, entities: [] });
+  state.activeFloor = state.floors.length - 1;
+  state.selectedId = null;
+  commitState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
+function removeActiveFloor(): void {
+  if (state.floors.length <= 1) return;
+  const floor = activeFloor();
+  if (!window.confirm(`${floor.name}（${floor.entities.length}個の要素）を削除します。実行しますか？`)) {
+    return;
+  }
+  hiddenFloorIds.delete(floor.id);
+  state.floors.splice(state.activeFloor, 1);
+  state.floors.forEach((item, index) => {
+    item.name = `${index + 1}F`;
+  });
+  state.activeFloor = clamp(state.activeFloor, 0, state.floors.length - 1);
+  state.selectedId = null;
+  commitState();
+  fitPlanToCanvas();
+  redrawAll();
 }
 
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
-    const dataValue = button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
+    const dataValue = button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode ?? button.dataset.roof;
     button.classList.toggle("is-active", dataValue === value);
   });
 }
@@ -325,6 +681,12 @@ function syncPlanCursor(): void {
 function updateDimensionToggle(): void {
   dimensionToggle.classList.toggle("is-active", showDimensions);
   dimensionToggle.setAttribute("aria-pressed", String(showDimensions));
+}
+
+function updateShadowToggle(): void {
+  const button = document.querySelector<HTMLButtonElement>("#shadowToggle");
+  button?.classList.toggle("is-active", shadowsEnabled);
+  button?.setAttribute("aria-pressed", String(shadowsEnabled));
 }
 
 function applyViewMode(nextMode: ViewMode, persist = true): void {
@@ -375,7 +737,7 @@ function handlePointerDown(event: PointerEvent): void {
 
   if (activeTool === "erase") {
     if (hit.entity) {
-      state.entities = state.entities.filter((entity) => entity.id !== hit.entity?.id);
+      setActiveEntities(activeEntities().filter((entity) => entity.id !== hit.entity?.id));
       if (state.selectedId === hit.entity.id) state.selectedId = null;
       commitState();
       redrawAll();
@@ -405,7 +767,7 @@ function handlePointerDown(event: PointerEvent): void {
   state.selectedId = null;
 
   if (activeTool === "furniture") {
-    const base = BASE_FURNITURE[activeFurniture];
+    const base = FURNITURE_DEFS[activeFurniture];
     const entity: Furniture = {
       id: newId("furniture"),
       type: "furniture",
@@ -416,7 +778,7 @@ function handlePointerDown(event: PointerEvent): void {
       h: base.h,
       rotation: 0,
     };
-    state.entities.push(entity);
+    activeEntities().push(entity);
     state.selectedId = entity.id;
     drag.originEntity = cloneEntity(entity);
     drag.dragMode = "move";
@@ -481,9 +843,9 @@ function handlePointerUp(event: PointerEvent): void {
 
   const end = drag.currentWorld;
   const start = drag.startWorld;
-  const distance = Math.hypot(end.x - start.x, end.y - start.y);
+  const distanceMoved = Math.hypot(end.x - start.x, end.y - start.y);
 
-  if (drag.dragMode === "draw" && distance > 8) {
+  if (drag.dragMode === "draw" && distanceMoved > 8) {
     if (activeTool === "room") addRoomFromDrag(start, end);
     if (activeTool === "wall") addLineFromDrag("wall", start, end);
     if (activeTool === "door") addLineFromDrag("door", start, end);
@@ -542,6 +904,13 @@ function handleThreePointerUp(event: PointerEvent): void {
   const entityId = hits.map((hit) => entityIdFromObject(hit.object)).find((id): id is string => Boolean(id)) ?? null;
 
   state.selectedId = entityId;
+  if (entityId) {
+    const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === entityId));
+    if (floorIndex >= 0 && floorIndex !== state.activeFloor) {
+      state.activeFloor = floorIndex;
+      fitPlanToCanvas();
+    }
+  }
   activeTool = "select";
   setActiveButton("[data-tool]", activeTool);
   updateUi();
@@ -573,8 +942,17 @@ function handleKeyDown(event: KeyboardEvent): void {
     redo();
     return;
   }
+  if (!isEditing && event.key.toLowerCase() === "r" && state.selectedId) {
+    const selected = findEntity(state.selectedId);
+    if (selected?.type === "furniture") {
+      selected.rotation = (selected.rotation + 90) % 360;
+      commitState();
+      redrawAll();
+    }
+    return;
+  }
   if (!isEditing && (event.key === "Delete" || event.key === "Backspace") && state.selectedId) {
-    state.entities = state.entities.filter((entity) => entity.id !== state.selectedId);
+    setActiveEntities(activeEntities().filter((entity) => entity.id !== state.selectedId));
     state.selectedId = null;
     commitState();
     redrawAll();
@@ -587,18 +965,19 @@ function addRoomFromDrag(start: Point, end: Point): void {
   const w = snap(Math.abs(end.x - start.x));
   const h = snap(Math.abs(end.y - start.y));
   if (w < GRID * 2 || h < GRID * 2) return;
-  const room: Room = {
+  const entities = activeEntities();
+  const newRoom: Room = {
     id: newId("room"),
     type: "room",
-    name: `部屋 ${state.entities.filter((entity) => entity.type === "room").length + 1}`,
+    name: `部屋 ${entities.filter((entity) => entity.type === "room").length + 1}`,
     x,
     y,
     w,
     h,
-    color: ROOM_COLORS[state.entities.length % ROOM_COLORS.length],
+    color: ROOM_COLORS[entities.length % ROOM_COLORS.length],
   };
-  state.entities.push(room);
-  state.selectedId = room.id;
+  entities.push(newRoom);
+  state.selectedId = newRoom.id;
 }
 
 function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Point): void {
@@ -614,7 +993,7 @@ function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Po
     x2: snappedEnd.x,
     y2: snappedEnd.y,
   };
-  state.entities.push(line);
+  activeEntities().push(line);
   state.selectedId = line.id;
 }
 
@@ -631,7 +1010,7 @@ function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
     startAngle: kind === "arc" ? -Math.PI / 2 : 0,
     endAngle,
   };
-  state.entities.push(shape);
+  activeEntities().push(shape);
   state.selectedId = shape.id;
 }
 
@@ -706,14 +1085,19 @@ function render2d(): void {
   ctx.scale(view.zoom, view.zoom);
 
   drawGrid(width, height);
-  state.entities.filter(isRoom).forEach(drawRoom);
-  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wall) => {
-    getVisibleWallSegments(wall).forEach(drawWall2d);
+  drawFloorBelowGhost();
+
+  const entities = activeEntities();
+  entities.filter(isRoom).forEach(drawRoom);
+  entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
+    getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
-  state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
-  state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
-  state.entities.filter(isFurniture).forEach(drawFurniture2d);
-  state.entities.filter(isShape).forEach(drawShape2d);
+  entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
+  const doors = entities.filter((entity): entity is LinearElement => entity.type === "door");
+  doors.forEach(drawDoorWipe2d);
+  doors.forEach(drawDoor2d);
+  entities.filter(isFurniture).forEach(drawFurniture2d);
+  entities.filter(isShape).forEach(drawShape2d);
 
   if (drag.dragMode === "draw" && activeTool !== "furniture") {
     drawPreview(drag.startWorld, drag.currentWorld);
@@ -733,35 +1117,58 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
   ctx.lineWidth = 1 / view.zoom;
   for (let x = startX; x <= right; x += GRID) {
     ctx.beginPath();
-    ctx.strokeStyle = x % (GRID * 5) === 0 ? "#d8dee8" : "#edf0f5";
+    ctx.strokeStyle = x % (GRID * 5) === 0 ? "#e2e6ec" : "#f2f4f7";
     ctx.moveTo(x, top);
     ctx.lineTo(x, bottom);
     ctx.stroke();
   }
   for (let y = startY; y <= bottom; y += GRID) {
     ctx.beginPath();
-    ctx.strokeStyle = y % (GRID * 5) === 0 ? "#d8dee8" : "#edf0f5";
+    ctx.strokeStyle = y % (GRID * 5) === 0 ? "#e2e6ec" : "#f2f4f7";
     ctx.moveTo(left, y);
     ctx.lineTo(right, y);
     ctx.stroke();
   }
 }
 
+function drawFloorBelowGhost(): void {
+  if (state.activeFloor === 0) return;
+  const below = state.floors[state.activeFloor - 1];
+  ctx.save();
+  below.entities.forEach((entity) => {
+    if (entity.type === "room") {
+      ctx.strokeStyle = GHOST;
+      ctx.lineWidth = 1.2 / view.zoom;
+      ctx.strokeRect(entity.x, entity.y, entity.w, entity.h);
+    } else if (entity.type === "wall") {
+      ctx.strokeStyle = GHOST;
+      ctx.lineCap = "square";
+      ctx.lineWidth = WALL_THICKNESS_2D;
+      ctx.beginPath();
+      ctx.moveTo(entity.x1, entity.y1);
+      ctx.lineTo(entity.x2, entity.y2);
+      ctx.stroke();
+    }
+  });
+  ctx.restore();
+}
+
 function drawRoom(room: Room): void {
   const selected = state.selectedId === room.id;
-  ctx.fillStyle = room.color;
-  ctx.strokeStyle = selected ? "#2775d1" : "#aeb7c4";
-  ctx.lineWidth = selected ? 3 / view.zoom : 1.4 / view.zoom;
+  ctx.fillStyle = selected ? "#f2f7fd" : room.color;
+  ctx.strokeStyle = selected ? "#2775d1" : "#c3c9d2";
+  ctx.lineWidth = selected ? 2.4 / view.zoom : 1.1 / view.zoom;
   ctx.fillRect(room.x, room.y, room.w, room.h);
   ctx.strokeRect(room.x, room.y, room.w, room.h);
 
   const label = getRoomLabelPosition(room);
-  ctx.fillStyle = "#2e3746";
+  ctx.fillStyle = INK;
+  ctx.textAlign = "left";
   ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
   ctx.textBaseline = "top";
   ctx.fillText(room.name, label.x, label.y);
   if (showDimensions) {
-    ctx.fillStyle = "#687386";
+    ctx.fillStyle = INK_SOFT;
     ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
     ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + 20);
   }
@@ -779,17 +1186,50 @@ function drawRoomLabelGuide(room: Room): void {
   ctx.restore();
 }
 
-function drawWall2d(wall: LinearElement): void {
-  drawLineElement(wall, "#2f3b4d", WALL_THICKNESS_2D);
+function drawWall2d(wallItem: LinearElement): void {
+  drawLineElement(wallItem, wallItem.color ?? INK, WALL_THICKNESS_2D);
 }
 
 function drawWindow2d(windowEl: LinearElement): void {
-  drawLineElement(windowEl, "#4aa9d6", 8);
+  const selected = state.selectedId === windowEl.id;
+  const length = distance(windowEl);
+  if (length <= 0) return;
   const mid = midpoint(windowEl);
+  const angle = lineAngle(windowEl);
+  const t = WALL_THICKNESS_2D;
+  ctx.save();
+  ctx.translate(mid.x, mid.y);
+  ctx.rotate(angle);
+  if (selected) {
+    ctx.strokeStyle = "rgba(39, 117, 209, 0.4)";
+    ctx.lineWidth = (t + 8) / view.zoom;
+    ctx.beginPath();
+    ctx.moveTo(-length / 2, 0);
+    ctx.lineTo(length / 2, 0);
+    ctx.stroke();
+  }
   ctx.fillStyle = "#ffffff";
+  ctx.fillRect(-length / 2, -t / 2, length, t);
+  ctx.strokeStyle = selected ? "#2775d1" : windowEl.color ?? INK;
+  ctx.lineWidth = 1.4 / view.zoom;
+  ctx.strokeRect(-length / 2, -t / 2, length, t);
   ctx.beginPath();
-  ctx.arc(mid.x, mid.y, 3.5 / view.zoom, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(-length / 2, 0);
+  ctx.lineTo(length / 2, 0);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDoorWipe2d(door: LinearElement): void {
+  ctx.save();
+  ctx.lineCap = "butt";
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = WALL_THICKNESS_2D + 4;
+  ctx.beginPath();
+  ctx.moveTo(door.x1, door.y1);
+  ctx.lineTo(door.x2, door.y2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawDoor2d(door: LinearElement): void {
@@ -804,25 +1244,19 @@ function drawDoor2d(door: LinearElement): void {
   };
 
   ctx.lineCap = "butt";
-  ctx.strokeStyle = "#fbfcfe";
-  ctx.lineWidth = (WALL_THICKNESS_2D + 5) / view.zoom;
-  ctx.beginPath();
-  ctx.moveTo(door.x1, door.y1);
-  ctx.lineTo(door.x2, door.y2);
-  ctx.stroke();
-
-  ctx.strokeStyle = selected ? "#2775d1" : "#1e2430";
-  ctx.lineWidth = (selected ? 3.2 : 2.4) / view.zoom;
+  ctx.strokeStyle = selected ? "#2775d1" : door.color ?? INK;
+  ctx.lineWidth = (selected ? 3 : 1.8) / view.zoom;
   ctx.beginPath();
   ctx.moveTo(door.x1, door.y1);
   ctx.lineTo(leafEnd.x, leafEnd.y);
   ctx.stroke();
 
+  ctx.lineWidth = (selected ? 2 : 1.2) / view.zoom;
   ctx.beginPath();
   ctx.arc(door.x1, door.y1, length, leafAngle, angle, false);
   ctx.stroke();
 
-  ctx.lineWidth = 4 / view.zoom;
+  ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(door.x1, door.y1);
   ctx.lineTo(door.x1 + Math.cos(angle + Math.PI / 2) * 10, door.y1 + Math.sin(angle + Math.PI / 2) * 10);
@@ -835,14 +1269,14 @@ function drawDoor2d(door: LinearElement): void {
 function drawLineElement(entity: LinearElement, color: string, width: number): void {
   const selected = state.selectedId === entity.id;
   ctx.save();
-  ctx.lineCap = "round";
-  ctx.lineWidth = (selected ? width + 6 : width) / view.zoom;
+  ctx.lineCap = "square";
+  ctx.lineWidth = selected ? width + 6 / view.zoom : width;
   ctx.strokeStyle = selected ? "rgba(39, 117, 209, 0.35)" : color;
   ctx.beginPath();
   ctx.moveTo(entity.x1, entity.y1);
   ctx.lineTo(entity.x2, entity.y2);
   ctx.stroke();
-  ctx.lineWidth = width / view.zoom;
+  ctx.lineWidth = width;
   ctx.strokeStyle = color;
   ctx.beginPath();
   ctx.moveTo(entity.x1, entity.y1);
@@ -851,25 +1285,291 @@ function drawLineElement(entity: LinearElement, color: string, width: number): v
   ctx.restore();
 }
 
-function drawFurniture2d(furniture: Furniture): void {
-  const selected = state.selectedId === furniture.id;
-  const base = BASE_FURNITURE[furniture.kind];
-  ctx.save();
-  ctx.translate(furniture.x + furniture.w / 2, furniture.y + furniture.h / 2);
-  ctx.rotate((furniture.rotation * Math.PI) / 180);
-  roundedRect(-furniture.w / 2, -furniture.h / 2, furniture.w, furniture.h, 8);
-  ctx.fillStyle = `#${base.color.toString(16).padStart(6, "0")}`;
-  ctx.fill();
-  ctx.strokeStyle = selected ? "#2775d1" : "rgba(34, 41, 54, 0.28)";
-  ctx.lineWidth = selected ? 3 / view.zoom : 1.5 / view.zoom;
+// ---- 2D furniture symbols (CAD-style monochrome line art) ----
+
+function strokeLine(x1: number, y1: number, x2: number, y2: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
   ctx.stroke();
+}
+
+function strokeCircle(x: number, y: number, r: number, fill = false): void {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  if (fill) ctx.fill();
+  ctx.stroke();
+}
+
+function strokeEllipse(x: number, y: number, rx: number, ry: number, fill = false): void {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  if (fill) ctx.fill();
+  ctx.stroke();
+}
+
+function strokeRoundedRect(x: number, y: number, w: number, h: number, r: number, fill = false): void {
+  roundedRect(x, y, w, h, r);
+  if (fill) ctx.fill();
+  ctx.stroke();
+}
+
+function strokeArrowHead(x: number, y: number, angle: number, size: number): void {
+  ctx.beginPath();
+  ctx.moveTo(x - Math.cos(angle - 0.5) * size, y - Math.sin(angle - 0.5) * size);
+  ctx.lineTo(x, y);
+  ctx.lineTo(x - Math.cos(angle + 0.5) * size, y - Math.sin(angle + 0.5) * size);
+  ctx.stroke();
+}
+
+function drawMiniChair(cx: number, cy: number, size: number, backSide: number): void {
+  strokeRoundedRect(cx - size / 2, cy - size / 2, size, size, 3, true);
+  strokeLine(cx - size / 2 + 2, cy + backSide * (size / 2 - 3), cx + size / 2 - 2, cy + backSide * (size / 2 - 3));
+}
+
+function drawFurniture2d(furnitureItem: Furniture): void {
+  const selected = state.selectedId === furnitureItem.id;
+  ctx.save();
+  ctx.translate(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2);
+  ctx.rotate((furnitureItem.rotation * Math.PI) / 180);
+  ctx.lineWidth = 1.4 / view.zoom;
+  ctx.strokeStyle = furnitureItem.color ?? INK;
   ctx.fillStyle = "#ffffff";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `${Math.max(11, 12 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-  ctx.fillText(base.label, 0, 0);
+  ctx.lineCap = "round";
+  drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h);
+  if (selected) {
+    ctx.strokeStyle = "#2775d1";
+    ctx.lineWidth = 2.2 / view.zoom;
+    strokeRoundedRect(-furnitureItem.w / 2, -furnitureItem.h / 2, furnitureItem.w, furnitureItem.h, 4);
+  }
   ctx.restore();
-  if (selected) drawResizeHandles(furniture);
+  if (selected) drawResizeHandles(furnitureItem);
+}
+
+function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
+  const hw = w / 2;
+  const hh = h / 2;
+  switch (kind) {
+    case "sofa":
+    case "armchair": {
+      strokeRoundedRect(-hw, -hh, w, h, 8, true);
+      const t = Math.min(w, h) * 0.22;
+      strokeRoundedRect(-hw, -hh, w, t, 5);
+      strokeRoundedRect(-hw, -hh, t, h, 5);
+      strokeRoundedRect(hw - t, -hh, t, h, 5);
+      if (kind === "sofa" && w >= 120) {
+        strokeLine(0, -hh + t, 0, hh);
+      }
+      break;
+    }
+    case "table": {
+      strokeRoundedRect(-hw, -hh, w, h, 6, true);
+      break;
+    }
+    case "tv": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeRoundedRect(-w * 0.36, -hh + 4, w * 0.72, 6, 2);
+      break;
+    }
+    case "plant": {
+      const r = Math.min(hw, hh);
+      strokeCircle(0, 0, r, true);
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i += 1) {
+        const angle = (i / 12) * Math.PI * 2;
+        const radius = i % 2 === 0 ? r * 0.82 : r * 0.3;
+        const px = Math.cos(angle) * radius;
+        const py = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case "diningTable": {
+      const tw = w * 0.7;
+      const th = h * 0.48;
+      const cs = Math.min(w, h) * 0.23;
+      const chairZ = th / 2 + cs * 0.58;
+      drawMiniChair(-w * 0.17, -chairZ, cs, -1);
+      drawMiniChair(w * 0.17, -chairZ, cs, -1);
+      drawMiniChair(-w * 0.17, chairZ, cs, 1);
+      drawMiniChair(w * 0.17, chairZ, cs, 1);
+      strokeRoundedRect(-tw / 2, -th / 2, tw, th, 4, true);
+      break;
+    }
+    case "chair": {
+      strokeRoundedRect(-hw, -hh, w, h, 4, true);
+      strokeLine(-hw + 3, -hh + 4, hw - 3, -hh + 4);
+      break;
+    }
+    case "kitchen": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeRoundedRect(-hw + w * 0.07, -h * 0.3, w * 0.24, h * 0.6, 5);
+      strokeCircle(-hw + w * 0.19, -hh + h * 0.12, 2.5);
+      const bx = hw - w * 0.16;
+      const br = h * 0.17;
+      strokeCircle(bx, -h * 0.2, br);
+      strokeCircle(bx, h * 0.2, br);
+      strokeCircle(bx - w * 0.14, 0, br * 0.8);
+      break;
+    }
+    case "fridge": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeLine(-hw + 3, hh - h * 0.18, hw - 3, hh - h * 0.18);
+      strokeLine(-hw + w * 0.16, hh - h * 0.09, -hw + w * 0.38, hh - h * 0.09);
+      break;
+    }
+    case "bed":
+    case "bedDouble": {
+      strokeRoundedRect(-hw, -hh, w, h, 4, true);
+      if (kind === "bed") {
+        strokeRoundedRect(-w * 0.28, -hh + h * 0.04, w * 0.56, h * 0.1, 4);
+      } else {
+        strokeRoundedRect(-w * 0.43, -hh + h * 0.04, w * 0.37, h * 0.1, 4);
+        strokeRoundedRect(w * 0.06, -hh + h * 0.04, w * 0.37, h * 0.1, 4);
+      }
+      strokeLine(-hw, -hh + h * 0.24, hw, -hh + h * 0.24);
+      strokeLine(hw - w * 0.3, -hh + h * 0.24, hw, -hh + h * 0.24 + h * 0.12);
+      break;
+    }
+    case "desk": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      const cs = Math.min(w, h) * 0.5;
+      drawMiniChair(0, hh - cs * 0.58, cs, 1);
+      break;
+    }
+    case "shelf": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      for (let x = -hw + 30; x < hw - 2; x += 30) {
+        strokeLine(x, -hh, x, hh);
+      }
+      break;
+    }
+    case "bath": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeRoundedRect(-hw + 7, -hh + 7, w - 14, h - 14, Math.min(w, h) * 0.28);
+      strokeCircle(-hw + w * 0.18, 0, 3);
+      break;
+    }
+    case "toilet": {
+      strokeRoundedRect(-hw + 1, -hh, w - 2, h * 0.26, 2, true);
+      ctx.fillStyle = "#ffffff";
+      strokeEllipse(0, h * 0.14, w * 0.42, h * 0.32, true);
+      strokeEllipse(0, h * 0.14, w * 0.27, h * 0.21);
+      break;
+    }
+    case "washbasin": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeEllipse(0, h * 0.06, w * 0.3, h * 0.28);
+      strokeRoundedRect(-w * 0.07, -hh + 2, w * 0.14, 5, 2);
+      break;
+    }
+    case "washer": {
+      strokeRoundedRect(-hw, -hh, w, h, 4, true);
+      const r = Math.min(hw, hh);
+      strokeCircle(0, 1, r * 0.6);
+      strokeCircle(0, 1, r * 0.3);
+      strokeCircle(-hw + 6, -hh + 6, 2);
+      break;
+    }
+    case "closet": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(-hw, -hh, w, h);
+      ctx.clip();
+      for (let x = -hw - h; x < hw; x += 16) {
+        strokeLine(x, hh, x + h, -hh);
+      }
+      ctx.restore();
+      break;
+    }
+    case "wardrobe": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeLine(-hw, -hh, hw, hh);
+      strokeLine(hw, -hh, -hw, hh);
+      break;
+    }
+    case "stairs": {
+      strokeRoundedRect(-hw, -hh, w, h, 1, true);
+      if (h >= w) {
+        for (let y = -hh + 24; y < hh - 4; y += 24) {
+          strokeLine(-hw, y, hw, y);
+        }
+        strokeCircle(0, hh - 10, 3);
+        strokeLine(0, hh - 10, 0, -hh + 14);
+        strokeArrowHead(0, -hh + 14, -Math.PI / 2, 8);
+      } else {
+        for (let x = -hw + 24; x < hw - 4; x += 24) {
+          strokeLine(x, -hh, x, hh);
+        }
+        strokeCircle(-hw + 10, 0, 3);
+        strokeLine(-hw + 10, 0, hw - 14, 0);
+        strokeArrowHead(hw - 14, 0, 0, 8);
+      }
+      break;
+    }
+    case "stairsU": {
+      strokeRoundedRect(-hw, -hh, w, h, 1, true);
+      const landing = Math.min(w, h) * 0.32;
+      strokeLine(-hw, -hh, 0, -hh + landing);
+      strokeLine(hw, -hh, 0, -hh + landing);
+      strokeLine(0, -hh + landing, 0, hh);
+      for (let y = -hh + landing + 20; y < hh - 4; y += 20) {
+        strokeLine(-hw, y, 0, y);
+        strokeLine(0, y, hw, y);
+      }
+      const ax = w * 0.25;
+      const ay = -hh + landing + 8;
+      strokeCircle(ax, hh - 9, 3);
+      strokeLine(ax, hh - 9, ax, ay);
+      ctx.beginPath();
+      ctx.arc(0, ay, ax, 0, Math.PI, true);
+      ctx.stroke();
+      strokeLine(-ax, ay, -ax, hh - 12);
+      strokeArrowHead(-ax, hh - 12, Math.PI / 2, 8);
+      break;
+    }
+    case "stairsSpiral": {
+      const r = Math.min(hw, hh);
+      strokeCircle(0, 0, r, true);
+      for (let i = 0; i < 12; i += 1) {
+        const angle = (i / 12) * Math.PI * 2;
+        strokeLine(0, 0, Math.cos(angle) * r, Math.sin(angle) * r);
+      }
+      ctx.fillStyle = String(ctx.strokeStyle);
+      strokeCircle(0, 0, 2.5, true);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.55, Math.PI * 0.5, Math.PI * 1.75, false);
+      ctx.stroke();
+      const endAngle = Math.PI * 1.75;
+      strokeArrowHead(Math.cos(endAngle) * r * 0.55, Math.sin(endAngle) * r * 0.55, endAngle + Math.PI / 2, 7);
+      break;
+    }
+    case "car": {
+      let cw = w;
+      let chh = h;
+      if (w > h) {
+        ctx.rotate(Math.PI / 2);
+        cw = h;
+        chh = w;
+      }
+      const cx = cw / 2;
+      const cy = chh / 2;
+      strokeRoundedRect(-cx, -cy, cw, chh, Math.min(cx, chh * 0.12), true);
+      strokeRoundedRect(-cx + cw * 0.12, -chh * 0.1, cw * 0.76, chh * 0.42, 8);
+      strokeLine(-cx + cw * 0.1, -cy + chh * 0.12, cx - cw * 0.1, -cy + chh * 0.12);
+      strokeLine(-cx, -chh * 0.11, -cx - 6, -chh * 0.14);
+      strokeLine(cx, -chh * 0.11, cx + 6, -chh * 0.14);
+      break;
+    }
+    default: {
+      strokeRoundedRect(-hw, -hh, w, h, 4, true);
+    }
+  }
 }
 
 function drawShape2d(shape: Shape): void {
@@ -877,7 +1577,7 @@ function drawShape2d(shape: Shape): void {
   ctx.save();
   if (selected) {
     ctx.strokeStyle = "rgba(39, 117, 209, 0.35)";
-    ctx.lineWidth = (WALL_THICKNESS_2D + 6) / view.zoom;
+    ctx.lineWidth = WALL_THICKNESS_2D + 6 / view.zoom;
     ctx.lineCap = "round";
     ctx.beginPath();
     if (shape.kind === "circle") {
@@ -887,8 +1587,8 @@ function drawShape2d(shape: Shape): void {
     }
     ctx.stroke();
   }
-  ctx.strokeStyle = "#2f3b4d";
-  ctx.lineWidth = WALL_THICKNESS_2D / view.zoom;
+  ctx.strokeStyle = shape.color ?? INK;
+  ctx.lineWidth = WALL_THICKNESS_2D;
   ctx.lineCap = "round";
   ctx.beginPath();
   if (shape.kind === "circle") {
@@ -968,62 +1668,79 @@ function drawResizeHandles(entity: Room | Furniture): void {
   });
 }
 
+// ---- 3D ----
+
 function rebuildThree(): void {
   disposeGroup(planGroup);
-  const rooms = state.entities.filter(isRoom);
-  const bounds = getBounds();
+  const bounds = getGlobalBounds();
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
 
-  if (rooms.length === 0) {
-    addGroundPlaceholder(center);
-  } else {
-    rooms.forEach((room) => addRoom3d(room, center));
+  state.floors.forEach((floor, index) => {
+    if (hiddenFloorIds.has(floor.id)) return;
+    const yBase = index * FLOOR_SPACING;
+    floor.entities.filter(isRoom).forEach((roomItem) => addRoom3d(roomItem, center, yBase, index));
+    floor.entities
+      .filter((entity): entity is LinearElement => entity.type === "wall")
+      .forEach((wallItem) => {
+        getVisibleWallSegments(wallItem, floor.entities).forEach((segment) =>
+          addStraightWall3d(segment, center, yBase, wallItem.id, true),
+        );
+      });
+    floor.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase));
+    floor.entities
+      .filter((entity): entity is LinearElement => entity.type === "door")
+      .forEach((door) => addDoor3d(door, center, yBase));
+    floor.entities
+      .filter((entity): entity is LinearElement => entity.type === "window")
+      .forEach((windowEl) => addWindow3d(windowEl, center, yBase));
+    floor.entities.filter(isFurniture).forEach((furnitureItem) => addFurniture3d(furnitureItem, center, yBase));
+  });
+
+  if (state.floors.every((floor) => floor.entities.length === 0)) {
+    addGroundPlaceholder({ x: 0, y: 0 });
   }
 
-  state.entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wall) => addWall3d(wall, center));
-  state.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center));
-  state.entities.filter((entity): entity is LinearElement => entity.type === "door").forEach((door) => addDoor3d(door, center));
-  state.entities.filter((entity): entity is LinearElement => entity.type === "window").forEach((windowEl) => addWindow3d(windowEl, center));
-  state.entities.filter(isFurniture).forEach((furniture) => addFurniture3d(furniture, center));
-
+  addRoof3d(center);
   addSubtleGrid(bounds, center);
-  frameCamera(bounds);
+  if (pendingCameraFrame) {
+    frameCamera(bounds);
+    pendingCameraFrame = false;
+  }
   updateUi();
 }
 
-function addRoom3d(room: Room, center: Point): void {
-  const width = room.w * SCALE_3D;
-  const depth = room.h * SCALE_3D;
-  const geometry = new THREE.BoxGeometry(width, 0.06, depth);
-  const material = roomMaterial(room.color);
+function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number): void {
+  const width = roomItem.w * SCALE_3D;
+  const depth = roomItem.h * SCALE_3D;
+  const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
+  const geometry = new THREE.BoxGeometry(width, thickness, depth);
+  const material = floorIndex === 0 ? roomMaterial(roomItem.color) : slabMaterial;
   const mesh = new THREE.Mesh(geometry, material);
-  const pos = to3d(room.x + room.w / 2, room.y + room.h / 2, center);
-  mesh.position.set(pos.x, 0, pos.z);
+  const pos = to3d(roomItem.x + roomItem.w / 2, roomItem.y + roomItem.h / 2, center);
+  const y = floorIndex === 0 ? thickness / 2 : yBase - thickness / 2;
+  mesh.position.set(pos.x, y, pos.z);
   mesh.receiveShadow = true;
-  mesh.castShadow = false;
-  markSelectable(mesh, room.id);
+  mesh.castShadow = floorIndex > 0;
+  markSelectable(mesh, roomItem.id);
   planGroup.add(mesh);
 
   const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
   edge.position.copy(mesh.position);
   planGroup.add(edge);
-  addSelectionBox(mesh, room.id);
+  addSelectionBox(mesh, roomItem.id);
 }
 
-function addWall3d(wall: LinearElement, center: Point): void {
-  getVisibleWallSegments(wall).forEach((segment) => addStraightWall3d(segment, center, wall.id));
-}
-
-function addStraightWall3d(wall: LinearElement, center: Point, entityId = wall.id, showSelection = true): void {
-  const length = distance(wall) * SCALE_3D;
+function addStraightWall3d(wallItem: LinearElement, center: Point, yBase: number, entityId = wallItem.id, showSelection = true): void {
+  const length = distance(wallItem) * SCALE_3D;
   if (length <= 0.02) return;
   const thickness = WALL_THICKNESS_2D * SCALE_3D;
-  const angle = Math.atan2(wall.y2 - wall.y1, wall.x2 - wall.x1);
+  const angle = Math.atan2(wallItem.y2 - wallItem.y1, wallItem.x2 - wallItem.x1);
+  const bodyMaterial = wallItem.color ? coloredMaterial(wallItem.color, 0.78) : wallMaterial;
   const geometry = new THREE.BoxGeometry(length, WALL_HEIGHT, thickness);
-  const mesh = new THREE.Mesh(geometry, wallMaterial);
-  const mid = midpoint(wall);
+  const mesh = new THREE.Mesh(geometry, bodyMaterial);
+  const mid = midpoint(wallItem);
   const pos = to3d(mid.x, mid.y, center);
-  mesh.position.set(pos.x, WALL_HEIGHT / 2, pos.z);
+  mesh.position.set(pos.x, yBase + WALL_HEIGHT / 2, pos.z);
   mesh.rotation.y = -angle;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -1031,10 +1748,10 @@ function addStraightWall3d(wall: LinearElement, center: Point, entityId = wall.i
   planGroup.add(mesh);
 
   const cap = new THREE.Mesh(
-    new THREE.BoxGeometry(length + 0.01, 0.08, thickness + 0.01),
-    wallCapMaterial,
+    new THREE.BoxGeometry(length + 0.01, 0.06, thickness + 0.01),
+    wallItem.color ? bodyMaterial : wallCapMaterial,
   );
-  cap.position.set(pos.x, WALL_HEIGHT + 0.04, pos.z);
+  cap.position.set(pos.x, yBase + WALL_HEIGHT + 0.03, pos.z);
   cap.rotation.y = -angle;
   cap.castShadow = true;
   markSelectable(cap, entityId);
@@ -1044,7 +1761,7 @@ function addStraightWall3d(wall: LinearElement, center: Point, entityId = wall.i
   }
 }
 
-function addShapeWall3d(shape: Shape, center: Point): void {
+function addShapeWall3d(shape: Shape, center: Point, yBase: number): void {
   const start = shape.kind === "circle" ? 0 : shape.startAngle;
   const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - shape.startAngle);
   const segmentCount = Math.max(12, Math.ceil((shape.r * sweep) / 24));
@@ -1058,59 +1775,61 @@ function addShapeWall3d(shape: Shape, center: Point): void {
       y1: shape.y + Math.sin(a1) * shape.r,
       x2: shape.x + Math.cos(a2) * shape.r,
       y2: shape.y + Math.sin(a2) * shape.r,
+      color: shape.color,
     };
-    addStraightWall3d(segment, center, shape.id, false);
+    addStraightWall3d(segment, center, yBase, shape.id, false);
   }
 }
 
-function addDoor3d(door: LinearElement, center: Point): void {
+function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
   const length = Math.max(distance(door) * SCALE_3D, 0.7);
   const frameThickness = 0.1;
-  const frameHeight = 2.62;
-  const panelHeight = 2.42;
+  const frameHeight = 2.1;
+  const panelHeight = 2.0;
   const panelThickness = 0.08;
   const angle = lineAngle(door);
   const mid = midpoint(door);
 
-  const panel = addOrientedBox(mid, center, length * 0.92, panelHeight, panelThickness, panelHeight / 2, angle, doorMaterial, door.id);
+  const panel = addOrientedBox(mid, center, length * 0.92, panelHeight, panelThickness, yBase + panelHeight / 2, angle, door.color ? coloredMaterial(door.color, 0.72) : doorMaterial, door.id);
   panel.castShadow = true;
   panel.receiveShadow = true;
 
   const handleOffset = localOffset3d(length * 0.34, panelThickness * 0.72, angle);
   const handle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.MeshStandardMaterial({ color: 0xd7b56d, roughness: 0.42, metalness: 0.25 }));
   const panelPos = to3d(mid.x, mid.y, center);
-  handle.position.set(panelPos.x + handleOffset.x, 1.2, panelPos.z + handleOffset.z);
+  handle.position.set(panelPos.x + handleOffset.x, yBase + 1.05, panelPos.z + handleOffset.z);
   handle.castShadow = true;
   markSelectable(handle, door.id);
   planGroup.add(handle);
 
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.08, frameThickness, 0.04, angle, doorFrameMaterial, door.id);
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.12, frameThickness, frameHeight, angle, doorFrameMaterial, door.id);
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.08, frameThickness, yBase + 0.04, angle, doorFrameMaterial, door.id);
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.12, frameThickness, yBase + frameHeight, angle, doorFrameMaterial, door.id);
 
-  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, frameHeight / 2, angle, doorFrameMaterial, door.id);
-  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, frameHeight / 2, angle, doorFrameMaterial, door.id);
+  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
+  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
   addSelectionBox(panel, door.id);
 }
 
-function addWindow3d(windowEl: LinearElement, center: Point): void {
+function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): void {
   const length = distance(windowEl) * SCALE_3D;
   const angle = lineAngle(windowEl);
   const mid = midpoint(windowEl);
   const frameThickness = 0.08;
   const frameDepth = 0.1;
-  const glassHeight = 1.08;
-  const glassY = 1.58;
+  const glassHeight = 1.05;
+  const glassY = yBase + 1.4;
   const frameBottom = glassY - glassHeight / 2;
   const frameTop = glassY + glassHeight / 2;
+  const frameMaterial = windowEl.color ? coloredMaterial(windowEl.color, 0.5) : windowFrameMaterial;
 
   const glass = addOrientedBox(mid, center, Math.max(length - frameThickness * 1.2, 0.2), glassHeight, 0.04, glassY, angle, windowMaterial, windowEl.id);
   glass.receiveShadow = true;
 
-  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameBottom, angle, windowFrameMaterial, windowEl.id);
-  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameTop, angle, windowFrameMaterial, windowEl.id);
-  addOrientedBox({ x: windowEl.x1, y: windowEl.y1 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
-  addOrientedBox({ x: windowEl.x2, y: windowEl.y2 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
-  addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, windowFrameMaterial, windowEl.id);
+  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameBottom, angle, frameMaterial, windowEl.id);
+  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameTop, angle, frameMaterial, windowEl.id);
+  addOrientedBox({ x: windowEl.x1, y: windowEl.y1 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
+  addOrientedBox({ x: windowEl.x2, y: windowEl.y2 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
+  addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, frameMaterial, windowEl.id);
   addSelectionBox(glass, windowEl.id);
 }
 
@@ -1143,33 +1862,327 @@ function localOffset3d(localX: number, localZ: number, angle: number): { x: numb
   };
 }
 
-function addFurniture3d(furniture: Furniture, center: Point): void {
-  const base = BASE_FURNITURE[furniture.kind];
-  const width = furniture.w * SCALE_3D;
-  const depth = furniture.h * SCALE_3D;
-  const material = new THREE.MeshStandardMaterial({ color: base.color, roughness: 0.64 });
-  const height = furniture.kind === "bed" ? 0.58 : furniture.kind === "kitchen" ? 1.1 : furniture.kind === "bath" ? 0.68 : 0.78;
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-  const pos = to3d(furniture.x + furniture.w / 2, furniture.y + furniture.h / 2, center);
-  mesh.position.set(pos.x, height / 2 + 0.05, pos.z);
-  mesh.rotation.y = (-furniture.rotation * Math.PI) / 180;
+// ---- 3D furniture ----
+
+function furniturePart(
+  group: THREE.Group,
+  width: number,
+  height: number,
+  depth: number,
+  x: number,
+  y: number,
+  z: number,
+  color: number,
+  roughness = 0.72,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshStandardMaterial({ color, roughness }));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
+}
+
+function cylinderPart(
+  group: THREE.Group,
+  radius: number,
+  height: number,
+  x: number,
+  y: number,
+  z: number,
+  color: number,
+  roughness = 0.72,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 24), new THREE.MeshStandardMaterial({ color, roughness }));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
+}
+
+function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
+  const group = new THREE.Group();
+  const w = furnitureItem.w * SCALE_3D;
+  const d = furnitureItem.h * SCALE_3D;
+  const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
+  group.position.set(pos.x, yBase + 0.02, pos.z);
+  group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
+
+  switch (furnitureItem.kind) {
+    case "sofa":
+    case "armchair": {
+      furniturePart(group, w * 0.98, 0.35, d * 0.72, 0, 0.175, d * 0.13, COLOR_FABRIC);
+      furniturePart(group, w, 0.7, d * 0.24, 0, 0.35, -d * 0.38, COLOR_FABRIC);
+      furniturePart(group, w * 0.12, 0.52, d, -w * 0.44, 0.26, 0, COLOR_FABRIC);
+      furniturePart(group, w * 0.12, 0.52, d, w * 0.44, 0.26, 0, COLOR_FABRIC);
+      break;
+    }
+    case "table": {
+      furniturePart(group, w, 0.045, d, 0, 0.4, 0, COLOR_WOOD);
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          furniturePart(group, 0.05, 0.38, 0.05, sx * w * 0.42, 0.19, sz * d * 0.36, COLOR_WOOD_DARK);
+        });
+      });
+      break;
+    }
+    case "tv": {
+      furniturePart(group, w, 0.4, d, 0, 0.2, 0, COLOR_WOOD_DARK);
+      furniturePart(group, w * 0.72, 0.62, 0.05, 0, 0.73, -d * 0.15, COLOR_DARK, 0.3);
+      break;
+    }
+    case "plant": {
+      cylinderPart(group, w * 0.32, 0.32, 0, 0.16, 0, 0x99705a);
+      const foliage = new THREE.Mesh(new THREE.SphereGeometry(w * 0.52, 18, 14), new THREE.MeshStandardMaterial({ color: COLOR_GREEN, roughness: 0.8 }));
+      foliage.position.set(0, 0.72, 0);
+      foliage.castShadow = true;
+      group.add(foliage);
+      break;
+    }
+    case "diningTable": {
+      furniturePart(group, w * 0.7, 0.045, d * 0.48, 0, 0.7, 0, COLOR_WOOD);
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          furniturePart(group, 0.05, 0.68, 0.05, sx * w * 0.3, 0.34, sz * d * 0.18, COLOR_WOOD_DARK);
+        });
+      });
+      const cs = Math.min(w, d) * 0.22;
+      const chairZ = d * 0.24 + cs * 0.6;
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          furniturePart(group, cs, 0.44, cs, sx * w * 0.17, 0.22, sz * chairZ, COLOR_WOOD);
+          furniturePart(group, cs, 0.4, 0.045, sx * w * 0.17, 0.62, sz * (chairZ + cs * 0.45), COLOR_WOOD);
+        });
+      });
+      break;
+    }
+    case "chair": {
+      furniturePart(group, w, 0.42, d, 0, 0.21, 0, COLOR_WOOD);
+      furniturePart(group, w, 0.42, 0.05, 0, 0.63, -d / 2 + 0.025, COLOR_WOOD);
+      break;
+    }
+    case "kitchen": {
+      furniturePart(group, w, 0.85, d, 0, 0.425, 0, 0xdadcda);
+      furniturePart(group, w + 0.02, 0.04, d + 0.02, 0, 0.87, 0, 0x8d8d89, 0.4);
+      furniturePart(group, w * 0.28, 0.015, d * 0.66, w * 0.28, 0.9, 0, COLOR_DARK, 0.35);
+      furniturePart(group, w * 0.2, 0.015, d * 0.5, -w * 0.24, 0.9, 0, 0xc4cbcf, 0.3);
+      break;
+    }
+    case "fridge": {
+      furniturePart(group, w, 1.82, d, 0, 0.91, 0, 0xe2e6e7, 0.38);
+      furniturePart(group, w * 0.06, 0.5, 0.03, -w * 0.3, 1.2, d / 2 + 0.015, COLOR_STEEL, 0.3);
+      break;
+    }
+    case "bed":
+    case "bedDouble": {
+      furniturePart(group, w, 0.24, d, 0, 0.12, 0, COLOR_WOOD_DARK);
+      furniturePart(group, w * 0.95, 0.2, d * 0.95, 0, 0.34, 0, 0xf0ede6);
+      if (furnitureItem.kind === "bed") {
+        furniturePart(group, w * 0.55, 0.09, d * 0.14, 0, 0.48, -d * 0.36, COLOR_WHITE);
+      } else {
+        furniturePart(group, w * 0.36, 0.09, d * 0.14, -w * 0.22, 0.48, -d * 0.36, COLOR_WHITE);
+        furniturePart(group, w * 0.36, 0.09, d * 0.14, w * 0.22, 0.48, -d * 0.36, COLOR_WHITE);
+      }
+      break;
+    }
+    case "desk": {
+      furniturePart(group, w, 0.045, d, 0, 0.72, 0, COLOR_WOOD);
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          furniturePart(group, 0.05, 0.7, 0.05, sx * w * 0.44, 0.35, sz * d * 0.4, COLOR_WOOD_DARK);
+        });
+      });
+      break;
+    }
+    case "shelf": {
+      furniturePart(group, w, 1.8, d, 0, 0.9, 0, COLOR_WOOD);
+      break;
+    }
+    case "bath": {
+      furniturePart(group, w, 0.58, d, 0, 0.29, 0, 0xe6edf0, 0.4);
+      furniturePart(group, w * 0.78, 0.03, d * 0.72, 0, 0.585, 0, 0xbcd9e4, 0.2);
+      break;
+    }
+    case "toilet": {
+      furniturePart(group, w * 0.9, 0.7, d * 0.24, 0, 0.35, -d * 0.36, COLOR_CERAMIC, 0.35);
+      const bowl = cylinderPart(group, w * 0.42, 0.4, 0, 0.2, d * 0.1, COLOR_CERAMIC, 0.35);
+      bowl.scale.z = Math.max(1, (d * 0.6) / (w * 0.84));
+      break;
+    }
+    case "washbasin": {
+      furniturePart(group, w, 0.78, d, 0, 0.39, 0, 0xe8e9e7, 0.5);
+      furniturePart(group, w + 0.02, 0.035, d + 0.02, 0, 0.8, 0, COLOR_CERAMIC, 0.3);
+      furniturePart(group, 0.04, 0.14, 0.04, 0, 0.88, -d * 0.3, COLOR_STEEL, 0.3);
+      break;
+    }
+    case "washer": {
+      furniturePart(group, w, 0.96, d, 0, 0.48, 0, 0xeceeee, 0.35);
+      const door = cylinderPart(group, Math.min(w, d) * 0.3, 0.02, 0, 0.55, d / 2 + 0.005, 0x87919a, 0.3);
+      door.rotation.x = Math.PI / 2;
+      break;
+    }
+    case "closet": {
+      furniturePart(group, w, 2.35, d, 0, 1.175, 0, 0xcfc8bb);
+      break;
+    }
+    case "wardrobe": {
+      furniturePart(group, w, 1.25, d, 0, 0.625, 0, COLOR_WOOD);
+      break;
+    }
+    case "stairs": {
+      const horizontal = furnitureItem.w > furnitureItem.h;
+      const run = horizontal ? w : d;
+      const stepCount = Math.round(clamp((horizontal ? furnitureItem.w : furnitureItem.h) / 24, 8, 16));
+      const stepDepth = run / stepCount;
+      for (let i = 0; i < stepCount; i += 1) {
+        const stepHeight = (WALL_HEIGHT * (i + 1)) / stepCount;
+        if (horizontal) {
+          furniturePart(group, stepDepth, stepHeight, d, -w / 2 + stepDepth * (i + 0.5), stepHeight / 2, 0, 0xcbb391);
+        } else {
+          furniturePart(group, w, stepHeight, stepDepth, 0, stepHeight / 2, d / 2 - stepDepth * (i + 0.5), 0xcbb391);
+        }
+      }
+      break;
+    }
+    case "stairsU": {
+      const landing = d * 0.32;
+      const flight = d - landing;
+      const steps = 7;
+      const stepDepth = flight / steps;
+      for (let i = 0; i < steps; i += 1) {
+        const upHeight = ((WALL_HEIGHT / 2) * (i + 1)) / steps;
+        furniturePart(group, w / 2, upHeight, stepDepth, w / 4, upHeight / 2, d / 2 - stepDepth * (i + 0.5), 0xcbb391);
+        const downHeight = WALL_HEIGHT / 2 + ((WALL_HEIGHT / 2) * (i + 1)) / steps;
+        furniturePart(group, w / 2, downHeight, stepDepth, -w / 4, downHeight / 2, -d / 2 + landing + stepDepth * (i + 0.5), 0xcbb391);
+      }
+      furniturePart(group, w, WALL_HEIGHT / 2, landing, 0, WALL_HEIGHT / 4, -d / 2 + landing / 2, 0xcbb391);
+      break;
+    }
+    case "stairsSpiral": {
+      const radius = Math.min(w, d) / 2;
+      cylinderPart(group, 0.045, WALL_HEIGHT, 0, WALL_HEIGHT / 2, 0, COLOR_STEEL, 0.4);
+      const steps = 12;
+      for (let i = 0; i < steps; i += 1) {
+        const angle = -Math.PI / 2 + (i * Math.PI * 1.8) / steps;
+        const stepY = (WALL_HEIGHT * (i + 1)) / (steps + 2);
+        const step = furniturePart(group, radius * 0.92, 0.05, radius * 0.38, Math.cos(angle) * radius * 0.48, stepY, Math.sin(angle) * radius * 0.48, 0xcbb391);
+        step.rotation.y = -angle;
+      }
+      break;
+    }
+    case "car": {
+      furniturePart(group, w * 0.96, 0.45, d * 0.98, 0, 0.62, 0, 0xaebccb, 0.35);
+      furniturePart(group, w * 0.82, 0.4, d * 0.42, 0, 1.02, d * 0.03, 0x5b6875, 0.3);
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          const wheel = cylinderPart(group, 0.32, 0.2, sx * (w / 2 - 0.1), 0.32, sz * d * 0.3, COLOR_DARK, 0.6);
+          wheel.rotation.z = Math.PI / 2;
+        });
+      });
+      break;
+    }
+    default: {
+      furniturePart(group, w, 0.72, d, 0, 0.36, 0, 0xb9c0c8);
+    }
+  }
+
+  if (furnitureItem.color) {
+    const tint = new THREE.Color(furnitureItem.color);
+    group.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      const material = mesh.material as THREE.MeshStandardMaterial | undefined;
+      if (material?.color) material.color.set(tint);
+    });
+  }
+
+  markSelectable(group, furnitureItem.id);
+  planGroup.add(group);
+  addSelectionBox(group, furnitureItem.id);
+}
+
+// ---- Roof ----
+
+function buildRoofGeometry(width: number, depth: number, height: number, ridgeInset: number): THREE.BufferGeometry {
+  const w2 = width / 2;
+  const d2 = depth / 2;
+  const inset = Math.min(ridgeInset, w2 * 0.999);
+  const A = [-w2, 0, -d2];
+  const B = [w2, 0, -d2];
+  const C = [w2, 0, d2];
+  const D = [-w2, 0, d2];
+  const R1 = [-w2 + inset, height, 0];
+  const R2 = [w2 - inset, height, 0];
+  const triangles = [
+    A, R2, B,
+    A, R1, R2,
+    C, R1, D,
+    C, R2, R1,
+    A, D, R1,
+    C, B, R2,
+    A, B, C,
+    A, C, D,
+  ];
+  const positions = new Float32Array(triangles.flat());
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function addRoof3d(center: Point): void {
+  if (state.roof === "none") return;
+  let topIndex = -1;
+  for (let i = state.floors.length - 1; i >= 0; i -= 1) {
+    if (!hiddenFloorIds.has(state.floors[i].id)) {
+      topIndex = i;
+      break;
+    }
+  }
+  if (topIndex < 0) return;
+  const topFloor = state.floors[topIndex];
+  const bounds =
+    getEntitiesBounds(topFloor.entities.filter(isRoom)) ??
+    getEntitiesBounds(topFloor.entities) ??
+    getGlobalBounds();
+  if (!bounds) return;
+
+  const overhang = 40;
+  const width = (bounds.w + overhang * 2) * SCALE_3D;
+  const depth = (bounds.h + overhang * 2) * SCALE_3D;
+  const pos = to3d(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, center);
+  const topY = topIndex * FLOOR_SPACING + WALL_HEIGHT + 0.06;
+
+  if (state.roof === "flat") {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roofMaterial);
+    mesh.position.set(pos.x, topY + 0.08, pos.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    planGroup.add(mesh);
+    const edge = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMaterial);
+    edge.position.copy(mesh.position);
+    planGroup.add(edge);
+    return;
+  }
+
+  const long = Math.max(width, depth);
+  const short = Math.min(width, depth);
+  const height = short * (state.roof === "gable" ? 0.34 : 0.3);
+  const ridgeInset = state.roof === "gable" ? 0 : short / 2;
+  const geometry = buildRoofGeometry(long, short, height, ridgeInset);
+  const mesh = new THREE.Mesh(geometry, roofMaterial);
+  mesh.position.set(pos.x, topY, pos.z);
+  if (depth > width) {
+    mesh.rotation.y = Math.PI / 2;
+  }
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   planGroup.add(mesh);
 
-  if (furniture.kind === "sofa") {
-    addFurniturePart(mesh, width, 0.46, 0.14, 0, height * 0.58, -depth * 0.46, base.color);
-  }
-  if (furniture.kind === "table" || furniture.kind === "desk") {
-    addLegs(mesh, width, depth, height, base.color);
-  }
-  if (furniture.kind === "bath") {
-    const tub = new THREE.Mesh(new THREE.BoxGeometry(width * 0.76, 0.05, depth * 0.62), new THREE.MeshStandardMaterial({ color: 0xe9f6fb, roughness: 0.25 }));
-    tub.position.set(0, height / 2 + 0.03, 0);
-    mesh.add(tub);
-  }
-  markSelectable(mesh, furniture.id);
-  addSelectionBox(mesh, furniture.id);
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 12), edgeMaterial);
+  edge.position.copy(mesh.position);
+  edge.rotation.copy(mesh.rotation);
+  planGroup.add(edge);
 }
 
 function markSelectable(object: THREE.Object3D, entityId: string): void {
@@ -1197,29 +2210,6 @@ function entityIdFromObject(object: THREE.Object3D): string | null {
   return null;
 }
 
-function addFurniturePart(parent: THREE.Mesh, width: number, height: number, depth: number, x: number, y: number, z: number, color: number): void {
-  const part = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshStandardMaterial({ color, roughness: 0.7 }));
-  part.position.set(x, y, z);
-  part.castShadow = true;
-  parent.add(part);
-}
-
-function addLegs(parent: THREE.Mesh, width: number, depth: number, height: number, color: number): void {
-  const legMaterial = new THREE.MeshStandardMaterial({ color: shadeColor(color, -0.25), roughness: 0.72 });
-  const positions = [
-    [-width * 0.38, -depth * 0.34],
-    [width * 0.38, -depth * 0.34],
-    [-width * 0.38, depth * 0.34],
-    [width * 0.38, depth * 0.34],
-  ];
-  positions.forEach(([x, z]) => {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.07, height, 0.07), legMaterial);
-    leg.position.set(x, -height * 0.42, z);
-    leg.castShadow = true;
-    parent.add(leg);
-  });
-}
-
 function addGroundPlaceholder(center: Point): void {
   const geometry = new THREE.BoxGeometry(7, 0.05, 5);
   const material = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.8 });
@@ -1240,9 +2230,10 @@ function addSubtleGrid(bounds: Bounds | null, center: Point): void {
 
 function frameCamera(bounds: Bounds | null): void {
   const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 7;
-  const distanceToFit = clamp(size * 1.5, 7, 28);
-  camera.position.set(distanceToFit * 0.9, distanceToFit * 0.78, distanceToFit);
-  controls.target.set(0, 0.45, 0);
+  const buildingHeight = state.floors.length * FLOOR_SPACING;
+  const distanceToFit = clamp(Math.max(size * 1.4, buildingHeight * 2.2), 6, 30);
+  camera.position.set(distanceToFit * 0.9, distanceToFit * 0.72, distanceToFit);
+  controls.target.set(0, Math.min(buildingHeight * 0.32, 2.4), 0);
   controls.update();
 }
 
@@ -1270,24 +2261,27 @@ function redrawAll(rebuild = true): void {
 function updateUi(): void {
   updateStats();
   updatePropertiesPanel();
+  renderFloorTabs();
+  renderFloorVisibility();
+  setActiveButton("[data-roof]", state.roof);
   document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", historyIndex <= 0);
   document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", historyIndex >= history.length - 1);
 }
 
 function updateStats(): void {
-  const rooms = state.entities.filter(isRoom).length;
-  const walls = state.entities.filter((entity) => entity.type === "wall").length;
-  const furniture = state.entities.filter(isFurniture).length;
-  const shapes = state.entities.filter(isShape).length;
-  const threeParts = state.entities.length;
-  planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furniture}${shapes ? ` / 図形${shapes}` : ""}`;
-  threeStats.textContent = `部屋${rooms}・部材${threeParts}を自動変換`;
+  const entities = activeEntities();
+  const rooms = entities.filter(isRoom).length;
+  const walls = entities.filter((entity) => entity.type === "wall").length;
+  const furnitureCount = entities.filter(isFurniture).length;
+  planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furnitureCount}`;
+  const totalParts = state.floors.reduce((sum, floor) => sum + floor.entities.length, 0);
+  threeStats.textContent = `${state.floors.length}階建て・部材${totalParts}を自動変換`;
 }
 
 function updatePropertiesPanel(): void {
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
   if (!selected) {
-    propertiesPanel.innerHTML = `<p class="empty-state">選択ツールで部屋・壁・家具を選ぶと、名前や寸法を調整できます。</p>`;
+    propertiesPanel.innerHTML = `<p class="empty-state">選択ツールで部屋・壁・家具を選ぶと、名前や寸法を調整できます。家具は R キーで90°回転します。</p>`;
     return;
   }
 
@@ -1318,6 +2312,7 @@ function updatePropertiesPanel(): void {
           <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
           <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" /></label>
         </div>
+        <label>色<input id="lineColorInput" type="color" value="${selected.color ?? "#000000"}" /></label>
       </div>
     `;
     bindNumber("#lineXInput", (value) => {
@@ -1330,6 +2325,7 @@ function updatePropertiesPanel(): void {
       selected.y1 += dy;
       selected.y2 += dy;
     });
+    bindInput("#lineColorInput", (value) => (selected.color = value));
     return;
   }
 
@@ -1348,6 +2344,7 @@ function updatePropertiesPanel(): void {
           <label>開始 °<input id="shapeStartInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" /></label>
           <label>終了 °<input id="shapeEndInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" /></label>
         </div>
+        <label>色<input id="shapeColorInput" type="color" value="${selectedShape.color ?? "#000000"}" /></label>
       </div>
     `;
     bindSelect("#shapeKindInput", (value) => {
@@ -1360,30 +2357,43 @@ function updatePropertiesPanel(): void {
     bindNumber("#shapeRadiusInput", (value) => (selectedShape.r = Math.max(GRID, snap(value))));
     bindNumber("#shapeStartInput", (value) => (selectedShape.startAngle = degreesToRadians(value)));
     bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
+    bindInput("#shapeColorInput", (value) => (selectedShape.color = value));
     return;
   }
 
   const selectedFurniture = selected as Furniture;
+  const kindOptions = FURNITURE_CATEGORIES.map(
+    (category) =>
+      `<optgroup label="${category.label}">` +
+      category.kinds
+        .map((kind) => `<option value="${kind}" ${kind === selectedFurniture.kind ? "selected" : ""}>${FURNITURE_DEFS[kind].label}</option>`)
+        .join("") +
+      `</optgroup>`,
+  ).join("");
   propertiesPanel.innerHTML = `
     <div class="property-grid">
       <label>種類
-        <select id="furnitureKindInput">
-          ${Object.entries(BASE_FURNITURE)
-            .map(([key, value]) => `<option value="${key}" ${key === selectedFurniture.kind ? "selected" : ""}>${value.label}</option>`)
-            .join("")}
-        </select>
+        <select id="furnitureKindInput">${kindOptions}</select>
       </label>
       <div class="two-col">
         <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" /></label>
         <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" /></label>
       </div>
-      <label>回転<input id="furnitureRotationInput" type="number" step="15" value="${selectedFurniture.rotation}" /></label>
+      <label>回転（Rキーで90°）<input id="furnitureRotationInput" type="number" step="15" value="${selectedFurniture.rotation}" /></label>
+      <label>色<input id="furnitureColorInput" type="color" value="${selectedFurniture.color ?? "#000000"}" /></label>
     </div>
   `;
-  bindSelect("#furnitureKindInput", (value) => (selectedFurniture.kind = value as FurnitureKind));
+  bindSelect("#furnitureKindInput", (value) => {
+    const kind = value as FurnitureKind;
+    const def = FURNITURE_DEFS[kind];
+    selectedFurniture.kind = kind;
+    selectedFurniture.w = def.w;
+    selectedFurniture.h = def.h;
+  });
   bindNumber("#furnitureWInput", (value) => (selectedFurniture.w = Math.max(GRID, snap(value))));
   bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(GRID, snap(value))));
   bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
+  bindInput("#furnitureColorInput", (value) => (selectedFurniture.color = value));
 }
 
 function bindInput(selector: string, update: (value: string) => void): void {
@@ -1434,7 +2444,7 @@ function getCanvasPixelRatio(): number {
 }
 
 function fitPlanToCanvas(): void {
-  const bounds = getBounds();
+  const bounds = getEntitiesBounds(activeEntities()) ?? getGlobalBounds();
   const rect = planCanvas.getBoundingClientRect();
   if (!bounds || rect.width === 0 || rect.height === 0) {
     view = { zoom: 1, x: rect.width / 2, y: rect.height / 2 };
@@ -1463,9 +2473,11 @@ function commitState(): void {
 
 function replaceState(next: PlanState, pushHistory: boolean): void {
   state = cloneState(next);
+  hiddenFloorIds.clear();
   if (pushHistory) commitState();
   persistState();
   fitPlanToCanvas();
+  pendingCameraFrame = true;
   redrawAll();
 }
 
@@ -1510,9 +2522,10 @@ function importPlan(): void {
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     try {
-      const parsed = JSON.parse(String(reader.result)) as PlanState;
-      if (!Array.isArray(parsed.entities)) throw new Error("Invalid plan");
-      replaceState({ entities: parsed.entities, selectedId: null }, true);
+      const normalized = normalizePlan(JSON.parse(String(reader.result)));
+      if (!normalized) throw new Error("Invalid plan");
+      normalized.selectedId = null;
+      replaceState(normalized, true);
     } catch {
       saveStatus.textContent = "読み込み失敗";
       window.setTimeout(() => {
@@ -1534,15 +2547,16 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 }
 
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
-  for (let i = state.entities.length - 1; i >= 0; i -= 1) {
-    const entity = state.entities[i];
+  const entities = activeEntities();
+  for (let i = entities.length - 1; i >= 0; i -= 1) {
+    const entity = entities[i];
     if (entity.type === "room" && isPointInRoomLabel(point, entity)) {
       return { entity, corner: "label" };
     }
   }
 
-  for (let i = state.entities.length - 1; i >= 0; i -= 1) {
-    const entity = state.entities[i];
+  for (let i = entities.length - 1; i >= 0; i -= 1) {
+    const entity = entities[i];
     if (entity.type === "room") {
       const corner = getCornerHit(entity, point);
       if (corner) return { entity, corner };
@@ -1615,79 +2629,214 @@ function to3d(x: number, y: number, center: Point): { x: number; z: number } {
   };
 }
 
-function makeTemplate(key: string): Entity[] {
+// ---- Templates ----
+
+function makeFloor(name: string, entities: Entity[]): Floor {
+  return { id: newId("floor"), name, entities };
+}
+
+function makeTemplate(key: string): PlanState {
   if (key === "studio") {
-    return [
-      room("LDK", 0, 0, 360, 300, "#e9eff8"),
-      room("水回り", 360, 0, 140, 160, "#e8f2ed"),
-      wall(0, 0, 500, 0),
-      wall(500, 0, 500, 300),
-      wall(500, 300, 0, 300),
-      wall(0, 300, 0, 0),
-      wall(360, 0, 360, 160),
-      door(330, 300, 390, 300),
-      windowLine(80, 0, 220, 0),
-      furniture("sofa", 60, 172, 92, 44),
-      furniture("table", 178, 170, 62, 46),
-      furniture("kitchen", 372, 20, 112, 44),
-      furniture("bath", 390, 92, 72, 50),
-    ];
+    return {
+      floors: [
+        makeFloor("1F", [
+          room("LDK", 0, 0, 420, 360, "#ffffff"),
+          room("水回り", 420, 0, 180, 220, "#fbfcfd"),
+          room("玄関", 420, 220, 180, 140, "#fcfbf9"),
+          wall(0, 0, 600, 0),
+          wall(600, 0, 600, 360),
+          wall(600, 360, 0, 360),
+          wall(0, 360, 0, 0),
+          wall(420, 0, 420, 360),
+          wall(420, 220, 600, 220),
+          door(420, 260, 420, 330),
+          door(420, 60, 420, 140),
+          door(470, 360, 550, 360),
+          windowLine(60, 0, 240, 0),
+          windowLine(0, 100, 0, 260),
+          furniture("kitchen", 40, 10),
+          furniture("fridge", 300, 10),
+          furniture("bed", 40, 140),
+          furniture("sofa", 220, 150),
+          furniture("table", 240, 250),
+          furniture("tv", 200, 310),
+          furniture("plant", 375, 310),
+          furniture("bath", 430, 15),
+          furniture("washbasin", 430, 105),
+          furniture("toilet", 540, 130),
+        ]),
+      ],
+      activeFloor: 0,
+      selectedId: null,
+      roof: "flat",
+    };
   }
 
   if (key === "twoLdk") {
-    return [
-      room("LDK", 0, 0, 380, 280, "#f5efe4"),
-      room("洋室 1", 380, 0, 220, 200, "#e9eff8"),
-      room("洋室 2", 0, 280, 240, 200, "#eef0e3"),
-      room("水回り", 240, 280, 180, 200, "#e8f2ed"),
-      room("玄関", 420, 200, 180, 280, "#f6e8e0"),
-      wall(0, 0, 600, 0),
-      wall(600, 0, 600, 480),
-      wall(600, 480, 0, 480),
-      wall(0, 480, 0, 0),
-      wall(380, 0, 380, 200),
-      wall(0, 280, 420, 280),
-      wall(240, 280, 240, 480),
-      wall(420, 200, 600, 200),
-      door(340, 280, 400, 280),
-      door(380, 130, 380, 190),
-      door(214, 280, 274, 280),
-      door(420, 340, 420, 400),
-      windowLine(80, 0, 250, 0),
-      windowLine(440, 0, 560, 0),
-      windowLine(40, 480, 190, 480),
-      furniture("sofa", 50, 150, 100, 46),
-      furniture("table", 192, 144, 70, 48),
-      furniture("bed", 426, 38, 94, 124),
-      furniture("bed", 40, 326, 94, 124),
-      furniture("kitchen", 242, 20, 118, 44),
-      furniture("bath", 284, 340, 76, 54),
-    ];
+    return {
+      floors: [
+        makeFloor("1F", [
+          room("LDK", 0, 0, 480, 320, "#ffffff"),
+          room("洋室 1", 480, 0, 320, 320, "#fbfcfd"),
+          room("洋室 2", 0, 320, 280, 240, "#fcfbf9"),
+          room("玄関", 280, 320, 200, 240, "#fdfdfc"),
+          room("水回り", 480, 320, 320, 240, "#fbfcfb"),
+          wall(0, 0, 800, 0),
+          wall(800, 0, 800, 560),
+          wall(800, 560, 0, 560),
+          wall(0, 560, 0, 0),
+          wall(480, 0, 480, 320),
+          wall(0, 320, 800, 320),
+          wall(280, 320, 280, 560),
+          wall(480, 320, 480, 560),
+          door(480, 100, 480, 180),
+          door(80, 320, 160, 320),
+          door(330, 320, 410, 320),
+          door(330, 560, 410, 560),
+          door(480, 380, 480, 450),
+          windowLine(60, 0, 260, 0),
+          windowLine(560, 0, 740, 0),
+          windowLine(40, 560, 200, 560),
+          windowLine(0, 100, 0, 240),
+          windowLine(800, 80, 800, 220),
+          furniture("kitchen", 80, 10),
+          furniture("fridge", 340, 10),
+          furniture("diningTable", 100, 120),
+          furniture("sofa", 300, 180),
+          furniture("tv", 330, 270),
+          furniture("plant", 440, 20),
+          furniture("bedDouble", 510, 80),
+          furniture("closet", 560, 10),
+          furniture("bed", 40, 340),
+          furniture("desk", 160, 470),
+          furniture("bath", 500, 340),
+          furniture("washbasin", 690, 340),
+          furniture("washer", 690, 410),
+          furniture("toilet", 740, 480),
+          furniture("shelf", 300, 340),
+        ]),
+      ],
+      activeFloor: 0,
+      selectedId: null,
+      roof: "hip",
+    };
   }
 
-  return [
-    room("LDK", 0, 0, 380, 300, "#f5efe4"),
-    room("寝室", 380, 0, 220, 220, "#e9eff8"),
-    room("水回り", 380, 220, 220, 160, "#e8f2ed"),
-    room("玄関", 0, 300, 240, 80, "#f6e8e0"),
-    wall(0, 0, 600, 0),
-    wall(600, 0, 600, 380),
-    wall(600, 380, 0, 380),
-    wall(0, 380, 0, 0),
-    wall(380, 0, 380, 380),
-    wall(380, 220, 600, 220),
-    wall(0, 300, 380, 300),
-    door(340, 300, 400, 300),
-    door(380, 150, 380, 210),
-    door(480, 220, 540, 220),
-    windowLine(70, 0, 250, 0),
-    windowLine(430, 0, 560, 0),
-    furniture("sofa", 54, 162, 98, 46),
-    furniture("table", 194, 154, 70, 48),
-    furniture("bed", 440, 48, 94, 126),
-    furniture("kitchen", 234, 22, 116, 44),
-    furniture("bath", 442, 278, 76, 54),
-  ];
+  if (key === "twoStory") {
+    return {
+      floors: [
+        makeFloor("1F", [
+          room("LDK", 0, 0, 460, 480, "#ffffff"),
+          room("水回り", 460, 0, 260, 240, "#fbfcfd"),
+          room("玄関", 460, 240, 260, 240, "#fcfbf9"),
+          wall(0, 0, 720, 0),
+          wall(720, 0, 720, 480),
+          wall(720, 480, 0, 480),
+          wall(0, 480, 0, 0),
+          wall(460, 0, 460, 480),
+          wall(460, 240, 720, 240),
+          door(560, 480, 640, 480),
+          door(460, 300, 460, 380),
+          door(540, 240, 620, 240),
+          windowLine(60, 0, 240, 0),
+          windowLine(0, 140, 0, 320),
+          windowLine(520, 0, 660, 0),
+          windowLine(60, 480, 220, 480),
+          furniture("kitchen", 40, 10),
+          furniture("fridge", 300, 10),
+          furniture("diningTable", 60, 120),
+          furniture("sofa", 40, 330),
+          furniture("tv", 40, 430),
+          furniture("stairsU", 270, 290),
+          furniture("plant", 410, 20),
+          furniture("bath", 480, 20),
+          furniture("washbasin", 480, 110),
+          furniture("washer", 570, 110),
+          furniture("toilet", 660, 140),
+          furniture("shelf", 610, 260),
+        ]),
+        makeFloor("2F", [
+          room("寝室", 0, 0, 360, 280, "#ffffff"),
+          room("洋室", 360, 0, 360, 280, "#fbfcfd"),
+          room("書斎", 0, 280, 240, 200, "#fcfbf9"),
+          room("ホール", 240, 280, 240, 200, "#fdfdfc"),
+          room("収納", 480, 280, 240, 200, "#fbfcfb"),
+          wall(0, 0, 720, 0),
+          wall(720, 0, 720, 480),
+          wall(720, 480, 0, 480),
+          wall(0, 480, 0, 0),
+          wall(360, 0, 360, 280),
+          wall(0, 280, 720, 280),
+          wall(240, 280, 240, 480),
+          wall(480, 280, 480, 480),
+          door(260, 280, 330, 280),
+          door(390, 280, 460, 280),
+          door(240, 340, 240, 410),
+          door(480, 340, 480, 410),
+          windowLine(60, 0, 240, 0),
+          windowLine(440, 0, 620, 0),
+          windowLine(40, 480, 160, 480),
+          windowLine(540, 480, 660, 480),
+          windowLine(0, 80, 0, 200),
+          furniture("bedDouble", 60, 40),
+          furniture("closet", 200, 10),
+          furniture("bed", 400, 40),
+          furniture("desk", 560, 40),
+          furniture("shelf", 620, 180),
+          furniture("desk", 40, 320),
+          furniture("shelf", 40, 410),
+          furniture("stairsU", 270, 290),
+          furniture("wardrobe", 520, 300),
+          furniture("closet", 520, 400),
+        ]),
+      ],
+      activeFloor: 0,
+      selectedId: null,
+      roof: "gable",
+    };
+  }
+
+  return {
+    floors: [
+      makeFloor("1F", [
+        room("LDK", 0, 0, 440, 480, "#ffffff"),
+        room("寝室", 440, 0, 280, 280, "#fbfcfd"),
+        room("玄関", 440, 280, 120, 200, "#fcfbf9"),
+        room("水回り", 560, 280, 160, 200, "#fbfcfb"),
+        wall(0, 0, 720, 0),
+        wall(720, 0, 720, 480),
+        wall(720, 480, 0, 480),
+        wall(0, 480, 0, 0),
+        wall(440, 0, 440, 480),
+        wall(440, 280, 720, 280),
+        wall(560, 280, 560, 480),
+        door(440, 100, 440, 180),
+        door(440, 340, 440, 410),
+        door(560, 330, 560, 400),
+        door(460, 480, 540, 480),
+        windowLine(80, 0, 280, 0),
+        windowLine(520, 0, 660, 0),
+        windowLine(0, 140, 0, 320),
+        windowLine(720, 80, 720, 200),
+        furniture("kitchen", 60, 10),
+        furniture("fridge", 320, 10),
+        furniture("diningTable", 80, 120),
+        furniture("sofa", 60, 330),
+        furniture("table", 250, 320),
+        furniture("tv", 250, 430),
+        furniture("plant", 400, 430),
+        furniture("bed", 470, 60),
+        furniture("closet", 540, 10),
+        furniture("desk", 590, 200),
+        furniture("bath", 570, 290, 140, 70),
+        furniture("washbasin", 570, 380),
+        furniture("toilet", 670, 380),
+      ]),
+    ],
+    activeFloor: 0,
+    selectedId: null,
+    roof: "gable",
+  };
 }
 
 function room(name: string, x: number, y: number, w: number, h: number, color: string): Room {
@@ -1706,7 +2855,7 @@ function windowLine(x1: number, y1: number, x2: number, y2: number): LinearEleme
   return { id: newId("window"), type: "window", x1, y1, x2, y2 };
 }
 
-function furniture(kind: FurnitureKind, x: number, y: number, w: number, h: number): Furniture {
+function furniture(kind: FurnitureKind, x: number, y: number, w = FURNITURE_DEFS[kind].w, h = FURNITURE_DEFS[kind].h): Furniture {
   return { id: newId("furniture"), type: "furniture", kind, x, y, w, h, rotation: 0 };
 }
 
@@ -1719,7 +2868,7 @@ function cloneEntity(value: Entity): Entity {
 }
 
 function findEntity(id: string): Entity | undefined {
-  return state.entities.find((entity) => entity.id === id);
+  return activeEntities().find((entity) => entity.id === id);
 }
 
 function isRoom(entity: Entity): entity is Room {
@@ -1766,12 +2915,12 @@ interface WallOpening {
   to: number;
 }
 
-function getVisibleWallSegments(wall: LinearElement): LinearElement[] {
-  const direction = lineDirection(wall);
-  const wallFrom = direction === "horizontal" ? Math.min(wall.x1, wall.x2) : Math.min(wall.y1, wall.y2);
-  const wallTo = direction === "horizontal" ? Math.max(wall.x1, wall.x2) : Math.max(wall.y1, wall.y2);
-  const openings = getWallOpenings(wall, wallFrom, wallTo);
-  if (openings.length === 0) return [wall];
+function getVisibleWallSegments(wallItem: LinearElement, entities: Entity[]): LinearElement[] {
+  const direction = lineDirection(wallItem);
+  const wallFrom = direction === "horizontal" ? Math.min(wallItem.x1, wallItem.x2) : Math.min(wallItem.y1, wallItem.y2);
+  const wallTo = direction === "horizontal" ? Math.max(wallItem.x1, wallItem.x2) : Math.max(wallItem.y1, wallItem.y2);
+  const openings = getWallOpenings(wallItem, wallFrom, wallTo, entities);
+  if (openings.length === 0) return [wallItem];
 
   const merged = mergeOpenings(openings);
   const intervals: WallOpening[] = [];
@@ -1786,16 +2935,16 @@ function getVisibleWallSegments(wall: LinearElement): LinearElement[] {
     intervals.push({ from: cursor, to: wallTo });
   }
 
-  return intervals.map((interval) => intervalToWallSegment(wall, interval));
+  return intervals.map((interval) => intervalToWallSegment(wallItem, interval));
 }
 
-function getWallOpenings(wall: LinearElement, wallFrom: number, wallTo: number): WallOpening[] {
-  const direction = lineDirection(wall);
-  const wallLinePosition = direction === "horizontal" ? (wall.y1 + wall.y2) / 2 : (wall.x1 + wall.x2) / 2;
+function getWallOpenings(wallItem: LinearElement, wallFrom: number, wallTo: number, entities: Entity[]): WallOpening[] {
+  const direction = lineDirection(wallItem);
+  const wallLinePosition = direction === "horizontal" ? (wallItem.y1 + wallItem.y2) / 2 : (wallItem.x1 + wallItem.x2) / 2;
   const tolerance = WALL_THICKNESS_2D * 1.4;
   const clearance = WALL_THICKNESS_2D * 0.7;
 
-  return state.entities
+  return entities
     .filter((entity): entity is LinearElement => entity.type === "door" || entity.type === "window")
     .filter((opening) => lineDirection(opening) === direction)
     .map((opening) => {
@@ -1824,13 +2973,13 @@ function mergeOpenings(openings: WallOpening[]): WallOpening[] {
   return merged;
 }
 
-function intervalToWallSegment(wall: LinearElement, interval: WallOpening): LinearElement {
-  if (lineDirection(wall) === "horizontal") {
-    const y = (wall.y1 + wall.y2) / 2;
-    return { ...wall, x1: interval.from, y1: y, x2: interval.to, y2: y };
+function intervalToWallSegment(wallItem: LinearElement, interval: WallOpening): LinearElement {
+  if (lineDirection(wallItem) === "horizontal") {
+    const y = (wallItem.y1 + wallItem.y2) / 2;
+    return { ...wallItem, x1: interval.from, y1: y, x2: interval.to, y2: y };
   }
-  const x = (wall.x1 + wall.x2) / 2;
-  return { ...wall, x1: x, y1: interval.from, x2: x, y2: interval.to };
+  const x = (wallItem.x1 + wallItem.x2) / 2;
+  return { ...wallItem, x1: x, y1: interval.from, x2: x, y2: interval.to };
 }
 
 interface Bounds {
@@ -1840,14 +2989,13 @@ interface Bounds {
   h: number;
 }
 
-function getBounds(includeEntity: (entity: Entity) => boolean = () => true): Bounds | null {
-  if (state.entities.length === 0) return null;
+function getEntitiesBounds(entities: Entity[]): Bounds | null {
+  if (entities.length === 0) return null;
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  state.entities.forEach((entity) => {
-    if (!includeEntity(entity)) return;
+  entities.forEach((entity) => {
     if (entity.type === "room" || entity.type === "furniture") {
       minX = Math.min(minX, entity.x);
       minY = Math.min(minY, entity.y);
@@ -1871,11 +3019,27 @@ function getBounds(includeEntity: (entity: Entity) => boolean = () => true): Bou
   return { x: minX, y: minY, w: Math.max(GRID, maxX - minX), h: Math.max(GRID, maxY - minY) };
 }
 
+function getGlobalBounds(): Bounds | null {
+  const all = state.floors.flatMap((floor) => floor.entities);
+  return getEntitiesBounds(all);
+}
+
 function roomMaterial(color: string): THREE.MeshStandardMaterial {
   const cached = roomMaterialCache.get(color);
   if (cached) return cached;
   const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.82 });
   roomMaterialCache.set(color, material);
+  return material;
+}
+
+const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+
+function coloredMaterial(color: string, roughness = 0.75): THREE.MeshStandardMaterial {
+  const key = `${color}-${roughness}`;
+  const cached = coloredMaterialCache.get(key);
+  if (cached) return cached;
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness });
+  coloredMaterialCache.set(key, material);
   return material;
 }
 
@@ -1926,7 +3090,7 @@ function normalizeAngle(angle: number): number {
 }
 
 function formatMeters(value: number): string {
-  return `${Math.round(value / 20) / 10}m`;
+  return `${Math.round(value / 10) / 10}m`;
 }
 
 function degreesToRadians(value: number): number {
@@ -1945,12 +3109,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function shadeColor(color: number, amount: number): number {
-  const threeColor = new THREE.Color(color);
-  threeColor.offsetHSL(0, 0, amount);
-  return threeColor.getHex();
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -1959,6 +3117,6 @@ function escapeHtml(value: string): string {
     .replaceAll('"', "&quot;");
 }
 
-function newId(prefix: EntityType): string {
+function newId(prefix: EntityType | "floor"): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }

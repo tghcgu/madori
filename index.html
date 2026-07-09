@@ -70,18 +70,6 @@
                 <i data-lucide="minus"></i>
                 <span>壁</span>
               </button>
-              <button class="tool-button" type="button" data-tool="door" title="ドア">
-                <i data-lucide="door-open"></i>
-                <span>ドア</span>
-              </button>
-              <button class="tool-button" type="button" data-tool="window" title="窓">
-                <i data-lucide="panel-top-open"></i>
-                <span>窓</span>
-              </button>
-              <button class="tool-button" type="button" data-tool="furniture" title="家具">
-                <i data-lucide="armchair"></i>
-                <span>家具</span>
-              </button>
               <button class="tool-button" type="button" data-tool="circle" title="円">
                 <i data-lucide="circle"></i>
                 <span>円</span>
@@ -98,14 +86,17 @@
           </section>
 
           <section class="tool-section">
-            <h2>家具</h2>
-            <div class="segmented" id="furniturePicker">
-              <button type="button" class="is-active" data-furniture="sofa">ソファ</button>
-              <button type="button" data-furniture="table">テーブル</button>
-              <button type="button" data-furniture="bed">ベッド</button>
-              <button type="button" data-furniture="desk">机</button>
-              <button type="button" data-furniture="kitchen">キッチン</button>
-              <button type="button" data-furniture="bath">浴槽</button>
+            <h2>家具・設備</h2>
+            <div id="furniturePicker" class="furniture-picker"></div>
+          </section>
+
+          <section class="tool-section">
+            <h2>屋根</h2>
+            <div class="segmented roof-picker" id="roofPicker">
+              <button type="button" data-roof="none">なし</button>
+              <button type="button" data-roof="gable">切妻</button>
+              <button type="button" data-roof="hip">寄棟</button>
+              <button type="button" data-roof="flat">陸屋根</button>
             </div>
           </section>
 
@@ -116,6 +107,7 @@
                 <button type="button" data-template="studio">ワンルーム</button>
                 <button type="button" data-template="oneLdk">1LDK</button>
                 <button type="button" data-template="twoLdk">2LDK</button>
+                <button type="button" data-template="twoStory">二階建て 3LDK</button>
               </div>
             </details>
           </section>
@@ -128,12 +120,13 @@
 
         <section class="plan-pane">
           <div class="pane-bar">
-            <div>
+            <div class="pane-left">
               <strong>2D</strong>
+              <div class="floor-tabs" id="floorTabs" aria-label="階の切り替え"></div>
               <span id="planStats"></span>
             </div>
             <div class="pane-actions">
-              <button class="toggle-button is-active" id="dimensionToggle" type="button" title="幅・奥行を表示" aria-pressed="true">
+              <button class="toggle-button" id="dimensionToggle" type="button" title="幅・奥行を表示" aria-pressed="false">
                 <i data-lucide="ruler"></i>
                 <span>寸法</span>
               </button>
@@ -147,8 +140,31 @@
 
         <section class="three-pane">
           <div class="three-overlay">
-            <strong>3D</strong>
-            <span id="threeStats"></span>
+            <div class="three-overlay-row">
+              <strong>3D</strong>
+              <span id="threeStats"></span>
+            </div>
+            <div class="three-overlay-row three-settings">
+              <button class="mini-toggle is-active" id="shadowToggle" type="button" title="影の表示を切り替え" aria-pressed="true">
+                <i data-lucide="sun"></i>
+                <span>影</span>
+              </button>
+              <span class="floor-visibility" id="floorVisibility" title="3Dに表示する階"></span>
+              <label class="light-select-label" title="光の方角">
+                <i data-lucide="compass"></i>
+                <select id="lightDirectionSelect">
+                  <option value="n">北から</option>
+                  <option value="ne">北東から</option>
+                  <option value="e">東から</option>
+                  <option value="se">南東から</option>
+                  <option value="s">南から</option>
+                  <option value="sw">南西から</option>
+                  <option value="w">西から</option>
+                  <option value="nw">北西から</option>
+                  <option value="top">真上から</option>
+                </select>
+              </label>
+            </div>
           </div>
           <canvas id="threeCanvas" aria-label="3D間取りプレビュー"></canvas>
         </section>
