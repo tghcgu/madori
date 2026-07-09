@@ -151,6 +151,7 @@ const VIEW_MODE_KEY = "madori-quick-3d-view-mode";
 const DIMENSION_LABELS_KEY = "madori-quick-3d-dimension-labels";
 const SHADOWS_KEY = "madori-quick-3d-shadows";
 const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
+const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -159,6 +160,12 @@ const WALL_HEIGHT = 2.6;
 const FLOOR_SLAB = 0.15;
 const FLOOR_SPACING = WALL_HEIGHT + FLOOR_SLAB;
 const MAX_FLOORS = 4;
+// 開口の高さ範囲（壁がドア・窓と重なった部分だけを切り抜くために使う）
+const DOOR_HEAD_Y = 2.1;
+const WINDOW_SILL_Y = 0.84;
+const WINDOW_HEAD_Y = 1.96;
+// 光量5段階の倍率
+const LIGHT_LEVELS = [0.5, 0.75, 1, 1.3, 1.6];
 
 const INK = "#000000";
 const INK_SOFT = "#5b6470";
@@ -237,6 +244,7 @@ let viewMode: ViewMode = loadViewMode();
 let showDimensions = loadDimensionLabels();
 let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
+let lightLevel = loadLightLevel();
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -406,20 +414,26 @@ function loadLightDirection(): LightDirection {
   return stored && stored in LIGHT_POSITIONS ? (stored as LightDirection) : "se";
 }
 
+function loadLightLevel(): number {
+  const stored = Number(localStorage.getItem(LIGHT_LEVEL_KEY));
+  return Number.isInteger(stored) && stored >= 1 && stored <= LIGHT_LEVELS.length ? stored : 3;
+}
+
 function applyLightSettings(): void {
   const [x, y, z] = LIGHT_POSITIONS[lightDirection];
   sunLight.position.set(x, y, z);
   // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
   sunLight.shadow.intensity = shadowsEnabled ? 1 : 0;
+  const level = LIGHT_LEVELS[lightLevel - 1];
   if (shadowsEnabled) {
     // 通常: 太陽光で立体感を出す
-    sunLight.intensity = 2.4;
-    hemiLight.intensity = 1.6;
+    sunLight.intensity = 2.4 * level;
+    hemiLight.intensity = 1.6 * level;
     hemiLight.groundColor.set(0xaeb7c3);
   } else {
     // 影オフ: 太陽光を完全に消し、均一な環境光のみのフラットな見た目にする
     sunLight.intensity = 0;
-    hemiLight.intensity = 3.5;
+    hemiLight.intensity = 3.5 * level;
     hemiLight.groundColor.set(0xffffff);
   }
 }
@@ -507,6 +521,16 @@ function setupUi(): void {
     lightSelect.addEventListener("change", () => {
       lightDirection = lightSelect.value as LightDirection;
       localStorage.setItem(LIGHT_DIRECTION_KEY, lightDirection);
+      applyLightSettings();
+    });
+  }
+
+  const lightLevelSelect = document.querySelector<HTMLSelectElement>("#lightLevelSelect");
+  if (lightLevelSelect) {
+    lightLevelSelect.value = String(lightLevel);
+    lightLevelSelect.addEventListener("change", () => {
+      lightLevel = Number(lightLevelSelect.value) || 3;
+      localStorage.setItem(LIGHT_LEVEL_KEY, String(lightLevel));
       applyLightSettings();
     });
   }
@@ -1799,11 +1823,7 @@ function rebuildThree(): void {
     floor.entities.filter(isRoom).forEach((roomItem) => addRoom3d(roomItem, center, yBase, index));
     floor.entities
       .filter((entity): entity is LinearElement => entity.type === "wall")
-      .forEach((wallItem) => {
-        getVisibleWallSegments(wallItem, floor.entities).forEach((segment) =>
-          addStraightWall3d(segment, center, yBase, wallItem.id, true),
-        );
-      });
+      .forEach((wallItem) => addWall3d(wallItem, floor.entities, center, yBase));
     floor.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase));
     floor.entities
       .filter((entity): entity is LinearElement => entity.type === "door")
@@ -1848,33 +1868,62 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
   addSelectionBox(mesh, roomItem.id);
 }
 
-function addStraightWall3d(wallItem: LinearElement, center: Point, yBase: number, entityId = wallItem.id, showSelection = true): void {
+function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number): void {
+  getVisibleWallSegments(wallItem, entities).forEach((segment) => addStraightWall3d(segment, center, yBase, wallItem.id, true));
+
+  // ドア・窓と重なった区間は、開口の高さ分だけを切り抜き、残り（ドア上・窓上下）を壁として埋める
+  const direction = lineDirection(wallItem);
+  const wallFrom = direction === "horizontal" ? Math.min(wallItem.x1, wallItem.x2) : Math.min(wallItem.y1, wallItem.y2);
+  const wallTo = direction === "horizontal" ? Math.max(wallItem.x1, wallItem.x2) : Math.max(wallItem.y1, wallItem.y2);
+  getWallOpenings(wallItem, wallFrom, wallTo, entities).forEach((opening) => {
+    const segment = intervalToWallSegment(wallItem, opening);
+    if (opening.kind === "door") {
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, DOOR_HEAD_Y, WALL_HEIGHT);
+    } else {
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, 0, WINDOW_SILL_Y);
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, WINDOW_HEAD_Y, WALL_HEIGHT);
+    }
+  });
+}
+
+function addStraightWall3d(
+  wallItem: LinearElement,
+  center: Point,
+  yBase: number,
+  entityId = wallItem.id,
+  showSelection = true,
+  yFrom = 0,
+  yTo = WALL_HEIGHT,
+): void {
   const length = distance(wallItem) * SCALE_3D;
-  if (length <= 0.02) return;
+  const height = yTo - yFrom;
+  if (length <= 0.02 || height <= 0.02) return;
   const thickness = WALL_THICKNESS_2D * SCALE_3D;
   const angle = Math.atan2(wallItem.y2 - wallItem.y1, wallItem.x2 - wallItem.x1);
   const customWallColor = wallItem.color3d ?? wallItem.color;
   const bodyMaterial = customWallColor ? coloredMaterial(customWallColor, 0.78) : wallMaterial;
-  const geometry = new THREE.BoxGeometry(length, WALL_HEIGHT, thickness);
+  const geometry = new THREE.BoxGeometry(length, height, thickness);
   const mesh = new THREE.Mesh(geometry, bodyMaterial);
   const mid = midpoint(wallItem);
   const pos = to3d(mid.x, mid.y, center);
-  mesh.position.set(pos.x, yBase + WALL_HEIGHT / 2, pos.z);
+  mesh.position.set(pos.x, yBase + yFrom + height / 2, pos.z);
   mesh.rotation.y = -angle;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   markSelectable(mesh, entityId);
   planGroup.add(mesh);
 
-  const cap = new THREE.Mesh(
-    new THREE.BoxGeometry(length + 0.01, 0.06, thickness + 0.01),
-    customWallColor ? bodyMaterial : wallCapMaterial,
-  );
-  cap.position.set(pos.x, yBase + WALL_HEIGHT + 0.03, pos.z);
-  cap.rotation.y = -angle;
-  cap.castShadow = true;
-  markSelectable(cap, entityId);
-  planGroup.add(cap);
+  if (yTo >= WALL_HEIGHT - 0.001) {
+    const cap = new THREE.Mesh(
+      new THREE.BoxGeometry(length + 0.01, 0.06, thickness + 0.01),
+      customWallColor ? bodyMaterial : wallCapMaterial,
+    );
+    cap.position.set(pos.x, yBase + WALL_HEIGHT + 0.03, pos.z);
+    cap.rotation.y = -angle;
+    cap.castShadow = true;
+    markSelectable(cap, entityId);
+    planGroup.add(cap);
+  }
   if (showSelection) {
     addSelectionBox(mesh, entityId);
   }
@@ -1928,10 +1977,6 @@ function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
 
   addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
   addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
-
-  // 開口で切り抜かれた壁を埋める垂れ壁（ドア上部）
-  const headerHeight = WALL_HEIGHT - frameHeight;
-  addOrientedBox(mid, center, length + 0.15, headerHeight, WALL_THICKNESS_2D * SCALE_3D, yBase + frameHeight + headerHeight / 2, angle, wallMaterial, door.id);
   addSelectionBox(panel, door.id);
 }
 
@@ -1958,13 +2003,6 @@ function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): voi
   if (windowEl.mullion) {
     addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, frameMaterial, windowEl.id);
   }
-
-  // 開口で切り抜かれた壁を埋める腰壁（下）と垂れ壁（上）
-  const wallDepth = WALL_THICKNESS_2D * SCALE_3D;
-  const sillHeight = frameBottom - yBase;
-  const headerHeight = yBase + WALL_HEIGHT - frameTop;
-  addOrientedBox(mid, center, length + 0.15, sillHeight, wallDepth, yBase + sillHeight / 2, angle, wallMaterial, windowEl.id);
-  addOrientedBox(mid, center, length + 0.15, headerHeight, wallDepth, frameTop + headerHeight / 2, angle, wallMaterial, windowEl.id);
   addSelectionBox(glass, windowEl.id);
 }
 
@@ -3128,6 +3166,7 @@ function distance(entity: LinearElement): number {
 interface WallOpening {
   from: number;
   to: number;
+  kind?: "door" | "window";
 }
 
 function getVisibleWallSegments(wallItem: LinearElement, entities: Entity[]): LinearElement[] {
@@ -3170,7 +3209,7 @@ function getWallOpenings(wallItem: LinearElement, wallFrom: number, wallTo: numb
       const openingTo = direction === "horizontal" ? Math.max(opening.x1, opening.x2) : Math.max(opening.y1, opening.y2);
       const from = clamp(openingFrom - clearance, wallFrom, wallTo);
       const to = clamp(openingTo + clearance, wallFrom, wallTo);
-      return to > from ? { from, to } : null;
+      return to > from ? { from, to, kind: opening.type as "door" | "window" } : null;
     })
     .filter((opening): opening is WallOpening => Boolean(opening));
 }
