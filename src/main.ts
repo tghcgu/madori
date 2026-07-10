@@ -154,6 +154,7 @@ const DIMENSION_LABELS_KEY = "madori-quick-3d-dimension-labels";
 const SHADOWS_KEY = "madori-quick-3d-shadows";
 const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
+const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -171,7 +172,6 @@ const LIGHT_LEVELS = [0.5, 0.75, 1, 1.3, 1.6];
 
 const INK = "#000000";
 const INK_SOFT = "#5b6470";
-const GHOST = "#d4d9e0";
 
 interface FurnitureDef {
   label: string;
@@ -247,6 +247,7 @@ let showDimensions = loadDimensionLabels();
 let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
+let showGhostFloor = loadGhostFloor();
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -417,6 +418,10 @@ function loadLightDirection(): LightDirection {
   return stored && stored in LIGHT_POSITIONS ? (stored as LightDirection) : "se";
 }
 
+function loadGhostFloor(): boolean {
+  return localStorage.getItem(GHOST_FLOOR_KEY) !== "off";
+}
+
 function loadLightLevel(): number {
   const stored = Number(localStorage.getItem(LIGHT_LEVEL_KEY));
   return Number.isInteger(stored) && stored >= 1 && stored <= LIGHT_LEVELS.length ? stored : 3;
@@ -494,6 +499,17 @@ function setupUi(): void {
     updateDimensionToggle();
     render2d();
   });
+
+  const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
+  ghostToggle?.addEventListener("click", () => {
+    showGhostFloor = !showGhostFloor;
+    localStorage.setItem(GHOST_FLOOR_KEY, showGhostFloor ? "on" : "off");
+    ghostToggle.classList.toggle("is-active", showGhostFloor);
+    ghostToggle.setAttribute("aria-pressed", String(showGhostFloor));
+    render2d();
+  });
+  ghostToggle?.classList.toggle("is-active", showGhostFloor);
+  ghostToggle?.setAttribute("aria-pressed", String(showGhostFloor));
 
   const panelToggle = document.querySelector<HTMLButtonElement>("#panelToggle");
   panelToggle?.addEventListener("click", () => {
@@ -1262,10 +1278,11 @@ function render2d(): void {
   ctx.scale(view.zoom, view.zoom);
 
   drawGrid(width, height);
-  drawFloorBelowGhost();
 
   const entities = activeEntities();
   entities.filter(isRoom).forEach(drawRoom);
+  // 現在の階の部屋の塗りの上・線画の下に、下階のゴーストを挟む
+  drawFloorBelowGhost();
   entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
@@ -1307,24 +1324,20 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
 }
 
 function drawFloorBelowGhost(): void {
-  if (state.activeFloor === 0) return;
+  if (!showGhostFloor || state.activeFloor === 0) return;
   const below = state.floors[state.activeFloor - 1];
+  const entities = below.entities;
   ctx.save();
-  below.entities.forEach((entity) => {
-    if (entity.type === "room") {
-      ctx.strokeStyle = GHOST;
-      ctx.lineWidth = 1.2 / view.zoom;
-      ctx.strokeRect(entity.x, entity.y, entity.w, entity.h);
-    } else if (entity.type === "wall") {
-      ctx.strokeStyle = GHOST;
-      ctx.lineCap = "square";
-      ctx.lineWidth = WALL_THICKNESS_2D;
-      ctx.beginPath();
-      ctx.moveTo(entity.x1, entity.y1);
-      ctx.lineTo(entity.x2, entity.y2);
-      ctx.stroke();
-    }
+  // 下の階のすべての要素をごく薄い半透明で描く
+  ctx.globalAlpha = 0.13;
+  entities.filter(isRoom).forEach(drawRoom);
+  entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
+    getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
+  entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
+  entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
+  entities.filter(isFurniture).forEach(drawFurniture2d);
+  entities.filter(isShape).forEach(drawShape2d);
   ctx.restore();
 }
 
@@ -1909,8 +1922,10 @@ function rebuildThree(): void {
 }
 
 function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number): void {
-  const width = roomItem.w * SCALE_3D;
-  const depth = roomItem.h * SCALE_3D;
+  // 上階のスラブは壁厚ぶん外へ広げ、壁の外面と面一にして継ぎ目の溝をなくす
+  const slabOverhang = floorIndex === 0 ? 0 : WALL_THICKNESS_2D * SCALE_3D;
+  const width = roomItem.w * SCALE_3D + slabOverhang;
+  const depth = roomItem.h * SCALE_3D + slabOverhang;
   const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
   const geometry = new THREE.BoxGeometry(width, thickness, depth);
   const material = floorIndex === 0 ? roomMaterial(roomItem.color3d ?? roomItem.color) : slabMaterial;
