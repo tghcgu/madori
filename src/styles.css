@@ -719,6 +719,17 @@ select:focus-visible {
   font-weight: 700;
 }
 
+.settings-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+}
+
+.floor-visibility:empty + .settings-divider,
+.settings-divider:has(+ .floor-visibility:empty) {
+  display: none;
+}
+
 .floor-visibility {
   display: inline-flex;
   align-items: center;
