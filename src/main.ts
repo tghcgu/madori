@@ -263,6 +263,7 @@ let drag: PointerState = {
 };
 let threePointerDown: Point | null = null;
 let pendingCameraFrame = true;
+let roofVisible3d = true;
 const hiddenFloorIds = new Set<string>();
 
 const renderer = new THREE.WebGLRenderer({
@@ -668,25 +669,39 @@ function renderFloorVisibility(): void {
   const container = document.querySelector<HTMLSpanElement>("#floorVisibility");
   if (!container) return;
   container.innerHTML = "";
-  if (state.floors.length <= 1) return;
-  state.floors.forEach((floor) => {
+  if (state.floors.length > 1) {
+    state.floors.forEach((floor) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      const visible = !hiddenFloorIds.has(floor.id);
+      button.className = `mini-toggle${visible ? " is-active" : ""}`;
+      button.textContent = floor.name;
+      button.title = visible ? `${floor.name}を3Dから一時的に隠す` : `${floor.name}を3Dに表示`;
+      button.setAttribute("aria-pressed", String(visible));
+      button.addEventListener("click", () => {
+        if (hiddenFloorIds.has(floor.id)) {
+          hiddenFloorIds.delete(floor.id);
+        } else {
+          hiddenFloorIds.add(floor.id);
+        }
+        rebuildThree();
+      });
+      container.appendChild(button);
+    });
+  }
+  if (state.roof !== "none") {
     const button = document.createElement("button");
     button.type = "button";
-    const visible = !hiddenFloorIds.has(floor.id);
-    button.className = `mini-toggle${visible ? " is-active" : ""}`;
-    button.textContent = floor.name;
-    button.title = visible ? `${floor.name}を3Dから一時的に隠す` : `${floor.name}を3Dに表示`;
-    button.setAttribute("aria-pressed", String(visible));
+    button.className = `mini-toggle${roofVisible3d ? " is-active" : ""}`;
+    button.textContent = "屋根";
+    button.title = roofVisible3d ? "屋根を3Dから一時的に隠す" : "屋根を3Dに表示";
+    button.setAttribute("aria-pressed", String(roofVisible3d));
     button.addEventListener("click", () => {
-      if (hiddenFloorIds.has(floor.id)) {
-        hiddenFloorIds.delete(floor.id);
-      } else {
-        hiddenFloorIds.add(floor.id);
-      }
+      roofVisible3d = !roofVisible3d;
       rebuildThree();
     });
     container.appendChild(button);
-  });
+  }
 }
 
 function setActiveFloorIndex(index: number): void {
@@ -2306,7 +2321,7 @@ function buildRoofGeometry(width: number, depth: number, height: number, ridgeIn
 }
 
 function addRoof3d(center: Point): void {
-  if (state.roof === "none") return;
+  if (state.roof === "none" || !roofVisible3d) return;
   let topIndex = -1;
   for (let i = state.floors.length - 1; i >= 0; i -= 1) {
     if (!hiddenFloorIds.has(state.floors[i].id)) {
