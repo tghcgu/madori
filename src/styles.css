@@ -219,8 +219,23 @@ select:focus-visible {
   font-weight: 700;
 }
 
+.alpha-banner {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  background: rgba(39, 117, 209, 0.08);
+  color: #145da8;
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .workspace {
-  height: calc(100% - 64px);
+  height: calc(100% - 90px);
   display: grid;
   grid-template-columns: 284px minmax(430px, 1fr) minmax(430px, 1fr);
   gap: 1px;
