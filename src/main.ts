@@ -1972,7 +1972,9 @@ function addStraightWall3d(
   yTo = WALL_HEIGHT,
 ): void {
   const length = distance(wallItem) * SCALE_3D;
-  const height = yTo - yFrom;
+  // 上階の壁は床スラブの厚みぶん下へ延長し、下階の壁と外面が連続するようにする
+  const bottomExtension = yBase > 0 && yFrom === 0 ? FLOOR_SLAB : 0;
+  const height = yTo - yFrom + bottomExtension;
   if (length <= 0.02 || height <= 0.02) return;
   const thickness = WALL_THICKNESS_2D * SCALE_3D;
   const angle = Math.atan2(wallItem.y2 - wallItem.y1, wallItem.x2 - wallItem.x1);
@@ -1982,7 +1984,7 @@ function addStraightWall3d(
   const mesh = new THREE.Mesh(geometry, bodyMaterial);
   const mid = midpoint(wallItem);
   const pos = to3d(mid.x, mid.y, center);
-  mesh.position.set(pos.x, yBase + yFrom + height / 2, pos.z);
+  mesh.position.set(pos.x, yBase + yFrom - bottomExtension + height / 2, pos.z);
   mesh.rotation.y = -angle;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
