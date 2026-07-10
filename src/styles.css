@@ -89,6 +89,18 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.alpha-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(39, 117, 209, 0.12);
+  color: #145da8;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+
 .brand span {
   display: block;
   margin-top: 4px;
