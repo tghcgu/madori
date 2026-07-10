@@ -471,6 +471,32 @@ select:focus-visible {
   margin-bottom: 0;
 }
 
+.feedback-address {
+  user-select: all;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.feedback-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.feedback-link:hover {
+  border-color: var(--line-strong);
+  background: #f9fafc;
+}
+
 .shortcut-list {
   display: grid;
   gap: 7px;
