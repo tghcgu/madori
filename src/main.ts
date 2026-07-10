@@ -3202,7 +3202,7 @@ function getWallOpenings(wallItem: LinearElement, wallFrom: number, wallTo: numb
   return entities
     .filter((entity): entity is LinearElement => entity.type === "door" || entity.type === "window")
     .filter((opening) => lineDirection(opening) === direction)
-    .map((opening) => {
+    .map((opening): WallOpening | null => {
       const openingLinePosition = direction === "horizontal" ? (opening.y1 + opening.y2) / 2 : (opening.x1 + opening.x2) / 2;
       if (Math.abs(openingLinePosition - wallLinePosition) > tolerance) return null;
       const openingFrom = direction === "horizontal" ? Math.min(opening.x1, opening.x2) : Math.min(opening.y1, opening.y2);
