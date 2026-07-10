@@ -1891,14 +1891,24 @@ function rebuildThree(): void {
   const bounds = getGlobalBounds();
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
 
+  let topVisibleIndex = -1;
+  for (let i = state.floors.length - 1; i >= 0; i -= 1) {
+    if (!hiddenFloorIds.has(state.floors[i].id)) {
+      topVisibleIndex = i;
+      break;
+    }
+  }
+
   state.floors.forEach((floor, index) => {
     if (hiddenFloorIds.has(floor.id)) return;
     const yBase = index * FLOOR_SPACING;
+    // 笠木（壁上端のキャップ）は最上階のみ。途中階は上階の壁と面一に continuous させる
+    const withCap = index === topVisibleIndex;
     floor.entities.filter(isRoom).forEach((roomItem) => addRoom3d(roomItem, center, yBase, index));
     floor.entities
       .filter((entity): entity is LinearElement => entity.type === "wall")
-      .forEach((wallItem) => addWall3d(wallItem, floor.entities, center, yBase));
-    floor.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase));
+      .forEach((wallItem) => addWall3d(wallItem, floor.entities, center, yBase, withCap));
+    floor.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase, withCap));
     floor.entities
       .filter((entity): entity is LinearElement => entity.type === "door")
       .forEach((door) => addDoor3d(door, center, yBase));
@@ -1922,10 +1932,10 @@ function rebuildThree(): void {
 }
 
 function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number): void {
-  // 上階のスラブは壁厚ぶん外へ広げ、壁の外面と面一にして継ぎ目の溝をなくす
-  const slabOverhang = floorIndex === 0 ? 0 : WALL_THICKNESS_2D * SCALE_3D;
-  const width = roomItem.w * SCALE_3D + slabOverhang;
-  const depth = roomItem.h * SCALE_3D + slabOverhang;
+  // 上階のスラブは壁の内側に収める（外面は下へ延長した壁が覆うので、共面によるちらつきを避ける）
+  const slabInset = floorIndex === 0 ? 0 : WALL_THICKNESS_2D * SCALE_3D;
+  const width = Math.max(roomItem.w * SCALE_3D - slabInset, 0.1);
+  const depth = Math.max(roomItem.h * SCALE_3D - slabInset, 0.1);
   const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
   const geometry = new THREE.BoxGeometry(width, thickness, depth);
   const material = floorIndex === 0 ? roomMaterial(roomItem.color3d ?? roomItem.color) : slabMaterial;
@@ -1944,8 +1954,8 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
   addSelectionBox(mesh, roomItem.id);
 }
 
-function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number): void {
-  getVisibleWallSegments(wallItem, entities).forEach((segment) => addStraightWall3d(segment, center, yBase, wallItem.id, true));
+function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number, withCap = true): void {
+  getVisibleWallSegments(wallItem, entities).forEach((segment) => addStraightWall3d(segment, center, yBase, wallItem.id, true, 0, WALL_HEIGHT, withCap));
 
   // ドア・窓と重なった区間は、開口の高さ分だけを切り抜き、残り（ドア上・窓上下）を壁として埋める
   const direction = lineDirection(wallItem);
@@ -1954,10 +1964,10 @@ function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, y
   getWallOpenings(wallItem, wallFrom, wallTo, entities).forEach((opening) => {
     const segment = intervalToWallSegment(wallItem, opening);
     if (opening.kind === "door") {
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, DOOR_HEAD_Y, WALL_HEIGHT);
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, DOOR_HEAD_Y, WALL_HEIGHT, withCap);
     } else {
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, 0, WINDOW_SILL_Y);
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, WINDOW_HEAD_Y, WALL_HEIGHT);
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, 0, WINDOW_SILL_Y, withCap);
+      addStraightWall3d(segment, center, yBase, wallItem.id, false, WINDOW_HEAD_Y, WALL_HEIGHT, withCap);
     }
   });
 }
@@ -1970,6 +1980,7 @@ function addStraightWall3d(
   showSelection = true,
   yFrom = 0,
   yTo = WALL_HEIGHT,
+  withCap = true,
 ): void {
   const length = distance(wallItem) * SCALE_3D;
   // 上階の壁は床スラブの厚みぶん下へ延長し、下階の壁と外面が連続するようにする
@@ -1991,7 +2002,7 @@ function addStraightWall3d(
   markSelectable(mesh, entityId);
   planGroup.add(mesh);
 
-  if (yTo >= WALL_HEIGHT - 0.001) {
+  if (withCap && yTo >= WALL_HEIGHT - 0.001) {
     const cap = new THREE.Mesh(
       new THREE.BoxGeometry(length + 0.01, 0.06, thickness + 0.01),
       customWallColor ? bodyMaterial : wallCapMaterial,
@@ -2007,7 +2018,7 @@ function addStraightWall3d(
   }
 }
 
-function addShapeWall3d(shape: Shape, center: Point, yBase: number): void {
+function addShapeWall3d(shape: Shape, center: Point, yBase: number, withCap = true): void {
   if (shape.kind === "polygon") {
     const points = polygonPoints(shape);
     points.forEach((vertex, index) => {
@@ -2022,7 +2033,7 @@ function addShapeWall3d(shape: Shape, center: Point, yBase: number): void {
         color: shape.color,
         color3d: shape.color3d,
       };
-      addStraightWall3d(segment, center, yBase, shape.id, false);
+      addStraightWall3d(segment, center, yBase, shape.id, false, 0, WALL_HEIGHT, withCap);
     });
     return;
   }
@@ -2042,7 +2053,7 @@ function addShapeWall3d(shape: Shape, center: Point, yBase: number): void {
       color: shape.color,
       color3d: shape.color3d,
     };
-    addStraightWall3d(segment, center, yBase, shape.id, false);
+    addStraightWall3d(segment, center, yBase, shape.id, false, 0, WALL_HEIGHT, withCap);
   }
 }
 
