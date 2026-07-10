@@ -3,7 +3,7 @@ import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-type Tool = "select" | "room" | "wall" | "door" | "window" | "window2" | "furniture" | "circle" | "arc" | "erase";
+type Tool = "select" | "room" | "wall" | "door" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
 type FurnitureKind =
   | "sofa"
@@ -29,7 +29,7 @@ type FurnitureKind =
   | "stairsU"
   | "stairsSpiral"
   | "car";
-type ShapeKind = "circle" | "arc";
+type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "none" | "gable" | "hip" | "flat";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
 type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
@@ -91,6 +91,8 @@ interface Shape {
   r: number;
   startAngle: number;
   endAngle: number;
+  sides?: number;
+  rotation?: number;
   color?: string;
   color3d?: string;
 }
@@ -933,6 +935,7 @@ function handlePointerUp(event: PointerEvent): void {
     if (activeTool === "window2") addLineFromDrag("window", start, end, true);
     if (activeTool === "circle") addShapeFromDrag("circle", start, end);
     if (activeTool === "arc") addShapeFromDrag("arc", start, end);
+    if (activeTool === "polygon") addShapeFromDrag("polygon", start, end);
     commitState();
   }
 
@@ -1026,7 +1029,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (!isEditing && event.key.toLowerCase() === "r" && state.selectedId) {
     const selected = findEntity(state.selectedId);
     if (selected) {
-      rotateEntity90(selected);
+      rotateEntity(selected, event.shiftKey ? 15 : 90);
       commitState();
       redrawAll();
     }
@@ -1090,7 +1093,7 @@ function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Po
 
 function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
   const radius = Math.max(GRID, snap(Math.hypot(end.x - start.x, end.y - start.y)));
-  const endAngle = kind === "arc" ? Math.atan2(end.y - start.y, end.x - start.x) : Math.PI * 2;
+  const dragAngle = Math.atan2(end.y - start.y, end.x - start.x);
   const shape: Shape = {
     id: newId("shape"),
     type: "shape",
@@ -1099,18 +1102,34 @@ function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
     y: snap(start.y),
     r: radius,
     startAngle: kind === "arc" ? -Math.PI / 2 : 0,
-    endAngle,
+    endAngle: kind === "arc" ? dragAngle : Math.PI * 2,
   };
+  if (kind === "polygon") {
+    shape.sides = 6;
+    shape.rotation = dragAngle;
+  }
   activeEntities().push(shape);
   state.selectedId = shape.id;
 }
 
-function rotateEntity90(entity: Entity): void {
+function polygonPoints(shape: Shape): Point[] {
+  const sides = clamp(Math.round(shape.sides ?? 6), 3, 12);
+  const rotation = shape.rotation ?? 0;
+  const points: Point[] = [];
+  for (let i = 0; i < sides; i += 1) {
+    const angle = rotation + (i / sides) * Math.PI * 2;
+    points.push({ x: shape.x + Math.cos(angle) * shape.r, y: shape.y + Math.sin(angle) * shape.r });
+  }
+  return points;
+}
+
+function rotateEntity(entity: Entity, degrees: number): void {
   if (entity.type === "furniture") {
-    entity.rotation = (entity.rotation + 90) % 360;
+    entity.rotation = (entity.rotation + degrees) % 360;
     return;
   }
   if (entity.type === "room") {
+    // 部屋は軸平行のみなので、角度によらず縦横を入れ替える90°回転にする
     const cx = entity.x + entity.w / 2;
     const cy = entity.y + entity.h / 2;
     const newW = entity.h;
@@ -1123,19 +1142,29 @@ function rotateEntity90(entity: Entity): void {
   }
   if (isLinear(entity)) {
     const mid = midpoint(entity);
-    const x1 = mid.x - (entity.y1 - mid.y);
-    const y1 = mid.y + (entity.x1 - mid.x);
-    const x2 = mid.x - (entity.y2 - mid.y);
-    const y2 = mid.y + (entity.x2 - mid.x);
-    entity.x1 = snap(x1);
-    entity.y1 = snap(y1);
-    entity.x2 = snap(x2);
-    entity.y2 = snap(y2);
+    const rad = degreesToRadians(degrees);
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const rotatePoint = (x: number, y: number): Point => ({
+      x: Math.round(mid.x + (x - mid.x) * cos - (y - mid.y) * sin),
+      y: Math.round(mid.y + (x - mid.x) * sin + (y - mid.y) * cos),
+    });
+    const p1 = rotatePoint(entity.x1, entity.y1);
+    const p2 = rotatePoint(entity.x2, entity.y2);
+    entity.x1 = p1.x;
+    entity.y1 = p1.y;
+    entity.x2 = p2.x;
+    entity.y2 = p2.y;
     return;
   }
   if (entity.type === "shape") {
-    entity.startAngle += Math.PI / 2;
-    entity.endAngle += Math.PI / 2;
+    const rad = degreesToRadians(degrees);
+    if (entity.kind === "polygon") {
+      entity.rotation = (entity.rotation ?? 0) + rad;
+      return;
+    }
+    entity.startAngle += rad;
+    entity.endAngle += rad;
   }
 }
 
@@ -1729,6 +1758,22 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
   }
 }
 
+function traceShapePath(shape: Shape): void {
+  ctx.beginPath();
+  if (shape.kind === "circle") {
+    ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
+  } else if (shape.kind === "arc") {
+    ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
+  } else {
+    const points = polygonPoints(shape);
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+  }
+}
+
 function drawShape2d(shape: Shape): void {
   const selected = state.selectedId === shape.id;
   ctx.save();
@@ -1736,23 +1781,15 @@ function drawShape2d(shape: Shape): void {
     ctx.strokeStyle = "rgba(39, 117, 209, 0.35)";
     ctx.lineWidth = WALL_THICKNESS_2D + 6 / view.zoom;
     ctx.lineCap = "round";
-    ctx.beginPath();
-    if (shape.kind === "circle") {
-      ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
-    } else {
-      ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
-    }
+    ctx.lineJoin = "round";
+    traceShapePath(shape);
     ctx.stroke();
   }
   ctx.strokeStyle = shape.color ?? INK;
   ctx.lineWidth = WALL_THICKNESS_2D;
   ctx.lineCap = "round";
-  ctx.beginPath();
-  if (shape.kind === "circle") {
-    ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
-  } else {
-    ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
-  }
+  ctx.lineJoin = "round";
+  traceShapePath(shape);
   ctx.stroke();
   if (selected) {
     ctx.fillStyle = "#ffffff";
@@ -1778,13 +1815,22 @@ function drawPreview(start: Point, current: Point): void {
     const h = Math.abs(current.y - start.y);
     ctx.fillRect(x, y, w, h);
     ctx.strokeRect(x, y, w, h);
-  } else if (activeTool === "circle" || activeTool === "arc") {
+  } else if (activeTool === "circle" || activeTool === "arc" || activeTool === "polygon") {
     const r = Math.max(1, Math.hypot(current.x - start.x, current.y - start.y));
     ctx.beginPath();
     if (activeTool === "circle") {
       ctx.arc(start.x, start.y, r, 0, Math.PI * 2);
-    } else {
+    } else if (activeTool === "arc") {
       ctx.arc(start.x, start.y, r, -Math.PI / 2, Math.atan2(current.y - start.y, current.x - start.x));
+    } else {
+      const rotation = Math.atan2(current.y - start.y, current.x - start.x);
+      for (let i = 0; i <= 6; i += 1) {
+        const angle = rotation + (i / 6) * Math.PI * 2;
+        const px = start.x + Math.cos(angle) * r;
+        const py = start.y + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
     }
     ctx.stroke();
   } else {
@@ -1945,6 +1991,24 @@ function addStraightWall3d(
 }
 
 function addShapeWall3d(shape: Shape, center: Point, yBase: number): void {
+  if (shape.kind === "polygon") {
+    const points = polygonPoints(shape);
+    points.forEach((vertex, index) => {
+      const next = points[(index + 1) % points.length];
+      const segment: LinearElement = {
+        id: shape.id,
+        type: "wall",
+        x1: vertex.x,
+        y1: vertex.y,
+        x2: next.x,
+        y2: next.y,
+        color: shape.color,
+        color3d: shape.color3d,
+      };
+      addStraightWall3d(segment, center, yBase, shape.id, false);
+    });
+    return;
+  }
   const start = shape.kind === "circle" ? 0 : shape.startAngle;
   const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - shape.startAngle);
   const segmentCount = Math.max(12, Math.ceil((shape.r * sweep) / 24));
@@ -2495,7 +2559,7 @@ function updatePropertiesPanel(): void {
     bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
     bindInput("#roomColorInput", (value) => (selected.color = value));
     bindInput("#roomColor3dInput", (value) => (selected.color3d = value));
-    bindButton("#roomRotateButton", () => rotateEntity90(selected));
+    bindButton("#roomRotateButton", () => rotateEntity(selected, 90));
     return;
   }
 
@@ -2515,7 +2579,7 @@ function updatePropertiesPanel(): void {
         <p class="empty-state">${typeLabel}</p>
         <div class="two-col">
           <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" /></label>
-          <label>角度 °<input id="lineAngleInput" type="number" step="15" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" /></label>
+          <label>角度 °<input id="lineAngleInput" type="number" step="5" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" /></label>
         </div>
         <div class="two-col">
           <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
@@ -2537,7 +2601,7 @@ function updatePropertiesPanel(): void {
       selected.y2 = Math.round(selected.y1 + Math.sin(angle) * newLength);
     });
     bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
-    bindButton("#lineRotateButton", () => rotateEntity90(selected));
+    bindButton("#lineRotateButton", () => rotateEntity(selected, 90));
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
@@ -2557,19 +2621,32 @@ function updatePropertiesPanel(): void {
 
   if (selected.type === "shape") {
     const selectedShape = selected;
+    const arcRows =
+      selectedShape.kind === "arc"
+        ? `<div class="two-col">
+            <label>開始 °<input id="shapeStartInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" /></label>
+            <label>終了 °<input id="shapeEndInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" /></label>
+          </div>`
+        : "";
+    const polygonRows =
+      selectedShape.kind === "polygon"
+        ? `<div class="two-col">
+            <label>辺の数<input id="shapeSidesInput" type="number" min="3" max="12" step="1" value="${clamp(Math.round(selectedShape.sides ?? 6), 3, 12)}" /></label>
+            <label>回転 °<input id="shapeRotationInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.rotation ?? 0))}" /></label>
+          </div>`
+        : "";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
         <label>種類
           <select id="shapeKindInput">
             <option value="circle" ${selectedShape.kind === "circle" ? "selected" : ""}>円</option>
             <option value="arc" ${selectedShape.kind === "arc" ? "selected" : ""}>円弧</option>
+            <option value="polygon" ${selectedShape.kind === "polygon" ? "selected" : ""}>多角形</option>
           </select>
         </label>
         <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" /></label>
-        <div class="two-col">
-          <label>開始 °<input id="shapeStartInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" /></label>
-          <label>終了 °<input id="shapeEndInput" type="number" step="15" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" /></label>
-        </div>
+        ${arcRows}
+        ${polygonRows}
         <div class="two-col">
           <label>色 2D<input id="shapeColorInput" type="color" value="${selectedShape.color ?? "#000000"}" /></label>
           <label>色 3D<input id="shapeColor3dInput" type="color" value="${selectedShape.color3d ?? selectedShape.color ?? "#f4f1ec"}" /></label>
@@ -2582,10 +2659,16 @@ function updatePropertiesPanel(): void {
         selectedShape.startAngle = 0;
         selectedShape.endAngle = Math.PI * 2;
       }
+      if (selectedShape.kind === "polygon") {
+        selectedShape.sides = selectedShape.sides ?? 6;
+        selectedShape.rotation = selectedShape.rotation ?? 0;
+      }
     });
     bindNumber("#shapeRadiusInput", (value) => (selectedShape.r = Math.max(GRID, snap(value))));
     bindNumber("#shapeStartInput", (value) => (selectedShape.startAngle = degreesToRadians(value)));
     bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
+    bindNumber("#shapeSidesInput", (value) => (selectedShape.sides = clamp(Math.round(value), 3, 12)));
+    bindNumber("#shapeRotationInput", (value) => (selectedShape.rotation = degreesToRadians(value)));
     bindInput("#shapeColorInput", (value) => (selectedShape.color = value));
     bindInput("#shapeColor3dInput", (value) => (selectedShape.color3d = value));
     return;
@@ -2609,7 +2692,7 @@ function updatePropertiesPanel(): void {
         <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" /></label>
         <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" /></label>
       </div>
-      <label>回転（Rキーで90°）<input id="furnitureRotationInput" type="number" step="15" value="${selectedFurniture.rotation}" /></label>
+      <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} /> 左右反転（Fキー）</label>
       <div class="two-col">
         <label>色 2D<input id="furnitureColorInput" type="color" value="${selectedFurniture.color ?? "#000000"}" /></label>
@@ -2885,9 +2968,17 @@ function getCornerHit(entity: Room | Furniture, point: Point): string | null {
 }
 
 function constrainLine(start: Point, end: Point): Point {
-  return Math.abs(end.x - start.x) >= Math.abs(end.y - start.y)
-    ? { x: end.x, y: start.y }
-    : { x: start.x, y: end.y };
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return { x: end.x, y: end.y };
+  // 15°刻みにスナップ（縦横に加えて斜めの壁も引ける）
+  const step = Math.PI / 12;
+  const angle = Math.round(Math.atan2(dy, dx) / step) * step;
+  return {
+    x: Math.round(start.x + Math.cos(angle) * length),
+    y: Math.round(start.y + Math.sin(angle) * length),
+  };
 }
 
 function to3d(x: number, y: number, center: Point): { x: number; z: number } {
@@ -3342,6 +3433,10 @@ function distanceToSegment(point: Point, start: Point, end: Point): number {
 
 function isPointNearShape(point: Point, shape: Shape): boolean {
   const threshold = Math.max(10 / view.zoom, 6);
+  if (shape.kind === "polygon") {
+    const points = polygonPoints(shape);
+    return points.some((vertex, index) => distanceToSegment(point, vertex, points[(index + 1) % points.length]) < threshold);
+  }
   const dist = Math.hypot(point.x - shape.x, point.y - shape.y);
   if (Math.abs(dist - shape.r) > threshold) return false;
   if (shape.kind === "circle") return true;
