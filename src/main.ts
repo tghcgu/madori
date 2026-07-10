@@ -386,7 +386,7 @@ function loadInitialState(): PlanState {
       localStorage.removeItem(STORAGE_KEY);
     }
   }
-  return makeTemplate("oneLdk");
+  return makeTemplate("starter");
 }
 
 function emptyState(): PlanState {
@@ -3063,6 +3063,25 @@ function makeFloor(name: string, entities: Entity[]): Floor {
 }
 
 function makeTemplate(key: string): PlanState {
+  if (key === "starter") {
+    return {
+      floors: [
+        makeFloor("1F", [
+          room("部屋", 0, 0, 600, 400, "#ffffff"),
+          wall(0, 0, 600, 0),
+          wall(600, 0, 600, 400),
+          wall(600, 400, 0, 400),
+          wall(0, 400, 0, 0),
+          door(260, 400, 340, 400),
+          windowLine(180, 0, 420, 0),
+        ]),
+      ],
+      activeFloor: 0,
+      selectedId: null,
+      roof: "none",
+    };
+  }
+
   if (key === "studio") {
     return {
       floors: [
