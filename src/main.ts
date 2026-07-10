@@ -242,6 +242,7 @@ const COLOR_DARK = 0x2c3238;
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
+let activePolygonSides = 6;
 let viewMode: ViewMode = loadViewMode();
 let showDimensions = loadDimensionLabels();
 let shadowsEnabled = loadShadowsEnabled();
@@ -623,6 +624,42 @@ function buildFurniturePicker(): void {
   fittings.appendChild(fittingsItems);
   furniturePicker.appendChild(fittings);
 
+  const shapes = document.createElement("details");
+  shapes.className = "furniture-category";
+  const shapesSummary = document.createElement("summary");
+  shapesSummary.textContent = "図形";
+  shapes.appendChild(shapesSummary);
+  const shapesItems = document.createElement("div");
+  shapesItems.className = "furniture-items";
+  ([
+    ["circle", 0, "円"],
+    ["arc", 0, "円弧"],
+    ["poly3", 3, "三角形"],
+    ["poly4", 4, "四角形"],
+    ["poly5", 5, "五角形"],
+    ["poly6", 6, "六角形"],
+    ["poly8", 8, "八角形"],
+  ] as [string, number, string][]).forEach(([key, sides, label]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.shape = key;
+    button.textContent = label;
+    button.addEventListener("click", () => {
+      if (key === "circle" || key === "arc") {
+        activeTool = key;
+      } else {
+        activeTool = "polygon";
+        activePolygonSides = sides;
+      }
+      setActiveButton("[data-shape]", key);
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+    });
+    shapesItems.appendChild(button);
+  });
+  shapes.appendChild(shapesItems);
+  furniturePicker.appendChild(shapes);
+
   FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
     const details = document.createElement("details");
     details.className = "furniture-category";
@@ -761,7 +798,8 @@ function removeActiveFloor(): void {
 
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
-    const dataValue = button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode ?? button.dataset.roof;
+    const dataValue =
+      button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode ?? button.dataset.roof;
     button.classList.toggle("is-active", dataValue === value);
   });
 }
@@ -1121,8 +1159,9 @@ function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
     endAngle: kind === "arc" ? dragAngle : Math.PI * 2,
   };
   if (kind === "polygon") {
-    shape.sides = 6;
-    shape.rotation = dragAngle;
+    shape.sides = activePolygonSides;
+    // 辺がドラッグ方向を向くようにする（四角形なら水平ドラッグで正方形の向きになる）
+    shape.rotation = dragAngle + Math.PI / activePolygonSides;
   }
   activeEntities().push(shape);
   state.selectedId = shape.id;
@@ -1836,9 +1875,10 @@ function drawPreview(start: Point, current: Point): void {
     } else if (activeTool === "arc") {
       ctx.arc(start.x, start.y, r, -Math.PI / 2, Math.atan2(current.y - start.y, current.x - start.x));
     } else {
-      const rotation = Math.atan2(current.y - start.y, current.x - start.x);
-      for (let i = 0; i <= 6; i += 1) {
-        const angle = rotation + (i / 6) * Math.PI * 2;
+      const sides = activePolygonSides;
+      const rotation = Math.atan2(current.y - start.y, current.x - start.x) + Math.PI / sides;
+      for (let i = 0; i <= sides; i += 1) {
+        const angle = rotation + (i / sides) * Math.PI * 2;
         const px = start.x + Math.cos(angle) * r;
         const py = start.y + Math.sin(angle) * r;
         if (i === 0) ctx.moveTo(px, py);
