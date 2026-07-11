@@ -3,7 +3,7 @@ import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
-type Tool = "select" | "room" | "wall" | "door" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
+type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
 type FurnitureKind =
   | "sofa"
@@ -11,6 +11,9 @@ type FurnitureKind =
   | "table"
   | "tv"
   | "plant"
+  | "wallClock"
+  | "grandfatherClock"
+  | "aquarium"
   | "diningTable"
   | "chair"
   | "kitchen"
@@ -53,6 +56,7 @@ interface Room {
   color3d?: string;
   labelOffsetX?: number;
   labelOffsetY?: number;
+  locked?: boolean;
 }
 
 interface LinearElement {
@@ -66,6 +70,8 @@ interface LinearElement {
   color3d?: string;
   flip?: boolean;
   mullion?: boolean;
+  doorStyle?: "swing" | "sliding";
+  locked?: boolean;
 }
 
 interface Furniture {
@@ -80,6 +86,7 @@ interface Furniture {
   color?: string;
   color3d?: string;
   flip?: boolean;
+  locked?: boolean;
 }
 
 interface Shape {
@@ -95,6 +102,7 @@ interface Shape {
   rotation?: number;
   color?: string;
   color3d?: string;
+  locked?: boolean;
 }
 
 type Entity = Room | LinearElement | Furniture | Shape;
@@ -185,6 +193,9 @@ const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   table: { label: "ローテーブル", w: 100, h: 50 },
   tv: { label: "テレビ台", w: 120, h: 40 },
   plant: { label: "観葉植物", w: 40, h: 40 },
+  wallClock: { label: "壁掛け時計", w: 50, h: 20 },
+  grandfatherClock: { label: "ホールクロック", w: 60, h: 40 },
+  aquarium: { label: "水槽", w: 120, h: 45 },
   diningTable: { label: "ダイニングセット", w: 160, h: 160 },
   chair: { label: "椅子", w: 45, h: 45 },
   kitchen: { label: "キッチン", w: 240, h: 65 },
@@ -207,6 +218,7 @@ const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
 
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "リビング", kinds: ["sofa", "armchair", "table", "tv", "plant"] },
+  { label: "時計・装飾", kinds: ["wallClock", "grandfatherClock", "aquarium"] },
   { label: "ダイニング・キッチン", kinds: ["diningTable", "chair", "kitchen", "fridge"] },
   { label: "寝室・書斎", kinds: ["bed", "bedDouble", "desk", "shelf"] },
   { label: "水回り", kinds: ["bath", "toilet", "washbasin", "washer"] },
@@ -607,6 +619,7 @@ function buildFurniturePicker(): void {
   fittingsItems.className = "furniture-items";
   ([
     ["door", "ドア"],
+    ["slidingDoor", "引き戸"],
     ["window", "窓"],
     ["window2", "窓（区切付き）"],
   ] as [Tool, string][]).forEach(([tool, label]) => {
@@ -839,6 +852,10 @@ function applyViewMode(nextMode: ViewMode, persist = true): void {
       render2d();
     }
     render3dOnce();
+    if (viewMode === "three") {
+      frameCamera(getGlobalBounds());
+      render3dOnce();
+    }
   });
 }
 
@@ -872,11 +889,15 @@ function handlePointerDown(event: PointerEvent): void {
   drag.resizeCorner = hit.corner;
 
   if (activeTool === "erase") {
-    if (hit.entity) {
+    if (hit.entity && !isLocked(hit.entity)) {
       setActiveEntities(activeEntities().filter((entity) => entity.id !== hit.entity?.id));
       if (state.selectedId === hit.entity.id) state.selectedId = null;
       commitState();
       redrawAll();
+    } else if (hit.entity) {
+      state.selectedId = hit.entity.id;
+      updateUi();
+      render2d();
     }
     drag.dragMode = "none";
     return;
@@ -884,7 +905,10 @@ function handlePointerDown(event: PointerEvent): void {
 
   if (activeTool === "select") {
     state.selectedId = hit.entity?.id ?? null;
-    if (hit.entity?.type === "room" && hit.corner === "label") {
+    if (hit.entity && isLocked(hit.entity)) {
+      drag.dragMode = "none";
+      planCanvas.style.cursor = "not-allowed";
+    } else if (hit.entity?.type === "room" && hit.corner === "label") {
       drag.dragMode = "label";
       planCanvas.style.cursor = "grabbing";
     } else if (hit.entity && hit.corner && (isResizable(hit.entity) || isLinear(hit.entity))) {
@@ -937,7 +961,7 @@ function handlePointerMove(event: PointerEvent): void {
   const point = screenToWorld(event);
   const hover = hitTest(point);
   if (activeTool === "select" && drag.dragMode === "none") {
-    planCanvas.style.cursor = hover.corner === "label" ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
+    planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed" : hover.corner === "label" ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
   }
 
   if (drag.pointerId !== event.pointerId || drag.dragMode === "none") {
@@ -985,6 +1009,7 @@ function handlePointerUp(event: PointerEvent): void {
     if (activeTool === "room") addRoomFromDrag(start, end);
     if (activeTool === "wall") addLineFromDrag("wall", start, end);
     if (activeTool === "door") addLineFromDrag("door", start, end);
+    if (activeTool === "slidingDoor") addLineFromDrag("door", start, end, false, "sliding");
     if (activeTool === "window") addLineFromDrag("window", start, end);
     if (activeTool === "window2") addLineFromDrag("window", start, end, true);
     if (activeTool === "circle") addShapeFromDrag("circle", start, end);
@@ -1069,7 +1094,7 @@ function handleWheel(event: WheelEvent): void {
 
 function handleKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
-  const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT";
+  const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT" || target?.tagName === "TEXTAREA" || Boolean(target?.isContentEditable);
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
     event.preventDefault();
     event.shiftKey ? redo() : undo();
@@ -1080,9 +1105,18 @@ function handleKeyDown(event: KeyboardEvent): void {
     redo();
     return;
   }
-  if (!isEditing && event.key.toLowerCase() === "r" && state.selectedId) {
+  if (!isEditing && event.key.toLowerCase() === "l" && state.selectedId) {
     const selected = findEntity(state.selectedId);
     if (selected) {
+      selected.locked = !selected.locked;
+      commitState();
+      redrawAll();
+    }
+    return;
+  }
+  if (!isEditing && event.key.toLowerCase() === "r" && state.selectedId) {
+    const selected = findEntity(state.selectedId);
+    if (selected && !isLocked(selected)) {
       rotateEntity(selected, event.shiftKey ? 15 : 90);
       commitState();
       redrawAll();
@@ -1091,7 +1125,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   }
   if (!isEditing && event.key.toLowerCase() === "f" && state.selectedId) {
     const selected = findEntity(state.selectedId);
-    if (selected?.type === "furniture" || selected?.type === "door") {
+    if (!selected?.locked && (selected?.type === "furniture" || selected?.type === "door")) {
       selected.flip = !selected.flip;
       commitState();
       redrawAll();
@@ -1099,6 +1133,8 @@ function handleKeyDown(event: KeyboardEvent): void {
     return;
   }
   if (!isEditing && (event.key === "Delete" || event.key === "Backspace") && state.selectedId) {
+    const selected = findEntity(state.selectedId);
+    if (!selected || isLocked(selected)) return;
     setActiveEntities(activeEntities().filter((entity) => entity.id !== state.selectedId));
     state.selectedId = null;
     commitState();
@@ -1127,7 +1163,13 @@ function addRoomFromDrag(start: Point, end: Point): void {
   state.selectedId = newRoom.id;
 }
 
-function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Point, mullion = false): void {
+function addLineFromDrag(
+  type: "wall" | "door" | "window",
+  start: Point,
+  end: Point,
+  mullion = false,
+  doorStyle: LinearElement["doorStyle"] = "swing",
+): void {
   const snappedStart = { x: snap(start.x), y: snap(start.y) };
   const snappedEnd = constrainLine(snappedStart, { x: snap(end.x), y: snap(end.y) });
   const length = Math.hypot(snappedEnd.x - snappedStart.x, snappedEnd.y - snappedStart.y);
@@ -1141,6 +1183,7 @@ function addLineFromDrag(type: "wall" | "door" | "window", start: Point, end: Po
     y2: snappedEnd.y,
   };
   if (type === "window" && mullion) line.mullion = true;
+  if (type === "door" && doorStyle === "sliding") line.doorStyle = "sliding";
   activeEntities().push(line);
   state.selectedId = line.id;
 }
@@ -1179,6 +1222,7 @@ function polygonPoints(shape: Shape): Point[] {
 }
 
 function rotateEntity(entity: Entity, degrees: number): void {
+  if (isLocked(entity)) return;
   if (entity.type === "furniture") {
     entity.rotation = (entity.rotation + degrees) % 360;
     return;
@@ -1224,6 +1268,7 @@ function rotateEntity(entity: Entity, degrees: number): void {
 }
 
 function rotateLineTo(entity: LinearElement, degrees: number): void {
+  if (isLocked(entity)) return;
   const mid = midpoint(entity);
   const length = distance(entity);
   const rad = degreesToRadians(degrees);
@@ -1234,6 +1279,7 @@ function rotateLineTo(entity: LinearElement, degrees: number): void {
 }
 
 function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): void {
+  if (isLocked(entity) || isLocked(origin)) return;
   const moveX = snap(dx);
   const moveY = snap(dy);
   if (origin.type === "room" && entity.type === "room") {
@@ -1258,11 +1304,13 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
 
 function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): void {
   if (origin.type !== "room" || entity.type !== "room") return;
+  if (isLocked(entity) || isLocked(origin)) return;
   entity.labelOffsetX = (origin.labelOffsetX ?? 10) + dx;
   entity.labelOffsetY = (origin.labelOffsetY ?? 10) + dy;
 }
 
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
+  if (isLocked(entity) || isLocked(origin)) return;
   if (origin.type === "room" && entity.type === "room") {
     let x1 = origin.x;
     let y1 = origin.y;
@@ -1329,6 +1377,7 @@ function render2d(): void {
   entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   entities.filter(isFurniture).forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
+  entities.filter(isLocked).forEach(drawLockedIndicator);
 
   if (drag.dragMode === "draw" && activeTool !== "furniture") {
     drawPreview(drag.startWorld, drag.currentWorld);
@@ -1400,7 +1449,7 @@ function drawRoom(room: Room): void {
     ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + 20);
   }
   if (selected) drawRoomLabelGuide(room);
-  if (selected) drawResizeHandles(room);
+  if (selected && !isLocked(room)) drawResizeHandles(room);
 }
 
 function drawRoomLabelGuide(room: Room): void {
@@ -1415,7 +1464,7 @@ function drawRoomLabelGuide(room: Room): void {
 
 function drawWall2d(wallItem: LinearElement): void {
   drawLineElement(wallItem, wallItem.color ?? INK, WALL_THICKNESS_2D);
-  if (state.selectedId === wallItem.id) drawLineHandles(wallItem);
+  if (state.selectedId === wallItem.id && !isLocked(wallItem)) drawLineHandles(wallItem);
 }
 
 function drawLineHandles(entity: LinearElement): void {
@@ -1468,10 +1517,14 @@ function drawWindow2d(windowEl: LinearElement): void {
     ctx.stroke();
   }
   ctx.restore();
-  if (selected) drawLineHandles(windowEl);
+  if (selected && !isLocked(windowEl)) drawLineHandles(windowEl);
 }
 
 function drawDoor2d(door: LinearElement): void {
+  if (door.doorStyle === "sliding") {
+    drawSlidingDoor2d(door);
+    return;
+  }
   ctx.save();
   const selected = state.selectedId === door.id;
   const length = Math.max(distance(door), GRID);
@@ -1500,7 +1553,42 @@ function drawDoor2d(door: LinearElement): void {
   }
   ctx.stroke();
   ctx.restore();
-  if (selected) drawLineHandles(door);
+  if (selected && !isLocked(door)) drawLineHandles(door);
+}
+
+function drawSlidingDoor2d(door: LinearElement): void {
+  const selected = state.selectedId === door.id;
+  const length = Math.max(distance(door), GRID);
+  const mid = midpoint(door);
+  const angle = lineAngle(door);
+  const depth = WALL_THICKNESS_2D;
+  const front = door.flip ? -1 : 1;
+  ctx.save();
+  ctx.translate(mid.x, mid.y);
+  ctx.rotate(angle);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(-length / 2, -depth / 2, length, depth);
+  ctx.strokeStyle = selected ? "#2775d1" : door.color ?? INK;
+  ctx.lineWidth = (selected ? 2.2 : 1.4) / view.zoom;
+  ctx.strokeRect(-length / 2, -depth / 2, length, depth);
+  const panelWidth = length * 0.56;
+  const trackOffset = depth * 0.23 * front;
+  ctx.beginPath();
+  ctx.moveTo(-length / 2, -trackOffset);
+  ctx.lineTo(-length / 2 + panelWidth, -trackOffset);
+  ctx.moveTo(length / 2 - panelWidth, trackOffset);
+  ctx.lineTo(length / 2, trackOffset);
+  ctx.stroke();
+  const handleX = length * 0.08;
+  ctx.lineWidth = 2 / view.zoom;
+  ctx.beginPath();
+  ctx.moveTo(-handleX, -trackOffset - depth * 0.18);
+  ctx.lineTo(-handleX, -trackOffset + depth * 0.18);
+  ctx.moveTo(handleX, trackOffset - depth * 0.18);
+  ctx.lineTo(handleX, trackOffset + depth * 0.18);
+  ctx.stroke();
+  ctx.restore();
+  if (selected && !isLocked(door)) drawLineHandles(door);
 }
 
 function drawLineElement(entity: LinearElement, color: string, width: number): void {
@@ -1581,7 +1669,7 @@ function drawFurniture2d(furnitureItem: Furniture): void {
     strokeRoundedRect(-furnitureItem.w / 2, -furnitureItem.h / 2, furnitureItem.w, furnitureItem.h, 4);
   }
   ctx.restore();
-  if (selected) drawResizeHandles(furnitureItem);
+  if (selected && !isLocked(furnitureItem)) drawResizeHandles(furnitureItem);
 }
 
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
@@ -1606,23 +1694,52 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     }
     case "tv": {
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(-w * 0.36, -hh + 4, w * 0.72, 6, 2);
+      strokeRoundedRect(-w * 0.42, -hh + 3, w * 0.84, Math.max(5, h * 0.18), 2);
       break;
     }
     case "plant": {
       const r = Math.min(hw, hh);
       strokeCircle(0, 0, r, true);
+      for (let i = 0; i < 8; i += 1) {
+        ctx.save();
+        ctx.rotate((i / 8) * Math.PI * 2);
+        strokeEllipse(r * 0.42, 0, r * 0.48, r * 0.15);
+        ctx.restore();
+      }
+      strokeCircle(0, 0, r * 0.18);
+      break;
+    }
+    case "wallClock": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      const r = Math.min(hw * 0.42, hh * 0.72);
+      strokeCircle(0, 0, r);
+      strokeLine(0, 0, 0, -r * 0.55);
+      strokeLine(0, 0, r * 0.45, r * 0.2);
+      break;
+    }
+    case "grandfatherClock": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      const r = Math.min(hw, hh) * 0.42;
+      strokeCircle(0, -hh * 0.24, r);
+      strokeLine(0, -hh * 0.24, 0, -hh * 0.24 - r * 0.55);
+      strokeLine(0, -hh * 0.24, r * 0.45, -hh * 0.12);
+      strokeCircle(0, hh * 0.35, r * 0.28);
+      break;
+    }
+    case "aquarium": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeRoundedRect(-hw + 5, -hh + 5, w - 10, h - 10, 2);
       ctx.beginPath();
       for (let i = 0; i <= 12; i += 1) {
-        const angle = (i / 12) * Math.PI * 2;
-        const radius = i % 2 === 0 ? r * 0.82 : r * 0.3;
-        const px = Math.cos(angle) * radius;
-        const py = Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+        const x = -hw + 8 + ((w - 16) * i) / 12;
+        const y = -hh + h * 0.34 + Math.sin((i / 12) * Math.PI * 4) * h * 0.07;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
       }
-      ctx.closePath();
       ctx.stroke();
+      strokeEllipse(w * 0.12, h * 0.12, Math.min(w, h) * 0.16, Math.min(w, h) * 0.08);
+      strokeLine(w * 0.26, h * 0.12, w * 0.34, h * 0.04);
+      strokeLine(w * 0.26, h * 0.12, w * 0.34, h * 0.2);
       break;
     }
     case "diningTable": {
@@ -1640,6 +1757,13 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     case "chair": {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
       strokeLine(-hw + 3, -hh + 4, hw - 3, -hh + 4);
+      const legRadius = Math.max(1.8, Math.min(w, h) * 0.055);
+      [
+        [-hw + legRadius * 1.8, -hh + legRadius * 1.8],
+        [hw - legRadius * 1.8, -hh + legRadius * 1.8],
+        [-hw + legRadius * 1.8, hh - legRadius * 1.8],
+        [hw - legRadius * 1.8, hh - legRadius * 1.8],
+      ].forEach(([x, y]) => strokeCircle(x, y, legRadius));
       break;
     }
     case "kitchen": {
@@ -1843,7 +1967,7 @@ function drawShape2d(shape: Shape): void {
   ctx.lineJoin = "round";
   traceShapePath(shape);
   ctx.stroke();
-  if (selected) {
+  if (selected && !isLocked(shape)) {
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = "#2775d1";
     ctx.lineWidth = 2 / view.zoom;
@@ -1922,6 +2046,36 @@ function drawResizeHandles(entity: Room | Furniture): void {
     ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
     ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
   });
+}
+
+function drawLockedIndicator(entity: Entity): void {
+  let anchor: Point;
+  if (entity.type === "room") {
+    anchor = { x: entity.x + entity.w - 16 / view.zoom, y: entity.y + 16 / view.zoom };
+  } else if (entity.type === "furniture") {
+    anchor = { x: entity.x + entity.w / 2, y: entity.y + entity.h / 2 };
+  } else if (entity.type === "shape") {
+    anchor = { x: entity.x, y: entity.y };
+  } else {
+    anchor = midpoint(entity);
+  }
+
+  const size = 15 / view.zoom;
+  ctx.save();
+  ctx.translate(anchor.x, anchor.y);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
+  ctx.strokeStyle = "#8a5a13";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.beginPath();
+  ctx.arc(0, 0, size * 0.72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, -size * 0.08, size * 0.24, Math.PI, 0);
+  ctx.stroke();
+  ctx.fillStyle = "#8a5a13";
+  ctx.fillRect(-size * 0.31, -size * 0.04, size * 0.62, size * 0.45);
+  ctx.restore();
 }
 
 // ---- 3D ----
@@ -2098,6 +2252,10 @@ function addShapeWall3d(shape: Shape, center: Point, yBase: number, withCap = tr
 }
 
 function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
+  if (door.doorStyle === "sliding") {
+    addSlidingDoor3d(door, center, yBase);
+    return;
+  }
   const length = Math.max(distance(door) * SCALE_3D, 0.7);
   const frameThickness = 0.1;
   const frameHeight = 2.1;
@@ -2125,6 +2283,54 @@ function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
   addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
   addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
   addSelectionBox(panel, door.id);
+}
+
+function addSlidingDoor3d(door: LinearElement, center: Point, yBase: number): void {
+  const planLength = Math.max(distance(door), GRID);
+  const length = Math.max(planLength * SCALE_3D, 0.8);
+  const angle = lineAngle(door);
+  const mid = midpoint(door);
+  const unitX = (door.x2 - door.x1) / planLength;
+  const unitY = (door.y2 - door.y1) / planLength;
+  const panelHeight = 2.0;
+  const panelWidth = length * 0.55;
+  const panelDepth = 0.065;
+  const frameThickness = 0.09;
+  const trackSide = door.flip ? -1 : 1;
+  const customDoorColor = door.color3d ?? door.color;
+  const panelMaterial = customDoorColor ? coloredMaterial(customDoorColor, 0.72) : doorMaterial;
+  const anchorOffset = planLength * 0.235;
+  const leftAnchor = { x: mid.x - unitX * anchorOffset, y: mid.y - unitY * anchorOffset };
+  const rightAnchor = { x: mid.x + unitX * anchorOffset, y: mid.y + unitY * anchorOffset };
+  const leftPanel = addOrientedBox(leftAnchor, center, panelWidth, panelHeight, panelDepth, yBase + panelHeight / 2, angle, panelMaterial, door.id);
+  const rightPanel = addOrientedBox(rightAnchor, center, panelWidth, panelHeight, panelDepth, yBase + panelHeight / 2, angle, panelMaterial, door.id);
+  const leftTrack = localOffset3d(0, panelDepth * 0.42 * trackSide, angle);
+  const rightTrack = localOffset3d(0, -panelDepth * 0.42 * trackSide, angle);
+  leftPanel.position.x += leftTrack.x;
+  leftPanel.position.z += leftTrack.z;
+  rightPanel.position.x += rightTrack.x;
+  rightPanel.position.z += rightTrack.z;
+
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.1, frameThickness * 1.45, yBase + panelHeight + 0.06, angle, doorFrameMaterial, door.id);
+  addOrientedBox(mid, center, length + frameThickness * 2, 0.055, frameThickness * 1.3, yBase + 0.028, angle, doorFrameMaterial, door.id);
+  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, panelHeight + 0.1, frameThickness, yBase + (panelHeight + 0.1) / 2, angle, doorFrameMaterial, door.id);
+  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, panelHeight + 0.1, frameThickness, yBase + (panelHeight + 0.1) / 2, angle, doorFrameMaterial, door.id);
+
+  const leftHandleAnchor = { x: mid.x - unitX * planLength * 0.045, y: mid.y - unitY * planLength * 0.045 };
+  const rightHandleAnchor = { x: mid.x + unitX * planLength * 0.045, y: mid.y + unitY * planLength * 0.045 };
+  const leftStile = addOrientedBox(leftHandleAnchor, center, 0.045, panelHeight, 0.025, yBase + panelHeight / 2, angle, doorFrameMaterial, door.id);
+  const rightStile = addOrientedBox(rightHandleAnchor, center, 0.045, panelHeight, 0.025, yBase + panelHeight / 2, angle, doorFrameMaterial, door.id);
+  const leftHandle = addOrientedBox(leftHandleAnchor, center, 0.035, 0.3, 0.025, yBase + 1.02, angle, doorFrameMaterial, door.id);
+  const rightHandle = addOrientedBox(rightHandleAnchor, center, 0.035, 0.3, 0.025, yBase + 1.02, angle, doorFrameMaterial, door.id);
+  leftStile.position.x += leftTrack.x * 1.18;
+  leftStile.position.z += leftTrack.z * 1.18;
+  rightStile.position.x += rightTrack.x * 1.18;
+  rightStile.position.z += rightTrack.z * 1.18;
+  leftHandle.position.x += leftTrack.x * 1.25;
+  leftHandle.position.z += leftTrack.z * 1.25;
+  rightHandle.position.x += rightTrack.x * 1.25;
+  rightHandle.position.z += rightTrack.z * 1.25;
+  addSelectionBox(leftPanel, door.id);
 }
 
 function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): void {
@@ -2221,6 +2427,25 @@ function cylinderPart(
   return mesh;
 }
 
+function ellipsoidPart(
+  group: THREE.Group,
+  radius: number,
+  scale: [number, number, number],
+  x: number,
+  y: number,
+  z: number,
+  color: number,
+  roughness = 0.72,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 20, 14), new THREE.MeshStandardMaterial({ color, roughness }));
+  mesh.scale.set(scale[0], scale[1], scale[2]);
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+  return mesh;
+}
+
 function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
   const group = new THREE.Group();
   const w = furnitureItem.w * SCALE_3D;
@@ -2249,16 +2474,130 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
       break;
     }
     case "tv": {
-      furniturePart(group, w, 0.4, d, 0, 0.2, 0, COLOR_WOOD_DARK);
-      furniturePart(group, w * 0.72, 0.62, 0.05, 0, 0.73, -d * 0.15, COLOR_DARK, 0.3);
+      const cabinetHeight = clamp(d * 0.8, 0.28, 0.55);
+      const screenWidth = Math.max(0.42, w * 0.86);
+      const screenHeight = clamp(screenWidth * 0.56, 0.38, 1.45);
+      const screenY = cabinetHeight + 0.1 + screenHeight / 2;
+      furniturePart(group, w, cabinetHeight, d, 0, cabinetHeight / 2, 0, COLOR_WOOD_DARK);
+      furniturePart(group, screenWidth + 0.08, screenHeight + 0.08, 0.065, 0, screenY, -d * 0.18, 0x44484d, 0.32);
+      furniturePart(group, screenWidth, screenHeight, 0.025, 0, screenY, -d * 0.18 - 0.045, 0x101820, 0.2);
+      furniturePart(group, 0.07, 0.12, 0.07, 0, cabinetHeight + 0.04, -d * 0.18, COLOR_STEEL, 0.3);
       break;
     }
     case "plant": {
-      cylinderPart(group, w * 0.32, 0.32, 0, 0.16, 0, 0x99705a);
-      const foliage = new THREE.Mesh(new THREE.SphereGeometry(w * 0.52, 18, 14), new THREE.MeshStandardMaterial({ color: COLOR_GREEN, roughness: 0.8 }));
-      foliage.position.set(0, 0.72, 0);
-      foliage.castShadow = true;
-      group.add(foliage);
+      const baseSize = Math.max(0.28, Math.min(w, d));
+      const plantHeight = clamp(Math.max(w, d) * 2.1, 0.75, 2.4);
+      const potRadius = baseSize * 0.3;
+      const potHeight = clamp(baseSize * 0.65, 0.24, 0.52);
+      cylinderPart(group, potRadius, potHeight, 0, potHeight / 2, 0, 0x99705a);
+      const trunkHeight = Math.max(0.32, plantHeight - potHeight - baseSize * 0.25);
+      cylinderPart(group, Math.max(0.025, baseSize * 0.055), trunkHeight, 0, potHeight + trunkHeight / 2, 0, 0x74563b, 0.82);
+      const crownY = potHeight + trunkHeight * 0.72;
+      const leafLength = clamp(Math.max(w, d) * 0.58, 0.3, 0.95);
+      for (let index = 0; index < 10; index += 1) {
+        const angle = (index / 10) * Math.PI * 2;
+        const tier = index % 2 === 0 ? 0 : 1;
+        const radius = leafLength * (tier ? 0.24 : 0.34);
+        const leaf = ellipsoidPart(
+          group,
+          0.5,
+          [leafLength, leafLength * 0.24, leafLength * 0.42],
+          Math.cos(angle) * radius,
+          crownY + (tier ? leafLength * 0.16 : 0),
+          Math.sin(angle) * radius,
+          tier ? 0x5d9457 : COLOR_GREEN,
+          0.86,
+        );
+        leaf.rotation.y = -angle;
+        leaf.rotation.z = (index % 2 === 0 ? 1 : -1) * 0.42;
+      }
+      const topLeaf = ellipsoidPart(group, 0.5, [leafLength * 0.72, leafLength * 0.32, leafLength * 0.45], 0, plantHeight - leafLength * 0.12, 0, 0x79a96d, 0.86);
+      topLeaf.rotation.z = Math.PI / 2;
+      break;
+    }
+    case "wallClock": {
+      const diameter = clamp(w * 0.9, 0.32, 1.15);
+      const radius = diameter / 2;
+      const faceY = clamp(1.45 + radius * 0.25, 1.5, 1.95);
+      const frontZ = d * 0.4;
+      const frame = cylinderPart(group, radius, 0.075, 0, faceY, frontZ, COLOR_WOOD_DARK, 0.56);
+      frame.rotation.x = Math.PI / 2;
+      const dial = cylinderPart(group, radius * 0.86, 0.08, 0, faceY, frontZ + 0.045, COLOR_WHITE, 0.45);
+      dial.rotation.x = Math.PI / 2;
+      dial.userData.skipFurnitureTint = true;
+      const minuteHand = furniturePart(group, radius * 0.65, 0.025, 0.025, 0, faceY + radius * 0.18, frontZ + 0.09, COLOR_DARK, 0.35);
+      minuteHand.rotation.z = 0.22;
+      minuteHand.userData.skipFurnitureTint = true;
+      const hourHand = furniturePart(group, radius * 0.46, 0.035, 0.03, radius * 0.08, faceY, frontZ + 0.095, COLOR_DARK, 0.35);
+      hourHand.rotation.z = -0.72;
+      hourHand.userData.skipFurnitureTint = true;
+      break;
+    }
+    case "grandfatherClock": {
+      const clockHeight = clamp(w * 3.2, 1.72, 2.5);
+      const bodyWidth = w * 0.86;
+      const frontZ = d / 2 + 0.02;
+      furniturePart(group, bodyWidth, clockHeight * 0.72, d, 0, clockHeight * 0.36, 0, COLOR_WOOD_DARK);
+      furniturePart(group, w, clockHeight * 0.3, d * 1.06, 0, clockHeight * 0.82, 0, COLOR_WOOD);
+      furniturePart(group, w * 1.08, 0.1, d * 1.12, 0, clockHeight + 0.02, 0, COLOR_WOOD_DARK);
+      const faceRadius = Math.min(w * 0.34, clockHeight * 0.13);
+      const clockFaceY = clockHeight * 0.83;
+      const faceFrame = cylinderPart(group, faceRadius, 0.06, 0, clockFaceY, frontZ + 0.02, COLOR_WOOD_DARK, 0.56);
+      faceFrame.rotation.x = Math.PI / 2;
+      const face = cylinderPart(group, faceRadius * 0.84, 0.065, 0, clockFaceY, frontZ + 0.055, COLOR_WHITE, 0.44);
+      face.rotation.x = Math.PI / 2;
+      face.userData.skipFurnitureTint = true;
+      const hand = furniturePart(group, faceRadius * 0.62, 0.025, 0.02, 0, clockFaceY + faceRadius * 0.16, frontZ + 0.095, COLOR_DARK, 0.35);
+      hand.rotation.z = 0.3;
+      hand.userData.skipFurnitureTint = true;
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(bodyWidth * 0.62, clockHeight * 0.34, 0.025),
+        new THREE.MeshPhysicalMaterial({ color: 0xb8dce8, transparent: true, opacity: 0.28, roughness: 0.08, transmission: 0.18 }),
+      );
+      glass.position.set(0, clockHeight * 0.38, frontZ + 0.035);
+      glass.userData.skipFurnitureTint = true;
+      group.add(glass);
+      furniturePart(group, 0.018, clockHeight * 0.27, 0.018, 0, clockHeight * 0.43, frontZ + 0.07, 0xc3a35f, 0.32).userData.skipFurnitureTint = true;
+      const bob = cylinderPart(group, faceRadius * 0.36, 0.025, 0, clockHeight * 0.27, frontZ + 0.075, 0xc3a35f, 0.32);
+      bob.rotation.x = Math.PI / 2;
+      bob.userData.skipFurnitureTint = true;
+      break;
+    }
+    case "aquarium": {
+      const standHeight = clamp(d * 1.1, 0.42, 0.72);
+      const tankHeight = clamp(w * 0.55, 0.62, 1.3);
+      const tankY = standHeight + tankHeight / 2 + 0.04;
+      furniturePart(group, w, standHeight, d, 0, standHeight / 2, 0, COLOR_WOOD_DARK);
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.98, tankHeight, d * 0.94),
+        new THREE.MeshPhysicalMaterial({ color: 0xc8edf5, transparent: true, opacity: 0.24, roughness: 0.04, transmission: 0.42, side: THREE.DoubleSide }),
+      );
+      glass.position.set(0, tankY, 0);
+      glass.castShadow = true;
+      glass.userData.skipFurnitureTint = true;
+      group.add(glass);
+      const water = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.91, tankHeight * 0.76, d * 0.86),
+        new THREE.MeshPhysicalMaterial({ color: 0x58b7d8, transparent: true, opacity: 0.42, roughness: 0.18, transmission: 0.16 }),
+      );
+      water.position.set(0, tankY - tankHeight * 0.08, 0);
+      water.userData.skipFurnitureTint = true;
+      group.add(water);
+      furniturePart(group, w, 0.055, d, 0, standHeight + 0.025, 0, COLOR_DARK, 0.42);
+      furniturePart(group, w, 0.07, d, 0, standHeight + tankHeight + 0.08, 0, COLOR_DARK, 0.42);
+      [
+        [-0.22, 0.56, -0.08, 0xe6a84b],
+        [0.18, 0.38, 0.1, 0xd96b56],
+        [0.02, 0.7, 0.04, 0x8d75c9],
+      ].forEach(([x, y, z, color], index) => {
+        const fish = ellipsoidPart(group, 0.12, [1.5, 0.62, 0.45], w * x, standHeight + tankHeight * y, d * z, color, 0.48);
+        fish.rotation.y = index % 2 === 0 ? 0.25 : Math.PI + 0.2;
+        fish.userData.skipFurnitureTint = true;
+      });
+      for (let index = -1; index <= 1; index += 1) {
+        const stem = cylinderPart(group, 0.018, tankHeight * (0.22 + (index + 1) * 0.06), w * (0.28 + index * 0.08), standHeight + tankHeight * 0.17, d * 0.12, 0x4c8f55, 0.82);
+        stem.userData.skipFurnitureTint = true;
+      }
       break;
     }
     case "diningTable": {
@@ -2279,8 +2618,21 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
       break;
     }
     case "chair": {
-      furniturePart(group, w, 0.42, d, 0, 0.21, 0, COLOR_WOOD);
-      furniturePart(group, w, 0.42, 0.05, 0, 0.63, -d / 2 + 0.025, COLOR_WOOD);
+      const seatHeight = clamp(Math.min(w, d) * 0.96, 0.42, 0.58);
+      const seatThickness = clamp(Math.min(w, d) * 0.16, 0.06, 0.1);
+      const legSize = clamp(Math.min(w, d) * 0.1, 0.035, 0.07);
+      const legHeight = seatHeight - seatThickness / 2;
+      furniturePart(group, w * 0.92, seatThickness, d * 0.88, 0, seatHeight, 0, COLOR_WOOD);
+      [-1, 1].forEach((sx) => {
+        [-1, 1].forEach((sz) => {
+          furniturePart(group, legSize, legHeight, legSize, sx * w * 0.38, legHeight / 2, sz * d * 0.36, COLOR_WOOD_DARK);
+        });
+      });
+      const backHeight = clamp(d * 1.15, 0.46, 0.82);
+      [-1, 1].forEach((sx) => {
+        furniturePart(group, legSize, backHeight, legSize, sx * w * 0.39, seatHeight + backHeight / 2, -d * 0.39, COLOR_WOOD_DARK);
+      });
+      furniturePart(group, w * 0.82, backHeight * 0.44, 0.055, 0, seatHeight + backHeight * 0.68, -d * 0.39, COLOR_WOOD);
       break;
     }
     case "kitchen": {
@@ -2414,7 +2766,7 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
     group.traverse((object) => {
       const mesh = object as THREE.Mesh;
       const material = mesh.material as THREE.MeshStandardMaterial | undefined;
-      if (material?.color) material.color.set(tint);
+      if (!object.userData.skipFurnitureTint && material?.color) material.color.set(tint);
     });
   }
 
@@ -2516,7 +2868,8 @@ function markSelectable(object: THREE.Object3D, entityId: string): void {
 
 function addSelectionBox(object: THREE.Object3D, entityId: string): void {
   if (state.selectedId !== entityId) return;
-  const helper = new THREE.BoxHelper(object, 0x2775d1);
+  const selected = findEntity(entityId);
+  const helper = new THREE.BoxHelper(object, selected && isLocked(selected) ? 0x9b6714 : 0x2775d1);
   helper.userData.ignoreSelection = true;
   planGroup.add(helper);
 }
@@ -2553,7 +2906,10 @@ function addSubtleGrid(bounds: Bounds | null, center: Point): void {
 function frameCamera(bounds: Bounds | null): void {
   const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 7;
   const buildingHeight = state.floors.length * FLOOR_SPACING;
-  const distanceToFit = clamp(Math.max(size * 1.4, buildingHeight * 2.2), 6, 30);
+  const rect = threeCanvas.getBoundingClientRect();
+  const aspect = rect.height > 0 ? rect.width / rect.height : 1;
+  const portraitScale = aspect < 1 ? 1 / Math.max(aspect, 0.45) : 1;
+  const distanceToFit = clamp(Math.max(size * 1.4 * portraitScale, buildingHeight * 2.2), 6, 30);
   camera.position.set(distanceToFit * 0.9, distanceToFit * 0.72, distanceToFit);
   controls.target.set(0, Math.min(buildingHeight * 0.32, 2.4), 0);
   controls.update();
@@ -2606,22 +2962,26 @@ function updatePropertiesPanel(): void {
     propertiesPanel.innerHTML = `<p class="empty-state">選択ツールで部屋・壁・家具を選ぶと、名前や寸法を調整できます。家具は R キーで回転、F キーで反転します。</p>`;
     return;
   }
+  const placementDisabled = isLocked(selected) ? "disabled" : "";
+  const lockRow = `<label class="check placement-lock"><input id="entityLockedInput" type="checkbox" ${isLocked(selected) ? "checked" : ""} /> 配置を固定（Lキー）</label>`;
 
   if (selected.type === "room") {
     propertiesPanel.innerHTML = `
       <div class="property-grid">
+        ${lockRow}
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" /></label>
         <div class="two-col">
-          <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" /></label>
-          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" /></label>
+          <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
+          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
         </div>
         <div class="two-col">
           <label>色 2D<input id="roomColorInput" type="color" value="${selected.color}" /></label>
           <label>色 3D<input id="roomColor3dInput" type="color" value="${selected.color3d ?? selected.color}" /></label>
         </div>
-        <button type="button" class="prop-button" id="roomRotateButton">90°回転（Rキー）</button>
+        <button type="button" class="prop-button" id="roomRotateButton" ${placementDisabled}>90°回転（Rキー）</button>
       </div>
     `;
+    bindEntityLock(selected);
     bindInput("#roomNameInput", (value) => (selected.name = value || "部屋"));
     bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
     bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
@@ -2632,11 +2992,21 @@ function updatePropertiesPanel(): void {
   }
 
   if (isLinear(selected)) {
-    const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? "ドア" : "窓";
+    const slidingDoor = selected.type === "door" && selected.doorStyle === "sliding";
+    const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? (slidingDoor ? "引き戸" : "ドア") : "窓";
     const default3d = selected.type === "wall" ? "#f4f1ec" : selected.type === "door" ? "#99683d" : "#dfe5ea";
+    const doorStyleRow =
+      selected.type === "door"
+        ? `<label>扉の種類
+            <select id="doorStyleInput">
+              <option value="swing" ${slidingDoor ? "" : "selected"}>開き戸</option>
+              <option value="sliding" ${slidingDoor ? "selected" : ""}>引き戸</option>
+            </select>
+          </label>`
+        : "";
     const doorFlipRow =
       selected.type === "door"
-        ? `<label class="check"><input id="doorFlipInput" type="checkbox" ${selected.flip ? "checked" : ""} /> 開きを反転（Fキー）</label>`
+        ? `<label class="check"><input id="doorFlipInput" type="checkbox" ${selected.flip ? "checked" : ""} ${placementDisabled} /> ${slidingDoor ? "重なり" : "開き"}を反転（Fキー）</label>`
         : "";
     const mullionRow =
       selected.type === "window"
@@ -2644,16 +3014,18 @@ function updatePropertiesPanel(): void {
         : "";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
+        ${lockRow}
         <p class="empty-state">${typeLabel}</p>
+        ${doorStyleRow}
         <div class="two-col">
-          <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" /></label>
-          <label>角度 °<input id="lineAngleInput" type="number" step="5" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" /></label>
+          <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" ${placementDisabled} /></label>
+          <label>角度 °<input id="lineAngleInput" type="number" step="5" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" ${placementDisabled} /></label>
         </div>
         <div class="two-col">
-          <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" /></label>
-          <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" /></label>
+          <label>始点X<input id="lineXInput" type="number" step="20" value="${selected.x1}" ${placementDisabled} /></label>
+          <label>始点Y<input id="lineYInput" type="number" step="20" value="${selected.y1}" ${placementDisabled} /></label>
         </div>
-        <button type="button" class="prop-button" id="lineRotateButton">90°回転（Rキー）</button>
+        <button type="button" class="prop-button" id="lineRotateButton" ${placementDisabled}>90°回転（Rキー）</button>
         ${doorFlipRow}
         ${mullionRow}
         <div class="two-col">
@@ -2662,6 +3034,7 @@ function updatePropertiesPanel(): void {
         </div>
       </div>
     `;
+    bindEntityLock(selected);
     bindNumber("#lineLengthInput", (value) => {
       const newLength = Math.max(GRID, Math.round(value));
       const angle = lineAngle(selected);
@@ -2670,6 +3043,7 @@ function updatePropertiesPanel(): void {
     });
     bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
     bindButton("#lineRotateButton", () => rotateEntity(selected, 90));
+    bindSelect("#doorStyleInput", (value) => (selected.doorStyle = value as LinearElement["doorStyle"]));
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
@@ -2692,27 +3066,28 @@ function updatePropertiesPanel(): void {
     const arcRows =
       selectedShape.kind === "arc"
         ? `<div class="two-col">
-            <label>開始 °<input id="shapeStartInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" /></label>
-            <label>終了 °<input id="shapeEndInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" /></label>
+            <label>開始 °<input id="shapeStartInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.startAngle))}" ${placementDisabled} /></label>
+            <label>終了 °<input id="shapeEndInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.endAngle))}" ${placementDisabled} /></label>
           </div>`
         : "";
     const polygonRows =
       selectedShape.kind === "polygon"
         ? `<div class="two-col">
-            <label>辺の数<input id="shapeSidesInput" type="number" min="3" max="12" step="1" value="${clamp(Math.round(selectedShape.sides ?? 6), 3, 12)}" /></label>
-            <label>回転 °<input id="shapeRotationInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.rotation ?? 0))}" /></label>
+            <label>辺の数<input id="shapeSidesInput" type="number" min="3" max="12" step="1" value="${clamp(Math.round(selectedShape.sides ?? 6), 3, 12)}" ${placementDisabled} /></label>
+            <label>回転 °<input id="shapeRotationInput" type="number" step="5" value="${Math.round(radiansToDegrees(selectedShape.rotation ?? 0))}" ${placementDisabled} /></label>
           </div>`
         : "";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
+        ${lockRow}
         <label>種類
-          <select id="shapeKindInput">
+          <select id="shapeKindInput" ${placementDisabled}>
             <option value="circle" ${selectedShape.kind === "circle" ? "selected" : ""}>円</option>
             <option value="arc" ${selectedShape.kind === "arc" ? "selected" : ""}>円弧</option>
             <option value="polygon" ${selectedShape.kind === "polygon" ? "selected" : ""}>多角形</option>
           </select>
         </label>
-        <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" /></label>
+        <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" ${placementDisabled} /></label>
         ${arcRows}
         ${polygonRows}
         <div class="two-col">
@@ -2721,6 +3096,7 @@ function updatePropertiesPanel(): void {
         </div>
       </div>
     `;
+    bindEntityLock(selectedShape);
     bindSelect("#shapeKindInput", (value) => {
       selectedShape.kind = value as ShapeKind;
       if (selectedShape.kind === "circle") {
@@ -2753,21 +3129,23 @@ function updatePropertiesPanel(): void {
   ).join("");
   propertiesPanel.innerHTML = `
     <div class="property-grid">
+      ${lockRow}
       <label>種類
-        <select id="furnitureKindInput">${kindOptions}</select>
+        <select id="furnitureKindInput" ${placementDisabled}>${kindOptions}</select>
       </label>
       <div class="two-col">
-        <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" /></label>
-        <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" /></label>
+        <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" ${placementDisabled} /></label>
+        <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" ${placementDisabled} /></label>
       </div>
-      <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" /></label>
-      <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} /> 左右反転（Fキー）</label>
+      <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
+      <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
       <div class="two-col">
         <label>色 2D<input id="furnitureColorInput" type="color" value="${selectedFurniture.color ?? "#000000"}" /></label>
         <label>色 3D<input id="furnitureColor3dInput" type="color" value="${selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8"}" /></label>
       </div>
     </div>
   `;
+  bindEntityLock(selectedFurniture);
   bindSelect("#furnitureKindInput", (value) => {
     const kind = value as FurnitureKind;
     const def = FURNITURE_DEFS[kind];
@@ -2781,6 +3159,12 @@ function updatePropertiesPanel(): void {
   bindCheckbox("#furnitureFlipInput", (checked) => (selectedFurniture.flip = checked));
   bindInput("#furnitureColorInput", (value) => (selectedFurniture.color = value));
   bindInput("#furnitureColor3dInput", (value) => (selectedFurniture.color3d = value));
+}
+
+function bindEntityLock(entity: Entity): void {
+  bindCheckbox("#entityLockedInput", (checked) => {
+    entity.locked = checked;
+  });
 }
 
 function bindInput(selector: string, update: (value: string) => void): void {
@@ -3335,6 +3719,10 @@ function isLinear(entity: Entity): entity is LinearElement {
 
 function isResizable(entity: Entity): entity is Room | Furniture {
   return entity.type === "room" || entity.type === "furniture";
+}
+
+function isLocked(entity: Entity): boolean {
+  return entity.locked === true;
 }
 
 function lineDirection(entity: LinearElement): Direction {

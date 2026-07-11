@@ -606,6 +606,15 @@ select:focus-visible {
   padding: 7px 9px;
 }
 
+.property-grid input:disabled,
+.property-grid select:disabled,
+.property-grid .prop-button:disabled {
+  background: #eef1f4;
+  color: #8a919b;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .property-grid .two-col {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -638,6 +647,13 @@ select:focus-visible {
 .property-grid label.check input {
   width: auto;
   min-height: 0;
+}
+
+.property-grid label.placement-lock {
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+  color: #74480d;
+  font-weight: 600;
 }
 
 .plan-pane,
@@ -902,5 +918,12 @@ select:focus-visible {
   .plan-pane,
   .three-pane {
     grid-column: auto;
+  }
+
+  .workspace[data-view-mode="plan"] .plan-pane,
+  .workspace[data-view-mode="three"] .three-pane {
+    grid-column: 1;
+    grid-row: 2;
+    height: 68vh;
   }
 }
