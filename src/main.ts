@@ -3446,7 +3446,88 @@ function makeFloor(name: string, entities: Entity[]): Floor {
   return { id: newId("floor"), name, entities };
 }
 
+// 「サンプル」雛形: 作例プラン（書き出しJSONをそのまま収録）
+// 起動時（URLパラメータ経由）でも参照できるよう、巻き上げの効く関数宣言にしている
+function samplePlanData(): unknown {
+  return {
+  floors: [
+    {
+      id: "floor-a35471aa-199e-4886-8241-548b47d8ea02",
+      name: "1F",
+      entities: [
+        { id: "room-ee067625-51a8-4019-8565-b352841f3e73", type: "room", name: "寝室", x: 380, y: 0, w: 220, h: 220, color: "#e9eff8" },
+        { id: "room-038963ce-8166-4fe4-9eaa-7e91829213e4", type: "room", name: "水回り", x: 380, y: 220, w: 220, h: 220, color: "#e8f2ed" },
+        { id: "room-6b1825cb-c567-403c-8058-6523ca6dbde4", type: "room", name: "玄関", x: 0, y: 300, w: 380, h: 140, color: "#f6e8e0", labelOffsetX: 244.10191702469064, labelOffsetY: 35.376901574492194 },
+        { id: "wall-81013c56-5bcf-48b5-abd8-f16b73d135f3", type: "wall", x1: 0, y1: 0, x2: 600, y2: 0 },
+        { id: "wall-bf7760b9-38c1-4cda-826a-ee31172178c3", type: "wall", x1: 600, y1: 0, x2: 600, y2: 440 },
+        { id: "wall-87765cd4-1650-4714-af29-2d4f30beee85", type: "wall", x1: 600, y1: 440, x2: 0, y2: 440 },
+        { id: "wall-61ff692b-f233-43ae-8108-f30d8e2b61e1", type: "wall", x1: 0, y1: 440, x2: 0, y2: 0 },
+        { id: "wall-f1d83055-3bf5-41d1-b753-20db2583b8a1", type: "wall", x1: 380, y1: 0, x2: 380, y2: 440 },
+        { id: "wall-7a144e4d-23df-4f45-8086-ab975d0a2545", type: "wall", x1: 380, y1: 220, x2: 600, y2: 220 },
+        { id: "wall-5dce8c29-33d7-47e2-b5d7-40839f2b3db8", type: "wall", x1: 0, y1: 300, x2: 380, y2: 300 },
+        { id: "door-52c4d0ee-4c7a-4db3-9cb1-3ba1db1a15fd", type: "door", x1: 240, y1: 300, x2: 320, y2: 300 },
+        { id: "door-5cf38b13-c684-44ca-935e-0908d904746f", type: "door", x1: 380, y1: 140, x2: 380, y2: 180 },
+        { id: "door-48b1ad1a-a902-45f6-ad6d-7d6b568dd649", type: "door", x1: 460, y1: 220, x2: 540, y2: 220 },
+        { id: "window-94d629ab-9a8d-4cd3-b78b-93279bf96998", type: "window", x1: 70, y1: 0, x2: 250, y2: 0 },
+        { id: "window-ab00b630-a863-49e9-b1a6-3fd411a3ff2d", type: "window", x1: 430, y1: 0, x2: 560, y2: 0 },
+        { id: "furniture-238b95f5-e170-4ea3-bdd0-2e8d63c08892", type: "furniture", kind: "sofa", x: 80, y: 40, w: 140, h: 60, rotation: 0 },
+        { id: "furniture-7728a0d4-8c93-43da-816b-e781b5a504c6", type: "furniture", kind: "table", x: 80, y: 140, w: 80, h: 100, rotation: 0 },
+        { id: "furniture-18c308ac-cdad-4a92-bc92-5071236d8479", type: "furniture", kind: "bed", x: 520, y: 20, w: 74, h: 120, rotation: 0 },
+        { id: "furniture-be7d6740-6272-440f-95d1-f0bab0608c73", type: "furniture", kind: "kitchen", x: 240, y: 20, w: 120, h: 40, rotation: 0 },
+        { id: "furniture-c5bcaafe-20ab-47b9-8739-0dbaa36f719e", type: "furniture", kind: "bath", x: 440, y: 280, w: 120, h: 80, rotation: 0, color: "#000000", color3d: "#c2f3ff" },
+        { id: "window-cced82e5-d999-480a-a32e-8494dee0bb5a", type: "window", x1: 0, y1: 60, x2: 0, y2: 220 },
+        { id: "wall-470a55ea-b8e9-41b0-836e-794f53e1b254", type: "wall", x1: 0, y1: 40, x2: 0, y2: -180 },
+        { id: "wall-433e695b-470e-43c3-bd75-6ddd5a28a896", type: "wall", x1: 0, y1: -180, x2: 600, y2: -180 },
+        { id: "wall-76154116-819b-4daf-aaa6-431e94fcc1c0", type: "wall", x1: 600, y1: -180, x2: 600, y2: 20 },
+        { id: "shape-8cf996c6-dca5-4b39-ba14-12f60889bd91", type: "shape", kind: "circle", x: 920, y: -80, r: 160, startAngle: 0, endAngle: 6.283185307179586 },
+        { id: "shape-b1ac4c06-b255-4d6f-99cb-4c2633303385", type: "shape", kind: "arc", x: 660, y: -300, r: 60, startAngle: -1.5707963267948966, endAngle: 2.3754228892920524 },
+        { id: "wall-69d4bd62-3860-4a4c-9eec-745e06e193ad", type: "wall", x1: 1180, y1: -240, x2: 1180, y2: 340 },
+        { id: "wall-72497fe6-53c5-49c2-9355-58ac4b57089c", type: "wall", x1: 1180, y1: -240, x2: 2000, y2: -240 },
+        { id: "wall-640af7ef-3e1b-48b4-97e6-1c17efcf3069", type: "wall", x1: 1180, y1: 340, x2: 2000, y2: 340 },
+        { id: "wall-c2da2d05-a822-49f9-b5a1-9eb226eb91fb", type: "wall", x1: 2000, y1: -240, x2: 2000, y2: 340 },
+        { id: "room-80fae1c5-87f5-4824-9c0f-085a1e51b617", type: "room", name: "部屋 4", x: 240, y: -600, w: 460, h: 180, color: "#e8f2ed" },
+        { id: "door-c9e53dd8-24be-423c-99ab-ee27a80a23c0", type: "door", x1: 60, y1: 440, x2: 160, y2: 440 },
+        { id: "furniture-6a1c3a27-ee99-4f34-8c53-c74399151063", type: "furniture", kind: "table", x: 200, y: -140, w: 100, h: 80, rotation: 0 },
+        { id: "furniture-41012320-f935-440d-abee-0371f54ae634", type: "furniture", kind: "table", x: 60, y: -300, w: 100, h: 50, rotation: 0 },
+        { id: "furniture-1743122b-187b-412e-b280-c986fe64f743", type: "furniture", kind: "stairsSpiral", x: 440, y: -160, w: 140, h: 140, rotation: 90 },
+        { id: "furniture-6a9947d5-8015-4f76-9691-005782f6091c", type: "furniture", kind: "table", x: 820, y: 300, w: 100, h: 70, rotation: 0 },
+        { id: "furniture-01fc71a0-f688-459e-bb63-60bb100fe6ba", type: "furniture", kind: "closet", x: 0, y: -180, w: 160, h: 60, rotation: 0 },
+        { id: "door-d1972569-27a1-4dc2-aa16-28c048986801", type: "door", x1: 860, y1: -460, x2: 1000, y2: -460 },
+        { id: "door-67b92620-b0a9-47e1-9a0d-53b29d85c3f2", type: "door", x1: 0, y1: -100, x2: 0, y2: -40 },
+        { id: "furniture-283cf7e4-31f2-404e-8455-f4821697752c", type: "furniture", kind: "car", x: 1260, y: 700, w: 180, h: 460, rotation: 0 },
+        { id: "furniture-c965ef89-9119-4a01-ae08-ac7f6cc5374e", type: "furniture", kind: "stairsU", x: -300, y: 60, w: 240, h: 260, rotation: 0 },
+        { id: "furniture-ffff236f-57f6-4649-9d0b-1851ead4b219", type: "furniture", kind: "plant", x: 800, y: 720, w: 80, h: 80, rotation: 0 },
+        { id: "furniture-a5f3f497-a0cd-4212-b9fc-1c23f318ee60", type: "furniture", kind: "tv", x: -60, y: 680, w: 320, h: 140, rotation: 0 },
+        { id: "furniture-a02a885c-4624-410e-92ac-14b3fe78a3f6", type: "furniture", kind: "toilet", x: 220, y: 1040, w: 160, h: 200, rotation: 0 },
+        { id: "furniture-9c9e45fd-689b-4419-acc2-c2bc1ce0dfb4", type: "furniture", kind: "armchair", x: -400, y: -160, w: 80, h: 80, rotation: 0 },
+        { id: "furniture-2efe9d15-206a-4c2f-b007-383d567f5448", type: "furniture", kind: "chair", x: 1080, y: 300, w: 80, h: 80, rotation: 0 },
+        { id: "furniture-984286e0-c13c-4137-8b30-5fc8d7c822d6", type: "furniture", kind: "chair", x: 940, y: 560, w: 45, h: 45, rotation: 0 },
+        { id: "furniture-0560c5e1-3110-46ce-bdba-9b438b7b2dc7", type: "furniture", kind: "aquarium", x: -200, y: 1060, w: 180, h: 125, rotation: 0 },
+        { id: "furniture-9932ba70-4b8e-4bf4-9dd8-839dcf799304", type: "furniture", kind: "grandfatherClock", x: 80, y: 1060, w: 80, h: 140, rotation: 0 },
+        { id: "furniture-224fd4b7-5937-44d7-89c1-86debdf6fdf8", type: "furniture", kind: "wallClock", x: 600, y: 1060, w: 220, h: 160, rotation: 0 },
+        { id: "furniture-f10a3996-56f8-426d-98f5-1f00b84a75e7", type: "furniture", kind: "washer", x: 940, y: 1080, w: 125, h: 145, rotation: 0 },
+        { id: "furniture-a33c49c0-52ea-480f-9238-dd675437a9ea", type: "furniture", kind: "washbasin", x: 1220, y: 1260, w: 75, h: 55, rotation: 0 },
+        { id: "furniture-14358d3e-963c-45ff-b18b-224095ec5ddc", type: "furniture", kind: "washbasin", x: 1140, y: 1100, w: 120, h: 120, rotation: 180 },
+        { id: "furniture-bf61839b-28c6-4829-97c0-74d6e1c08fae", type: "furniture", kind: "stairs", x: 1700, y: 840, w: 100, h: 280, rotation: 0 },
+      ],
+    },
+    { id: "floor-b9fc8ff7-f6b0-4e9b-a154-89bed050dea9", name: "2F", entities: [] },
+  ],
+  activeFloor: 0,
+  selectedId: null,
+  roof: "none",
+  };
+}
+
 function makeTemplate(key: string): PlanState {
+  if (key === "sample") {
+    const plan = normalizePlan(samplePlanData());
+    if (plan) {
+      plan.selectedId = null;
+      plan.activeFloor = 0;
+      return plan;
+    }
+  }
   if (key === "starter") {
     return {
       floors: [
