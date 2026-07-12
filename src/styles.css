@@ -231,12 +231,29 @@ select:focus-visible {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
-  max-width: 360px;
+  max-width: 440px;
 }
 
 @media (max-width: 1180px) {
   .alpha-note {
     display: none;
+  }
+}
+
+.mobile-notice {
+  display: none;
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fcd34d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  .mobile-notice {
+    display: block;
   }
 }
 
