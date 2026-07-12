@@ -526,6 +526,19 @@ select:focus-visible {
   margin-bottom: 0;
 }
 
+.about-heading {
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.about-list {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  display: grid;
+  gap: 3px;
+}
+
 .feedback-address {
   user-select: all;
   font-weight: 700;
