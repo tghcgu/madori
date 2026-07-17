@@ -598,6 +598,13 @@ select:focus-visible {
   text-align: center;
 }
 
+.template-details .properties-panel {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  min-height: 0;
+}
+
 .properties-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
