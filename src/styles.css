@@ -360,13 +360,76 @@ select:focus-visible {
 }
 
 .roof-picker {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
 .roof-picker button {
+  min-height: 36px;
   padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
   font-size: 12px;
+}
+
+.roof-picker button:hover {
+  border-color: var(--line-strong);
+  background: #f7f9fc;
+}
+
+.roof-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.roof-list:empty {
+  display: none;
+}
+
+.roof-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.roof-list-row.is-active {
+  border-color: rgba(39, 117, 209, 0.62);
+  background: rgba(39, 117, 209, 0.07);
+}
+
+.roof-list-select,
+.roof-list-remove {
+  min-width: 0;
+  min-height: 34px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.roof-list-select {
+  overflow: hidden;
+  padding: 7px 9px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.roof-list-remove {
+  border-left: 1px solid var(--line);
+  color: var(--coral);
+  font-size: 18px;
+}
+
+.roof-list-remove:disabled {
+  color: #9ca3ad;
+  cursor: not-allowed;
 }
 
 .furniture-picker {
@@ -679,6 +742,11 @@ select:focus-visible {
 .property-grid .prop-button:hover {
   border-color: var(--line-strong);
   background: #f9fafc;
+}
+
+.property-grid .prop-button.danger-button {
+  border-color: rgba(212, 93, 76, 0.38);
+  color: #a83f31;
 }
 
 .property-grid label.check input {

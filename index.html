@@ -99,12 +99,12 @@
 
           <section class="tool-section">
             <h2>屋根</h2>
-            <div class="segmented roof-picker" id="roofPicker">
-              <button type="button" data-roof="none">なし</button>
-              <button type="button" data-roof="gable">切妻</button>
-              <button type="button" data-roof="hip">寄棟</button>
-              <button type="button" data-roof="flat">陸屋根</button>
+            <div class="roof-picker" id="roofPicker">
+              <button type="button" data-roof-add="gable">+ 切妻</button>
+              <button type="button" data-roof-add="hip">+ 寄棟</button>
+              <button type="button" data-roof-add="flat">+ 陸屋根</button>
             </div>
+            <div class="roof-list" id="roofList" aria-label="配置済みの屋根"></div>
           </section>
 
           <section class="tool-section">

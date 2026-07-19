@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
 type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
-type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape";
+type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof";
 type FurnitureKind =
   | "sofa"
   | "armchair"
@@ -33,7 +33,8 @@ type FurnitureKind =
   | "stairsSpiral"
   | "car";
 type ShapeKind = "circle" | "arc" | "polygon";
-type RoofKind = "none" | "gable" | "hip" | "flat";
+type RoofKind = "gable" | "hip" | "flat";
+type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
 type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
 type Direction = "horizontal" | "vertical";
@@ -105,7 +106,18 @@ interface Shape {
   locked?: boolean;
 }
 
-type Entity = Room | LinearElement | Furniture | Shape;
+interface Roof {
+  id: string;
+  type: "roof";
+  kind: RoofKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  locked?: boolean;
+}
+
+type Entity = Room | LinearElement | Furniture | Shape | Roof;
 
 interface Floor {
   id: string;
@@ -117,7 +129,7 @@ interface PlanState {
   floors: Floor[];
   activeFloor: number;
   selectedId: string | null;
-  roof: RoofKind;
+  roofs: Roof[];
 }
 
 interface PointerState {
@@ -149,6 +161,8 @@ const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
 const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
 const furniturePicker = requiredElement<HTMLDivElement>("#furniturePicker");
+const roofPicker = requiredElement<HTMLDivElement>("#roofPicker");
+const roofList = requiredElement<HTMLDivElement>("#roofList");
 const floorTabs = requiredElement<HTMLDivElement>("#floorTabs");
 const canvasContext = planCanvas.getContext("2d");
 if (!canvasContext) {
@@ -228,6 +242,11 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
 ];
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
+const ROOF_LABELS: Record<RoofKind, string> = {
+  gable: "切妻",
+  hip: "寄棟",
+  flat: "陸屋根",
+};
 
 // 2D画面の上が北（3Dの-z）。値は「光が差す方角」に太陽を置く位置。
 const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
@@ -346,11 +365,45 @@ applyViewMode(viewMode, false);
 animate3d();
 
 function isRoofKind(value: unknown): value is RoofKind {
-  return value === "none" || value === "gable" || value === "hip" || value === "flat";
+  return value === "gable" || value === "hip" || value === "flat";
+}
+
+function isLegacyRoofKind(value: unknown): value is LegacyRoofKind {
+  return value === "none" || isRoofKind(value);
+}
+
+function normalizeRoof(value: unknown): Roof | null {
+  const item = value as Partial<Roof>;
+  if (!item || !isRoofKind(item.kind)) return null;
+  const x = Number(item.x);
+  const y = Number(item.y);
+  const w = Number(item.w);
+  const h = Number(item.h);
+  if (![x, y, w, h].every(Number.isFinite)) return null;
+  return {
+    id: typeof item.id === "string" ? item.id : newId("roof"),
+    type: "roof",
+    kind: item.kind,
+    x,
+    y,
+    w: Math.max(GRID * 2, w),
+    h: Math.max(GRID * 2, h),
+    locked: item.locked === true ? true : undefined,
+  };
+}
+
+function legacyRoofs(kind: unknown, floors: Floor[]): Roof[] {
+  if (!isLegacyRoofKind(kind) || kind === "none") return [];
+  const sourceFloor = [...floors].reverse().find((floor) => floor.entities.length > 0);
+  if (!sourceFloor) return [];
+  const bounds = getEntitiesBounds(sourceFloor.entities.filter(isRoom)) ?? getEntitiesBounds(sourceFloor.entities);
+  if (!bounds) return [];
+  const overhang = 40;
+  return [roof(kind, bounds.x - overhang, bounds.y - overhang, bounds.w + overhang * 2, bounds.h + overhang * 2)];
 }
 
 function normalizePlan(parsed: unknown): PlanState | null {
-  const data = parsed as Partial<PlanState> & { entities?: Entity[] };
+  const data = parsed as Partial<PlanState> & { entities?: Entity[]; roof?: unknown };
   if (data && Array.isArray(data.floors)) {
     const floors: Floor[] = data.floors
       .filter((floor): floor is Floor => Boolean(floor) && Array.isArray((floor as Floor).entities))
@@ -360,11 +413,14 @@ function normalizePlan(parsed: unknown): PlanState | null {
         entities: floor.entities,
       }));
     if (floors.length === 0) return null;
+    const roofs = Array.isArray(data.roofs)
+      ? data.roofs.map(normalizeRoof).filter((item): item is Roof => Boolean(item))
+      : legacyRoofs(data.roof, floors);
     return {
       floors,
       activeFloor: clamp(Math.round(Number(data.activeFloor ?? 0)) || 0, 0, floors.length - 1),
       selectedId: data.selectedId ?? null,
-      roof: isRoofKind(data.roof) ? data.roof : "none",
+      roofs,
     };
   }
   if (data && Array.isArray(data.entities)) {
@@ -372,7 +428,7 @@ function normalizePlan(parsed: unknown): PlanState | null {
       floors: [{ id: newId("floor"), name: "1F", entities: data.entities }],
       activeFloor: 0,
       selectedId: data.selectedId ?? null,
-      roof: "none",
+      roofs: [],
     };
   }
   return null;
@@ -406,7 +462,7 @@ function emptyState(): PlanState {
     floors: [{ id: newId("floor"), name: "1F", entities: [] }],
     activeFloor: 0,
     selectedId: null,
-    roof: "none",
+    roofs: [],
   };
 }
 
@@ -467,10 +523,6 @@ function activeEntities(): Entity[] {
   return activeFloor().entities;
 }
 
-function setActiveEntities(entities: Entity[]): void {
-  activeFloor().entities = entities;
-}
-
 function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("button[data-view-mode]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -488,11 +540,9 @@ function setupUi(): void {
 
   buildFurniturePicker();
 
-  document.querySelectorAll<HTMLButtonElement>("[data-roof]").forEach((button) => {
+  roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.roof = button.dataset.roof as RoofKind;
-      commitState();
-      rebuildThree();
+      addRoof(button.dataset.roofAdd as RoofKind);
     });
   });
 
@@ -757,11 +807,11 @@ function renderFloorVisibility(): void {
       container.appendChild(button);
     });
   }
-  if (state.roof !== "none") {
+  if (state.roofs.length > 0) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `mini-toggle${roofVisible3d ? " is-active" : ""}`;
-    button.textContent = "屋根";
+    button.textContent = `屋根 ${state.roofs.length}`;
     button.title = roofVisible3d ? "屋根を3Dから一時的に隠す" : "屋根を3Dに表示";
     button.setAttribute("aria-pressed", String(roofVisible3d));
     button.addEventListener("click", () => {
@@ -770,6 +820,75 @@ function renderFloorVisibility(): void {
     });
     container.appendChild(button);
   }
+}
+
+function addRoof(kind: RoofKind): void {
+  if (!isRoofKind(kind)) return;
+  const selected = state.selectedId ? findEntity(state.selectedId) : null;
+  const selectedBounds = selected?.type === "room" ? { x: selected.x, y: selected.y, w: selected.w, h: selected.h } : null;
+  const sourceBounds =
+    selectedBounds ??
+    getEntitiesBounds(activeEntities().filter(isRoom)) ??
+    getEntitiesBounds(activeEntities()) ??
+    { x: -200, y: -150, w: 400, h: 300 };
+  const overhang = 40;
+  const previousRoof = selectedBounds ? null : state.roofs[state.roofs.length - 1] ?? null;
+  const defaultWidth = Math.max(GRID * 2, snap(sourceBounds.w + overhang * 2));
+  const defaultDepth = Math.max(GRID * 2, snap(sourceBounds.h + overhang * 2));
+  const item = roof(
+    kind,
+    previousRoof ? previousRoof.x + previousRoof.w + GRID * 2 : snap(sourceBounds.x - overhang),
+    previousRoof ? previousRoof.y : snap(sourceBounds.y - overhang),
+    previousRoof?.w ?? defaultWidth,
+    previousRoof?.h ?? defaultDepth,
+  );
+  state.roofs.push(item);
+  state.selectedId = item.id;
+  roofVisible3d = true;
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  pendingCameraFrame = true;
+  commitState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
+function renderRoofList(): void {
+  roofList.innerHTML = "";
+  state.roofs.forEach((item, index) => {
+    const row = document.createElement("div");
+    row.className = `roof-list-row${state.selectedId === item.id ? " is-active" : ""}`;
+
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "roof-list-select";
+    select.textContent = `${index + 1}. ${ROOF_LABELS[item.kind]} ${formatMeters(item.w)} x ${formatMeters(item.h)}`;
+    select.addEventListener("click", () => {
+      state.selectedId = item.id;
+      activeTool = "select";
+      setActiveButton("[data-tool]", activeTool);
+      updateUi();
+      render2d();
+      rebuildThree();
+    });
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "roof-list-remove";
+    remove.textContent = "×";
+    remove.title = `${index + 1}枚目の屋根を削除`;
+    remove.setAttribute("aria-label", remove.title);
+    remove.disabled = isLocked(item);
+    remove.addEventListener("click", () => {
+      if (isLocked(item)) return;
+      removeEntityById(item.id);
+      commitState();
+      redrawAll();
+    });
+
+    row.append(select, remove);
+    roofList.appendChild(row);
+  });
 }
 
 function setActiveFloorIndex(index: number): void {
@@ -812,7 +931,7 @@ function removeActiveFloor(): void {
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
     const dataValue =
-      button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode ?? button.dataset.roof;
+      button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
     button.classList.toggle("is-active", dataValue === value);
   });
 }
@@ -890,7 +1009,7 @@ function handlePointerDown(event: PointerEvent): void {
 
   if (activeTool === "erase") {
     if (hit.entity && !isLocked(hit.entity)) {
-      setActiveEntities(activeEntities().filter((entity) => entity.id !== hit.entity?.id));
+      removeEntityById(hit.entity.id);
       if (state.selectedId === hit.entity.id) state.selectedId = null;
       commitState();
       redrawAll();
@@ -1085,7 +1204,7 @@ function handleWheel(event: WheelEvent): void {
   event.preventDefault();
   const before = screenToWorld(event);
   const factor = event.deltaY > 0 ? 0.9 : 1.1;
-  view.zoom = clamp(view.zoom * factor, 0.35, 3.6);
+  view.zoom = clamp(view.zoom * factor, 0.25, 3.6);
   const after = screenToWorld(event);
   view.x += (after.x - before.x) * view.zoom;
   view.y += (after.y - before.y) * view.zoom;
@@ -1135,7 +1254,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (!isEditing && (event.key === "Delete" || event.key === "Backspace") && state.selectedId) {
     const selected = findEntity(state.selectedId);
     if (!selected || isLocked(selected)) return;
-    setActiveEntities(activeEntities().filter((entity) => entity.id !== state.selectedId));
+    removeEntityById(state.selectedId);
     state.selectedId = null;
     commitState();
     redrawAll();
@@ -1227,6 +1346,17 @@ function rotateEntity(entity: Entity, degrees: number): void {
     entity.rotation = (entity.rotation + degrees) % 360;
     return;
   }
+  if (entity.type === "roof") {
+    const cx = entity.x + entity.w / 2;
+    const cy = entity.y + entity.h / 2;
+    const newW = entity.h;
+    const newH = entity.w;
+    entity.x = snap(cx - newW / 2);
+    entity.y = snap(cy - newH / 2);
+    entity.w = newW;
+    entity.h = newH;
+    return;
+  }
   if (entity.type === "room") {
     // 部屋は軸平行のみなので、角度によらず縦横を入れ替える90°回転にする
     const cx = entity.x + entity.w / 2;
@@ -1290,6 +1420,10 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
     entity.x = snap(origin.x + moveX);
     entity.y = snap(origin.y + moveY);
   }
+  if (origin.type === "roof" && entity.type === "roof") {
+    entity.x = snap(origin.x + moveX);
+    entity.y = snap(origin.y + moveY);
+  }
   if (origin.type === "shape" && entity.type === "shape") {
     entity.x = snap(origin.x + moveX);
     entity.y = snap(origin.y + moveY);
@@ -1341,6 +1475,21 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
     entity.h = Math.max(GRID, Math.abs(y2 - y1));
   }
 
+  if (origin.type === "roof" && entity.type === "roof") {
+    let x1 = origin.x;
+    let y1 = origin.y;
+    let x2 = origin.x + origin.w;
+    let y2 = origin.y + origin.h;
+    if (corner.includes("w")) x1 = snap(point.x);
+    if (corner.includes("e")) x2 = snap(point.x);
+    if (corner.includes("n")) y1 = snap(point.y);
+    if (corner.includes("s")) y2 = snap(point.y);
+    entity.x = Math.min(x1, x2);
+    entity.y = Math.min(y1, y2);
+    entity.w = Math.max(GRID * 2, Math.abs(x2 - x1));
+    entity.h = Math.max(GRID * 2, Math.abs(y2 - y1));
+  }
+
   if (isLinear(origin) && isLinear(entity) && (corner === "p1" || corner === "p2")) {
     const fixed = corner === "p1" ? { x: origin.x2, y: origin.y2 } : { x: origin.x1, y: origin.y1 };
     const moved = constrainLine(fixed, { x: snap(point.x), y: snap(point.y) });
@@ -1377,7 +1526,9 @@ function render2d(): void {
   entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   entities.filter(isFurniture).forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
+  state.roofs.forEach(drawRoof2d);
   entities.filter(isLocked).forEach(drawLockedIndicator);
+  state.roofs.filter(isLocked).forEach(drawLockedIndicator);
 
   if (drag.dragMode === "draw" && activeTool !== "furniture") {
     drawPreview(drag.startWorld, drag.currentWorld);
@@ -1427,6 +1578,65 @@ function drawFloorBelowGhost(): void {
   entities.filter(isFurniture).forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
   ctx.restore();
+}
+
+function drawRoof2d(roofItem: Roof, index: number): void {
+  const selected = state.selectedId === roofItem.id;
+  const horizontal = roofItem.w >= roofItem.h;
+  const cx = roofItem.x + roofItem.w / 2;
+  const cy = roofItem.y + roofItem.h / 2;
+  const inset = Math.min(roofItem.w, roofItem.h) / 2;
+
+  ctx.save();
+  ctx.fillStyle = selected ? "rgba(39, 117, 209, 0.12)" : "rgba(93, 103, 115, 0.06)";
+  ctx.strokeStyle = selected ? "#2775d1" : "#657180";
+  ctx.lineWidth = (selected ? 2.2 : 1.4) / view.zoom;
+  ctx.setLineDash(selected ? [] : [7 / view.zoom, 5 / view.zoom]);
+  ctx.fillRect(roofItem.x, roofItem.y, roofItem.w, roofItem.h);
+  ctx.strokeRect(roofItem.x, roofItem.y, roofItem.w, roofItem.h);
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  if (roofItem.kind === "flat") {
+    const edgeInset = Math.min(16 / view.zoom, roofItem.w / 4, roofItem.h / 4);
+    ctx.rect(roofItem.x + edgeInset, roofItem.y + edgeInset, roofItem.w - edgeInset * 2, roofItem.h - edgeInset * 2);
+  } else if (horizontal) {
+    const ridgeStart = roofItem.kind === "gable" ? roofItem.x : roofItem.x + inset;
+    const ridgeEnd = roofItem.kind === "gable" ? roofItem.x + roofItem.w : roofItem.x + roofItem.w - inset;
+    ctx.moveTo(ridgeStart, cy);
+    ctx.lineTo(ridgeEnd, cy);
+    if (roofItem.kind === "hip") {
+      ctx.moveTo(roofItem.x, roofItem.y);
+      ctx.lineTo(ridgeStart, cy);
+      ctx.lineTo(roofItem.x, roofItem.y + roofItem.h);
+      ctx.moveTo(roofItem.x + roofItem.w, roofItem.y);
+      ctx.lineTo(ridgeEnd, cy);
+      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y + roofItem.h);
+    }
+  } else {
+    const ridgeStart = roofItem.kind === "gable" ? roofItem.y : roofItem.y + inset;
+    const ridgeEnd = roofItem.kind === "gable" ? roofItem.y + roofItem.h : roofItem.y + roofItem.h - inset;
+    ctx.moveTo(cx, ridgeStart);
+    ctx.lineTo(cx, ridgeEnd);
+    if (roofItem.kind === "hip") {
+      ctx.moveTo(roofItem.x, roofItem.y);
+      ctx.lineTo(cx, ridgeStart);
+      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y);
+      ctx.moveTo(roofItem.x, roofItem.y + roofItem.h);
+      ctx.lineTo(cx, ridgeEnd);
+      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y + roofItem.h);
+    }
+  }
+  ctx.stroke();
+
+  ctx.fillStyle = selected ? "#145da8" : "#4d5967";
+  ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`屋根 ${index + 1}  ${formatMeters(roofItem.w)} x ${formatMeters(roofItem.h)}`, roofItem.x + 6, roofItem.y - 5 / view.zoom);
+  ctx.restore();
+
+  if (selected && !isLocked(roofItem)) drawResizeHandles(roofItem);
 }
 
 function drawRoom(room: Room): void {
@@ -2031,7 +2241,7 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
   ctx.closePath();
 }
 
-function drawResizeHandles(entity: Room | Furniture): void {
+function drawResizeHandles(entity: Room | Furniture | Roof): void {
   const handles = [
     { x: entity.x, y: entity.y },
     { x: entity.x + entity.w, y: entity.y },
@@ -2050,7 +2260,7 @@ function drawResizeHandles(entity: Room | Furniture): void {
 
 function drawLockedIndicator(entity: Entity): void {
   let anchor: Point;
-  if (entity.type === "room") {
+  if (entity.type === "room" || entity.type === "roof") {
     anchor = { x: entity.x + entity.w - 16 / view.zoom, y: entity.y + 16 / view.zoom };
   } else if (entity.type === "furniture") {
     anchor = { x: entity.x + entity.w / 2, y: entity.y + entity.h / 2 };
@@ -2116,7 +2326,7 @@ function rebuildThree(): void {
     addGroundPlaceholder({ x: 0, y: 0 });
   }
 
-  addRoof3d(center);
+  state.roofs.forEach((roofItem) => addRoof3d(roofItem, center));
   addSubtleGrid(bounds, center);
   if (pendingCameraFrame) {
     frameCamera(bounds);
@@ -2804,8 +3014,8 @@ function buildRoofGeometry(width: number, depth: number, height: number, ridgeIn
   return geometry;
 }
 
-function addRoof3d(center: Point): void {
-  if (state.roof === "none" || !roofVisible3d) return;
+function addRoof3d(roofItem: Roof, center: Point): void {
+  if (!roofVisible3d) return;
   let topIndex = -1;
   for (let i = state.floors.length - 1; i >= 0; i -= 1) {
     if (!hiddenFloorIds.has(state.floors[i].id)) {
@@ -2814,35 +3024,30 @@ function addRoof3d(center: Point): void {
     }
   }
   if (topIndex < 0) return;
-  const topFloor = state.floors[topIndex];
-  const bounds =
-    getEntitiesBounds(topFloor.entities.filter(isRoom)) ??
-    getEntitiesBounds(topFloor.entities) ??
-    getGlobalBounds();
-  if (!bounds) return;
-
-  const overhang = 40;
-  const width = (bounds.w + overhang * 2) * SCALE_3D;
-  const depth = (bounds.h + overhang * 2) * SCALE_3D;
-  const pos = to3d(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2, center);
+  const width = roofItem.w * SCALE_3D;
+  const depth = roofItem.h * SCALE_3D;
+  const pos = to3d(roofItem.x + roofItem.w / 2, roofItem.y + roofItem.h / 2, center);
   const topY = topIndex * FLOOR_SPACING + WALL_HEIGHT + 0.06;
 
-  if (state.roof === "flat") {
+  if (roofItem.kind === "flat") {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roofMaterial);
     mesh.position.set(pos.x, topY + 0.08, pos.z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    markSelectable(mesh, roofItem.id);
     planGroup.add(mesh);
     const edge = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMaterial);
     edge.position.copy(mesh.position);
+    edge.userData.ignoreSelection = true;
     planGroup.add(edge);
+    addSelectionBox(mesh, roofItem.id);
     return;
   }
 
   const long = Math.max(width, depth);
   const short = Math.min(width, depth);
-  const height = short * (state.roof === "gable" ? 0.34 : 0.3);
-  const ridgeInset = state.roof === "gable" ? 0 : short / 2;
+  const height = short * (roofItem.kind === "gable" ? 0.34 : 0.3);
+  const ridgeInset = roofItem.kind === "gable" ? 0 : short / 2;
   const geometry = buildRoofGeometry(long, short, height, ridgeInset);
   const mesh = new THREE.Mesh(geometry, roofMaterial);
   mesh.position.set(pos.x, topY, pos.z);
@@ -2851,12 +3056,15 @@ function addRoof3d(center: Point): void {
   }
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  markSelectable(mesh, roofItem.id);
   planGroup.add(mesh);
 
   const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 12), edgeMaterial);
   edge.position.copy(mesh.position);
   edge.rotation.copy(mesh.rotation);
+  edge.userData.ignoreSelection = true;
   planGroup.add(edge);
+  addSelectionBox(mesh, roofItem.id);
 }
 
 function markSelectable(object: THREE.Object3D, entityId: string): void {
@@ -2941,7 +3149,7 @@ function updateUi(): void {
   updatePropertiesPanel();
   renderFloorTabs();
   renderFloorVisibility();
-  setActiveButton("[data-roof]", state.roof);
+  renderRoofList();
   document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", historyIndex <= 0);
   document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", historyIndex >= history.length - 1);
 }
@@ -2953,7 +3161,7 @@ function updateStats(): void {
   const furnitureCount = entities.filter(isFurniture).length;
   planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furnitureCount}`;
   const totalParts = state.floors.reduce((sum, floor) => sum + floor.entities.length, 0);
-  threeStats.textContent = `${state.floors.length}階建て・部材${totalParts}を自動変換`;
+  threeStats.textContent = `${state.floors.length}階建て・部材${totalParts}・屋根${state.roofs.length}`;
 }
 
 function updatePropertiesPanel(): void {
@@ -2964,6 +3172,45 @@ function updatePropertiesPanel(): void {
   }
   const placementDisabled = isLocked(selected) ? "disabled" : "";
   const lockRow = `<label class="check placement-lock"><input id="entityLockedInput" type="checkbox" ${isLocked(selected) ? "checked" : ""} /> 配置を固定（Lキー）</label>`;
+
+  if (selected.type === "roof") {
+    const roofIndex = state.roofs.findIndex((item) => item.id === selected.id);
+    propertiesPanel.innerHTML = `
+      <div class="property-grid">
+        ${lockRow}
+        <p class="empty-state">屋根 ${roofIndex + 1}</p>
+        <label>種類
+          <select id="roofKindInput" ${placementDisabled}>
+            <option value="gable" ${selected.kind === "gable" ? "selected" : ""}>切妻</option>
+            <option value="hip" ${selected.kind === "hip" ? "selected" : ""}>寄棟</option>
+            <option value="flat" ${selected.kind === "flat" ? "selected" : ""}>陸屋根</option>
+          </select>
+        </label>
+        <div class="two-col">
+          <label>幅 cm<input id="roofWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
+          <label>奥行 cm<input id="roofHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
+        </div>
+        <div class="two-col">
+          <label>位置 X<input id="roofXInput" type="number" step="20" value="${selected.x}" ${placementDisabled} /></label>
+          <label>位置 Y<input id="roofYInput" type="number" step="20" value="${selected.y}" ${placementDisabled} /></label>
+        </div>
+        <button type="button" class="prop-button" id="roofRotateButton" ${placementDisabled}>幅と奥行を入れ替える（Rキー）</button>
+        <button type="button" class="prop-button danger-button" id="roofDeleteButton" ${placementDisabled}>この屋根を削除</button>
+      </div>
+    `;
+    bindEntityLock(selected);
+    bindSelect("#roofKindInput", (value) => (selected.kind = value as RoofKind));
+    bindNumber("#roofWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
+    bindNumber("#roofHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
+    bindNumber("#roofXInput", (value) => (selected.x = snap(value)));
+    bindNumber("#roofYInput", (value) => (selected.y = snap(value)));
+    bindButton("#roofRotateButton", () => rotateEntity(selected, 90));
+    bindButton("#roofDeleteButton", () => {
+      removeEntityById(selected.id);
+      state.selectedId = null;
+    });
+    return;
+  }
 
   if (selected.type === "room") {
     propertiesPanel.innerHTML = `
@@ -3233,7 +3480,7 @@ function getCanvasPixelRatio(): number {
 }
 
 function fitPlanToCanvas(): void {
-  const bounds = getEntitiesBounds(activeEntities()) ?? getGlobalBounds();
+  const bounds = getEntitiesBounds([...activeEntities(), ...state.roofs]) ?? getGlobalBounds();
   const rect = planCanvas.getBoundingClientRect();
   if (!bounds || rect.width === 0 || rect.height === 0) {
     view = { zoom: 1, x: rect.width / 2, y: rect.height / 2 };
@@ -3242,7 +3489,7 @@ function fitPlanToCanvas(): void {
   const padding = 70;
   const zoomX = (rect.width - padding * 2) / bounds.w;
   const zoomY = (rect.height - padding * 2) / bounds.h;
-  const zoom = clamp(Math.min(zoomX, zoomY), 0.45, 2.2);
+  const zoom = clamp(Math.min(zoomX, zoomY), 0.25, 2.2);
   view.zoom = zoom;
   view.x = rect.width / 2 - (bounds.x + bounds.w / 2) * zoom;
   view.y = rect.height / 2 - (bounds.y + bounds.h / 2) * zoom;
@@ -3337,6 +3584,12 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
   const entities = activeEntities();
+  const selectedRoof = state.roofs.find((item) => item.id === state.selectedId);
+  if (selectedRoof) {
+    const corner = getCornerHit(selectedRoof, point);
+    if (corner) return { entity: selectedRoof, corner };
+    if (isPointInRoof(point, selectedRoof)) return { entity: selectedRoof, corner: null };
+  }
   for (let i = entities.length - 1; i >= 0; i -= 1) {
     const entity = entities[i];
     if (entity.type === "room" && isPointInRoomLabel(point, entity)) {
@@ -3370,6 +3623,12 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
         return { entity, corner: null };
       }
+    }
+  }
+  for (let i = state.roofs.length - 1; i >= 0; i -= 1) {
+    const roofItem = state.roofs[i];
+    if (roofItem.id !== selectedRoof?.id && isPointNearRoofEdge(point, roofItem)) {
+      return { entity: roofItem, corner: null };
     }
   }
   return { entity: null, corner: null };
@@ -3407,7 +3666,7 @@ function isPointInRoomLabel(point: Point, room: Room): boolean {
   return point.x >= bounds.x && point.x <= bounds.x + bounds.w && point.y >= bounds.y && point.y <= bounds.y + bounds.h;
 }
 
-function getCornerHit(entity: Room | Furniture, point: Point): string | null {
+function getCornerHit(entity: Room | Furniture | Roof, point: Point): string | null {
   const size = 12 / view.zoom;
   const corners = [
     { key: "nw", x: entity.x, y: entity.y },
@@ -3417,6 +3676,22 @@ function getCornerHit(entity: Room | Furniture, point: Point): string | null {
   ];
   const hit = corners.find((corner) => Math.abs(point.x - corner.x) <= size && Math.abs(point.y - corner.y) <= size);
   return hit?.key ?? null;
+}
+
+function isPointNearRoofEdge(point: Point, roofItem: Roof): boolean {
+  const tolerance = 12 / view.zoom;
+  const withinX = point.x >= roofItem.x - tolerance && point.x <= roofItem.x + roofItem.w + tolerance;
+  const withinY = point.y >= roofItem.y - tolerance && point.y <= roofItem.y + roofItem.h + tolerance;
+  if (!withinX || !withinY) return false;
+  const nearLeft = Math.abs(point.x - roofItem.x) <= tolerance;
+  const nearRight = Math.abs(point.x - (roofItem.x + roofItem.w)) <= tolerance;
+  const nearTop = Math.abs(point.y - roofItem.y) <= tolerance;
+  const nearBottom = Math.abs(point.y - (roofItem.y + roofItem.h)) <= tolerance;
+  return nearLeft || nearRight || nearTop || nearBottom;
+}
+
+function isPointInRoof(point: Point, roofItem: Roof): boolean {
+  return point.x >= roofItem.x && point.x <= roofItem.x + roofItem.w && point.y >= roofItem.y && point.y <= roofItem.y + roofItem.h;
 }
 
 function constrainLine(start: Point, end: Point): Point {
@@ -3515,7 +3790,7 @@ function samplePlanData(): unknown {
   ],
   activeFloor: 0,
   selectedId: null,
-  roof: "none",
+  roofs: [],
   };
 }
 
@@ -3543,7 +3818,7 @@ function makeTemplate(key: string): PlanState {
       ],
       activeFloor: 0,
       selectedId: null,
-      roof: "none",
+      roofs: [],
     };
   }
 
@@ -3579,7 +3854,7 @@ function makeTemplate(key: string): PlanState {
       ],
       activeFloor: 0,
       selectedId: null,
-      roof: "flat",
+      roofs: [roof("flat", -40, -40, 680, 440)],
     };
   }
 
@@ -3629,7 +3904,7 @@ function makeTemplate(key: string): PlanState {
       ],
       activeFloor: 0,
       selectedId: null,
-      roof: "hip",
+      roofs: [roof("hip", -40, -40, 880, 640)],
     };
   }
 
@@ -3703,7 +3978,7 @@ function makeTemplate(key: string): PlanState {
       ],
       activeFloor: 0,
       selectedId: null,
-      roof: "gable",
+      roofs: [roof("gable", -40, -40, 800, 560)],
     };
   }
 
@@ -3746,7 +4021,7 @@ function makeTemplate(key: string): PlanState {
     ],
     activeFloor: 0,
     selectedId: null,
-    roof: "gable",
+    roofs: [roof("gable", -40, -40, 800, 560)],
   };
 }
 
@@ -3770,6 +4045,10 @@ function furniture(kind: FurnitureKind, x: number, y: number, w = FURNITURE_DEFS
   return { id: newId("furniture"), type: "furniture", kind, x, y, w, h, rotation: 0 };
 }
 
+function roof(kind: RoofKind, x: number, y: number, w: number, h: number): Roof {
+  return { id: newId("roof"), type: "roof", kind, x, y, w, h };
+}
+
 function cloneState(value: PlanState): PlanState {
   return JSON.parse(JSON.stringify(value)) as PlanState;
 }
@@ -3779,7 +4058,15 @@ function cloneEntity(value: Entity): Entity {
 }
 
 function findEntity(id: string): Entity | undefined {
-  return activeEntities().find((entity) => entity.id === id);
+  return state.roofs.find((item) => item.id === id) ?? state.floors.flatMap((floor) => floor.entities).find((entity) => entity.id === id);
+}
+
+function removeEntityById(id: string): void {
+  state.roofs = state.roofs.filter((item) => item.id !== id);
+  state.floors.forEach((floor) => {
+    floor.entities = floor.entities.filter((entity) => entity.id !== id);
+  });
+  if (state.selectedId === id) state.selectedId = null;
 }
 
 function isRoom(entity: Entity): entity is Room {
@@ -3798,8 +4085,8 @@ function isLinear(entity: Entity): entity is LinearElement {
   return entity.type === "wall" || entity.type === "door" || entity.type === "window";
 }
 
-function isResizable(entity: Entity): entity is Room | Furniture {
-  return entity.type === "room" || entity.type === "furniture";
+function isResizable(entity: Entity): entity is Room | Furniture | Roof {
+  return entity.type === "room" || entity.type === "furniture" || entity.type === "roof";
 }
 
 function isLocked(entity: Entity): boolean {
@@ -3913,7 +4200,7 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
   let maxX = -Infinity;
   let maxY = -Infinity;
   entities.forEach((entity) => {
-    if (entity.type === "room" || entity.type === "furniture") {
+    if (entity.type === "room" || entity.type === "furniture" || entity.type === "roof") {
       minX = Math.min(minX, entity.x);
       minY = Math.min(minY, entity.y);
       maxX = Math.max(maxX, entity.x + entity.w);
@@ -3937,7 +4224,7 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
 }
 
 function getGlobalBounds(): Bounds | null {
-  const all = state.floors.flatMap((floor) => floor.entities);
+  const all = [...state.floors.flatMap((floor) => floor.entities), ...state.roofs];
   return getEntitiesBounds(all);
 }
 
