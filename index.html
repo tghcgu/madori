@@ -3,7 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231f2937'/%3E%3Cpath d='M14 46V18h36v28H14Z' fill='none' stroke='%23f8fafc' stroke-width='5'/%3E%3Cpath d='M32 18v28M14 32h36' stroke='%23f97316' stroke-width='4'/%3E%3C/svg%3E" />
+    <meta name="description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta name="application-name" content="間取りクイック3D" />
+    <meta name="apple-mobile-web-app-title" content="間取りクイック3D" />
+    <meta name="theme-color" content="#1667c7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="msapplication-TileColor" content="#1667c7" />
+    <meta name="msapplication-config" content="%BASE_URL%browserconfig.xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:site_name" content="間取りクイック3D" />
+    <meta property="og:title" content="間取りクイック3D" />
+    <meta property="og:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta property="og:url" content="https://madori-5yu.pages.dev/" />
+    <meta property="og:image" content="https://madori-5yu.pages.dev/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="間取りクイック3D" />
+    <meta name="twitter:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta name="twitter:image" content="https://madori-5yu.pages.dev/icon-512.png" />
+    <link rel="canonical" href="https://madori-5yu.pages.dev/" />
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="%BASE_URL%favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
+    <link rel="manifest" href="%BASE_URL%site.webmanifest" />
     <title>間取りクイック3D</title>
   </head>
   <body>
@@ -13,7 +39,7 @@
           <button class="icon-button" id="panelToggle" type="button" title="ツールパネルをしまう / 出す" aria-label="ツールパネルをしまう / 出す" aria-pressed="false">
             <i data-lucide="panel-left-close"></i>
           </button>
-          <div class="brand-mark">間</div>
+          <img class="brand-mark" src="%BASE_URL%favicon.svg" alt="" width="40" height="40" />
           <div>
             <strong>間取りクイック3D<span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変わったりする場合があります。">α版</span></strong>
             <span id="saveStatus">保存済み</span>
