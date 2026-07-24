@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="application-name" content="間取りクイック3D" />
     <meta name="apple-mobile-web-app-title" content="間取りクイック3D" />
     <meta name="theme-color" content="#1667c7" />
@@ -19,11 +20,16 @@
     <meta property="og:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
     <meta property="og:url" content="https://madori-5yu.pages.dev/" />
     <meta property="og:image" content="https://madori-5yu.pages.dev/icon-512.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="間取りクイック3Dのアプリアイコン" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="間取りクイック3D" />
     <meta name="twitter:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
     <meta name="twitter:image" content="https://madori-5yu.pages.dev/icon-512.png" />
     <link rel="canonical" href="https://madori-5yu.pages.dev/" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
     <link rel="icon" href="%BASE_URL%favicon.ico" sizes="any" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%favicon-32x32.png" />
@@ -31,6 +37,17 @@
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
     <link rel="manifest" href="%BASE_URL%site.webmanifest" />
     <title>間取りクイック3D</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://madori-5yu.pages.dev/#website",
+        "url": "https://madori-5yu.pages.dev/",
+        "name": "間取りクイック3D",
+        "alternateName": ["Madori Quick 3D", "madori-5yu.pages.dev"],
+        "inLanguage": "ja"
+      }
+    </script>
   </head>
   <body>
     <div id="app">
@@ -41,7 +58,7 @@
           </button>
           <img class="brand-mark" src="%BASE_URL%favicon.svg" alt="" width="40" height="40" />
           <div>
-            <strong>間取りクイック3D<span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変わったりする場合があります。">α版</span></strong>
+            <h1>間取りクイック3D<span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変わったりする場合があります。">α版</span></h1>
             <span id="saveStatus">保存済み</span>
           </div>
           <span class="alpha-note">開発途中のテスト公開版です。不具合や予告のない仕様変更が起こる場合があります。スマホでは正しく操作できないため、PCでのご利用を推奨します。</span>

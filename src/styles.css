@@ -80,7 +80,9 @@ select:focus-visible {
   border-radius: 8px;
 }
 
-.brand strong {
+.brand h1 {
+  margin: 0;
+  font-size: inherit;
   display: block;
   line-height: 1.1;
   white-space: nowrap;
