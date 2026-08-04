@@ -177,6 +177,7 @@ const SHADOWS_KEY = "madori-quick-3d-shadows";
 const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
+const MOBILE_NOTICE_KEY = "madori-quick-3d-mobile-notice";
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -191,6 +192,18 @@ const WINDOW_SILL_Y = 0.84;
 const WINDOW_HEAD_Y = 1.96;
 // 光量5段階の倍率
 const LIGHT_LEVELS = [0.5, 0.75, 1, 1.3, 1.6];
+
+function isMobileOrTabletDevice(): boolean {
+  const navigatorWithUserAgentData = navigator as Navigator & {
+    userAgentData?: { mobile?: boolean };
+  };
+  const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return Boolean(
+    navigatorWithUserAgentData.userAgentData?.mobile ||
+      isIpadOs ||
+      /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent),
+  );
+}
 
 const INK = "#000000";
 const INK_SOFT = "#5b6470";
@@ -573,6 +586,23 @@ function setupUi(): void {
   });
   ghostToggle?.classList.toggle("is-active", showGhostFloor);
   ghostToggle?.setAttribute("aria-pressed", String(showGhostFloor));
+
+  const mobileNotice = document.querySelector<HTMLElement>("#mobileNotice");
+  if (mobileNotice && isMobileOrTabletDevice()) {
+    mobileNotice.classList.add("is-mobile-device");
+    if (localStorage.getItem(MOBILE_NOTICE_KEY) === "dismissed") {
+      mobileNotice.classList.add("is-dismissed");
+    }
+    document.querySelector<HTMLButtonElement>("#mobileNoticeClose")?.addEventListener("click", () => {
+      mobileNotice.classList.add("is-dismissed");
+      localStorage.setItem(MOBILE_NOTICE_KEY, "dismissed");
+      requestAnimationFrame(() => {
+        resizeCanvases();
+        render2d();
+        render3dOnce();
+      });
+    });
+  }
 
   const panelToggle = document.querySelector<HTMLButtonElement>("#panelToggle");
   panelToggle?.addEventListener("click", () => {

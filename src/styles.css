@@ -242,7 +242,9 @@ select:focus-visible {
 .mobile-notice {
   display: none;
   flex: 0 0 auto;
-  padding: 8px 14px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
   background: #fef3c7;
   color: #92400e;
   border-bottom: 1px solid #fcd34d;
@@ -250,12 +252,29 @@ select:focus-visible {
   line-height: 1.5;
 }
 
-/* マウスでホバーできないタッチ主体の端末（スマホ・タブレット）だけに表示する。
-   画面幅では判定しない（PCでウィンドウを狭めただけで出てしまうため） */
-@media (hover: none) and (pointer: coarse) {
-  .mobile-notice {
-    display: block;
-  }
+.mobile-notice.is-dismissed {
+  display: none !important;
+}
+
+.mobile-notice-close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: transparent;
+  color: #92400e;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.mobile-notice-close:hover {
+  background: rgba(146, 64, 14, 0.12);
+}
+
+.mobile-notice.is-mobile-device {
+  display: flex;
 }
 
 .topbar {
