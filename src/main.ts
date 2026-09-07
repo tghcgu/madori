@@ -2,11 +2,20 @@ import { createIcons, icons } from "lucide";
 import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
 
 type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof";
 type FurnitureKind =
   | "sofa"
+  | "sofaCorner"
+  | "sideTable"
+  | "roundTable"
+  | "stool"
+  | "rug"
+  | "floorLamp"
+  | "piano"
+  | "bench"
   | "armchair"
   | "table"
   | "tv"
@@ -55,6 +64,7 @@ interface Room {
   h: number;
   color: string;
   color3d?: string;
+  surface?: RoomSurface;
   labelOffsetX?: number;
   labelOffsetY?: number;
   locked?: boolean;
@@ -215,6 +225,14 @@ interface FurnitureDef {
 }
 
 const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
+  sofaCorner: { label: "L字ソファ", w: 240, h: 160 },
+  sideTable: { label: "サイドテーブル", w: 50, h: 50 },
+  roundTable: { label: "丸テーブル", w: 100, h: 100 },
+  stool: { label: "スツール", w: 40, h: 40 },
+  rug: { label: "ラグ", w: 200, h: 140 },
+  floorLamp: { label: "フロアライト", w: 45, h: 45 },
+  piano: { label: "ピアノ", w: 150, h: 60 },
+  bench: { label: "ベンチ", w: 150, h: 55 },
   sofa: { label: "ソファ", w: 170, h: 80 },
   armchair: { label: "1人掛け", w: 80, h: 80 },
   table: { label: "ローテーブル", w: 100, h: 50 },
@@ -244,14 +262,14 @@ const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
 };
 
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
-  { label: "リビング", kinds: ["sofa", "armchair", "table", "tv", "plant"] },
-  { label: "時計・装飾", kinds: ["wallClock", "grandfatherClock", "aquarium"] },
-  { label: "ダイニング・キッチン", kinds: ["diningTable", "chair", "kitchen", "fridge"] },
+  { label: "リビング", kinds: ["sofa", "sofaCorner", "armchair", "table", "sideTable", "tv", "plant", "rug", "floorLamp"] },
+  { label: "時計・装飾", kinds: ["wallClock", "grandfatherClock", "aquarium", "piano"] },
+  { label: "ダイニング・キッチン", kinds: ["diningTable", "roundTable", "chair", "stool", "kitchen", "fridge"] },
   { label: "寝室・書斎", kinds: ["bed", "bedDouble", "desk", "shelf"] },
   { label: "水回り", kinds: ["bath", "toilet", "washbasin", "washer"] },
   { label: "収納", kinds: ["closet", "wardrobe"] },
   { label: "階段", kinds: ["stairs", "stairsU", "stairsSpiral"] },
-  { label: "屋外", kinds: ["car"] },
+  { label: "屋外", kinds: ["bench", "car"] },
 ];
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
@@ -286,6 +304,7 @@ const COLOR_DARK = 0x2c3238;
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
+let activeRoomSurface: RoomSurface = "plain";
 let activePolygonSides = 6;
 let viewMode: ViewMode = loadViewMode();
 let showDimensions = loadDimensionLabels();
@@ -352,7 +371,7 @@ sunLight.shadow.camera.top = 14;
 sunLight.shadow.camera.bottom = -14;
 scene.add(sunLight);
 
-const roomMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
+const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
 const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78 });
 const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8 });
 const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x99683d, roughness: 0.72 });
@@ -368,6 +387,10 @@ const windowMaterial = new THREE.MeshStandardMaterial({
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x405064, transparent: true, opacity: 0.55 });
 const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d6773, roughness: 0.86, side: THREE.DoubleSide });
 const slabMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.85 });
+const sharedMaterials = new Set<THREE.Material>([
+  wallMaterial, wallCapMaterial, doorMaterial, doorFrameMaterial, windowFrameMaterial,
+  windowMaterial, edgeMaterial, roofMaterial, slabMaterial,
+]);
 
 createIcons({ icons });
 setupUi();
@@ -421,9 +444,9 @@ function normalizePlan(parsed: unknown): PlanState | null {
     const floors: Floor[] = data.floors
       .filter((floor): floor is Floor => Boolean(floor) && Array.isArray((floor as Floor).entities))
       .map((floor, index) => ({
-        id: floor.id ?? newId("room"),
+        id: typeof floor.id === "string" ? floor.id : newId("floor"),
         name: `${index + 1}F`,
-        entities: floor.entities,
+        entities: floor.entities.map(normalizeEntity),
       }));
     if (floors.length === 0) return null;
     const roofs = Array.isArray(data.roofs)
@@ -438,13 +461,61 @@ function normalizePlan(parsed: unknown): PlanState | null {
   }
   if (data && Array.isArray(data.entities)) {
     return {
-      floors: [{ id: newId("floor"), name: "1F", entities: data.entities }],
+      floors: [{ id: newId("floor"), name: "1F", entities: data.entities.map(normalizeEntity) }],
       activeFloor: 0,
       selectedId: data.selectedId ?? null,
       roofs: [],
     };
   }
   return null;
+}
+
+function normalizeEntity(value: unknown): Entity {
+  if (!value || typeof value !== "object") throw new Error("Invalid plan entity");
+  const entity = value as Entity;
+  const finite = (...values: unknown[]) => values.every((item) => typeof item === "number" && Number.isFinite(item));
+  const color = (input: unknown) => typeof input === "string" && /^#[0-9a-f]{6}$/i.test(input) ? input : undefined;
+  const base = {
+    id: typeof entity.id === "string" && entity.id ? entity.id : newId("room"),
+    locked: entity.locked === true,
+  };
+  if (entity.type === "roof") {
+    const normalized = normalizeRoof(entity);
+    if (normalized) return normalized;
+  }
+  if (entity.type === "room" || entity.type === "furniture") {
+    if (!finite(entity.x, entity.y, entity.w, entity.h) || entity.w <= 0 || entity.h <= 0) throw new Error("Invalid dimensions");
+    if (entity.type === "room") {
+      return {
+        ...entity, ...base,
+        name: typeof entity.name === "string" ? entity.name : "部屋",
+        color: color(entity.color) ?? "#ffffff", color3d: color(entity.color3d),
+        surface: isRoomSurface(entity.surface) ? entity.surface : "plain",
+        labelOffsetX: finite(entity.labelOffsetX) ? entity.labelOffsetX : undefined,
+        labelOffsetY: finite(entity.labelOffsetY) ? entity.labelOffsetY : undefined,
+      };
+    }
+    if (!Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, entity.kind)) throw new Error("Unknown furniture kind");
+    return {
+      ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d),
+      rotation: finite(entity.rotation) ? entity.rotation : 0,
+    };
+  }
+  if (entity.type === "wall" || entity.type === "door" || entity.type === "window") {
+    if (!finite(entity.x1, entity.y1, entity.x2, entity.y2)) throw new Error("Invalid line coordinates");
+    return { ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d) };
+  }
+  if (entity.type === "shape" && ["circle", "arc", "polygon"].includes(entity.kind)) {
+    if (!finite(entity.x, entity.y, entity.r) || entity.r <= 0) throw new Error("Invalid shape");
+    return {
+      ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d),
+      startAngle: finite(entity.startAngle) ? entity.startAngle : 0,
+      endAngle: finite(entity.endAngle) ? entity.endAngle : Math.PI * 2,
+      sides: finite(entity.sides) ? clamp(Math.round(entity.sides!), 3, 12) : 6,
+      rotation: finite(entity.rotation) ? entity.rotation : 0,
+    };
+  }
+  throw new Error("Unknown plan entity");
 }
 
 function loadInitialState(): PlanState {
@@ -546,6 +617,8 @@ function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
+      if (activeTool === "room") activeRoomSurface = "plain";
+      setActiveButton("[data-surface]", activeTool === "room" ? activeRoomSurface : "");
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
     });
@@ -689,6 +762,34 @@ function setupUi(): void {
 function buildFurniturePicker(): void {
   furniturePicker.innerHTML = "";
 
+  const surfaces = document.createElement("details");
+  surfaces.className = "furniture-category";
+  surfaces.open = true;
+  const surfaceSummary = document.createElement("summary");
+  surfaceSummary.textContent = "床・地面";
+  surfaces.appendChild(surfaceSummary);
+  const surfaceItems = document.createElement("div");
+  surfaceItems.className = "furniture-items";
+  (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.surface = surface;
+    const swatch = document.createElement("span");
+    swatch.className = "surface-swatch";
+    swatch.style.backgroundImage = `url(${surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL()})`;
+    button.append(swatch, SURFACE_DEFS[surface].label);
+    button.addEventListener("click", () => {
+      activeRoomSurface = surface;
+      activeTool = "room";
+      setActiveButton("[data-surface]", surface);
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+    });
+    surfaceItems.appendChild(button);
+  });
+  surfaces.appendChild(surfaceItems);
+  furniturePicker.appendChild(surfaces);
+
   const fittings = document.createElement("details");
   fittings.className = "furniture-category";
   fittings.open = true;
@@ -767,7 +868,7 @@ function buildFurniturePicker(): void {
       button.type = "button";
       button.dataset.furniture = kind;
       button.textContent = FURNITURE_DEFS[kind].label;
-      if (kind === activeFurniture) button.classList.add("is-active");
+      if (activeTool === "furniture" && kind === activeFurniture) button.classList.add("is-active");
       button.addEventListener("click", () => {
         activeFurniture = kind;
         setActiveButton("[data-furniture]", activeFurniture);
@@ -961,12 +1062,15 @@ function removeActiveFloor(): void {
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
     const dataValue =
-      button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
+      button.dataset.surface ?? button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
     button.classList.toggle("is-active", dataValue === value);
+    button.setAttribute("aria-pressed", String(dataValue === value));
   });
 }
 
 function syncPlanCursor(): void {
+  setActiveButton("[data-surface]", activeTool === "room" ? activeRoomSurface : "");
+  setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
   if (drag.dragMode === "pan") {
     planCanvas.style.cursor = "grabbing";
     return;
@@ -998,10 +1102,10 @@ function applyViewMode(nextMode: ViewMode, persist = true): void {
   requestAnimationFrame(() => {
     resizeCanvases();
     if (viewMode !== "three") {
+      fitPlanToCanvas();
       render2d();
     }
-    render3dOnce();
-    if (viewMode === "three") {
+    if (viewMode !== "plan") {
       frameCamera(getGlobalBounds());
       render3dOnce();
     }
@@ -1301,12 +1405,13 @@ function addRoomFromDrag(start: Point, end: Point): void {
   const newRoom: Room = {
     id: newId("room"),
     type: "room",
-    name: `部屋 ${entities.filter((entity) => entity.type === "room").length + 1}`,
+    name: `${activeRoomSurface === "grass" ? "草地" : activeRoomSurface === "stone" ? "石の床" : "部屋"} ${entities.filter((entity) => entity.type === "room").length + 1}`,
     x,
     y,
     w,
     h,
-    color: ROOM_COLORS[entities.length % ROOM_COLORS.length],
+    color: activeRoomSurface === "plain" ? ROOM_COLORS[entities.length % ROOM_COLORS.length] : SURFACE_DEFS[activeRoomSurface].color,
+    surface: activeRoomSurface,
   };
   entities.push(newRoom);
   state.selectedId = newRoom.id;
@@ -1549,12 +1654,13 @@ function render2d(): void {
   entities.filter(isRoom).forEach(drawRoom);
   // 現在の階の部屋の塗りの上・線画の下に、下階のゴーストを挟む
   drawFloorBelowGhost();
+  entities.filter(isFurniture).filter((item) => item.kind === "rug").forEach(drawFurniture2d);
   entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
   entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
   entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
-  entities.filter(isFurniture).forEach(drawFurniture2d);
+  entities.filter(isFurniture).filter((item) => item.kind !== "rug").forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
   state.roofs.forEach(drawRoof2d);
   entities.filter(isLocked).forEach(drawLockedIndicator);
@@ -1671,10 +1777,17 @@ function drawRoof2d(roofItem: Roof, index: number): void {
 
 function drawRoom(room: Room): void {
   const selected = state.selectedId === room.id;
-  ctx.fillStyle = selected ? "#f2f7fd" : room.color;
+  const surface = room.surface ?? "plain";
+  const pattern = surface !== "plain" ? ctx.createPattern(surfaceCanvas(surface, room.color), "repeat") : null;
+  pattern?.setTransform(new DOMMatrix().translate(room.x, room.y).scale(SURFACE_TILE_CM / 256));
+  ctx.fillStyle = pattern ?? room.color;
   ctx.strokeStyle = selected ? "#2775d1" : "#c3c9d2";
   ctx.lineWidth = selected ? 2.4 / view.zoom : 1.1 / view.zoom;
   ctx.fillRect(room.x, room.y, room.w, room.h);
+  if (selected) {
+    ctx.fillStyle = "rgba(39,117,209,0.08)";
+    ctx.fillRect(room.x, room.y, room.w, room.h);
+  }
   ctx.strokeRect(room.x, room.y, room.w, room.h);
 
   const label = getRoomLabelPosition(room);
@@ -1916,6 +2029,62 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
   const hw = w / 2;
   const hh = h / 2;
   switch (kind) {
+    case "sofaCorner": {
+      ctx.beginPath();
+      ctx.moveTo(-hw, -hh);
+      ctx.lineTo(hw, -hh);
+      ctx.lineTo(hw, hh);
+      ctx.lineTo(w * 0.12, hh);
+      ctx.lineTo(w * 0.12, 0);
+      ctx.lineTo(-hw, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      strokeLine(-hw, -h * 0.36, hw, -h * 0.36);
+      strokeLine(w * 0.4, -h * 0.36, w * 0.4, hh);
+      strokeLine(-w * 0.18, -h * 0.36, -w * 0.18, 0);
+      strokeLine(w * 0.12, -h * 0.36, w * 0.12, 0);
+      break;
+    }
+    case "sideTable": {
+      strokeRoundedRect(-hw, -hh, w, h, 4, true);
+      strokeRoundedRect(-w * 0.4, -h * 0.4, w * 0.8, h * 0.8, 2);
+      break;
+    }
+    case "roundTable":
+    case "stool":
+    case "floorLamp": {
+      strokeEllipse(0, 0, hw, hh, true);
+      if (kind === "stool") strokeEllipse(0, 0, w * 0.4, h * 0.4);
+      if (kind === "floorLamp") {
+        strokeEllipse(0, 0, w * 0.22, h * 0.22);
+        strokeLine(-w * 0.15, -h * 0.15, w * 0.15, h * 0.15);
+        strokeLine(w * 0.15, -h * 0.15, -w * 0.15, h * 0.15);
+      }
+      break;
+    }
+    case "rug": {
+      ctx.fillStyle = "#e1dbd4";
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeRoundedRect(-w * 0.44, -h * 0.42, w * 0.88, h * 0.84, 1);
+      break;
+    }
+    case "piano": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeLine(-hw, h * 0.15, hw, h * 0.15);
+      for (let i = 0; i <= 21; i += 1) {
+        const x = -w * 0.45 + i * w * 0.9 / 21;
+        strokeLine(x, h * 0.15, x, hh);
+      }
+      break;
+    }
+    case "bench": {
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      for (let i = 1; i < 5; i += 1) strokeLine(-hw, -hh + h * i / 5, hw, -hh + h * i / 5);
+      strokeLine(-w * 0.4, -hh, -w * 0.4, hh);
+      strokeLine(w * 0.4, -hh, w * 0.4, hh);
+      break;
+    }
     case "sofa":
     case "armchair": {
       strokeRoundedRect(-hw, -hh, w, h, 8, true);
@@ -2372,8 +2541,7 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
   const depth = Math.max(roomItem.h * SCALE_3D - slabInset, 0.1);
   const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
   const geometry = new THREE.BoxGeometry(width, thickness, depth);
-  const material = floorIndex === 0 ? roomMaterial(roomItem.color3d ?? roomItem.color) : slabMaterial;
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(geometry, [slabMaterial, slabMaterial, roomMaterial(roomItem, width, depth), slabMaterial, slabMaterial, slabMaterial]);
   const pos = to3d(roomItem.x + roomItem.w / 2, roomItem.y + roomItem.h / 2, center);
   const y = floorIndex === 0 ? thickness / 2 : yBase - thickness / 2;
   mesh.position.set(pos.x, y, pos.z);
@@ -2691,11 +2859,85 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
   const w = furnitureItem.w * SCALE_3D;
   const d = furnitureItem.h * SCALE_3D;
   const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
-  group.position.set(pos.x, yBase + 0.02, pos.z);
+  group.position.set(pos.x, yBase + (yBase === 0 ? 0.1 : 0.02), pos.z);
   group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
   if (furnitureItem.flip) group.scale.x = -1;
 
   switch (furnitureItem.kind) {
+    case "sofaCorner": {
+      furniturePart(group, w, 0.3, d * 0.5, 0, 0.23, -d * 0.25, COLOR_FABRIC);
+      furniturePart(group, w * 0.38, 0.3, d * 0.5, w * 0.31, 0.23, d * 0.25, COLOR_FABRIC);
+      furniturePart(group, w, 0.8, d * 0.13, 0, 0.4, -d * 0.435, COLOR_FABRIC);
+      furniturePart(group, w * 0.1, 0.6, d, w * 0.45, 0.3, 0, COLOR_FABRIC);
+      furniturePart(group, w * 0.1, 0.6, d * 0.5, -w * 0.45, 0.3, -d * 0.25, COLOR_FABRIC);
+      for (let i = 0; i < 3; i += 1) furniturePart(group, w * 0.255, 0.1, d * 0.34, -w * 0.265 + i * w * 0.265, 0.43, -d * 0.19, 0xa5b5c4);
+      furniturePart(group, w * 0.27, 0.1, d * 0.48, w * 0.26, 0.43, d * 0.25, 0xa5b5c4);
+      break;
+    }
+    case "sideTable": {
+      furniturePart(group, w, 0.05, d, 0, 0.55, 0, COLOR_WOOD);
+      furniturePart(group, w * 0.86, 0.04, d * 0.86, 0, 0.16, 0, COLOR_WOOD);
+      for (const x of [-1, 1]) for (const z of [-1, 1]) {
+        furniturePart(group, w * 0.08, 0.53, d * 0.08, x * w * 0.4, 0.265, z * d * 0.4, COLOR_WOOD_DARK);
+      }
+      break;
+    }
+    case "roundTable":
+    case "stool": {
+      const stool = furnitureItem.kind === "stool";
+      const height = stool ? 0.45 : 0.74;
+      const top = cylinderPart(group, 0.5, 0.06, 0, height, 0, stool ? COLOR_FABRIC : COLOR_WOOD);
+      top.scale.set(w, 1, d);
+      for (const x of [-1, 1]) for (const z of [-1, 1]) {
+        furniturePart(group, w * 0.07, height - 0.03, d * 0.07, x * w * 0.27, (height - 0.03) / 2, z * d * 0.27, COLOR_WOOD_DARK);
+      }
+      break;
+    }
+    case "rug": {
+      furniturePart(group, w, 0.02, d, 0, 0.01, 0, 0xb0a49a, 1);
+      furniturePart(group, w * 0.88, 0.004, d * 0.84, 0, 0.022, 0, 0xd8d0c4, 1);
+      break;
+    }
+    case "floorLamp": {
+      const base = cylinderPart(group, 0.5, 0.04, 0, 0.02, 0, COLOR_DARK);
+      base.scale.set(w * 0.65, 1, d * 0.65);
+      cylinderPart(group, 0.016, 1.45, 0, 0.765, 0, COLOR_STEEL, 0.3);
+      const shade = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.5, 0.35, 32, 1, true),
+        new THREE.MeshStandardMaterial({ color: 0xfff3d4, roughness: 0.85, side: THREE.DoubleSide }),
+      );
+      shade.scale.set(w, 1, d);
+      shade.position.y = 1.52;
+      shade.castShadow = true;
+      shade.userData.skipFurnitureTint = true;
+      group.add(shade);
+      break;
+    }
+    case "piano": {
+      furniturePart(group, w, 1.15, d * 0.65, 0, 0.575, -d * 0.175, COLOR_DARK, 0.35);
+      furniturePart(group, w, 0.06, d, 0, 0.73, 0, COLOR_DARK, 0.35);
+      for (const x of [-1, 1]) furniturePart(group, w * 0.06, 0.7, d * 0.12, x * w * 0.45, 0.35, d * 0.4, COLOR_DARK);
+      for (let i = 0; i < 28; i += 1) {
+        const keyWidth = w * 0.88 / 28;
+        const x = -w * 0.44 + (i + 0.5) * keyWidth;
+        const key = furniturePart(group, keyWidth * 0.95, 0.022, d * 0.3, x, 0.775, d * 0.3, COLOR_WHITE);
+        key.userData.skipFurnitureTint = true;
+        if (![2, 6].includes(i % 7) && i < 27) {
+          const black = furniturePart(group, keyWidth * 0.55, 0.025, d * 0.18, x + keyWidth / 2, 0.795, d * 0.24, 0x15191c);
+          black.userData.skipFurnitureTint = true;
+        }
+      }
+      break;
+    }
+    case "bench": {
+      for (let i = 0; i < 4; i += 1) furniturePart(group, w, 0.055, d * 0.19, 0, 0.45, -d * 0.27 + i * d * 0.21, COLOR_WOOD);
+      for (const x of [-1, 1]) {
+        for (const z of [-1, 1]) furniturePart(group, w * 0.035, 0.43, d * 0.09, x * w * 0.38, 0.215, z * d * 0.3, COLOR_DARK);
+        furniturePart(group, w * 0.035, 0.82, d * 0.065, x * w * 0.38, 0.41, -d * 0.4, COLOR_DARK);
+      }
+      for (let i = 0; i < 3; i += 1) furniturePart(group, w, 0.09, d * 0.075, 0, 0.6 + i * 0.115, -d * 0.4, COLOR_WOOD);
+      break;
+    }
     case "sofa":
     case "armchair": {
       furniturePart(group, w * 0.98, 0.35, d * 0.72, 0, 0.175, d * 0.13, COLOR_FABRIC);
@@ -3247,6 +3489,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" /></label>
+        <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
         <div class="two-col">
           <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
           <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
@@ -3260,6 +3503,12 @@ function updatePropertiesPanel(): void {
     `;
     bindEntityLock(selected);
     bindInput("#roomNameInput", (value) => (selected.name = value || "部屋"));
+    bindSelect("#roomSurfaceInput", (value) => {
+      if (!isRoomSurface(value)) return;
+      selected.surface = value;
+      selected.color = SURFACE_DEFS[value].color;
+      selected.color3d = SURFACE_DEFS[value].color;
+    });
     bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
     bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
     bindInput("#roomColorInput", (value) => (selected.color = value));
@@ -3456,6 +3705,10 @@ function bindInput(selector: string, update: (value: string) => void): void {
 function bindNumber(selector: string, update: (value: number) => void): void {
   const input = propertiesPanel.querySelector<HTMLInputElement>(selector);
   input?.addEventListener("change", () => {
+    if (input.value.trim() === "" || !Number.isFinite(Number(input.value))) {
+      updatePropertiesPanel();
+      return;
+    }
     update(Number(input.value));
     commitState();
     redrawAll();
@@ -3613,7 +3866,9 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 }
 
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
-  const entities = activeEntities();
+  // Match visual stacking even when a floor or rug was placed after the furniture.
+  const layer = (entity: Entity): number => entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
+  const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedRoof = state.roofs.find((item) => item.id === state.selectedId);
   if (selectedRoof) {
     const corner = getCornerHit(selectedRoof, point);
@@ -3638,7 +3893,12 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     } else if (entity.type === "furniture") {
       const corner = getCornerHit(entity, point);
       if (corner) return { entity, corner };
-      if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
+      const angle = degreesToRadians(entity.rotation);
+      const dx = point.x - entity.x - entity.w / 2;
+      const dy = point.y - entity.y - entity.h / 2;
+      const localX = dx * Math.cos(angle) + dy * Math.sin(angle);
+      const localY = -dx * Math.sin(angle) + dy * Math.cos(angle);
+      if (Math.abs(localX) <= entity.w / 2 && Math.abs(localY) <= entity.h / 2) {
         return { entity, corner: null };
       }
     } else if (entity.type === "shape") {
@@ -4258,15 +4518,17 @@ function getGlobalBounds(): Bounds | null {
   return getEntitiesBounds(all);
 }
 
-function roomMaterial(color: string): THREE.MeshStandardMaterial {
-  const cached = roomMaterialCache.get(color);
-  if (cached) return cached;
-  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.82 });
-  roomMaterialCache.set(color, material);
-  return material;
+function roomMaterial(roomItem: Room, width: number, depth: number): THREE.MeshStandardMaterial {
+  const surface = roomItem.surface ?? "plain";
+  const color = roomItem.color3d ?? roomItem.color;
+  if (surface === "plain") return new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
+  const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(width / (SURFACE_TILE_CM * SCALE_3D), depth / (SURFACE_TILE_CM * SCALE_3D));
+  map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  return new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness });
 }
-
-const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
 
 function coloredMaterial(color: string, roughness = 0.75): THREE.MeshStandardMaterial {
   const key = `${color}-${roughness}`;
@@ -4278,20 +4540,25 @@ function coloredMaterial(color: string, roughness = 0.75): THREE.MeshStandardMat
 }
 
 function disposeGroup(group: THREE.Group): void {
-  while (group.children.length > 0) {
-    const child = group.children.pop();
-    if (!child) continue;
-    child.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
-      const material = mesh.material;
-      if (Array.isArray(material)) {
-        material.forEach((item) => item.dispose());
-      } else if (material) {
-        material.dispose();
-      }
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (mesh.geometry) geometries.add(mesh.geometry);
+    const items = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+    items.forEach((material) => {
+      if (sharedMaterials.has(material)) return;
+      materials.add(material);
+      const map = (material as THREE.MeshStandardMaterial).map;
+      if (map) textures.add(map);
     });
-  }
+  });
+  group.clear();
+  geometries.forEach((geometry) => geometry.dispose());
+  materials.forEach((material) => material.dispose());
+  textures.forEach((texture) => texture.dispose());
+  coloredMaterialCache.clear();
 }
 
 function distanceToSegment(point: Point, start: Point, end: Point): number {

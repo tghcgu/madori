@@ -486,6 +486,18 @@ select:focus-visible {
   padding: 8px;
 }
 
+.surface-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-right: 5px;
+  vertical-align: middle;
+  border: 1px solid #a7b1b9;
+  border-radius: 2px;
+  background-size: 32px 32px;
+}
+
 .furniture-items button {
   min-height: 32px;
   min-width: 0;

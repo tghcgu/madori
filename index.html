@@ -300,7 +300,15 @@
 
     <script type="module" src="/src/main.ts"></script>
     <!-- Cloudflare Web Analytics（Cookie不使用・個人を追跡しない訪問数計測） -->
-    <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "170c2ffc789b469fb34c08fae663f7cd"}'></script>
+    <script type="module">
+      if (import.meta.env.PROD && !["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+        const beacon = document.createElement("script");
+        beacon.src = "https://static.cloudflareinsights.com/beacon.min.js";
+        beacon.defer = true;
+        beacon.dataset.cfBeacon = JSON.stringify({ token: "170c2ffc789b469fb34c08fae663f7cd" });
+        document.head.appendChild(beacon);
+      }
+    </script>
     <!-- End Cloudflare Web Analytics -->
   </body>
 </html>

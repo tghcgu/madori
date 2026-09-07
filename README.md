@@ -141,16 +141,21 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | --- | --- |
 | 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
 | 図形 | 円、円弧、多角形 |
-| リビング | ソファ、1人掛け、ローテーブル、テレビ台、観葉植物 |
-| 時計・装飾 | 壁掛け時計、ホールクロック、水槽 |
-| ダイニング・キッチン | ダイニングセット、椅子、キッチン、冷蔵庫 |
+| 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
+| リビング | ソファ、L字ソファ、1人掛け、ローテーブル、サイドテーブル、テレビ台、観葉植物、ラグ、フロアライト |
+| 時計・装飾 | 壁掛け時計、ホールクロック、水槽、ピアノ |
+| ダイニング・キッチン | ダイニングセット、丸テーブル、椅子、スツール、キッチン、冷蔵庫 |
 | 寝室・書斎 | シングルベッド、ダブルベッド、机、本棚 |
 | 水回り | 浴槽、トイレ、洗面台、洗濯機 |
 | 収納 | クローゼット、タンス |
 | 階段 | 直階段、折り返し階段、らせん階段 |
-| 屋外 | 車 |
+| 屋外 | ベンチ、車 |
 
 各家具は2D用の平面記号と3Dモデルを持ちます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
+
+「床・地面」で素材を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。既存の部屋は「選択中」の「床材」から変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
+
+ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
 
 ### 雛形
 
@@ -583,16 +588,21 @@ If a room is selected before adding a roof, the new roof is sized around that ro
 | --- | --- |
 | Openings | Swing door, sliding door, window, divided window |
 | Shapes | Circle, arc, polygon |
-| Living | Sofa, armchair, low table, TV stand, plant |
-| Clocks and decor | Wall clock, grandfather clock, aquarium |
-| Dining and kitchen | Dining set, chair, kitchen unit, refrigerator |
+| Floors and ground | Plain, wood planks, tile, stone paving, grass |
+| Living | Sofa, corner sofa, armchair, low table, side table, TV stand, plant, rug, floor lamp |
+| Clocks and decor | Wall clock, grandfather clock, aquarium, upright piano |
+| Dining and kitchen | Dining set, round table, chair, stool, kitchen unit, refrigerator |
 | Bedroom and study | Single bed, double bed, desk, shelf |
 | Bathroom and utility | Bathtub, toilet, washbasin, washing machine |
 | Storage | Closet, wardrobe |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
-| Exterior | Car |
+| Exterior | Bench, car |
 
 Each item has a dedicated 2D plan symbol and a generated 3D representation. The geometry adapts to user-defined width and depth where practical.
+
+Choose a material under **床・地面** (floors and ground), then drag on the 2D canvas to place an area. For existing rooms, change **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
+
+Rugs render below furniture. Adding a floor or rug afterward does not prevent selecting furniture placed on top.
 
 ### Templates
 
