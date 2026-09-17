@@ -1863,6 +1863,7 @@ function drawRoom(room: Room): void {
 
 function drawRoomLabelGuide(room: Room): void {
   const bounds = getRoomLabelBounds(room);
+  if (!bounds) return;
   ctx.save();
   ctx.setLineDash([5 / view.zoom, 4 / view.zoom]);
   ctx.strokeStyle = "rgba(39, 117, 209, 0.7)";
@@ -3035,7 +3036,7 @@ function updatePropertiesPanel(): void {
       </div>
     `;
     bindEntityLock(selected);
-    bindInput("#roomNameInput", (value) => (selected.name = value || "部屋"));
+    bindInput("#roomNameInput", (value) => (selected.name = value));
     bindSelect("#roomSurfaceInput", (value) => {
       if (!isRoomSurface(value)) return;
       selected.surface = value;
@@ -3485,7 +3486,8 @@ function getRoomLabelPosition(room: Room): Point {
   };
 }
 
-function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: number } {
+function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: number } | null {
+  if (!room.name.trim() && !showDimensions) return null;
   const position = getRoomLabelPosition(room);
   const nameWidth = Math.max(36, room.name.length * 14);
   const dimensionWidth = showDimensions ? 82 : 0;
@@ -3499,6 +3501,7 @@ function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: n
 
 function isPointInRoomLabel(point: Point, room: Room): boolean {
   const bounds = getRoomLabelBounds(room);
+  if (!bounds) return false;
   return point.x >= bounds.x && point.x <= bounds.x + bounds.w && point.y >= bounds.y && point.y <= bounds.y + bounds.h;
 }
 

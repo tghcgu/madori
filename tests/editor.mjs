@@ -13,6 +13,10 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
     if (!id.replaceAll('\\', '/').endsWith('/src/main.ts')) return;
     return `${code}\nwindow.__editorTest = {
       catalog: FURNITURE_DEFS,
+      roomLabelBounds(id) {
+        const room = findEntity(id);
+        return room?.type === 'room' ? getRoomLabelBounds(room) : null;
+      },
       symbolImage(item) {
         const r = planCanvas.getBoundingClientRect(), ratio = planCanvas.width/r.width;
         const margin = 12, copy = document.createElement('canvas');
@@ -135,6 +139,53 @@ try {
   assert.equal((await saved()).floors[0].entities[0].w, 640);
   await page.locator('#roomNameInput').press('Tab');
   console.log('PASS: reset confirmation and text-field undo');
+
+  const previousName = (await saved()).floors[0].entities[0].name;
+  await change('#roomNameInput', '');
+  assert.equal(await page.locator('#roomNameInput').inputValue(), '');
+  assert.equal((await saved()).floors[0].entities[0].name, '');
+  assert.equal(await page.evaluate(() => window.__editorTest.roomLabelBounds('room')), null);
+  await page.locator('#undoButton').click();
+  assert.equal((await saved()).floors[0].entities[0].name, previousName);
+  await page.locator('#redoButton').click();
+  assert.equal((await saved()).floors[0].entities[0].name, '');
+  await page.screenshot({ path: `${output}/unnamed-room.png` });
+  point = await planPoint(25, 20);
+  await move(point, 80, 60);
+  const movedUnnamedRoom = (await saved()).floors[0].entities[0];
+  assert.ok(movedUnnamedRoom.x !== 0 || movedUnnamedRoom.y !== 0);
+  assert.equal(movedUnnamedRoom.labelOffsetX, undefined);
+  assert.equal(movedUnnamedRoom.labelOffsetY, undefined);
+  await page.locator('#undoButton').click();
+  await page.locator('#dimensionToggle').click();
+  assert.ok(await page.evaluate(() => window.__editorTest.roomLabelBounds('room')));
+  point = await planPoint(35, 40);
+  await move(point, 60, 40);
+  const movedDimensions = (await saved()).floors[0].entities[0];
+  assert.equal(movedDimensions.x, 0);
+  assert.equal(movedDimensions.y, 0);
+  assert.ok(movedDimensions.labelOffsetX !== undefined);
+  await page.locator('#undoButton').click();
+  await page.locator('#dimensionToggle').click();
+  await change('#roomNameInput', '   ');
+  assert.equal(await page.evaluate(() => window.__editorTest.roomLabelBounds('room')), null);
+  await change('#roomNameInput', '');
+  const unnamedExportEvent = page.waitForEvent('download');
+  await page.locator('#exportButton').click();
+  const unnamedExport = await unnamedExportEvent, unnamedChunks = [];
+  for await (const chunk of await unnamedExport.createReadStream()) unnamedChunks.push(chunk);
+  const unnamedPlan = JSON.parse(Buffer.concat(unnamedChunks).toString());
+  assert.equal(unnamedPlan.floors[0].entities[0].name, '');
+  await importPlan(unnamedPlan);
+  await page.reload();
+  assert.equal((await saved()).floors[0].entities[0].name, '');
+  assert.equal(await page.locator('#recoveryNotice').isVisible(), false);
+  point = await planPoint(50, 50);
+  await page.mouse.click(point.x, point.y);
+  assert.equal(await page.locator('#roomNameInput').inputValue(), '');
+  await change('#roomNameInput', 'Renamed');
+  assert.equal((await saved()).floors[0].entities[0].name, 'Renamed');
+  console.log('PASS: unnamed rooms, label hit testing, dimension dragging, undo/redo, export/import and reload');
 
   const diagonal = { id: 'diagonal', type: 'wall', x1: 17, y1: 19, x2: 417, y2: 319 };
   await importPlan(plan([room(), diagonal, { id: 'door', type: 'door', x1: 177, y1: 139, x2: 257, y2: 199 }]));
