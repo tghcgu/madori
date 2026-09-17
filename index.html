@@ -99,6 +99,11 @@
         </div>
       </header>
 
+      <div class="recovery-notice" id="recoveryNotice" role="alert" hidden>
+        <span id="recoveryMessage"></span>
+        <button type="button" id="recoveryExportButton"><i data-lucide="download"></i>元データを書き出し</button>
+        <button type="button" id="recoveryCloseButton" title="閉じる" aria-label="閉じる"><i data-lucide="x"></i></button>
+      </div>
       <div class="mobile-notice" id="mobileNotice" role="note">
         <span>本ツールはPCでの利用を前提としています。スマートフォンやタブレットでは正しく表示されなかったり、操作が難しかったりするため、PCのブラウザからのご利用をおすすめします。</span>
         <button class="mobile-notice-close" id="mobileNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>

@@ -498,6 +498,26 @@ select:focus-visible {
   background-size: 32px 32px;
 }
 
+.recovery-notice:not([hidden]) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #fff2bf;
+  color: #653f0a;
+  font-size: 13px;
+}
+
+.recovery-notice span { flex: 1 1 280px; }
+.recovery-notice button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+.recovery-notice svg { width: 16px; height: 16px; }
+
 .furniture-items button {
   min-height: 32px;
   min-width: 0;

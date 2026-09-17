@@ -113,6 +113,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 階ごとの表示・非表示
 - 屋根全体の一時表示・非表示
 - 3D上の物体をクリックして選択
+- 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
+- 「選択」ツールで固定されていない家具を直接ドラッグ移動。Escで中止、Undo / Redoに対応
 
 ### 複数階
 
@@ -126,6 +128,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 切妻、寄棟、陸屋根を何枚でも追加
 - 屋根ごとに幅、奥行、位置を編集
+- 「設置階」を屋根ごとに指定。階を追加しても設置階は変わらず、対象階を隠すと屋根も非表示
 - 2D上でドラッグ移動
 - 四隅のハンドルでサイズ変更
 - 幅と奥行を90度入れ替え
@@ -192,10 +195,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 2D | ホイール | 拡大・縮小 |
 | 2D | ダブルクリック | 要素を選択してプロパティを表示 |
 | 2D | 四隅・端点をドラッグ | 部屋、家具、屋根、線要素のサイズ変更 |
-| 3D | 左ドラッグ | 視点を回転 |
+| 3D | 左ドラッグ | 「選択」で家具を移動。それ以外の場所では視点を回転 |
 | 3D | 右ドラッグ | 視点を平行移動 |
 | 3D | ホイール | 拡大・縮小 |
-| 3D | クリック | 物体を選択 |
+| 3D | クリック | 物体を選択。家具ツールでは編集中の階へ配置 |
 
 ### キーボードショートカット
 
@@ -216,6 +219,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 ### 自動保存
 
 間取りはブラウザの`localStorage`へ自動保存されます。ログインやクラウド保存はありません。
+
+一部の項目が壊れている場合は、元データを退避して読み込める項目を復旧します。画面上部の「元データを書き出し」から、元のJSONをそのまま取得できます。容量不足などで退避できない場合は、元データを上書きしないよう自動保存を停止します。その場合、編集中の内容は通常の「書き出し」で保存してください。構文が壊れたJSONは自動復旧できませんが、元データの取得は可能です。
+
+「新規」は作成済みの要素がある場合に確認を表示します。確定した後もUndoで戻せます。名前などの入力中は、Ctrl / Cmd + Zは入力欄の文字だけを取り消します。
 
 - 保存キー: `madori-quick-3d-plan`
 - 表示モード、寸法表示、影、光、下階表示もブラウザへ保存
@@ -284,6 +291,10 @@ npm.cmd run dev
 | `npm run build` | TypeScriptの型チェック後、`dist/`へ本番ビルド |
 | `npm run preview` | `dist/`の本番ビルドをローカルで確認 |
 | `npm ci` | `package-lock.json`に基づいて依存関係を再現 |
+| `npm test` | 壁・床の幾何計算と保存データ保護の単体テスト（Node.js 22.6以上） |
+| `npm run test:e2e` | Playwrightによる編集・復旧・表示のブラウザ回帰テスト |
+
+ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
 本番ビルド:
 
@@ -329,7 +340,11 @@ madori/
 │  └─ google*.html           # Search Console確認ファイル
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理
+│  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
+│  ├─ persistence.ts         # 自動保存データの復旧と原本保護
+│  ├─ surfaces.ts            # 床材と模様
 │  └─ styles.css             # アプリ全体のスタイル
+├─ tests/                    # 単体テストとブラウザ回帰テスト
 ├─ index.html                # UI構造とアプリのエントリ
 ├─ package.json              # 依存関係とnpmスクリプト
 ├─ package-lock.json         # 依存関係の固定
@@ -377,7 +392,7 @@ madori/
 }
 ```
 
-座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`です。屋根は全階共通の`roofs`配列で管理され、最上階の上へ3D表示されます。
+座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`です。屋根は全階共通の`roofs`配列で管理し、各屋根の`floorId`で設置階を指定します。未指定の旧データは読み込み時の最上階に割り当てます。設置階を削除すると対応する屋根も削除され、Undoで一緒に戻せます。
 
 ## ブランチとデプロイ
 
@@ -573,6 +588,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 
 - Add any number of gable, hip, and flat roofs
 - Edit width, depth, and position for each roof
+- Assign each roof to a floor. Adding floors does not move existing roofs; hiding a floor also hides its roofs
 - Drag roofs on the 2D canvas
 - Resize roofs from corner handles
 - Swap width and depth with a 90-degree rotation
@@ -639,10 +655,10 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 2D | Mouse wheel | Zoom |
 | 2D | Double-click | Select an item and show its properties |
 | 2D | Drag handles | Resize rooms, furniture, roofs, and line endpoints |
-| 3D | Left-drag | Orbit the camera |
+| 3D | Left-drag | Move unlocked furniture with Select; orbit from other parts of the scene |
 | 3D | Right-drag | Pan the camera |
 | 3D | Mouse wheel | Zoom |
-| 3D | Click | Select a 3D object |
+| 3D | Click | Select an object, or place furniture on the active floor with a furniture tool |
 
 ### Keyboard
 
@@ -658,11 +674,15 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 
 Some shortcuts are disabled while an input, select box, or editable field has focus.
 
+Furniture tools stay active after placement so you can place several items directly in 3D. Press Escape to cancel a placement or move. Completed gestures support Undo / Redo. Ctrl / Cmd + Z inside a text field uses native text undo, without undoing the plan. Drawing walls and floor regions still uses the 2D canvas.
+
 ## Persistence and File Transfer
 
 ### Automatic browser storage
 
 Plans are saved automatically to browser `localStorage`. There is no login or cloud save.
+
+If some saved items are invalid, the original data is backed up before valid items are recovered. Use the recovery banner to download the original JSON unchanged. If the backup fails, for example because storage is full, autosave stops to protect the original; export ongoing work with the regular Export button. Malformed JSON cannot be recovered automatically, but remains downloadable. New asks for confirmation before removing existing items, and can be undone.
 
 - Main storage key: `madori-quick-3d-plan`
 - View mode, dimensions, shadows, lighting, and lower-floor display are also saved
@@ -728,6 +748,10 @@ npm.cmd run dev
 | `npm run build` | Type-check with TypeScript and build production files into `dist/` |
 | `npm run preview` | Preview the production build locally |
 | `npm ci` | Install the exact dependency tree from `package-lock.json` |
+| `npm test` | Unit tests for wall/floor geometry and storage recovery (Node.js 22.6+) |
+| `npm run test:e2e` | Playwright regression tests for editing, recovery, and rendering |
+
+Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
 Production build:
 
@@ -773,7 +797,11 @@ madori/
 │  └─ google*.html           # Search Console verification
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence
+│  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
+│  ├─ persistence.ts         # Autosave recovery and original-data protection
+│  ├─ surfaces.ts            # Floor materials and textures
 │  └─ styles.css             # Application styling
+├─ tests/                    # Unit and browser regression tests
 ├─ index.html                # UI structure and application entry
 ├─ package.json              # Dependencies and npm scripts
 ├─ package-lock.json         # Locked dependency tree
@@ -821,7 +849,7 @@ The exported JSON has the following high-level shape:
 }
 ```
 
-Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, and `shape`. Roofs are stored separately in the plan-level `roofs` array and rendered above the highest floor.
+Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, and `shape`. Roofs are stored in the plan-level `roofs` array, with each roof's `floorId` identifying its supporting floor. Legacy roofs without this field are assigned to the highest floor at load time. Deleting a floor also deletes its roofs; Undo restores both.
 
 ## Branches and Deployment
 

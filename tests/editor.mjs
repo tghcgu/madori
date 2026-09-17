@@ -1,0 +1,314 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+
+const key = 'madori-quick-3d-plan';
+const output = '.codex/regression';
+await mkdir(output, { recursive: true });
+// Read-only geometry probes are added only by this isolated test server.
+const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plugins: [{
+  name: 'editor-test-probes',
+  transform(code, id) {
+    if (!id.replaceAll('\\', '/').endsWith('/src/main.ts')) return;
+    return `${code}\nwindow.__editorTest = {
+      project(x, y, height = 0.08) {
+        const p = new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D,height,(y-threeSceneCenter.y)*SCALE_3D).project(camera);
+        const r = threeCanvas.getBoundingClientRect();
+        return { x:r.left+(p.x+1)*r.width/2, y:r.top+(1-p.y)*r.height/2 };
+      },
+      bounds(id) {
+        const objects = planGroup.children.filter(o => o.userData.entityId === id);
+        if (!objects.length) return null;
+        const box = new THREE.Box3();
+        objects.forEach(o => box.union(new THREE.Box3().setFromObject(o)));
+        return { min:box.min.toArray(), max:box.max.toArray() };
+      },
+      planPoint(x,y) {
+        const r = planCanvas.getBoundingClientRect();
+        return { x:r.left+x*view.zoom+view.x, y:r.top+y*view.zoom+view.y };
+      },
+      floorPieces(id) {
+        return planGroup.children.filter(o => o.userData.entityId===id).flatMap(o => o.children.filter(c=>c.isMesh).map(c=>{
+          const b = new THREE.Box3().setFromObject(c); return { min:b.min.toArray(),max:b.max.toArray() };
+        }));
+      }
+    };`;
+  },
+}] });
+await server.listen();
+let browser;
+const errors = [];
+const room = (id = 'room', x = 0, y = 0, w = 600, h = 400, surface = 'plain') => ({ id, type: 'room', name: id, x, y, w, h, surface, color: '#ffffff' });
+const plan = (entities = [room()], roofs = []) => ({ floors: [{ id: 'f1', name: '1F', entities }], activeFloor: 0, selectedId: null, roofs });
+let page;
+const saved = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), key);
+async function change(selector, value) {
+  await page.locator(selector).fill(String(value));
+  await page.locator(selector).press('Tab');
+}
+async function choose(selector) {
+  const button = page.locator(selector);
+  const details = button.locator('xpath=ancestor::details');
+  if (await details.count() && await details.getAttribute('open') === null) await details.locator('summary').click();
+  await button.click();
+}
+async function importPlan(data) {
+  await page.locator('#importInput').setInputFiles({ name: 'test.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  await page.waitForTimeout(180);
+  assert.notEqual(await page.locator('#saveStatus').textContent(), '読み込み失敗');
+}
+async function move(from, dx, dy, cancel = false) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + dx, from.y + dy, { steps: 8 });
+  if (cancel) await page.keyboard.press('Escape');
+  await page.mouse.up();
+}
+const project = (x, y, height) => page.evaluate(([x, y, height]) => window.__editorTest.project(x, y, height), [x, y, height]);
+const planPoint = (x, y) => page.evaluate(([x, y]) => window.__editorTest.planPoint(x, y), [x, y]);
+async function pixels(target = page) {
+  await target.waitForTimeout(300);
+  return target.locator('#threeCanvas').evaluate(canvas => {
+    const copy = document.createElement('canvas');
+    copy.width = canvas.width; copy.height = canvas.height;
+    const ctx = copy.getContext('2d');
+    ctx.drawImage(canvas, 0, 0);
+    const { data } = ctx.getImageData(0, 0, copy.width, copy.height);
+    const colors = new Set();
+    let hash = 0;
+    for (let i = 0; i < data.length; i += 64) {
+      colors.add(`${data[i] >> 4},${data[i+1] >> 4},${data[i+2] >> 4}`);
+      hash = (Math.imul(hash, 31) + data[i] + data[i+1]*3 + data[i+2]*7) >>> 0;
+    }
+    return { colors: colors.size, hash, width: copy.width, height: copy.height };
+  });
+}
+async function open(raw = JSON.stringify(plan()), extra = {}) {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, ...extra });
+  const target = await context.newPage();
+  target.on('pageerror', error => errors.push(error.message));
+  target.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await target.addInitScript(({ key, raw }) => {
+    if (sessionStorage.getItem('seeded')) return;
+    localStorage.setItem(key, raw);
+    sessionStorage.setItem('seeded', 'yes');
+  }, { key, raw });
+  await target.goto(server.resolvedUrls.local[0]);
+  await target.waitForFunction(() => Boolean(window.__editorTest));
+  return target;
+}
+
+try {
+  browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
+  page = await open();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  assert.equal(await page.locator('vite-error-overlay').count(), 0);
+
+  // Destructive reset and native text undo must not silently remove a plan.
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.locator('#resetButton').click();
+  assert.equal((await saved()).floors[0].entities.length, 1);
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#resetButton').click();
+  assert.equal((await saved()).floors[0].entities.length, 0);
+  await page.locator('#undoButton').click();
+  assert.equal((await saved()).floors[0].entities.length, 1);
+  await page.locator('[data-view-mode="plan"]').click();
+  let point = await planPoint(50, 50);
+  await page.mouse.click(point.x, point.y);
+  await change('#roomWInput', 640);
+  await page.locator('#roomNameInput').focus();
+  await page.locator('#roomNameInput').press('End');
+  await page.locator('#roomNameInput').pressSequentially('AB');
+  await page.keyboard.press('Control+z');
+  assert.equal((await saved()).floors[0].entities[0].w, 640);
+  await page.locator('#roomNameInput').press('Tab');
+  console.log('PASS: reset confirmation and text-field undo');
+
+  const diagonal = { id: 'diagonal', type: 'wall', x1: 17, y1: 19, x2: 417, y2: 319 };
+  await importPlan(plan([room(), diagonal, { id: 'door', type: 'door', x1: 177, y1: 139, x2: 257, y2: 199 }]));
+  point = await planPoint(97, 79);
+  await move(point, 39, 47);
+  const movedWall = (await saved()).floors[0].entities.find(e => e.id === 'diagonal');
+  assert.notEqual(movedWall.x1, diagonal.x1);
+  assert.equal(movedWall.x2 - movedWall.x1, 400);
+  assert.equal(movedWall.y2 - movedWall.y1, 300);
+  await page.locator('#undoButton').click();
+  await page.locator('[data-view-mode="split"]').click();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${output}/diagonal.png` });
+  console.log('PASS: dragging diagonal walls preserves length and angle');
+
+  const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
+  await importPlan(surfaces);
+  await page.locator('[data-view-mode="three"]').click();
+  const grassPieces = await page.evaluate(() => window.__editorTest.floorPieces('grass'));
+  const stonePieces = await page.evaluate(() => window.__editorTest.floorPieces('stone'));
+  assert.equal(grassPieces.length, 4);
+  assert.equal(stonePieces.length, 1);
+  for (const a of grassPieces) for (const b of stonePieces) {
+    assert.ok(a.max[0] <= b.min[0]+1e-6 || b.max[0] <= a.min[0]+1e-6 || a.max[2] <= b.min[2]+1e-6 || b.max[2] <= a.min[2]+1e-6);
+  }
+  assert.ok((await pixels()).colors > 20);
+  await page.screenshot({ path: `${output}/overlapping-floors.png` });
+  console.log('PASS: overlapping floor meshes do not share visible areas');
+
+  const roof = { id: 'roof', type: 'roof', kind: 'gable', x: -40, y: -40, w: 680, h: 480 };
+  const twoStory = plan([room()], [roof]);
+  twoStory.floors.push({ id: 'f2', name: '2F', entities: [room('upper')] });
+  await importPlan(twoStory);
+  assert.equal((await saved()).roofs[0].floorId, 'f2');
+  const roofBounds = await page.evaluate(() => window.__editorTest.bounds('roof'));
+  assert.ok(roofBounds);
+  await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).click();
+  assert.equal(await page.evaluate(() => window.__editorTest.bounds('roof')), null);
+  await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).click();
+  assert.deepEqual(await page.evaluate(() => window.__editorTest.bounds('roof')), roofBounds);
+  await choose('.roof-list-select');
+  await page.locator('#roofFloorInput').selectOption('f1');
+  const lowerBounds = await page.evaluate(() => window.__editorTest.bounds('roof'));
+  assert.ok(Math.abs(roofBounds.min[1] - lowerBounds.min[1] - 2.75) < 1e-6);
+  await page.locator('#entityLockedInput').check();
+  assert.equal(await page.locator('#roofFloorInput').isDisabled(), true);
+  await page.locator('#entityLockedInput').uncheck();
+  await page.locator('#roofFloorInput').selectOption('f2');
+  await page.reload();
+  await page.locator('[data-view-mode="plan"]').click();
+  await page.locator('[title="上の階を追加"]').click();
+  assert.equal((await saved()).roofs[0].floorId, 'f2');
+  await page.locator('#floorTabs button').filter({ hasText: /^2F$/ }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('[title="表示中の階を削除"]').click();
+  assert.equal((await saved()).roofs.length, 0);
+  await page.locator('#undoButton').click();
+  assert.equal((await saved()).roofs[0].floorId, 'f2');
+  console.log('PASS: roof migration, floor assignment, visibility, lock, reload and undo');
+
+  await importPlan(plan());
+  await page.locator('[data-view-mode="three"]').click();
+  await choose('[data-furniture="table"]');
+  point = await project(300, 200);
+  await page.mouse.click(point.x, point.y);
+  let furniture = (await saved()).floors[0].entities.find(e => e.type === 'furniture');
+  assert.ok(furniture);
+  assert.equal(await page.locator('[data-furniture="table"]').getAttribute('aria-pressed'), 'true');
+  await page.locator('[data-tool="select"]').click();
+  point = await project(furniture.x + furniture.w/2, furniture.y + furniture.h/2, 0.42);
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.down();
+  await page.mouse.move(point.x + 90, point.y + 40, { steps: 8 });
+  await page.mouse.move(point.x, point.y, { steps: 8 });
+  await page.mouse.up();
+  assert.deepEqual((await saved()).floors[0].entities.find(e => e.id === furniture.id), furniture);
+  await move(point, 100, 45);
+  let movedFurniture = (await saved()).floors[0].entities.find(e => e.id === furniture.id);
+  assert.ok(movedFurniture.x !== furniture.x || movedFurniture.y !== furniture.y);
+  assert.equal(movedFurniture.w, furniture.w);
+  assert.equal(movedFurniture.h, furniture.h);
+  await page.locator('#undoButton').click();
+  assert.deepEqual((await saved()).floors[0].entities.find(e => e.id === furniture.id), furniture);
+  await page.locator('#redoButton').click();
+  assert.deepEqual((await saved()).floors[0].entities.find(e => e.id === furniture.id), movedFurniture);
+  point = await project(movedFurniture.x + movedFurniture.w/2, movedFurniture.y + movedFurniture.h/2, 0.42);
+  await move(point, 80, 20, true);
+  assert.deepEqual((await saved()).floors[0].entities.find(e => e.id === furniture.id), movedFurniture);
+  await page.locator('#entityLockedInput').check();
+  const locked = (await saved()).floors[0].entities.find(e => e.id === furniture.id);
+  point = await project(locked.x + locked.w/2, locked.y + locked.h/2, 0.42);
+  await move(point, 70, 30);
+  assert.deepEqual((await saved()).floors[0].entities.find(e => e.id === furniture.id), locked);
+  await choose('[data-furniture="chair"]');
+  point = await project(160, 150);
+  await move(point, 30, 20, true);
+  assert.equal((await saved()).floors[0].entities.filter(e => e.type === 'furniture').length, 1);
+  await page.locator('[data-tool="select"]').click();
+  await page.waitForTimeout(1000);
+  const beforeOrbit = await pixels();
+  const beforeProjection = await project(100, 100);
+  const canvas = await page.locator('#threeCanvas').boundingBox();
+  const background = { x: canvas.x + canvas.width * 0.8, y: canvas.y + 100 };
+  await move(background, 100, 40);
+  assert.notEqual((await pixels()).hash, beforeOrbit.hash);
+  assert.notDeepEqual(await project(100, 100), beforeProjection);
+  const beforePan = await pixels();
+  await page.mouse.move(background.x, background.y);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(background.x - 70, background.y + 30, { steps: 8 });
+  await page.mouse.up({ button: 'right' });
+  assert.notEqual((await pixels()).hash, beforePan.hash);
+  const beforeZoom = await pixels();
+  await page.mouse.wheel(0, -160);
+  assert.notEqual((await pixels()).hash, beforeZoom.hash);
+  await page.screenshot({ path: `${output}/three-editing.png` });
+  console.log('PASS: 3D placement, move, dimensions, lock, cancel, undo/redo, orbit, pan and zoom');
+
+  const upperPlan = plan();
+  upperPlan.floors.push({ id: 'f2', name: '2F', entities: [room('upper')] });
+  upperPlan.activeFloor = 1;
+  await importPlan(upperPlan);
+  await choose('[data-furniture="chair"]');
+  point = await project(300, 200, 2.75);
+  await page.mouse.click(point.x, point.y);
+  assert.equal((await saved()).floors[0].entities.filter(e => e.type === 'furniture').length, 0);
+  assert.equal((await saved()).floors[1].entities.filter(e => e.type === 'furniture').length, 1);
+  await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).click();
+  point = await project(100, 100, 2.75);
+  await page.mouse.click(point.x, point.y);
+  assert.equal((await saved()).floors[1].entities.filter(e => e.type === 'furniture').length, 1);
+  console.log('PASS: 3D placement uses the active floor and skips hidden floors');
+  await page.context().close();
+
+  // Recovery is tested through actual localStorage and the download UI.
+  const broken = JSON.stringify(plan([room(), { type: 'furniture', kind: 'unknown', x: 0, y: 0, w: 100, h: 100 }]));
+  page = await open(broken);
+  assert.equal(await page.locator('#recoveryNotice').isVisible(), true);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), broken);
+  const downloadEvent = page.waitForEvent('download');
+  await page.locator('#recoveryExportButton').click();
+  const download = await downloadEvent;
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  assert.equal(Buffer.concat(chunks).toString(), broken);
+  const backups = await page.evaluate(key => Object.keys(localStorage).filter(k => k.startsWith(key+'-recovery-')).map(k => localStorage.getItem(k)), key);
+  assert.deepEqual(backups, [broken]);
+  await page.locator('[data-view-mode="plan"]').click();
+  point = await planPoint(50, 50);
+  await page.mouse.click(point.x, point.y);
+  await change('#roomWInput', 640);
+  assert.equal((await saved()).floors[0].entities.length, 1);
+  assert.equal((await saved()).floors[0].entities[0].w, 640);
+  await page.context().close();
+  page = await open(broken);
+  await page.addInitScript(() => {
+    const set = Storage.prototype.setItem;
+    Storage.prototype.setItem = function(key, value) {
+      if (key.includes('-recovery-')) throw new DOMException('Full', 'QuotaExceededError');
+      return set.call(this, key, value);
+    };
+  });
+  await page.reload();
+  await page.locator('[data-view-mode="plan"]').click();
+  point = await planPoint(50, 50);
+  await page.mouse.click(point.x, point.y);
+  await change('#roomWInput', 640);
+  assert.equal(await page.evaluate(key => localStorage.getItem(key), key), broken);
+  assert.match(await page.locator('#saveStatus').textContent(), /自動保存停止/);
+  await page.context().close();
+  console.log('PASS: partial recovery, original download and quota-failure protection');
+
+  page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
+  assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  await page.locator('[data-view-mode="three"]').click();
+  assert.ok((await pixels()).colors > 20);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: `${output}/mobile.png`, fullPage: true });
+  assert.deepEqual(errors, []);
+  console.log('PASS: mobile canvas, layout and no browser errors');
+} catch (error) {
+  if (page && !page.isClosed()) await page.screenshot({ path: `${output}/failure.png`, fullPage: true }).catch(() => {});
+  throw error;
+} finally {
+  await browser?.close();
+  await server.close();
+}

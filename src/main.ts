@@ -3,6 +3,8 @@ import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
+import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
+import { readStoredPlan, type Recovery } from "./persistence";
 
 type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof";
@@ -46,7 +48,6 @@ type RoofKind = "gable" | "hip" | "flat";
 type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
 type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
-type Direction = "horizontal" | "vertical";
 type ViewMode = "split" | "plan" | "three";
 
 interface Point {
@@ -124,6 +125,7 @@ interface Roof {
   y: number;
   w: number;
   h: number;
+  floorId?: string;
   locked?: boolean;
 }
 
@@ -151,6 +153,16 @@ interface PointerState {
   currentWorld: Point;
   originEntity: Entity | null;
   resizeCorner: string | null;
+}
+
+interface ThreeDrag {
+  pointerId: number;
+  startScreen: Point;
+  startWorld: Point;
+  origin: Furniture;
+  planeY: number;
+  created: boolean;
+  moved: boolean;
 }
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -312,6 +324,7 @@ let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
 let showGhostFloor = loadGhostFloor();
+let storageRecovery: Recovery | null = null;
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -329,6 +342,9 @@ let drag: PointerState = {
   resizeCorner: null,
 };
 let threePointerDown: Point | null = null;
+let threeDrag: ThreeDrag | null = null;
+let threeSceneCenter: Point = { x: 0, y: 0 };
+let threeNeedsRender = true;
 let pendingCameraFrame = true;
 let roofVisible3d = true;
 const hiddenFloorIds = new Set<string>();
@@ -353,6 +369,7 @@ controls.screenSpacePanning = false;
 controls.minDistance = 4;
 controls.maxDistance = 48;
 controls.maxPolarAngle = Math.PI * 0.48;
+controls.addEventListener("change", () => { threeNeedsRender = true; });
 
 const planGroup = new THREE.Group();
 scene.add(planGroup);
@@ -424,6 +441,7 @@ function normalizeRoof(value: unknown): Roof | null {
     y,
     w: Math.max(GRID * 2, w),
     h: Math.max(GRID * 2, h),
+    floorId: typeof item.floorId === "string" ? item.floorId : undefined,
     locked: item.locked === true ? true : undefined,
   };
 }
@@ -438,20 +456,36 @@ function legacyRoofs(kind: unknown, floors: Floor[]): Roof[] {
   return [roof(kind, bounds.x - overhang, bounds.y - overhang, bounds.w + overhang * 2, bounds.h + overhang * 2)];
 }
 
-function normalizePlan(parsed: unknown): PlanState | null {
+function normalizePlan(parsed: unknown, recover = false): PlanState | null {
   const data = parsed as Partial<PlanState> & { entities?: Entity[]; roof?: unknown };
+  const normalizeEntities = (items: unknown[]): Entity[] => items.flatMap((item) => {
+    try {
+      return [normalizeEntity(item)];
+    } catch (error) {
+      if (!recover) throw error;
+      return [];
+    }
+  });
   if (data && Array.isArray(data.floors)) {
+    if (!recover && data.floors.some((floor) => !floor || !Array.isArray(floor.entities))) throw new Error("Invalid floor");
     const floors: Floor[] = data.floors
       .filter((floor): floor is Floor => Boolean(floor) && Array.isArray((floor as Floor).entities))
       .map((floor, index) => ({
         id: typeof floor.id === "string" ? floor.id : newId("floor"),
         name: `${index + 1}F`,
-        entities: floor.entities.map(normalizeEntity),
+        entities: normalizeEntities(floor.entities),
       }));
     if (floors.length === 0) return null;
     const roofs = Array.isArray(data.roofs)
-      ? data.roofs.map(normalizeRoof).filter((item): item is Roof => Boolean(item))
+      ? data.roofs.flatMap((item) => {
+        const normalized = normalizeRoof(item);
+        if (!normalized && !recover) throw new Error("Invalid roof");
+        return normalized ? [normalized] : [];
+      })
       : legacyRoofs(data.roof, floors);
+    roofs.forEach((item) => {
+      if (!floors.some((floor) => floor.id === item.floorId)) item.floorId = floors[floors.length - 1].id;
+    });
     return {
       floors,
       activeFloor: clamp(Math.round(Number(data.activeFloor ?? 0)) || 0, 0, floors.length - 1),
@@ -461,7 +495,7 @@ function normalizePlan(parsed: unknown): PlanState | null {
   }
   if (data && Array.isArray(data.entities)) {
     return {
-      floors: [{ id: newId("floor"), name: "1F", entities: data.entities.map(normalizeEntity) }],
+      floors: [{ id: newId("floor"), name: "1F", entities: normalizeEntities(data.entities) }],
       activeFloor: 0,
       selectedId: data.selectedId ?? null,
       roofs: [],
@@ -529,16 +563,9 @@ function loadInitialState(): PlanState {
     }
     return plan;
   }
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
-      const normalized = normalizePlan(JSON.parse(raw));
-      if (normalized) return normalized;
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }
-  return makeTemplate("starter");
+  const stored = readStoredPlan(localStorage, STORAGE_KEY, normalizePlan);
+  storageRecovery = stored.recovery;
+  return stored.plan ?? (storageRecovery ? emptyState() : makeTemplate("starter"));
 }
 
 function emptyState(): PlanState {
@@ -581,6 +608,7 @@ function loadLightLevel(): number {
 }
 
 function applyLightSettings(): void {
+  threeNeedsRender = true;
   const [x, y, z] = LIGHT_POSITIONS[lightDirection];
   sunLight.position.set(x, y, z);
   // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
@@ -728,11 +756,24 @@ function setupUi(): void {
     frameCamera(getGlobalBounds());
   });
   document.querySelector<HTMLButtonElement>("#resetButton")?.addEventListener("click", () => {
+    if ((state.roofs.length || state.floors.some((floor) => floor.entities.length)) && !window.confirm("現在の間取りを消去して新規作成します。実行しますか？")) return;
     replaceState(emptyState(), true);
   });
   document.querySelector<HTMLButtonElement>("#exportButton")?.addEventListener("click", exportPlan);
   document.querySelector<HTMLButtonElement>("#importButton")?.addEventListener("click", () => importInput.click());
   importInput.addEventListener("change", importPlan);
+  if (storageRecovery) {
+    const recovery = storageRecovery;
+    if (!recovery.backupSaved) saveStatus.textContent = "元データ保護中・自動保存停止";
+    requiredElement<HTMLElement>("#recoveryNotice").hidden = false;
+    requiredElement<HTMLElement>("#recoveryMessage").textContent = recovery.backupSaved
+      ? "保存データに読み込めない項目がありました。元データを退避し、読み込める内容を復旧しました。"
+      : "保存データを完全には読み込めません。元データを保護するため、自動保存を停止しています。編集中の内容は書き出してください。";
+    requiredElement<HTMLButtonElement>("#recoveryExportButton").addEventListener("click", () => downloadJson(recovery.raw, "madori-recovery.json"));
+    requiredElement<HTMLButtonElement>("#recoveryCloseButton").addEventListener("click", () => {
+      requiredElement<HTMLElement>("#recoveryNotice").hidden = true;
+    });
+  }
 
   planCanvas.addEventListener("pointerdown", handlePointerDown);
   planCanvas.addEventListener("pointermove", handlePointerMove);
@@ -741,8 +782,11 @@ function setupUi(): void {
   planCanvas.addEventListener("wheel", handleWheel, { passive: false });
   planCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
   planCanvas.addEventListener("dblclick", handleDoubleClick);
-  threeCanvas.addEventListener("pointerdown", handleThreePointerDown);
+  threeCanvas.addEventListener("pointerdown", handleThreePointerDown, { capture: true });
+  threeCanvas.addEventListener("pointermove", handleThreePointerMove);
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
+  threeCanvas.addEventListener("pointercancel", cancelThreeDrag);
+  threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
   window.addEventListener("keydown", handleKeyDown);
 
   appResizeObserver = new ResizeObserver(() => {
@@ -973,6 +1017,7 @@ function addRoof(kind: RoofKind): void {
     previousRoof?.w ?? defaultWidth,
     previousRoof?.h ?? defaultDepth,
   );
+  item.floorId = activeFloor().id;
   state.roofs.push(item);
   state.selectedId = item.id;
   roofVisible3d = true;
@@ -993,7 +1038,8 @@ function renderRoofList(): void {
     const select = document.createElement("button");
     select.type = "button";
     select.className = "roof-list-select";
-    select.textContent = `${index + 1}. ${ROOF_LABELS[item.kind]} ${formatMeters(item.w)} x ${formatMeters(item.h)}`;
+    const floorName = state.floors.find((floor) => floor.id === item.floorId)?.name ?? state.floors[state.floors.length - 1].name;
+    select.textContent = `${index + 1}. ${floorName} ${ROOF_LABELS[item.kind]} ${formatMeters(item.w)} x ${formatMeters(item.h)}`;
     select.addEventListener("click", () => {
       state.selectedId = item.id;
       activeTool = "select";
@@ -1044,10 +1090,12 @@ function addFloorAbove(): void {
 function removeActiveFloor(): void {
   if (state.floors.length <= 1) return;
   const floor = activeFloor();
-  if (!window.confirm(`${floor.name}（${floor.entities.length}個の要素）を削除します。実行しますか？`)) {
+  const attachedRoofs = state.roofs.filter((item) => item.floorId === floor.id);
+  if (!window.confirm(`${floor.name}（${floor.entities.length}個の要素・屋根${attachedRoofs.length}枚）を削除します。実行しますか？`)) {
     return;
   }
   hiddenFloorIds.delete(floor.id);
+  state.roofs = state.roofs.filter((item) => item.floorId !== floor.id);
   state.floors.splice(state.activeFloor, 1);
   state.floors.forEach((item, index) => {
     item.name = `${index + 1}F`;
@@ -1303,22 +1351,120 @@ function handleDoubleClick(event: MouseEvent): void {
 }
 
 function handleThreePointerDown(event: PointerEvent): void {
+  if (event.button !== 0 || threeDrag) {
+    threePointerDown = null;
+    return;
+  }
   threePointerDown = { x: event.clientX, y: event.clientY };
+  const id = pickThreeEntity(event);
+  const selected = id ? findEntity(id) : undefined;
+
+  if (activeTool === "erase") {
+    event.stopImmediatePropagation();
+    threePointerDown = null;
+    if (selected && !isLocked(selected)) {
+      removeEntityById(selected.id);
+      commitState();
+      redrawAll();
+    }
+    return;
+  }
+
+  let furnitureItem: Furniture;
+  let floorIndex = state.activeFloor;
+  const created = activeTool === "furniture";
+  if (created) {
+    if (hiddenFloorIds.has(activeFloor().id)) return;
+    const point = threeFloorPoint(event, floorIndex * FLOOR_SPACING + (floorIndex === 0 ? 0.08 : 0));
+    if (!point) return;
+    const base = FURNITURE_DEFS[activeFurniture];
+    furnitureItem = { id: newId("furniture"), type: "furniture", kind: activeFurniture, x: snap(point.x - base.w / 2), y: snap(point.y - base.h / 2), w: base.w, h: base.h, rotation: 0 };
+  } else if (activeTool === "select" && selected?.type === "furniture" && !isLocked(selected)) {
+    furnitureItem = selected;
+    floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === selected.id));
+  } else {
+    return;
+  }
+
+  const planeY = floorIndex * FLOOR_SPACING + (floorIndex === 0 ? 0.08 : 0);
+  const point = threeFloorPoint(event, planeY);
+  if (!point) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  controls.enabled = false;
+  threeCanvas.setPointerCapture(event.pointerId);
+  state.activeFloor = floorIndex;
+  if (created) activeEntities().push(furnitureItem);
+  state.selectedId = furnitureItem.id;
+  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, planeY, created, moved: false };
+  threeCanvas.style.cursor = "grabbing";
+  redrawAll();
 }
 
-function handleThreePointerUp(event: PointerEvent): void {
-  if (!threePointerDown) return;
-  const moved = Math.hypot(event.clientX - threePointerDown.x, event.clientY - threePointerDown.y);
-  threePointerDown = null;
-  if (moved > 6) return;
-
+function setThreeRay(event: PointerEvent): void {
   const rect = threeCanvas.getBoundingClientRect();
   pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  camera.updateMatrixWorld();
   raycaster.setFromCamera(pointerNdc, camera);
-  const hits = raycaster.intersectObjects(planGroup.children, true);
-  const entityId = hits.map((hit) => entityIdFromObject(hit.object)).find((id): id is string => Boolean(id)) ?? null;
+}
 
+function threeFloorPoint(event: PointerEvent, y: number): Point | null {
+  setThreeRay(event);
+  const point = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), new THREE.Vector3());
+  return point ? { x: point.x / SCALE_3D + threeSceneCenter.x, y: point.z / SCALE_3D + threeSceneCenter.y } : null;
+}
+
+function pickThreeEntity(event: PointerEvent): string | null {
+  setThreeRay(event);
+  planGroup.updateMatrixWorld(true);
+  const hits = raycaster.intersectObjects(planGroup.children, true);
+  return hits.map((hit) => entityIdFromObject(hit.object)).find((id): id is string => Boolean(id)) ?? null;
+}
+
+function handleThreePointerMove(event: PointerEvent): void {
+  if (!threeDrag || event.pointerId !== threeDrag.pointerId) return;
+  if (!threeDrag.moved && Math.hypot(event.clientX - threeDrag.startScreen.x, event.clientY - threeDrag.startScreen.y) < 3) return;
+  threeDrag.moved = true;
+  const point = threeFloorPoint(event, threeDrag.planeY);
+  const entity = findEntity(threeDrag.origin.id);
+  if (!point || !entity) return;
+  moveEntity(entity, threeDrag.origin, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
+  redrawAll();
+}
+
+function finishThreeDrag(cancel = false): void {
+  if (!threeDrag) return;
+  const gesture = threeDrag;
+  threeDrag = null;
+  threePointerDown = null;
+  const current = findEntity(gesture.origin.id);
+  if (cancel) {
+    if (gesture.created) removeEntityById(gesture.origin.id);
+    else if (current) Object.assign(current, gesture.origin);
+  } else if (current && (gesture.created || JSON.stringify(current) !== JSON.stringify(gesture.origin))) {
+    commitState();
+  }
+  controls.enabled = true;
+  if (threeCanvas.hasPointerCapture(gesture.pointerId)) threeCanvas.releasePointerCapture(gesture.pointerId);
+  threeCanvas.style.cursor = "grab";
+  redrawAll();
+}
+
+function cancelThreeDrag(): void {
+  finishThreeDrag(true);
+}
+
+function handleThreePointerUp(event: PointerEvent): void {
+  if (threeDrag) {
+    if (event.pointerId === threeDrag.pointerId) finishThreeDrag();
+    return;
+  }
+  if (!threePointerDown || event.button !== 0) return;
+  const moved = Math.hypot(event.clientX - threePointerDown.x, event.clientY - threePointerDown.y);
+  threePointerDown = null;
+  if (moved > 6 || activeTool === "furniture") return;
+  const entityId = pickThreeEntity(event);
   state.selectedId = entityId;
   if (entityId) {
     const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === entityId));
@@ -1348,6 +1494,12 @@ function handleWheel(event: WheelEvent): void {
 function handleKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT" || target?.tagName === "TEXTAREA" || Boolean(target?.isContentEditable);
+  if (isEditing) return;
+  if (event.key === "Escape" && threeDrag) {
+    cancelThreeDrag();
+    return;
+  }
+  if (threeDrag && (event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) cancelThreeDrag();
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
     event.preventDefault();
     event.shiftKey ? redo() : undo();
@@ -1564,10 +1716,10 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
     entity.y = snap(origin.y + moveY);
   }
   if (isLinear(origin) && isLinear(entity)) {
-    entity.x1 = snap(origin.x1 + moveX);
-    entity.y1 = snap(origin.y1 + moveY);
-    entity.x2 = snap(origin.x2 + moveX);
-    entity.y2 = snap(origin.y2 + moveY);
+    entity.x1 = origin.x1 + moveX;
+    entity.y1 = origin.y1 + moveY;
+    entity.x2 = origin.x2 + moveX;
+    entity.y2 = origin.y2 + moveY;
   }
 }
 
@@ -2490,9 +2642,14 @@ function drawLockedIndicator(entity: Entity): void {
 // ---- 3D ----
 
 function rebuildThree(): void {
+  threeNeedsRender = true;
   disposeGroup(planGroup);
   const bounds = getGlobalBounds();
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
+  const shift = new THREE.Vector3((threeSceneCenter.x - center.x) * SCALE_3D, 0, (threeSceneCenter.y - center.y) * SCALE_3D);
+  camera.position.add(shift);
+  controls.target.add(shift);
+  threeSceneCenter = center;
 
   let topVisibleIndex = -1;
   for (let i = state.floors.length - 1; i >= 0; i -= 1) {
@@ -2507,7 +2664,8 @@ function rebuildThree(): void {
     const yBase = index * FLOOR_SPACING;
     // 笠木（壁上端のキャップ）は最上階のみ。途中階は上階の壁と面一に continuous させる
     const withCap = index === topVisibleIndex;
-    floor.entities.filter(isRoom).forEach((roomItem) => addRoom3d(roomItem, center, yBase, index));
+    const rooms = floor.entities.filter(isRoom);
+    rooms.forEach((roomItem, roomIndex) => addRoom3d(roomItem, center, yBase, index, rooms.slice(roomIndex + 1)));
     floor.entities
       .filter((entity): entity is LinearElement => entity.type === "wall")
       .forEach((wallItem) => addWall3d(wallItem, floor.entities, center, yBase, withCap));
@@ -2534,43 +2692,30 @@ function rebuildThree(): void {
   updateUi();
 }
 
-function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number): void {
-  // 上階のスラブは壁の内側に収める（外面は下へ延長した壁が覆うので、共面によるちらつきを避ける）
-  const slabInset = floorIndex === 0 ? 0 : WALL_THICKNESS_2D * SCALE_3D;
-  const width = Math.max(roomItem.w * SCALE_3D - slabInset, 0.1);
-  const depth = Math.max(roomItem.h * SCALE_3D - slabInset, 0.1);
+function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number, laterRooms: Room[]): void {
+  const slabInset = floorIndex === 0 ? 0 : WALL_THICKNESS_2D;
+  const footprint = (item: Room): Rectangle => ({ x: item.x + slabInset / 2, y: item.y + slabInset / 2, w: Math.max(item.w - slabInset, 10), h: Math.max(item.h - slabInset, 10) });
   const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
-  const geometry = new THREE.BoxGeometry(width, thickness, depth);
-  const mesh = new THREE.Mesh(geometry, [slabMaterial, slabMaterial, roomMaterial(roomItem, width, depth), slabMaterial, slabMaterial, slabMaterial]);
-  const pos = to3d(roomItem.x + roomItem.w / 2, roomItem.y + roomItem.h / 2, center);
-  const y = floorIndex === 0 ? thickness / 2 : yBase - thickness / 2;
-  mesh.position.set(pos.x, y, pos.z);
-  mesh.receiveShadow = true;
-  mesh.castShadow = floorIndex > 0;
-  markSelectable(mesh, roomItem.id);
-  planGroup.add(mesh);
-
-  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), edgeMaterial);
-  edge.position.copy(mesh.position);
-  planGroup.add(edge);
-  addSelectionBox(mesh, roomItem.id);
+  const group = new THREE.Group();
+  for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
+    const geometry = new THREE.BoxGeometry(rect.w * SCALE_3D, thickness, rect.h * SCALE_3D);
+    const mesh = new THREE.Mesh(geometry, [slabMaterial, slabMaterial, roomMaterial(roomItem, rect), slabMaterial, slabMaterial, slabMaterial]);
+    const pos = to3d(rect.x + rect.w / 2, rect.y + rect.h / 2, center);
+    mesh.position.set(pos.x, floorIndex === 0 ? thickness / 2 : yBase - thickness / 2, pos.z);
+    mesh.receiveShadow = true;
+    mesh.castShadow = floorIndex > 0;
+    group.add(mesh);
+  }
+  if (!group.children.length) return;
+  markSelectable(group, roomItem.id);
+  planGroup.add(group);
+  addSelectionBox(group, roomItem.id);
 }
 
 function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number, withCap = true): void {
-  getVisibleWallSegments(wallItem, entities).forEach((segment) => addStraightWall3d(segment, center, yBase, wallItem.id, true, 0, WALL_HEIGHT, withCap));
-
-  // ドア・窓と重なった区間は、開口の高さ分だけを切り抜き、残り（ドア上・窓上下）を壁として埋める
-  const direction = lineDirection(wallItem);
-  const wallFrom = direction === "horizontal" ? Math.min(wallItem.x1, wallItem.x2) : Math.min(wallItem.y1, wallItem.y2);
-  const wallTo = direction === "horizontal" ? Math.max(wallItem.x1, wallItem.x2) : Math.max(wallItem.y1, wallItem.y2);
-  getWallOpenings(wallItem, wallFrom, wallTo, entities).forEach((opening) => {
-    const segment = intervalToWallSegment(wallItem, opening);
-    if (opening.kind === "door") {
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, DOOR_HEAD_Y, WALL_HEIGHT, withCap);
-    } else {
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, 0, WINDOW_SILL_Y, withCap);
-      addStraightWall3d(segment, center, yBase, wallItem.id, false, WINDOW_HEAD_Y, WALL_HEIGHT, withCap);
-    }
+  wallSections(wallItem, entities).forEach((section) => {
+    const segment = segmentInterval(wallItem, section.from, section.to);
+    addStraightWall3d(segment, center, yBase, wallItem.id, true, section.bottom, section.top, withCap);
   });
 }
 
@@ -3288,14 +3433,8 @@ function buildRoofGeometry(width: number, depth: number, height: number, ridgeIn
 
 function addRoof3d(roofItem: Roof, center: Point): void {
   if (!roofVisible3d) return;
-  let topIndex = -1;
-  for (let i = state.floors.length - 1; i >= 0; i -= 1) {
-    if (!hiddenFloorIds.has(state.floors[i].id)) {
-      topIndex = i;
-      break;
-    }
-  }
-  if (topIndex < 0) return;
+  const topIndex = roofItem.floorId ? state.floors.findIndex((floor) => floor.id === roofItem.floorId) : state.floors.length - 1;
+  if (topIndex < 0 || hiddenFloorIds.has(state.floors[topIndex].id)) return;
   const width = roofItem.w * SCALE_3D;
   const depth = roofItem.h * SCALE_3D;
   const pos = to3d(roofItem.x + roofItem.w / 2, roofItem.y + roofItem.h / 2, center);
@@ -3403,11 +3542,14 @@ function render3dOnce(): void {
   camera.updateProjectionMatrix();
   controls.update();
   renderer.render(scene, camera);
+  threeNeedsRender = false;
 }
 
 function animate3d(): void {
   requestAnimationFrame(animate3d);
-  render3dOnce();
+  if (viewMode === "plan" || document.hidden) return;
+  controls.update();
+  if (threeNeedsRender) render3dOnce();
 }
 
 function redrawAll(rebuild = true): void {
@@ -3451,6 +3593,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <p class="empty-state">屋根 ${roofIndex + 1}</p>
+        <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${floor.name}</option>`).join("")}</select></label>
         <label>種類
           <select id="roofKindInput" ${placementDisabled}>
             <option value="gable" ${selected.kind === "gable" ? "selected" : ""}>切妻</option>
@@ -3471,6 +3614,9 @@ function updatePropertiesPanel(): void {
       </div>
     `;
     bindEntityLock(selected);
+    bindSelect("#roofFloorInput", (value) => {
+      if (state.floors.some((floor) => floor.id === value)) selected.floorId = value;
+    });
     bindSelect("#roofKindInput", (value) => (selected.kind = value as RoofKind));
     bindNumber("#roofWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
     bindNumber("#roofHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
@@ -3819,18 +3965,31 @@ function redo(): void {
 function persistState(): void {
   saveStatus.textContent = "保存中...";
   if (saveTimer) window.clearTimeout(saveTimer);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (storageRecovery && !storageRecovery.backupSaved) {
+    saveStatus.textContent = "元データ保護中・自動保存停止";
+    return;
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    saveStatus.textContent = "自動保存失敗・書き出してください";
+    return;
+  }
   saveTimer = window.setTimeout(() => {
     saveStatus.textContent = "保存済み";
   }, 320);
 }
 
 function exportPlan(): void {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  downloadJson(JSON.stringify(state, null, 2), `madori-${new Date().toISOString().slice(0, 10)}.json`);
+}
+
+function downloadJson(json: string, filename: string): void {
+  const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `madori-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -4085,6 +4244,12 @@ function samplePlanData(): unknown {
 }
 
 function makeTemplate(key: string): PlanState {
+  const plan = buildTemplate(key);
+  plan.roofs.forEach((item) => { item.floorId ??= plan.floors[plan.floors.length - 1].id; });
+  return plan;
+}
+
+function buildTemplate(key: string): PlanState {
   if (key === "sample") {
     const plan = normalizePlan(samplePlanData());
     if (plan) {
@@ -4383,10 +4548,6 @@ function isLocked(entity: Entity): boolean {
   return entity.locked === true;
 }
 
-function lineDirection(entity: LinearElement): Direction {
-  return Math.abs(entity.x2 - entity.x1) >= Math.abs(entity.y2 - entity.y1) ? "horizontal" : "vertical";
-}
-
 function lineAngle(entity: LinearElement): number {
   return Math.atan2(entity.y2 - entity.y1, entity.x2 - entity.x1);
 }
@@ -4402,78 +4563,15 @@ function distance(entity: LinearElement): number {
   return Math.hypot(entity.x2 - entity.x1, entity.y2 - entity.y1);
 }
 
-interface WallOpening {
-  from: number;
-  to: number;
-  kind?: "door" | "window";
-}
-
 function getVisibleWallSegments(wallItem: LinearElement, entities: Entity[]): LinearElement[] {
-  const direction = lineDirection(wallItem);
-  const wallFrom = direction === "horizontal" ? Math.min(wallItem.x1, wallItem.x2) : Math.min(wallItem.y1, wallItem.y2);
-  const wallTo = direction === "horizontal" ? Math.max(wallItem.x1, wallItem.x2) : Math.max(wallItem.y1, wallItem.y2);
-  const openings = getWallOpenings(wallItem, wallFrom, wallTo, entities);
-  if (openings.length === 0) return [wallItem];
-
-  const merged = mergeOpenings(openings);
-  const intervals: WallOpening[] = [];
-  let cursor = wallFrom;
-  merged.forEach((opening) => {
-    if (opening.from - cursor > 2) {
-      intervals.push({ from: cursor, to: opening.from });
-    }
-    cursor = Math.max(cursor, opening.to);
-  });
-  if (wallTo - cursor > 2) {
-    intervals.push({ from: cursor, to: wallTo });
-  }
-
-  return intervals.map((interval) => intervalToWallSegment(wallItem, interval));
+  return wallSections(wallItem, entities)
+    .filter((section) => section.bottom === 0 && section.top === WALL_HEIGHT)
+    .map((section) => segmentInterval(wallItem, section.from, section.to));
 }
 
-function getWallOpenings(wallItem: LinearElement, wallFrom: number, wallTo: number, entities: Entity[]): WallOpening[] {
-  const direction = lineDirection(wallItem);
-  const wallLinePosition = direction === "horizontal" ? (wallItem.y1 + wallItem.y2) / 2 : (wallItem.x1 + wallItem.x2) / 2;
-  const tolerance = WALL_THICKNESS_2D * 1.4;
-  // 壁線は端が半分張り出す（lineCap: square）ため、張り出しと同量だけ余分に切ると面一になる
-  const clearance = WALL_THICKNESS_2D * 0.5;
-
-  return entities
-    .filter((entity): entity is LinearElement => entity.type === "door" || entity.type === "window")
-    .filter((opening) => lineDirection(opening) === direction)
-    .map((opening): WallOpening | null => {
-      const openingLinePosition = direction === "horizontal" ? (opening.y1 + opening.y2) / 2 : (opening.x1 + opening.x2) / 2;
-      if (Math.abs(openingLinePosition - wallLinePosition) > tolerance) return null;
-      const openingFrom = direction === "horizontal" ? Math.min(opening.x1, opening.x2) : Math.min(opening.y1, opening.y2);
-      const openingTo = direction === "horizontal" ? Math.max(opening.x1, opening.x2) : Math.max(opening.y1, opening.y2);
-      const from = clamp(openingFrom - clearance, wallFrom, wallTo);
-      const to = clamp(openingTo + clearance, wallFrom, wallTo);
-      return to > from ? { from, to, kind: opening.type as "door" | "window" } : null;
-    })
-    .filter((opening): opening is WallOpening => Boolean(opening));
-}
-
-function mergeOpenings(openings: WallOpening[]): WallOpening[] {
-  const sorted = [...openings].sort((a, b) => a.from - b.from);
-  const merged: WallOpening[] = [];
-  sorted.forEach((opening) => {
-    const previous = merged[merged.length - 1];
-    if (!previous || opening.from > previous.to) {
-      merged.push({ ...opening });
-      return;
-    }
-    previous.to = Math.max(previous.to, opening.to);
-  });
-  return merged;
-}
-
-function intervalToWallSegment(wallItem: LinearElement, interval: WallOpening): LinearElement {
-  if (lineDirection(wallItem) === "horizontal") {
-    const y = (wallItem.y1 + wallItem.y2) / 2;
-    return { ...wallItem, x1: interval.from, y1: y, x2: interval.to, y2: y };
-  }
-  const x = (wallItem.x1 + wallItem.x2) / 2;
-  return { ...wallItem, x1: x, y1: interval.from, x2: x, y2: interval.to };
+function wallSections(wallItem: LinearElement, entities: Entity[]) {
+  const openings = entities.filter((entity): entity is LinearElement & { type: "door" | "window" } => entity.type === "door" || entity.type === "window");
+  return solidWallSections(distance(wallItem), openingIntervals(wallItem, openings, WALL_THICKNESS_2D), WALL_HEIGHT, DOOR_HEAD_Y, WINDOW_SILL_Y, WINDOW_HEAD_Y);
 }
 
 interface Bounds {
@@ -4518,14 +4616,15 @@ function getGlobalBounds(): Bounds | null {
   return getEntitiesBounds(all);
 }
 
-function roomMaterial(roomItem: Room, width: number, depth: number): THREE.MeshStandardMaterial {
+function roomMaterial(roomItem: Room, rect: Rectangle): THREE.MeshStandardMaterial {
   const surface = roomItem.surface ?? "plain";
   const color = roomItem.color3d ?? roomItem.color;
   if (surface === "plain") return new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
   const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
   map.colorSpace = THREE.SRGBColorSpace;
   map.wrapS = map.wrapT = THREE.RepeatWrapping;
-  map.repeat.set(width / (SURFACE_TILE_CM * SCALE_3D), depth / (SURFACE_TILE_CM * SCALE_3D));
+  map.repeat.set(rect.w / SURFACE_TILE_CM, rect.h / SURFACE_TILE_CM);
+  map.offset.set((rect.x - roomItem.x) / SURFACE_TILE_CM, (roomItem.y + roomItem.h - rect.y - rect.h) / SURFACE_TILE_CM);
   map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   return new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness });
 }
