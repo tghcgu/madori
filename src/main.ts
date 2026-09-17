@@ -5,44 +5,12 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
+import { FURNITURE_DEFS, type FurnitureKind } from "./furniture-catalog";
+import { buildFurnitureModel } from "./furniture-models";
+import { buildOpeningModel } from "./opening-models";
 
 type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof";
-type FurnitureKind =
-  | "sofa"
-  | "sofaCorner"
-  | "sideTable"
-  | "roundTable"
-  | "stool"
-  | "rug"
-  | "floorLamp"
-  | "piano"
-  | "bench"
-  | "armchair"
-  | "table"
-  | "tv"
-  | "plant"
-  | "wallClock"
-  | "grandfatherClock"
-  | "aquarium"
-  | "diningTable"
-  | "chair"
-  | "kitchen"
-  | "fridge"
-  | "bed"
-  | "bedDouble"
-  | "desk"
-  | "shelf"
-  | "bath"
-  | "toilet"
-  | "washbasin"
-  | "washer"
-  | "closet"
-  | "wardrobe"
-  | "stairs"
-  | "stairsU"
-  | "stairsSpiral"
-  | "car";
 type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
 type LegacyRoofKind = RoofKind | "none";
@@ -230,49 +198,6 @@ function isMobileOrTabletDevice(): boolean {
 const INK = "#000000";
 const INK_SOFT = "#5b6470";
 
-interface FurnitureDef {
-  label: string;
-  w: number;
-  h: number;
-}
-
-const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
-  sofaCorner: { label: "L字ソファ", w: 240, h: 160 },
-  sideTable: { label: "サイドテーブル", w: 50, h: 50 },
-  roundTable: { label: "丸テーブル", w: 100, h: 100 },
-  stool: { label: "スツール", w: 40, h: 40 },
-  rug: { label: "ラグ", w: 200, h: 140 },
-  floorLamp: { label: "フロアライト", w: 45, h: 45 },
-  piano: { label: "ピアノ", w: 150, h: 60 },
-  bench: { label: "ベンチ", w: 150, h: 55 },
-  sofa: { label: "ソファ", w: 170, h: 80 },
-  armchair: { label: "1人掛け", w: 80, h: 80 },
-  table: { label: "ローテーブル", w: 100, h: 50 },
-  tv: { label: "テレビ台", w: 120, h: 40 },
-  plant: { label: "観葉植物", w: 40, h: 40 },
-  wallClock: { label: "壁掛け時計", w: 50, h: 20 },
-  grandfatherClock: { label: "ホールクロック", w: 60, h: 40 },
-  aquarium: { label: "水槽", w: 120, h: 45 },
-  diningTable: { label: "ダイニングセット", w: 160, h: 160 },
-  chair: { label: "椅子", w: 45, h: 45 },
-  kitchen: { label: "キッチン", w: 240, h: 65 },
-  fridge: { label: "冷蔵庫", w: 65, h: 65 },
-  bed: { label: "シングルベッド", w: 100, h: 200 },
-  bedDouble: { label: "ダブルベッド", w: 140, h: 200 },
-  desk: { label: "机", w: 120, h: 60 },
-  shelf: { label: "棚・本棚", w: 90, h: 30 },
-  bath: { label: "浴槽", w: 160, h: 75 },
-  toilet: { label: "トイレ", w: 45, h: 75 },
-  washbasin: { label: "洗面台", w: 75, h: 55 },
-  washer: { label: "洗濯機", w: 65, h: 65 },
-  closet: { label: "クローゼット", w: 160, h: 60 },
-  wardrobe: { label: "タンス", w: 120, h: 45 },
-  stairs: { label: "直階段", w: 100, h: 280 },
-  stairsU: { label: "折返し階段", w: 180, h: 180 },
-  stairsSpiral: { label: "らせん階段", w: 140, h: 140 },
-  car: { label: "車", w: 180, h: 460 },
-};
-
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "リビング", kinds: ["sofa", "sofaCorner", "armchair", "table", "sideTable", "tv", "plant", "rug", "floorLamp"] },
   { label: "時計・装飾", kinds: ["wallClock", "grandfatherClock", "aquarium", "piano"] },
@@ -303,16 +228,6 @@ const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
   nw: [-10, 12, -10],
   top: [0.6, 18, 0.6],
 };
-
-// 3D palette
-const COLOR_WOOD = 0xb59a76;
-const COLOR_WOOD_DARK = 0x8a6f52;
-const COLOR_FABRIC = 0x8ea0b5;
-const COLOR_WHITE = 0xf3f4f2;
-const COLOR_STEEL = 0xd7dbde;
-const COLOR_GREEN = 0x6f9e63;
-const COLOR_CERAMIC = 0xf0f4f5;
-const COLOR_DARK = 0x2c3238;
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
@@ -391,22 +306,11 @@ scene.add(sunLight);
 const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
 const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78 });
 const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8 });
-const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x99683d, roughness: 0.72 });
-const doorFrameMaterial = new THREE.MeshStandardMaterial({ color: 0xd8d2c8, roughness: 0.74 });
-const windowFrameMaterial = new THREE.MeshStandardMaterial({ color: 0xdfe5ea, roughness: 0.52, metalness: 0.08 });
-const windowMaterial = new THREE.MeshStandardMaterial({
-  color: 0x78b8d8,
-  transparent: true,
-  opacity: 0.42,
-  roughness: 0.18,
-  metalness: 0.05,
-});
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x405064, transparent: true, opacity: 0.55 });
 const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d6773, roughness: 0.86, side: THREE.DoubleSide });
 const slabMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.85 });
 const sharedMaterials = new Set<THREE.Material>([
-  wallMaterial, wallCapMaterial, doorMaterial, doorFrameMaterial, windowFrameMaterial,
-  windowMaterial, edgeMaterial, roofMaterial, slabMaterial,
+  wallMaterial, wallCapMaterial, edgeMaterial, roofMaterial, slabMaterial,
 ]);
 
 createIcons({ icons });
@@ -2115,7 +2019,7 @@ function drawLineElement(entity: LinearElement, color: string, width: number): v
   ctx.restore();
 }
 
-// ---- 2D furniture symbols (CAD-style monochrome line art) ----
+// ---- 2D furniture symbols ----
 
 function strokeLine(x1: number, y1: number, x2: number, y2: number): void {
   ctx.beginPath();
@@ -2167,6 +2071,9 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   ctx.strokeStyle = furnitureItem.color ?? INK;
   ctx.fillStyle = "#ffffff";
   ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (["sofa", "sofaCorner", "armchair", "stool", "bed", "bedDouble"].includes(furnitureItem.kind)) ctx.fillStyle = "#edf3f2";
+  if (["table", "sideTable", "roundTable", "desk", "bench", "shelf", "closet", "wardrobe"].includes(furnitureItem.kind)) ctx.fillStyle = "#f7f5f0";
   drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h);
   if (selected) {
     ctx.strokeStyle = "#2775d1";
@@ -2196,11 +2103,14 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeLine(w * 0.4, -h * 0.36, w * 0.4, hh);
       strokeLine(-w * 0.18, -h * 0.36, -w * 0.18, 0);
       strokeLine(w * 0.12, -h * 0.36, w * 0.12, 0);
+      strokeRoundedRect(w * 0.15, h * 0.04, w * 0.22, h * 0.41, 4);
+      strokeRoundedRect(-w * 0.41, -h * 0.28, w * 0.16, h * 0.19, 4);
       break;
     }
     case "sideTable": {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
       strokeRoundedRect(-w * 0.4, -h * 0.4, w * 0.8, h * 0.8, 2);
+      for (const x of [-1, 1]) for (const y of [-1, 1]) strokeCircle(x * w * 0.36, y * h * 0.36, Math.min(w, h) * 0.025);
       break;
     }
     case "roundTable":
@@ -2208,6 +2118,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     case "floorLamp": {
       strokeEllipse(0, 0, hw, hh, true);
       if (kind === "stool") strokeEllipse(0, 0, w * 0.4, h * 0.4);
+      if (kind === "roundTable") strokeEllipse(0, 0, w * 0.46, h * 0.46);
       if (kind === "floorLamp") {
         strokeEllipse(0, 0, w * 0.22, h * 0.22);
         strokeLine(-w * 0.15, -h * 0.15, w * 0.15, h * 0.15);
@@ -2216,17 +2127,22 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "rug": {
-      ctx.fillStyle = "#e1dbd4";
+      ctx.fillStyle = "#e3ecea";
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
       strokeRoundedRect(-w * 0.44, -h * 0.42, w * 0.88, h * 0.84, 1);
+      for (const side of [-1, 1]) for (let i = 0; i < 18; i += 1) strokeLine(-w * 0.44 + i * w * 0.88 / 17, side * h * 0.46, -w * 0.44 + i * w * 0.88 / 17, side * h * 0.5);
       break;
     }
     case "piano": {
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
       strokeLine(-hw, h * 0.15, hw, h * 0.15);
-      for (let i = 0; i <= 21; i += 1) {
-        const x = -w * 0.45 + i * w * 0.9 / 21;
+      for (let i = 0; i <= 35; i += 1) {
+        const x = -w * 0.435 + i * w * 0.87 / 35;
         strokeLine(x, h * 0.15, x, hh);
+        if (i < 35 && ![2, 6].includes(i % 7)) {
+          ctx.fillStyle = String(ctx.strokeStyle);
+          ctx.fillRect(x + w * 0.87 / 35 * 0.72, h * 0.15, w * 0.87 / 35 * 0.56, h * 0.19);
+        }
       }
       break;
     }
@@ -2235,6 +2151,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       for (let i = 1; i < 5; i += 1) strokeLine(-hw, -hh + h * i / 5, hw, -hh + h * i / 5);
       strokeLine(-w * 0.4, -hh, -w * 0.4, hh);
       strokeLine(w * 0.4, -hh, w * 0.4, hh);
+      strokeRoundedRect(-w * 0.47, -h * 0.46, w * 0.94, h * 0.12, 2);
       break;
     }
     case "sofa":
@@ -2244,30 +2161,39 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeRoundedRect(-hw, -hh, w, t, 5);
       strokeRoundedRect(-hw, -hh, t, h, 5);
       strokeRoundedRect(hw - t, -hh, t, h, 5);
-      if (kind === "sofa" && w >= 120) {
-        strokeLine(0, -hh + t, 0, hh);
+      const count = kind === "armchair" ? 1 : Math.max(2, Math.min(4, Math.round(w / 65)));
+      const usable = w - t * 2;
+      for (let i = 0; i < count; i += 1) {
+        strokeRoundedRect(-hw + t + i * usable / count + usable * 0.01, -hh + t + h * 0.035, usable / count - usable * 0.02, h - t - h * 0.07, Math.min(w, h) * 0.05);
       }
       break;
     }
     case "table": {
       strokeRoundedRect(-hw, -hh, w, h, 6, true);
+      strokeRoundedRect(-w * 0.46, -h * 0.44, w * 0.92, h * 0.88, 4);
       break;
     }
     case "tv": {
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
       strokeRoundedRect(-w * 0.42, -hh + 3, w * 0.84, Math.max(5, h * 0.18), 2);
+      for (const sign of [-1, 1]) strokeLine(sign * w * 0.26, -h * 0.29, sign * w * 0.31, h * 0.14);
+      strokeLine(-w * 0.17, h * 0.4, -w * 0.17, hh);
+      strokeLine(w * 0.17, h * 0.4, w * 0.17, hh);
       break;
     }
     case "plant": {
-      const r = Math.min(hw, hh);
-      strokeCircle(0, 0, r, true);
+      ctx.fillStyle = "#e8f1e7";
+      strokeEllipse(0, 0, w * 0.22, h * 0.22, true);
       for (let i = 0; i < 8; i += 1) {
         ctx.save();
+        ctx.scale(w / Math.max(w, h), h / Math.max(w, h));
         ctx.rotate((i / 8) * Math.PI * 2);
-        strokeEllipse(r * 0.42, 0, r * 0.48, r * 0.15);
+        const r = Math.max(w, h) * 0.5;
+        strokeEllipse(r * 0.5, 0, r * 0.44, r * 0.14, true);
+        strokeLine(r * 0.06, 0, r * 0.9, 0);
         ctx.restore();
       }
-      strokeCircle(0, 0, r * 0.18);
+      strokeEllipse(0, 0, w * 0.065, h * 0.065);
       break;
     }
     case "wallClock": {
@@ -2276,6 +2202,10 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeCircle(0, 0, r);
       strokeLine(0, 0, 0, -r * 0.55);
       strokeLine(0, 0, r * 0.45, r * 0.2);
+      for (let i = 0; i < 4; i += 1) {
+        const a = i * Math.PI / 2;
+        strokeLine(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8, Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95);
+      }
       break;
     }
     case "grandfatherClock": {
@@ -2285,9 +2215,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeLine(0, -hh * 0.24, 0, -hh * 0.24 - r * 0.55);
       strokeLine(0, -hh * 0.24, r * 0.45, -hh * 0.12);
       strokeCircle(0, hh * 0.35, r * 0.28);
+      strokeLine(0, h * 0.05, 0, h * 0.27);
       break;
     }
     case "aquarium": {
+      ctx.fillStyle = "#e8f4f7";
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
       strokeRoundedRect(-hw + 5, -hh + 5, w - 10, h - 10, 2);
       ctx.beginPath();
@@ -2318,6 +2250,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     case "chair": {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
       strokeLine(-hw + 3, -hh + 4, hw - 3, -hh + 4);
+      strokeRoundedRect(-w * 0.37, -h * 0.28, w * 0.74, h * 0.66, 4);
       const legRadius = Math.max(1.8, Math.min(w, h) * 0.055);
       [
         [-hw + legRadius * 1.8, -hh + legRadius * 1.8],
@@ -2336,17 +2269,22 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeCircle(bx, -h * 0.2, br);
       strokeCircle(bx, h * 0.2, br);
       strokeCircle(bx - w * 0.14, 0, br * 0.8);
+      strokeRoundedRect(w * 0.06, -h * 0.39, w * 0.39, h * 0.78, 2);
+      const doors = Math.max(2, Math.min(8, Math.round(w / 60)));
+      for (let i = 1; i < doors; i += 1) strokeLine(-hw + i * w / doors, hh - h * 0.09, -hw + i * w / doors, hh);
       break;
     }
     case "fridge": {
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
       strokeLine(-hw + 3, hh - h * 0.18, hw - 3, hh - h * 0.18);
       strokeLine(-hw + w * 0.16, hh - h * 0.09, -hw + w * 0.38, hh - h * 0.09);
+      strokeRoundedRect(-w * 0.45, -h * 0.45, w * 0.9, h * 0.74, 2);
       break;
     }
     case "bed":
     case "bedDouble": {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
+      strokeRoundedRect(-w * 0.45, -h * 0.48, w * 0.9, h * 0.035, 2);
       if (kind === "bed") {
         strokeRoundedRect(-w * 0.28, -hh + h * 0.04, w * 0.56, h * 0.1, 4);
       } else {
@@ -2355,25 +2293,27 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       }
       strokeLine(-hw, -hh + h * 0.24, hw, -hh + h * 0.24);
       strokeLine(hw - w * 0.3, -hh + h * 0.24, hw, -hh + h * 0.24 + h * 0.12);
+      strokeLine(-w * 0.47, h * 0.38, w * 0.47, h * 0.38);
       break;
     }
     case "desk": {
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      const cs = Math.min(w, h) * 0.5;
-      drawMiniChair(0, hh - cs * 0.58, cs, 1);
+      strokeRoundedRect(w * 0.15, -h * 0.38, w * 0.28, h * 0.76, 2);
+      strokeLine(w * 0.23, h * 0.32, w * 0.35, h * 0.32);
+      strokeCircle(-w * 0.3, -h * 0.32, Math.min(w, h) * 0.025);
       break;
     }
     case "shelf": {
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
-      for (let x = -hw + 30; x < hw - 2; x += 30) {
-        strokeLine(x, -hh, x, hh);
-      }
+      strokeRoundedRect(-w * 0.43, -h * 0.38, w * 0.86, h * 0.8, 1);
+      for (let i = 0; i < 6; i += 1) strokeRoundedRect(-w * 0.38 + i * w * 0.09, -h * 0.29, w * 0.07, h * 0.61, 1);
       break;
     }
     case "bath": {
-      strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(-hw + 7, -hh + 7, w - 14, h - 14, Math.min(w, h) * 0.28);
+      strokeEllipse(0, 0, hw, hh, true);
+      strokeEllipse(0, 0, w * 0.42, h * 0.39);
       strokeCircle(-hw + w * 0.18, 0, 3);
+      strokeLine(-w * 0.3, -h * 0.3, -w * 0.3, -h * 0.12);
       break;
     }
     case "toilet": {
@@ -2381,12 +2321,15 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       ctx.fillStyle = "#ffffff";
       strokeEllipse(0, h * 0.14, w * 0.42, h * 0.32, true);
       strokeEllipse(0, h * 0.14, w * 0.27, h * 0.21);
+      strokeCircle(w * 0.15, -h * 0.37, Math.min(w, h) * 0.045);
       break;
     }
     case "washbasin": {
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
       strokeEllipse(0, h * 0.06, w * 0.3, h * 0.28);
       strokeRoundedRect(-w * 0.07, -hh + 2, w * 0.14, 5, 2);
+      strokeCircle(0, h * 0.06, Math.min(w, h) * 0.025);
+      strokeLine(0, h * 0.4, 0, hh);
       break;
     }
     case "washer": {
@@ -2395,6 +2338,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeCircle(0, 1, r * 0.6);
       strokeCircle(0, 1, r * 0.3);
       strokeCircle(-hw + 6, -hh + 6, 2);
+      strokeRoundedRect(-w * 0.42, -h * 0.45, w * 0.55, h * 0.11, 1);
       break;
     }
     case "closet": {
@@ -2407,12 +2351,16 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
         strokeLine(x, hh, x + h, -hh);
       }
       ctx.restore();
+      strokeLine(0, h * 0.38, 0, hh);
+      strokeLine(-w * 0.12, h * 0.42, -w * 0.04, h * 0.42);
+      strokeLine(w * 0.04, h * 0.42, w * 0.12, h * 0.42);
       break;
     }
     case "wardrobe": {
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
-      strokeLine(-hw, -hh, hw, hh);
-      strokeLine(hw, -hh, -hw, hh);
+      strokeLine(0, -h * 0.4, 0, h * 0.42);
+      strokeRoundedRect(-w * 0.45, -h * 0.4, w * 0.9, h * 0.83, 2);
+      for (const sign of [-1, 1]) strokeLine(sign * w * 0.15, h * 0.35, sign * w * 0.33, h * 0.35);
       break;
     }
     case "stairs": {
@@ -2436,7 +2384,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     }
     case "stairsU": {
       strokeRoundedRect(-hw, -hh, w, h, 1, true);
-      const landing = Math.min(w, h) * 0.32;
+      const landing = h * 0.3;
       strokeLine(-hw, -hh, 0, -hh + landing);
       strokeLine(hw, -hh, 0, -hh + landing);
       strokeLine(0, -hh + landing, 0, hh);
@@ -2449,7 +2397,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeCircle(ax, hh - 9, 3);
       strokeLine(ax, hh - 9, ax, ay);
       ctx.beginPath();
-      ctx.arc(0, ay, ax, 0, Math.PI, true);
+      ctx.ellipse(0, ay, ax, Math.min(landing * 0.65, ax), 0, 0, Math.PI, true);
       ctx.stroke();
       strokeLine(-ax, ay, -ax, hh - 12);
       strokeArrowHead(-ax, hh - 12, Math.PI / 2, 8);
@@ -2457,6 +2405,8 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
     }
     case "stairsSpiral": {
       const r = Math.min(hw, hh);
+      ctx.save();
+      ctx.scale(hw / r, hh / r);
       strokeCircle(0, 0, r, true);
       for (let i = 0; i < 12; i += 1) {
         const angle = (i / 12) * Math.PI * 2;
@@ -2470,23 +2420,24 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       ctx.stroke();
       const endAngle = Math.PI * 1.75;
       strokeArrowHead(Math.cos(endAngle) * r * 0.55, Math.sin(endAngle) * r * 0.55, endAngle + Math.PI / 2, 7);
+      ctx.restore();
       break;
     }
     case "car": {
-      let cw = w;
-      let chh = h;
-      if (w > h) {
-        ctx.rotate(Math.PI / 2);
-        cw = h;
-        chh = w;
-      }
+      const cw = w;
+      const chh = h;
       const cx = cw / 2;
       const cy = chh / 2;
       strokeRoundedRect(-cx, -cy, cw, chh, Math.min(cx, chh * 0.12), true);
       strokeRoundedRect(-cx + cw * 0.12, -chh * 0.1, cw * 0.76, chh * 0.42, 8);
       strokeLine(-cx + cw * 0.1, -cy + chh * 0.12, cx - cw * 0.1, -cy + chh * 0.12);
-      strokeLine(-cx, -chh * 0.11, -cx - 6, -chh * 0.14);
-      strokeLine(cx, -chh * 0.11, cx + 6, -chh * 0.14);
+      strokeLine(-cx + cw * 0.03, -chh * 0.11, -cx, -chh * 0.14);
+      strokeLine(cx - cw * 0.03, -chh * 0.11, cx, -chh * 0.14);
+      strokeLine(-cw * 0.35, chh * 0.07, cw * 0.35, chh * 0.07);
+      for (const sign of [-1, 1]) {
+        strokeRoundedRect(sign * cw * 0.29 - cw * 0.09, -chh * 0.45, cw * 0.18, chh * 0.035, 2);
+        strokeRoundedRect(sign * cw * 0.29 - cw * 0.09, chh * 0.42, cw * 0.18, chh * 0.035, 2);
+      }
       break;
     }
     default: {
@@ -2805,598 +2756,34 @@ function addShapeWall3d(shape: Shape, center: Point, yBase: number, withCap = tr
 }
 
 function addDoor3d(door: LinearElement, center: Point, yBase: number): void {
-  if (door.doorStyle === "sliding") {
-    addSlidingDoor3d(door, center, yBase);
-    return;
-  }
-  const length = Math.max(distance(door) * SCALE_3D, 0.7);
-  const frameThickness = 0.1;
-  const frameHeight = 2.1;
-  const panelHeight = 2.0;
-  const panelThickness = 0.08;
-  const angle = lineAngle(door);
-  const mid = midpoint(door);
-
-  const customDoorColor = door.color3d ?? door.color;
-  const panel = addOrientedBox(mid, center, length * 0.92, panelHeight, panelThickness, yBase + panelHeight / 2, angle, customDoorColor ? coloredMaterial(customDoorColor, 0.72) : doorMaterial, door.id);
-  panel.castShadow = true;
-  panel.receiveShadow = true;
-
-  const handleOffset = localOffset3d(length * 0.34, panelThickness * 0.72 * (door.flip ? -1 : 1), angle);
-  const handle = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.MeshStandardMaterial({ color: 0xd7b56d, roughness: 0.42, metalness: 0.25 }));
-  const panelPos = to3d(mid.x, mid.y, center);
-  handle.position.set(panelPos.x + handleOffset.x, yBase + 1.05, panelPos.z + handleOffset.z);
-  handle.castShadow = true;
-  markSelectable(handle, door.id);
-  planGroup.add(handle);
-
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.08, frameThickness, yBase + 0.04, angle, doorFrameMaterial, door.id);
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.12, frameThickness, yBase + frameHeight, angle, doorFrameMaterial, door.id);
-
-  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
-  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, frameHeight, frameThickness, yBase + frameHeight / 2, angle, doorFrameMaterial, door.id);
-  addSelectionBox(panel, door.id);
-}
-
-function addSlidingDoor3d(door: LinearElement, center: Point, yBase: number): void {
-  const planLength = Math.max(distance(door), GRID);
-  const length = Math.max(planLength * SCALE_3D, 0.8);
-  const angle = lineAngle(door);
-  const mid = midpoint(door);
-  const unitX = (door.x2 - door.x1) / planLength;
-  const unitY = (door.y2 - door.y1) / planLength;
-  const panelHeight = 2.0;
-  const panelWidth = length * 0.55;
-  const panelDepth = 0.065;
-  const frameThickness = 0.09;
-  const trackSide = door.flip ? -1 : 1;
-  const customDoorColor = door.color3d ?? door.color;
-  const panelMaterial = customDoorColor ? coloredMaterial(customDoorColor, 0.72) : doorMaterial;
-  const anchorOffset = planLength * 0.235;
-  const leftAnchor = { x: mid.x - unitX * anchorOffset, y: mid.y - unitY * anchorOffset };
-  const rightAnchor = { x: mid.x + unitX * anchorOffset, y: mid.y + unitY * anchorOffset };
-  const leftPanel = addOrientedBox(leftAnchor, center, panelWidth, panelHeight, panelDepth, yBase + panelHeight / 2, angle, panelMaterial, door.id);
-  const rightPanel = addOrientedBox(rightAnchor, center, panelWidth, panelHeight, panelDepth, yBase + panelHeight / 2, angle, panelMaterial, door.id);
-  const leftTrack = localOffset3d(0, panelDepth * 0.42 * trackSide, angle);
-  const rightTrack = localOffset3d(0, -panelDepth * 0.42 * trackSide, angle);
-  leftPanel.position.x += leftTrack.x;
-  leftPanel.position.z += leftTrack.z;
-  rightPanel.position.x += rightTrack.x;
-  rightPanel.position.z += rightTrack.z;
-
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.1, frameThickness * 1.45, yBase + panelHeight + 0.06, angle, doorFrameMaterial, door.id);
-  addOrientedBox(mid, center, length + frameThickness * 2, 0.055, frameThickness * 1.3, yBase + 0.028, angle, doorFrameMaterial, door.id);
-  addOrientedBox({ x: door.x1, y: door.y1 }, center, frameThickness, panelHeight + 0.1, frameThickness, yBase + (panelHeight + 0.1) / 2, angle, doorFrameMaterial, door.id);
-  addOrientedBox({ x: door.x2, y: door.y2 }, center, frameThickness, panelHeight + 0.1, frameThickness, yBase + (panelHeight + 0.1) / 2, angle, doorFrameMaterial, door.id);
-
-  const leftHandleAnchor = { x: mid.x - unitX * planLength * 0.045, y: mid.y - unitY * planLength * 0.045 };
-  const rightHandleAnchor = { x: mid.x + unitX * planLength * 0.045, y: mid.y + unitY * planLength * 0.045 };
-  const leftStile = addOrientedBox(leftHandleAnchor, center, 0.045, panelHeight, 0.025, yBase + panelHeight / 2, angle, doorFrameMaterial, door.id);
-  const rightStile = addOrientedBox(rightHandleAnchor, center, 0.045, panelHeight, 0.025, yBase + panelHeight / 2, angle, doorFrameMaterial, door.id);
-  const leftHandle = addOrientedBox(leftHandleAnchor, center, 0.035, 0.3, 0.025, yBase + 1.02, angle, doorFrameMaterial, door.id);
-  const rightHandle = addOrientedBox(rightHandleAnchor, center, 0.035, 0.3, 0.025, yBase + 1.02, angle, doorFrameMaterial, door.id);
-  leftStile.position.x += leftTrack.x * 1.18;
-  leftStile.position.z += leftTrack.z * 1.18;
-  rightStile.position.x += rightTrack.x * 1.18;
-  rightStile.position.z += rightTrack.z * 1.18;
-  leftHandle.position.x += leftTrack.x * 1.25;
-  leftHandle.position.z += leftTrack.z * 1.25;
-  rightHandle.position.x += rightTrack.x * 1.25;
-  rightHandle.position.z += rightTrack.z * 1.25;
-  addSelectionBox(leftPanel, door.id);
+  addOpening3d(door, center, yBase);
 }
 
 function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): void {
-  const length = distance(windowEl) * SCALE_3D;
-  const angle = lineAngle(windowEl);
-  const mid = midpoint(windowEl);
-  const frameThickness = 0.08;
-  const frameDepth = 0.1;
-  const glassHeight = 1.05;
-  const glassY = yBase + 1.4;
-  const frameBottom = glassY - glassHeight / 2;
-  const frameTop = glassY + glassHeight / 2;
-  const customFrameColor = windowEl.color3d ?? windowEl.color;
-  const frameMaterial = customFrameColor ? coloredMaterial(customFrameColor, 0.5) : windowFrameMaterial;
-
-  const glass = addOrientedBox(mid, center, Math.max(length - frameThickness * 1.2, 0.2), glassHeight, 0.04, glassY, angle, windowMaterial, windowEl.id);
-  glass.receiveShadow = true;
-
-  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameBottom, angle, frameMaterial, windowEl.id);
-  addOrientedBox(mid, center, length + frameThickness, frameThickness, frameDepth, frameTop, angle, frameMaterial, windowEl.id);
-  addOrientedBox({ x: windowEl.x1, y: windowEl.y1 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
-  addOrientedBox({ x: windowEl.x2, y: windowEl.y2 }, center, frameThickness, glassHeight + frameThickness, frameDepth, glassY, angle, frameMaterial, windowEl.id);
-  if (windowEl.mullion) {
-    addOrientedBox(mid, center, frameThickness * 0.72, glassHeight, frameDepth, glassY, angle, frameMaterial, windowEl.id);
-  }
-  addSelectionBox(glass, windowEl.id);
+  addOpening3d(windowEl, center, yBase);
 }
 
-function addOrientedBox(
-  anchor: Point,
-  center: Point,
-  width: number,
-  height: number,
-  depth: number,
-  y: number,
-  angle: number,
-  material: THREE.Material,
-  entityId: string,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
-  const pos = to3d(anchor.x, anchor.y, center);
-  mesh.position.set(pos.x, y, pos.z);
-  mesh.rotation.y = -angle;
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  markSelectable(mesh, entityId);
-  planGroup.add(mesh);
-  return mesh;
-}
-
-function localOffset3d(localX: number, localZ: number, angle: number): { x: number; z: number } {
-  return {
-    x: Math.cos(angle) * localX - Math.sin(angle) * localZ,
-    z: Math.sin(angle) * localX + Math.cos(angle) * localZ,
-  };
+function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
+  if (item.type === "wall") return;
+  const group = buildOpeningModel({ ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0 });
+  const mid = midpoint(item);
+  const position = to3d(mid.x, mid.y, center);
+  group.position.set(position.x, yBase, position.z);
+  group.rotation.y = -lineAngle(item);
+  markSelectable(group, item.id);
+  planGroup.add(group);
+  addSelectionBox(group, item.id);
 }
 
 // ---- 3D furniture ----
 
-function furniturePart(
-  group: THREE.Group,
-  width: number,
-  height: number,
-  depth: number,
-  x: number,
-  y: number,
-  z: number,
-  color: number,
-  roughness = 0.72,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshStandardMaterial({ color, roughness }));
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-  return mesh;
-}
-
-function cylinderPart(
-  group: THREE.Group,
-  radius: number,
-  height: number,
-  x: number,
-  y: number,
-  z: number,
-  color: number,
-  roughness = 0.72,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 24), new THREE.MeshStandardMaterial({ color, roughness }));
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-  return mesh;
-}
-
-function ellipsoidPart(
-  group: THREE.Group,
-  radius: number,
-  scale: [number, number, number],
-  x: number,
-  y: number,
-  z: number,
-  color: number,
-  roughness = 0.72,
-): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 20, 14), new THREE.MeshStandardMaterial({ color, roughness }));
-  mesh.scale.set(scale[0], scale[1], scale[2]);
-  mesh.position.set(x, y, z);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  group.add(mesh);
-  return mesh;
-}
-
 function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
-  const group = new THREE.Group();
-  const w = furnitureItem.w * SCALE_3D;
-  const d = furnitureItem.h * SCALE_3D;
+  const floorTop = yBase === 0 ? 0.08 : 0;
+  const group = buildFurnitureModel({ ...furnitureItem, rise: FLOOR_SPACING - floorTop });
   const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
-  group.position.set(pos.x, yBase + (yBase === 0 ? 0.1 : 0.02), pos.z);
+  group.position.set(pos.x, yBase + floorTop, pos.z);
   group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
-  if (furnitureItem.flip) group.scale.x = -1;
-
-  switch (furnitureItem.kind) {
-    case "sofaCorner": {
-      furniturePart(group, w, 0.3, d * 0.5, 0, 0.23, -d * 0.25, COLOR_FABRIC);
-      furniturePart(group, w * 0.38, 0.3, d * 0.5, w * 0.31, 0.23, d * 0.25, COLOR_FABRIC);
-      furniturePart(group, w, 0.8, d * 0.13, 0, 0.4, -d * 0.435, COLOR_FABRIC);
-      furniturePart(group, w * 0.1, 0.6, d, w * 0.45, 0.3, 0, COLOR_FABRIC);
-      furniturePart(group, w * 0.1, 0.6, d * 0.5, -w * 0.45, 0.3, -d * 0.25, COLOR_FABRIC);
-      for (let i = 0; i < 3; i += 1) furniturePart(group, w * 0.255, 0.1, d * 0.34, -w * 0.265 + i * w * 0.265, 0.43, -d * 0.19, 0xa5b5c4);
-      furniturePart(group, w * 0.27, 0.1, d * 0.48, w * 0.26, 0.43, d * 0.25, 0xa5b5c4);
-      break;
-    }
-    case "sideTable": {
-      furniturePart(group, w, 0.05, d, 0, 0.55, 0, COLOR_WOOD);
-      furniturePart(group, w * 0.86, 0.04, d * 0.86, 0, 0.16, 0, COLOR_WOOD);
-      for (const x of [-1, 1]) for (const z of [-1, 1]) {
-        furniturePart(group, w * 0.08, 0.53, d * 0.08, x * w * 0.4, 0.265, z * d * 0.4, COLOR_WOOD_DARK);
-      }
-      break;
-    }
-    case "roundTable":
-    case "stool": {
-      const stool = furnitureItem.kind === "stool";
-      const height = stool ? 0.45 : 0.74;
-      const top = cylinderPart(group, 0.5, 0.06, 0, height, 0, stool ? COLOR_FABRIC : COLOR_WOOD);
-      top.scale.set(w, 1, d);
-      for (const x of [-1, 1]) for (const z of [-1, 1]) {
-        furniturePart(group, w * 0.07, height - 0.03, d * 0.07, x * w * 0.27, (height - 0.03) / 2, z * d * 0.27, COLOR_WOOD_DARK);
-      }
-      break;
-    }
-    case "rug": {
-      furniturePart(group, w, 0.02, d, 0, 0.01, 0, 0xb0a49a, 1);
-      furniturePart(group, w * 0.88, 0.004, d * 0.84, 0, 0.022, 0, 0xd8d0c4, 1);
-      break;
-    }
-    case "floorLamp": {
-      const base = cylinderPart(group, 0.5, 0.04, 0, 0.02, 0, COLOR_DARK);
-      base.scale.set(w * 0.65, 1, d * 0.65);
-      cylinderPart(group, 0.016, 1.45, 0, 0.765, 0, COLOR_STEEL, 0.3);
-      const shade = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.5, 0.35, 32, 1, true),
-        new THREE.MeshStandardMaterial({ color: 0xfff3d4, roughness: 0.85, side: THREE.DoubleSide }),
-      );
-      shade.scale.set(w, 1, d);
-      shade.position.y = 1.52;
-      shade.castShadow = true;
-      shade.userData.skipFurnitureTint = true;
-      group.add(shade);
-      break;
-    }
-    case "piano": {
-      furniturePart(group, w, 1.15, d * 0.65, 0, 0.575, -d * 0.175, COLOR_DARK, 0.35);
-      furniturePart(group, w, 0.06, d, 0, 0.73, 0, COLOR_DARK, 0.35);
-      for (const x of [-1, 1]) furniturePart(group, w * 0.06, 0.7, d * 0.12, x * w * 0.45, 0.35, d * 0.4, COLOR_DARK);
-      for (let i = 0; i < 28; i += 1) {
-        const keyWidth = w * 0.88 / 28;
-        const x = -w * 0.44 + (i + 0.5) * keyWidth;
-        const key = furniturePart(group, keyWidth * 0.95, 0.022, d * 0.3, x, 0.775, d * 0.3, COLOR_WHITE);
-        key.userData.skipFurnitureTint = true;
-        if (![2, 6].includes(i % 7) && i < 27) {
-          const black = furniturePart(group, keyWidth * 0.55, 0.025, d * 0.18, x + keyWidth / 2, 0.795, d * 0.24, 0x15191c);
-          black.userData.skipFurnitureTint = true;
-        }
-      }
-      break;
-    }
-    case "bench": {
-      for (let i = 0; i < 4; i += 1) furniturePart(group, w, 0.055, d * 0.19, 0, 0.45, -d * 0.27 + i * d * 0.21, COLOR_WOOD);
-      for (const x of [-1, 1]) {
-        for (const z of [-1, 1]) furniturePart(group, w * 0.035, 0.43, d * 0.09, x * w * 0.38, 0.215, z * d * 0.3, COLOR_DARK);
-        furniturePart(group, w * 0.035, 0.82, d * 0.065, x * w * 0.38, 0.41, -d * 0.4, COLOR_DARK);
-      }
-      for (let i = 0; i < 3; i += 1) furniturePart(group, w, 0.09, d * 0.075, 0, 0.6 + i * 0.115, -d * 0.4, COLOR_WOOD);
-      break;
-    }
-    case "sofa":
-    case "armchair": {
-      furniturePart(group, w * 0.98, 0.35, d * 0.72, 0, 0.175, d * 0.13, COLOR_FABRIC);
-      furniturePart(group, w, 0.7, d * 0.24, 0, 0.35, -d * 0.38, COLOR_FABRIC);
-      furniturePart(group, w * 0.12, 0.52, d, -w * 0.44, 0.26, 0, COLOR_FABRIC);
-      furniturePart(group, w * 0.12, 0.52, d, w * 0.44, 0.26, 0, COLOR_FABRIC);
-      break;
-    }
-    case "table": {
-      furniturePart(group, w, 0.045, d, 0, 0.4, 0, COLOR_WOOD);
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          furniturePart(group, 0.05, 0.38, 0.05, sx * w * 0.42, 0.19, sz * d * 0.36, COLOR_WOOD_DARK);
-        });
-      });
-      break;
-    }
-    case "tv": {
-      const cabinetHeight = clamp(d * 0.8, 0.28, 0.55);
-      const screenWidth = Math.max(0.42, w * 0.86);
-      const screenHeight = clamp(screenWidth * 0.56, 0.38, 1.45);
-      const screenY = cabinetHeight + 0.1 + screenHeight / 2;
-      furniturePart(group, w, cabinetHeight, d, 0, cabinetHeight / 2, 0, COLOR_WOOD_DARK);
-      furniturePart(group, screenWidth + 0.08, screenHeight + 0.08, 0.065, 0, screenY, -d * 0.18, 0x44484d, 0.32);
-      furniturePart(group, screenWidth, screenHeight, 0.025, 0, screenY, -d * 0.18 - 0.045, 0x101820, 0.2);
-      furniturePart(group, 0.07, 0.12, 0.07, 0, cabinetHeight + 0.04, -d * 0.18, COLOR_STEEL, 0.3);
-      break;
-    }
-    case "plant": {
-      const baseSize = Math.max(0.28, Math.min(w, d));
-      const plantHeight = clamp(Math.max(w, d) * 2.1, 0.75, 2.4);
-      const potRadius = baseSize * 0.3;
-      const potHeight = clamp(baseSize * 0.65, 0.24, 0.52);
-      cylinderPart(group, potRadius, potHeight, 0, potHeight / 2, 0, 0x99705a);
-      const trunkHeight = Math.max(0.32, plantHeight - potHeight - baseSize * 0.25);
-      cylinderPart(group, Math.max(0.025, baseSize * 0.055), trunkHeight, 0, potHeight + trunkHeight / 2, 0, 0x74563b, 0.82);
-      const crownY = potHeight + trunkHeight * 0.72;
-      const leafLength = clamp(Math.max(w, d) * 0.58, 0.3, 0.95);
-      for (let index = 0; index < 10; index += 1) {
-        const angle = (index / 10) * Math.PI * 2;
-        const tier = index % 2 === 0 ? 0 : 1;
-        const radius = leafLength * (tier ? 0.24 : 0.34);
-        const leaf = ellipsoidPart(
-          group,
-          0.5,
-          [leafLength, leafLength * 0.24, leafLength * 0.42],
-          Math.cos(angle) * radius,
-          crownY + (tier ? leafLength * 0.16 : 0),
-          Math.sin(angle) * radius,
-          tier ? 0x5d9457 : COLOR_GREEN,
-          0.86,
-        );
-        leaf.rotation.y = -angle;
-        leaf.rotation.z = (index % 2 === 0 ? 1 : -1) * 0.42;
-      }
-      const topLeaf = ellipsoidPart(group, 0.5, [leafLength * 0.72, leafLength * 0.32, leafLength * 0.45], 0, plantHeight - leafLength * 0.12, 0, 0x79a96d, 0.86);
-      topLeaf.rotation.z = Math.PI / 2;
-      break;
-    }
-    case "wallClock": {
-      const diameter = clamp(w * 0.9, 0.32, 1.15);
-      const radius = diameter / 2;
-      const faceY = clamp(1.45 + radius * 0.25, 1.5, 1.95);
-      const frontZ = d * 0.4;
-      const frame = cylinderPart(group, radius, 0.075, 0, faceY, frontZ, COLOR_WOOD_DARK, 0.56);
-      frame.rotation.x = Math.PI / 2;
-      const dial = cylinderPart(group, radius * 0.86, 0.08, 0, faceY, frontZ + 0.045, COLOR_WHITE, 0.45);
-      dial.rotation.x = Math.PI / 2;
-      dial.userData.skipFurnitureTint = true;
-      const minuteHand = furniturePart(group, radius * 0.65, 0.025, 0.025, 0, faceY + radius * 0.18, frontZ + 0.09, COLOR_DARK, 0.35);
-      minuteHand.rotation.z = 0.22;
-      minuteHand.userData.skipFurnitureTint = true;
-      const hourHand = furniturePart(group, radius * 0.46, 0.035, 0.03, radius * 0.08, faceY, frontZ + 0.095, COLOR_DARK, 0.35);
-      hourHand.rotation.z = -0.72;
-      hourHand.userData.skipFurnitureTint = true;
-      break;
-    }
-    case "grandfatherClock": {
-      const clockHeight = clamp(w * 3.2, 1.72, 2.5);
-      const bodyWidth = w * 0.86;
-      const frontZ = d / 2 + 0.02;
-      furniturePart(group, bodyWidth, clockHeight * 0.72, d, 0, clockHeight * 0.36, 0, COLOR_WOOD_DARK);
-      furniturePart(group, w, clockHeight * 0.3, d * 1.06, 0, clockHeight * 0.82, 0, COLOR_WOOD);
-      furniturePart(group, w * 1.08, 0.1, d * 1.12, 0, clockHeight + 0.02, 0, COLOR_WOOD_DARK);
-      const faceRadius = Math.min(w * 0.34, clockHeight * 0.13);
-      const clockFaceY = clockHeight * 0.83;
-      const faceFrame = cylinderPart(group, faceRadius, 0.06, 0, clockFaceY, frontZ + 0.02, COLOR_WOOD_DARK, 0.56);
-      faceFrame.rotation.x = Math.PI / 2;
-      const face = cylinderPart(group, faceRadius * 0.84, 0.065, 0, clockFaceY, frontZ + 0.055, COLOR_WHITE, 0.44);
-      face.rotation.x = Math.PI / 2;
-      face.userData.skipFurnitureTint = true;
-      const hand = furniturePart(group, faceRadius * 0.62, 0.025, 0.02, 0, clockFaceY + faceRadius * 0.16, frontZ + 0.095, COLOR_DARK, 0.35);
-      hand.rotation.z = 0.3;
-      hand.userData.skipFurnitureTint = true;
-      const glass = new THREE.Mesh(
-        new THREE.BoxGeometry(bodyWidth * 0.62, clockHeight * 0.34, 0.025),
-        new THREE.MeshPhysicalMaterial({ color: 0xb8dce8, transparent: true, opacity: 0.28, roughness: 0.08, transmission: 0.18 }),
-      );
-      glass.position.set(0, clockHeight * 0.38, frontZ + 0.035);
-      glass.userData.skipFurnitureTint = true;
-      group.add(glass);
-      furniturePart(group, 0.018, clockHeight * 0.27, 0.018, 0, clockHeight * 0.43, frontZ + 0.07, 0xc3a35f, 0.32).userData.skipFurnitureTint = true;
-      const bob = cylinderPart(group, faceRadius * 0.36, 0.025, 0, clockHeight * 0.27, frontZ + 0.075, 0xc3a35f, 0.32);
-      bob.rotation.x = Math.PI / 2;
-      bob.userData.skipFurnitureTint = true;
-      break;
-    }
-    case "aquarium": {
-      const standHeight = clamp(d * 1.1, 0.42, 0.72);
-      const tankHeight = clamp(w * 0.55, 0.62, 1.3);
-      const tankY = standHeight + tankHeight / 2 + 0.04;
-      furniturePart(group, w, standHeight, d, 0, standHeight / 2, 0, COLOR_WOOD_DARK);
-      const glass = new THREE.Mesh(
-        new THREE.BoxGeometry(w * 0.98, tankHeight, d * 0.94),
-        new THREE.MeshPhysicalMaterial({ color: 0xc8edf5, transparent: true, opacity: 0.24, roughness: 0.04, transmission: 0.42, side: THREE.DoubleSide }),
-      );
-      glass.position.set(0, tankY, 0);
-      glass.castShadow = true;
-      glass.userData.skipFurnitureTint = true;
-      group.add(glass);
-      const water = new THREE.Mesh(
-        new THREE.BoxGeometry(w * 0.91, tankHeight * 0.76, d * 0.86),
-        new THREE.MeshPhysicalMaterial({ color: 0x58b7d8, transparent: true, opacity: 0.42, roughness: 0.18, transmission: 0.16 }),
-      );
-      water.position.set(0, tankY - tankHeight * 0.08, 0);
-      water.userData.skipFurnitureTint = true;
-      group.add(water);
-      furniturePart(group, w, 0.055, d, 0, standHeight + 0.025, 0, COLOR_DARK, 0.42);
-      furniturePart(group, w, 0.07, d, 0, standHeight + tankHeight + 0.08, 0, COLOR_DARK, 0.42);
-      [
-        [-0.22, 0.56, -0.08, 0xe6a84b],
-        [0.18, 0.38, 0.1, 0xd96b56],
-        [0.02, 0.7, 0.04, 0x8d75c9],
-      ].forEach(([x, y, z, color], index) => {
-        const fish = ellipsoidPart(group, 0.12, [1.5, 0.62, 0.45], w * x, standHeight + tankHeight * y, d * z, color, 0.48);
-        fish.rotation.y = index % 2 === 0 ? 0.25 : Math.PI + 0.2;
-        fish.userData.skipFurnitureTint = true;
-      });
-      for (let index = -1; index <= 1; index += 1) {
-        const stem = cylinderPart(group, 0.018, tankHeight * (0.22 + (index + 1) * 0.06), w * (0.28 + index * 0.08), standHeight + tankHeight * 0.17, d * 0.12, 0x4c8f55, 0.82);
-        stem.userData.skipFurnitureTint = true;
-      }
-      break;
-    }
-    case "diningTable": {
-      furniturePart(group, w * 0.7, 0.045, d * 0.48, 0, 0.7, 0, COLOR_WOOD);
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          furniturePart(group, 0.05, 0.68, 0.05, sx * w * 0.3, 0.34, sz * d * 0.18, COLOR_WOOD_DARK);
-        });
-      });
-      const cs = Math.min(w, d) * 0.22;
-      const chairZ = d * 0.24 + cs * 0.6;
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          furniturePart(group, cs, 0.44, cs, sx * w * 0.17, 0.22, sz * chairZ, COLOR_WOOD);
-          furniturePart(group, cs, 0.4, 0.045, sx * w * 0.17, 0.62, sz * (chairZ + cs * 0.45), COLOR_WOOD);
-        });
-      });
-      break;
-    }
-    case "chair": {
-      const seatHeight = clamp(Math.min(w, d) * 0.96, 0.42, 0.58);
-      const seatThickness = clamp(Math.min(w, d) * 0.16, 0.06, 0.1);
-      const legSize = clamp(Math.min(w, d) * 0.1, 0.035, 0.07);
-      const legHeight = seatHeight - seatThickness / 2;
-      furniturePart(group, w * 0.92, seatThickness, d * 0.88, 0, seatHeight, 0, COLOR_WOOD);
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          furniturePart(group, legSize, legHeight, legSize, sx * w * 0.38, legHeight / 2, sz * d * 0.36, COLOR_WOOD_DARK);
-        });
-      });
-      const backHeight = clamp(d * 1.15, 0.46, 0.82);
-      [-1, 1].forEach((sx) => {
-        furniturePart(group, legSize, backHeight, legSize, sx * w * 0.39, seatHeight + backHeight / 2, -d * 0.39, COLOR_WOOD_DARK);
-      });
-      furniturePart(group, w * 0.82, backHeight * 0.44, 0.055, 0, seatHeight + backHeight * 0.68, -d * 0.39, COLOR_WOOD);
-      break;
-    }
-    case "kitchen": {
-      furniturePart(group, w, 0.85, d, 0, 0.425, 0, 0xdadcda);
-      furniturePart(group, w + 0.02, 0.04, d + 0.02, 0, 0.87, 0, 0x8d8d89, 0.4);
-      furniturePart(group, w * 0.28, 0.015, d * 0.66, w * 0.28, 0.9, 0, COLOR_DARK, 0.35);
-      furniturePart(group, w * 0.2, 0.015, d * 0.5, -w * 0.24, 0.9, 0, 0xc4cbcf, 0.3);
-      break;
-    }
-    case "fridge": {
-      furniturePart(group, w, 1.82, d, 0, 0.91, 0, 0xe2e6e7, 0.38);
-      furniturePart(group, w * 0.06, 0.5, 0.03, -w * 0.3, 1.2, d / 2 + 0.015, COLOR_STEEL, 0.3);
-      break;
-    }
-    case "bed":
-    case "bedDouble": {
-      furniturePart(group, w, 0.24, d, 0, 0.12, 0, COLOR_WOOD_DARK);
-      furniturePart(group, w * 0.95, 0.2, d * 0.95, 0, 0.34, 0, 0xf0ede6);
-      if (furnitureItem.kind === "bed") {
-        furniturePart(group, w * 0.55, 0.09, d * 0.14, 0, 0.48, -d * 0.36, COLOR_WHITE);
-      } else {
-        furniturePart(group, w * 0.36, 0.09, d * 0.14, -w * 0.22, 0.48, -d * 0.36, COLOR_WHITE);
-        furniturePart(group, w * 0.36, 0.09, d * 0.14, w * 0.22, 0.48, -d * 0.36, COLOR_WHITE);
-      }
-      break;
-    }
-    case "desk": {
-      furniturePart(group, w, 0.045, d, 0, 0.72, 0, COLOR_WOOD);
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          furniturePart(group, 0.05, 0.7, 0.05, sx * w * 0.44, 0.35, sz * d * 0.4, COLOR_WOOD_DARK);
-        });
-      });
-      break;
-    }
-    case "shelf": {
-      furniturePart(group, w, 1.8, d, 0, 0.9, 0, COLOR_WOOD);
-      break;
-    }
-    case "bath": {
-      furniturePart(group, w, 0.58, d, 0, 0.29, 0, 0xe6edf0, 0.4);
-      furniturePart(group, w * 0.78, 0.03, d * 0.72, 0, 0.585, 0, 0xbcd9e4, 0.2);
-      break;
-    }
-    case "toilet": {
-      furniturePart(group, w * 0.9, 0.7, d * 0.24, 0, 0.35, -d * 0.36, COLOR_CERAMIC, 0.35);
-      const bowl = cylinderPart(group, w * 0.42, 0.4, 0, 0.2, d * 0.1, COLOR_CERAMIC, 0.35);
-      bowl.scale.z = Math.max(1, (d * 0.6) / (w * 0.84));
-      break;
-    }
-    case "washbasin": {
-      furniturePart(group, w, 0.78, d, 0, 0.39, 0, 0xe8e9e7, 0.5);
-      furniturePart(group, w + 0.02, 0.035, d + 0.02, 0, 0.8, 0, COLOR_CERAMIC, 0.3);
-      furniturePart(group, 0.04, 0.14, 0.04, 0, 0.88, -d * 0.3, COLOR_STEEL, 0.3);
-      break;
-    }
-    case "washer": {
-      furniturePart(group, w, 0.96, d, 0, 0.48, 0, 0xeceeee, 0.35);
-      const door = cylinderPart(group, Math.min(w, d) * 0.3, 0.02, 0, 0.55, d / 2 + 0.005, 0x87919a, 0.3);
-      door.rotation.x = Math.PI / 2;
-      break;
-    }
-    case "closet": {
-      furniturePart(group, w, 2.35, d, 0, 1.175, 0, 0xcfc8bb);
-      break;
-    }
-    case "wardrobe": {
-      furniturePart(group, w, 1.25, d, 0, 0.625, 0, COLOR_WOOD);
-      break;
-    }
-    case "stairs": {
-      const horizontal = furnitureItem.w > furnitureItem.h;
-      const run = horizontal ? w : d;
-      const stepCount = Math.round(clamp((horizontal ? furnitureItem.w : furnitureItem.h) / 24, 8, 16));
-      const stepDepth = run / stepCount;
-      for (let i = 0; i < stepCount; i += 1) {
-        const stepHeight = (WALL_HEIGHT * (i + 1)) / stepCount;
-        if (horizontal) {
-          furniturePart(group, stepDepth, stepHeight, d, -w / 2 + stepDepth * (i + 0.5), stepHeight / 2, 0, 0xcbb391);
-        } else {
-          furniturePart(group, w, stepHeight, stepDepth, 0, stepHeight / 2, d / 2 - stepDepth * (i + 0.5), 0xcbb391);
-        }
-      }
-      break;
-    }
-    case "stairsU": {
-      const landing = d * 0.32;
-      const flight = d - landing;
-      const steps = 7;
-      const stepDepth = flight / steps;
-      for (let i = 0; i < steps; i += 1) {
-        const upHeight = ((WALL_HEIGHT / 2) * (i + 1)) / steps;
-        furniturePart(group, w / 2, upHeight, stepDepth, w / 4, upHeight / 2, d / 2 - stepDepth * (i + 0.5), 0xcbb391);
-        const downHeight = WALL_HEIGHT / 2 + ((WALL_HEIGHT / 2) * (i + 1)) / steps;
-        furniturePart(group, w / 2, downHeight, stepDepth, -w / 4, downHeight / 2, -d / 2 + landing + stepDepth * (i + 0.5), 0xcbb391);
-      }
-      furniturePart(group, w, WALL_HEIGHT / 2, landing, 0, WALL_HEIGHT / 4, -d / 2 + landing / 2, 0xcbb391);
-      break;
-    }
-    case "stairsSpiral": {
-      const radius = Math.min(w, d) / 2;
-      cylinderPart(group, 0.045, WALL_HEIGHT, 0, WALL_HEIGHT / 2, 0, COLOR_STEEL, 0.4);
-      const steps = 12;
-      for (let i = 0; i < steps; i += 1) {
-        const angle = -Math.PI / 2 + (i * Math.PI * 1.8) / steps;
-        const stepY = (WALL_HEIGHT * (i + 1)) / (steps + 2);
-        const step = furniturePart(group, radius * 0.92, 0.05, radius * 0.38, Math.cos(angle) * radius * 0.48, stepY, Math.sin(angle) * radius * 0.48, 0xcbb391);
-        step.rotation.y = -angle;
-      }
-      break;
-    }
-    case "car": {
-      furniturePart(group, w * 0.96, 0.45, d * 0.98, 0, 0.62, 0, 0xaebccb, 0.35);
-      furniturePart(group, w * 0.82, 0.4, d * 0.42, 0, 1.02, d * 0.03, 0x5b6875, 0.3);
-      [-1, 1].forEach((sx) => {
-        [-1, 1].forEach((sz) => {
-          const wheel = cylinderPart(group, 0.32, 0.2, sx * (w / 2 - 0.1), 0.32, sz * d * 0.3, COLOR_DARK, 0.6);
-          wheel.rotation.z = Math.PI / 2;
-        });
-      });
-      break;
-    }
-    default: {
-      furniturePart(group, w, 0.72, d, 0, 0.36, 0, 0xb9c0c8);
-    }
-  }
-
-  const customFurnitureColor = furnitureItem.color3d ?? furnitureItem.color;
-  if (customFurnitureColor) {
-    const tint = new THREE.Color(customFurnitureColor);
-    group.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      const material = mesh.material as THREE.MeshStandardMaterial | undefined;
-      if (!object.userData.skipFurnitureTint && material?.color) material.color.set(tint);
-    });
-  }
-
+  if (furnitureItem.flip) group.scale.x *= -1;
   markSelectable(group, furnitureItem.id);
   planGroup.add(group);
   addSelectionBox(group, furnitureItem.id);

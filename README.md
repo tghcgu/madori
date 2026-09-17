@@ -156,6 +156,13 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 各家具は2D用の平面記号と3Dモデルを持ちます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
+- 家具・設備34種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
+- 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
+- 開き戸は3Dでは閉じた状態です。引き戸は別々のレールに配置した2枚の扉、窓は枠・サッシ・ガラス・取っ手で表現します。
+- 幅・奥行は3Dの設置範囲にも反映され、回転・反転後も保持されます。既存の保存JSONはそのまま利用できます。
+- 不透明な部品は材質ごとにまとめて描画し、細部を増やした際の描画負荷を抑えています。実製品を再現したCADモデルではありません。
+
 「床・地面」で素材を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。既存の部屋は「選択中」の「床材」から変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
 
 ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
@@ -291,10 +298,13 @@ npm.cmd run dev
 | `npm run build` | TypeScriptの型チェック後、`dist/`へ本番ビルド |
 | `npm run preview` | `dist/`の本番ビルドをローカルで確認 |
 | `npm ci` | `package-lock.json`に基づいて依存関係を再現 |
-| `npm test` | 壁・床の幾何計算と保存データ保護の単体テスト（Node.js 22.6以上） |
+| `npm test` | 家具・建具の形状、壁・床の幾何計算、保存データ保護の単体テスト（Node.js 22.6以上） |
 | `npm run test:e2e` | Playwrightによる編集・復旧・表示のブラウザ回帰テスト |
+| `npm run test:visual` | 全家具・建具の3D一覧を描画し、空白チェックと画像出力 |
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
+
+家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全34種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
 
 本番ビルド:
 
@@ -340,6 +350,9 @@ madori/
 │  └─ google*.html           # Search Console確認ファイル
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理
+│  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
+│  ├─ furniture-models.ts    # 家具34種類の3D形状と材質
+│  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
 │  ├─ surfaces.ts            # 床材と模様
@@ -616,6 +629,13 @@ If a room is selected before adding a roof, the new roof is sized around that ro
 
 Each item has a dedicated 2D plan symbol and a generated 3D representation. The geometry adapts to user-defined width and depth where practical.
 
+- All 34 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
+- Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
+- Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
+- The 3D footprint follows the specified width and depth, including rotation and mirroring. Existing saved JSON files remain compatible.
+- Opaque parts are batched by material to limit drawing overhead. These are simplified layout models, not CAD replicas of real products.
+
 Choose a material under **床・地面** (floors and ground), then drag on the 2D canvas to place an area. For existing rooms, change **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
 
 Rugs render below furniture. Adding a floor or rug afterward does not prevent selecting furniture placed on top.
@@ -748,10 +768,13 @@ npm.cmd run dev
 | `npm run build` | Type-check with TypeScript and build production files into `dist/` |
 | `npm run preview` | Preview the production build locally |
 | `npm ci` | Install the exact dependency tree from `package-lock.json` |
-| `npm test` | Unit tests for wall/floor geometry and storage recovery (Node.js 22.6+) |
+| `npm test` | Unit tests for furniture, openings, wall/floor geometry, and storage recovery (Node.js 22.6+) |
 | `npm run test:e2e` | Playwright regression tests for editing, recovery, and rendering |
+| `npm run test:visual` | Render the full 3D object catalog, check for blank output, and capture images |
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
+
+Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 34 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
 
 Production build:
 
@@ -797,6 +820,9 @@ madori/
 │  └─ google*.html           # Search Console verification
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence
+│  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
+│  ├─ furniture-models.ts    # Geometry and materials for 34 furniture types
+│  ├─ opening-models.ts      # Door, sliding door, and window geometry
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection
 │  ├─ surfaces.ts            # Floor materials and textures

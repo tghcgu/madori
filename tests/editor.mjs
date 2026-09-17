@@ -12,6 +12,16 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
   transform(code, id) {
     if (!id.replaceAll('\\', '/').endsWith('/src/main.ts')) return;
     return `${code}\nwindow.__editorTest = {
+      catalog: FURNITURE_DEFS,
+      symbolImage(item) {
+        const r = planCanvas.getBoundingClientRect(), ratio = planCanvas.width/r.width;
+        const margin = 12, copy = document.createElement('canvas');
+        copy.width = item.w*view.zoom+margin*2; copy.height = item.h*view.zoom+margin*2;
+        copy.getContext('2d').drawImage(planCanvas,
+          (item.x*view.zoom+view.x-margin)*ratio, (item.y*view.zoom+view.y-margin)*ratio,
+          copy.width*ratio, copy.height*ratio, 0, 0, copy.width, copy.height);
+        return copy.toDataURL();
+      },
       project(x, y, height = 0.08) {
         const p = new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D,height,(y-threeSceneCenter.y)*SCALE_3D).project(camera);
         const r = threeCanvas.getBoundingClientRect();
@@ -21,7 +31,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         const objects = planGroup.children.filter(o => o.userData.entityId === id);
         if (!objects.length) return null;
         const box = new THREE.Box3();
-        objects.forEach(o => box.union(new THREE.Box3().setFromObject(o)));
+        objects.forEach(o => box.union(new THREE.Box3().setFromObject(o, true)));
         return { min:box.min.toArray(), max:box.max.toArray() };
       },
       planPoint(x,y) {
@@ -114,7 +124,7 @@ try {
   assert.equal((await saved()).floors[0].entities.length, 0);
   await page.locator('#undoButton').click();
   assert.equal((await saved()).floors[0].entities.length, 1);
-  await page.locator('[data-view-mode="plan"]').click();
+  await page.locator('button[data-view-mode="plan"]').click();
   let point = await planPoint(50, 50);
   await page.mouse.click(point.x, point.y);
   await change('#roomWInput', 640);
@@ -135,14 +145,14 @@ try {
   assert.equal(movedWall.x2 - movedWall.x1, 400);
   assert.equal(movedWall.y2 - movedWall.y1, 300);
   await page.locator('#undoButton').click();
-  await page.locator('[data-view-mode="split"]').click();
+  await page.locator('button[data-view-mode="split"]').click();
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${output}/diagonal.png` });
   console.log('PASS: dragging diagonal walls preserves length and angle');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
-  await page.locator('[data-view-mode="three"]').click();
+  await page.locator('button[data-view-mode="three"]').click();
   const grassPieces = await page.evaluate(() => window.__editorTest.floorPieces('grass'));
   const stonePieces = await page.evaluate(() => window.__editorTest.floorPieces('stone'));
   assert.equal(grassPieces.length, 4);
@@ -174,7 +184,7 @@ try {
   await page.locator('#entityLockedInput').uncheck();
   await page.locator('#roofFloorInput').selectOption('f2');
   await page.reload();
-  await page.locator('[data-view-mode="plan"]').click();
+  await page.locator('button[data-view-mode="plan"]').click();
   await page.locator('[title="上の階を追加"]').click();
   assert.equal((await saved()).roofs[0].floorId, 'f2');
   await page.locator('#floorTabs button').filter({ hasText: /^2F$/ }).click();
@@ -186,7 +196,7 @@ try {
   console.log('PASS: roof migration, floor assignment, visibility, lock, reload and undo');
 
   await importPlan(plan());
-  await page.locator('[data-view-mode="three"]').click();
+  await page.locator('button[data-view-mode="three"]').click();
   await choose('[data-furniture="table"]');
   point = await project(300, 200);
   await page.mouse.click(point.x, point.y);
@@ -259,6 +269,53 @@ try {
   console.log('PASS: 3D placement uses the active floor and skips hidden floors');
   await page.context().close();
 
+  page = await open(JSON.stringify(plan([{ id: 'quality', type: 'furniture', kind: 'chair', x: 200, y: 100, w: 40, h: 40, rotation: 0 }])));
+  await page.locator('button[data-view-mode="split"]').click();
+  point = await planPoint(220, 120);
+  await page.mouse.click(point.x, point.y);
+  const catalog = await page.evaluate(() => window.__editorTest.catalog);
+  const symbols = [];
+  for (const [kind, defaults] of Object.entries(catalog)) {
+    await page.locator('#furnitureKindInput').selectOption(kind);
+    await change('#furnitureRotationInput', 0);
+    await page.locator('#furnitureFlipInput').uncheck();
+    await page.locator('#fitButton').click();
+    const original = (await saved()).floors[0].entities[0];
+    symbols.push({ label: defaults.label, url: await page.evaluate(item => window.__editorTest.symbolImage(item), original) });
+    const w = Math.max(20, Math.round(defaults.w*1.5/20)*20), h = Math.max(20, Math.round(defaults.h*0.75/20)*20);
+    await change('#furnitureWInput', w);
+    await change('#furnitureHInput', h);
+    await change('#furnitureRotationInput', 90);
+    await page.locator('#furnitureFlipInput').check();
+    await page.locator('#furnitureColor3dInput').evaluate(input => { input.value = '#6c998e'; input.dispatchEvent(new Event('change', { bubbles: true })); });
+    const edited = (await saved()).floors[0].entities[0];
+    assert.equal(edited.w, w); assert.equal(edited.h, h); assert.equal(edited.rotation, 90);
+    assert.equal(edited.flip, true); assert.equal(edited.color3d, '#6c998e');
+    const box = await page.evaluate(() => window.__editorTest.bounds('quality'));
+    assert.ok(Math.abs(box.max[0]-box.min[0]-h/100)<1e-5, `${kind}: rotated depth`);
+    assert.ok(Math.abs(box.max[2]-box.min[2]-w/100)<1e-5, `${kind}: rotated width`);
+    assert.ok(box.min[1] >= 0.08-1e-5, `${kind}: below floor`);
+  }
+  const lastFurniture = (await saved()).floors[0].entities[0];
+  await page.reload();
+  assert.deepEqual((await saved()).floors[0].entities[0], lastFurniture);
+  await page.locator('button[data-view-mode="three"]').click();
+  assert.ok((await pixels()).colors > 20);
+  await page.screenshot({ path: `${output}/furniture-edited.png` });
+  const contact = await browser.newPage({ viewport: { width: 1200, height: 2430 } });
+  await contact.setContent('<style>*{box-sizing:border-box}body{margin:0;display:grid;grid-template-columns:repeat(4,300px);font:14px system-ui;background:white}figure{margin:0;height:270px;padding:14px;border:1px solid #ddd;display:flex;flex-direction:column;gap:10px}img{width:100%;height:210px;object-fit:contain}</style>');
+  await contact.evaluate(symbols => {
+    for (const { label, url } of symbols) {
+      const figure=document.createElement('figure'), caption=document.createElement('figcaption'), image=document.createElement('img');
+      caption.textContent=label;image.src=url;figure.append(caption,image);document.body.append(figure);
+    }
+  }, symbols);
+  await contact.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())));
+  for (let part = 0; part < 3; part += 1) await contact.screenshot({ path: `${output}/symbols-${part+1}.png`, clip: { x:0, y:part*810, width:1200, height:810 } });
+  await contact.close();
+  await page.context().close();
+  console.log('PASS: all 34 furniture symbols, resizing, rotation, flip, color, 3D footprints and reload');
+
   // Recovery is tested through actual localStorage and the download UI.
   const broken = JSON.stringify(plan([room(), { type: 'furniture', kind: 'unknown', x: 0, y: 0, w: 100, h: 100 }]));
   page = await open(broken);
@@ -272,7 +329,7 @@ try {
   assert.equal(Buffer.concat(chunks).toString(), broken);
   const backups = await page.evaluate(key => Object.keys(localStorage).filter(k => k.startsWith(key+'-recovery-')).map(k => localStorage.getItem(k)), key);
   assert.deepEqual(backups, [broken]);
-  await page.locator('[data-view-mode="plan"]').click();
+  await page.locator('button[data-view-mode="plan"]').click();
   point = await planPoint(50, 50);
   await page.mouse.click(point.x, point.y);
   await change('#roomWInput', 640);
@@ -288,7 +345,7 @@ try {
     };
   });
   await page.reload();
-  await page.locator('[data-view-mode="plan"]').click();
+  await page.locator('button[data-view-mode="plan"]').click();
   point = await planPoint(50, 50);
   await page.mouse.click(point.x, point.y);
   await change('#roomWInput', 640);
@@ -299,7 +356,7 @@ try {
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);
-  await page.locator('[data-view-mode="three"]').click();
+  await page.locator('button[data-view-mode="three"]').click();
   assert.ok((await pixels()).colors > 20);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: `${output}/mobile.png`, fullPage: true });
