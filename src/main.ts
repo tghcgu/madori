@@ -262,6 +262,8 @@ let threeSceneCenter: Point = { x: 0, y: 0 };
 let threeNeedsRender = true;
 let pendingCameraFrame = true;
 let roofVisible3d = true;
+// 間取り(2D)上の屋根の一時的な表示切替。保存はしない
+let roofVisible2d = true;
 const hiddenFloorIds = new Set<string>();
 
 const renderer = new THREE.WebGLRenderer({
@@ -578,7 +580,17 @@ function setupUi(): void {
     showDimensions = !showDimensions;
     localStorage.setItem(DIMENSION_LABELS_KEY, showDimensions ? "visible" : "hidden");
     updateDimensionToggle();
+    renderRoofList();
     render2d();
+  });
+
+  document.querySelector<HTMLButtonElement>("#roofToggle2d")?.addEventListener("click", () => {
+    roofVisible2d = !roofVisible2d;
+    // 見えない屋根のハンドルやキー操作が残らないよう、隠すときは選択を外す
+    if (!roofVisible2d && state.roofs.some((item) => item.id === state.selectedId)) state.selectedId = null;
+    updateUi();
+    render2d();
+    rebuildThree();
   });
 
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
@@ -928,12 +940,28 @@ function addRoof(kind: RoofKind): void {
   state.roofs.push(item);
   state.selectedId = item.id;
   roofVisible3d = true;
+  roofVisible2d = true;
   activeTool = "select";
   setActiveButton("[data-tool]", activeTool);
   pendingCameraFrame = true;
   commitState();
   fitPlanToCanvas();
   redrawAll();
+}
+
+// 一覧や3Dから屋根を選んだときは、隠したままだと編集できないので間取りにも表示し直す
+function revealRoofsIfSelected(): void {
+  if (!roofVisible2d && state.roofs.some((item) => item.id === state.selectedId)) roofVisible2d = true;
+}
+
+function updateRoofToggle2d(): void {
+  const button = document.querySelector<HTMLButtonElement>("#roofToggle2d");
+  if (!button) return;
+  revealRoofsIfSelected();
+  button.hidden = state.roofs.length === 0;
+  button.classList.toggle("is-active", roofVisible2d);
+  button.setAttribute("aria-pressed", String(roofVisible2d));
+  button.title = roofVisible2d ? "間取り上の屋根を一時的に隠す" : "間取り上に屋根を表示";
 }
 
 function renderRoofList(): void {
@@ -946,7 +974,8 @@ function renderRoofList(): void {
     select.type = "button";
     select.className = "roof-list-select";
     const floorName = state.floors.find((floor) => floor.id === item.floorId)?.name ?? state.floors[state.floors.length - 1].name;
-    select.textContent = `${index + 1}. ${floorName} ${ROOF_LABELS[item.kind]} ${formatMeters(item.w)} x ${formatMeters(item.h)}`;
+    const roofSize = showDimensions ? ` ${formatMeters(item.w)} x ${formatMeters(item.h)}` : "";
+    select.textContent = `${index + 1}. ${floorName} ${ROOF_LABELS[item.kind]}${roofSize}`;
     select.addEventListener("click", () => {
       state.selectedId = item.id;
       activeTool = "select";
@@ -1721,9 +1750,10 @@ function render2d(): void {
   entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   entities.filter(isFurniture).filter((item) => item.kind !== "rug").forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
-  state.roofs.forEach(drawRoof2d);
+  revealRoofsIfSelected();
+  if (roofVisible2d) state.roofs.forEach(drawRoof2d);
   entities.filter(isLocked).forEach(drawLockedIndicator);
-  state.roofs.filter(isLocked).forEach(drawLockedIndicator);
+  if (roofVisible2d) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
 
   if (drag.dragMode === "draw" && activeTool !== "furniture") {
     drawPreview(drag.startWorld, drag.currentWorld);
@@ -1828,7 +1858,8 @@ function drawRoof2d(roofItem: Roof, index: number): void {
   ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
   ctx.textAlign = "left";
   ctx.textBaseline = "bottom";
-  ctx.fillText(`屋根 ${index + 1}  ${formatMeters(roofItem.w)} x ${formatMeters(roofItem.h)}`, roofItem.x + 6, roofItem.y - 5 / view.zoom);
+  const roofSize = showDimensions ? `  ${formatMeters(roofItem.w)} x ${formatMeters(roofItem.h)}` : "";
+  ctx.fillText(`屋根 ${index + 1}${roofSize}`, roofItem.x + 6, roofItem.y - 5 / view.zoom);
   ctx.restore();
 
   if (selected && !isLocked(roofItem)) drawResizeHandles(roofItem);
@@ -2955,6 +2986,7 @@ function updateUi(): void {
   renderFloorTabs();
   renderFloorVisibility();
   renderRoofList();
+  updateRoofToggle2d();
   document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", historyIndex <= 0);
   document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", historyIndex >= history.length - 1);
 }
@@ -3330,6 +3362,7 @@ function commitState(): void {
 function replaceState(next: PlanState, pushHistory: boolean): void {
   state = cloneState(next);
   hiddenFloorIds.clear();
+  roofVisible2d = true;
   if (pushHistory) commitState();
   persistState();
   fitPlanToCanvas();
@@ -3426,7 +3459,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
   // Match visual stacking even when a floor or rug was placed after the furniture.
   const layer = (entity: Entity): number => entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
-  const selectedRoof = state.roofs.find((item) => item.id === state.selectedId);
+  const selectedRoof = roofVisible2d ? state.roofs.find((item) => item.id === state.selectedId) : undefined;
   if (selectedRoof) {
     const corner = getCornerHit(selectedRoof, point);
     if (corner) return { entity: selectedRoof, corner };
@@ -3472,7 +3505,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       }
     }
   }
-  for (let i = state.roofs.length - 1; i >= 0; i -= 1) {
+  for (let i = roofVisible2d ? state.roofs.length - 1 : -1; i >= 0; i -= 1) {
     const roofItem = state.roofs[i];
     if (roofItem.id !== selectedRoof?.id && isPointNearRoofEdge(point, roofItem)) {
       return { entity: roofItem, corner: null };

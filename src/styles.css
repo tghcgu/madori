@@ -848,6 +848,11 @@ select:focus-visible {
   gap: 8px;
 }
 
+/* display: inline-flex が hidden 属性より優先されるため明示する */
+.toggle-button[hidden] {
+  display: none;
+}
+
 .toggle-button {
   min-width: 86px;
   height: 38px;
