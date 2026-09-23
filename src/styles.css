@@ -677,6 +677,10 @@ select:focus-visible {
   text-decoration: none;
 }
 
+.about-text .feedback-sub {
+  margin-top: 12px;
+}
+
 .feedback-link:hover {
   border-color: var(--line-strong);
   background: #f9fafc;

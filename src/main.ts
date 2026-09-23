@@ -670,10 +670,13 @@ function setupUi(): void {
     const recovery = storageRecovery;
     if (!recovery.backupSaved) saveStatus.textContent = "元データ保護中・自動保存停止";
     requiredElement<HTMLElement>("#recoveryNotice").hidden = false;
-    requiredElement<HTMLElement>("#recoveryMessage").textContent = recovery.backupSaved
-      ? "保存データに読み込めない項目がありました。元データを退避し、読み込める内容を復旧しました。"
-      : "保存データを完全には読み込めません。元データを保護するため、自動保存を停止しています。編集中の内容は書き出してください。";
-    requiredElement<HTMLButtonElement>("#recoveryExportButton").addEventListener("click", () => downloadJson(recovery.raw, "madori-recovery.json"));
+    const recoveredItems = state.floors.reduce((sum, floor) => sum + floor.entities.length, 0) + state.roofs.length;
+    requiredElement<HTMLElement>("#recoveryMessage").textContent = !recovery.backupSaved
+      ? "保存データを完全には読み込めません。元データを保護するため、自動保存を停止しています。編集中の内容は書き出してください。"
+      : recoveredItems > 0
+        ? "保存データに読み込めない項目がありました。元データを退避し、読み込める内容を復旧しました。"
+        : "保存データが壊れていたため読み込めませんでした。元データは退避してあり、「元データを書き出し」から取り出せます。";
+    requiredElement<HTMLButtonElement>("#recoveryExportButton").addEventListener("click", () => downloadJson(recovery.raw, `madori-recovery-${localDateStamp()}.json`));
     requiredElement<HTMLButtonElement>("#recoveryCloseButton").addEventListener("click", () => {
       requiredElement<HTMLElement>("#recoveryNotice").hidden = true;
     });
@@ -3369,7 +3372,14 @@ function persistState(): void {
 }
 
 function exportPlan(): void {
-  downloadJson(JSON.stringify(state, null, 2), `madori-${new Date().toISOString().slice(0, 10)}.json`);
+  downloadJson(JSON.stringify(state, null, 2), `madori-${localDateStamp()}.json`);
+}
+
+// toISOString() はUTCのため、日本時間の0〜9時に前日の日付になる。利用者の現地日付を使う
+function localDateStamp(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function downloadJson(json: string, filename: string): void {
@@ -3625,7 +3635,6 @@ function samplePlanData(): unknown {
         { id: "furniture-bf61839b-28c6-4829-97c0-74d6e1c08fae", type: "furniture", kind: "stairs", x: 1700, y: 840, w: 100, h: 280, rotation: 0 },
       ],
     },
-    { id: "floor-b9fc8ff7-f6b0-4e9b-a154-89bed050dea9", name: "2F", entities: [] },
   ],
   activeFloor: 0,
   selectedId: null,

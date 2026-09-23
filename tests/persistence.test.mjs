@@ -8,6 +8,8 @@ function storage(raw, full = false) {
   return {
     entries,
     getItem: name => entries.get(name) ?? null,
+    get length() { return entries.size; },
+    key: index => [...entries.keys()][index] ?? null,
     setItem(name, value) {
       if (full) throw new Error('QuotaExceededError');
       entries.set(name, value);
@@ -53,4 +55,13 @@ test('failed backups flag that the primary autosave must not be overwritten', ()
   assert.equal(result.recovery.raw, raw);
   assert.equal(source.getItem(key), raw);
   assert.equal(source.entries.size, 1);
+});
+
+test('reopening the same broken autosave does not pile up backups', () => {
+  const raw = '{ broken';
+  const source = storage(raw);
+  for (let i = 0; i < 3; i += 1) {
+    assert.deepEqual(readStoredPlan(source, key, normalize), { plan: null, recovery: { raw, backupSaved: true } });
+  }
+  assert.equal(source.entries.size, 2);
 });
