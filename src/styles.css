@@ -100,7 +100,9 @@ select:focus-visible {
   vertical-align: 2px;
 }
 
-.brand span {
+/* 保存状態の表示だけに限定する（.brand span だとα版バッジや注意書きにも当たり、
+   バッジが改行されたり、狭い画面で注意書きを隠す指定が負けたりする） */
+.brand #saveStatus {
   display: block;
   margin-top: 4px;
   color: var(--muted);
