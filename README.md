@@ -143,23 +143,23 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 家具・設備
 
-左パネルのパーツは「建物をつくる」と「家具を置く」の2段に分かれています。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。
+左パネルの「家具・設備」は、よく使う建具と家具を上に、床材・階段・図形の壁・屋根を下に並べています。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。
 
-| 段 | 分類 | 収録要素 |
-| --- | --- | --- |
-| 建物をつくる | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
-| | 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
-| | 図形の壁 | 円、円弧、三角形〜八角形 |
-| | 階段 | 直階段、折り返し階段、らせん階段 |
-| | 屋根 | 切妻、寄棟、陸屋根 |
-| 家具を置く | 椅子・ソファ | ソファ、L字ソファ、1人掛け、椅子、スツール、ベンチ |
-| | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、机 |
-| | ベッド | シングルベッド、ダブルベッド |
-| | 収納・棚 | クローゼット、タンス、棚・本棚 |
-| | 家電 | 冷蔵庫、洗濯機、テレビ台 |
-| | キッチン・水回り | キッチン、浴槽、トイレ、洗面台 |
-| | インテリア | 観葉植物、ラグ、フロアライト、壁掛け時計、ホールクロック、水槽、ピアノ |
-| | 乗り物 | 車 |
+| 分類 | 収録要素 |
+| --- | --- |
+| 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
+| 椅子・ソファ | ソファ、L字ソファ、1人掛け、椅子、スツール、ベンチ |
+| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、机 |
+| ベッド | シングルベッド、ダブルベッド |
+| 収納・棚 | クローゼット、タンス、棚・本棚 |
+| 家電 | 冷蔵庫、洗濯機、テレビ台 |
+| キッチン・水回り | キッチン、浴槽、トイレ、洗面台 |
+| インテリア | 観葉植物、ラグ、フロアライト、壁掛け時計、ホールクロック、水槽、ピアノ |
+| 乗り物 | 車 |
+| 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
+| 階段 | 直階段、折り返し階段、らせん階段 |
+| 図形の壁 | 円、円弧、三角形〜八角形 |
+| 屋根 | 切妻、寄棟、陸屋根 |
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
@@ -194,7 +194,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | エリア | 役割 |
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、新規作成 |
-| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、「建物をつくる」（床・建具・図形の壁・階段・屋根）、「家具を置く」、雛形 |
+| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、雛形 |
 | 2Dペイン | 間取りの作成、選択、移動、リサイズ、寸法・下階・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
@@ -625,23 +625,23 @@ If a room is selected before adding a roof, the new roof is sized around that ro
 
 ### Included objects
 
-The palette is split into "Build the structure" and "Place furniture". Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types.
+The furniture and equipment palette lists frequently used openings and furniture first, followed by floors, stairs, shape walls, and roofs. Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types.
 
-| Tier | Category | Objects |
-| --- | --- | --- |
-| Build the structure | Floors and ground | Plain, wood planks, tile, stone paving, grass |
-| | Openings | Swing door, sliding door, window, divided window |
-| | Shape walls | Circle, arc, triangle to octagon |
-| | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
-| | Roofs | Gable, hip, flat |
-| Place furniture | Seating | Sofa, corner sofa, armchair, chair, stool, bench |
-| | Tables and desks | Dining set, round table, low table, side table, desk |
-| | Beds | Single bed, double bed |
-| | Storage | Closet, wardrobe, shelf |
-| | Appliances | Refrigerator, washing machine, TV stand |
-| | Kitchen and bathroom | Kitchen unit, bathtub, toilet, washbasin |
-| | Decor | Plant, rug, floor lamp, wall clock, grandfather clock, aquarium, upright piano |
-| | Vehicles | Car |
+| Category | Objects |
+| --- | --- |
+| Openings | Swing door, sliding door, window, divided window |
+| Seating | Sofa, corner sofa, armchair, chair, stool, bench |
+| Tables and desks | Dining set, round table, low table, side table, desk |
+| Beds | Single bed, double bed |
+| Storage | Closet, wardrobe, shelf |
+| Appliances | Refrigerator, washing machine, TV stand |
+| Kitchen and bathroom | Kitchen unit, bathtub, toilet, washbasin |
+| Decor | Plant, rug, floor lamp, wall clock, grandfather clock, aquarium, upright piano |
+| Vehicles | Car |
+| Floors and ground | Plain, wood planks, tile, stone paving, grass |
+| Stairs | Straight stairs, U-shaped stairs, spiral stairs |
+| Shape walls | Circle, arc, triangle to octagon |
+| Roofs | Gable, hip, flat |
 
 Type in the search box at the top of the palette to show only matching parts.
 
@@ -676,7 +676,7 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | Area | Purpose |
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, and new plan |
-| Left panel | Drawing tools, selected-item properties, part search, "Build the structure" (floors, openings, shape walls, stairs, roofs), "Place furniture", and templates |
+| Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
 | 2D pane | Drawing, selection, movement, resizing, and toggles for dimensions, the floor below, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 

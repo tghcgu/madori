@@ -151,7 +151,6 @@ const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
 const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
 const furniturePicker = requiredElement<HTMLDivElement>("#furniturePicker");
-const structurePicker = requiredElement<HTMLDivElement>("#structurePicker");
 const paletteSearch = requiredElement<HTMLInputElement>("#paletteSearch");
 const paletteEmpty = requiredElement<HTMLParagraphElement>("#paletteEmpty");
 const roofPicker = requiredElement<HTMLDivElement>("#roofPicker");
@@ -212,7 +211,7 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "インテリア", kinds: ["plant", "rug", "floorLamp", "wallClock", "grandfatherClock", "aquarium", "piano"] },
   { label: "乗り物", kinds: ["car"] },
 ];
-// 階段は家具ではなく建物の構造として「建物をつくる」に置く
+// 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
 const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
 
 // 検索で表記ゆれ（ひらがな・別名）を拾うための語。表示名と分類名は自動で検索対象になる
@@ -746,8 +745,31 @@ function setupUi(): void {
 }
 
 function buildFurniturePicker(): void {
-  structurePicker.innerHTML = "";
   furniturePicker.innerHTML = "";
+
+  // よく使う建具と家具を上に、床材・階段・図形の壁は下に置く。屋根はHTML側で最後に並ぶ
+  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ");
+  ([
+    ["door", "ドア", "とびら 扉 開き戸"],
+    ["slidingDoor", "引き戸", "ひきど 扉 スライド"],
+    ["window", "窓", "まど"],
+    ["window2", "窓（区切付き）", "まど"],
+  ] as [Tool, string, string][]).forEach(([tool, label, keywords]) => {
+    const button = createPaletteButton(label, keywords, () => {
+      activeTool = tool;
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+    });
+    button.dataset.tool = tool;
+    fittings.items.appendChild(button);
+  });
+  furniturePicker.appendChild(fittings.details);
+
+  FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
+    const group = createPaletteGroup(category.label, categoryIndex === 0);
+    category.kinds.forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
+    furniturePicker.appendChild(group.details);
+  });
 
   const surfaces = createPaletteGroup("床・地面", true, "ゆか 床 素材");
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
@@ -765,24 +787,11 @@ function buildFurniturePicker(): void {
     button.prepend(swatch);
     surfaces.items.appendChild(button);
   });
-  structurePicker.appendChild(surfaces.details);
+  furniturePicker.appendChild(surfaces.details);
 
-  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ");
-  ([
-    ["door", "ドア", "とびら 扉 開き戸"],
-    ["slidingDoor", "引き戸", "ひきど 扉 スライド"],
-    ["window", "窓", "まど"],
-    ["window2", "窓（区切付き）", "まど"],
-  ] as [Tool, string, string][]).forEach(([tool, label, keywords]) => {
-    const button = createPaletteButton(label, keywords, () => {
-      activeTool = tool;
-      setActiveButton("[data-tool]", activeTool);
-      syncPlanCursor();
-    });
-    button.dataset.tool = tool;
-    fittings.items.appendChild(button);
-  });
-  structurePicker.appendChild(fittings.details);
+  const stairs = createPaletteGroup("階段", false, "かいだん");
+  STAIR_KINDS.forEach((kind) => stairs.items.appendChild(createFurnitureButton(kind)));
+  furniturePicker.appendChild(stairs.details);
 
   const shapes = createPaletteGroup("図形の壁", false, "図形 ずけい 壁 かべ");
   ([
@@ -808,11 +817,7 @@ function buildFurniturePicker(): void {
     button.dataset.shape = key;
     shapes.items.appendChild(button);
   });
-  structurePicker.appendChild(shapes.details);
-
-  const stairs = createPaletteGroup("階段", false, "かいだん");
-  STAIR_KINDS.forEach((kind) => stairs.items.appendChild(createFurnitureButton(kind)));
-  structurePicker.appendChild(stairs.details);
+  furniturePicker.appendChild(shapes.details);
 
   // 屋根の欄はHTMLに固定で置いてあるので、検索用の語だけ付ける
   const roofCategory = requiredElement<HTMLDetailsElement>("#roofCategory");
@@ -821,12 +826,6 @@ function buildFurniturePicker(): void {
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
     const kind = button.dataset.roofAdd as RoofKind;
     button.dataset.search = normalizeSearchText(`${ROOF_LABELS[kind]} ${roofKeywords[kind]}`);
-  });
-
-  FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
-    const group = createPaletteGroup(category.label, categoryIndex === 0);
-    category.kinds.forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
-    furniturePicker.appendChild(group.details);
   });
 
   applyPaletteSearch();
