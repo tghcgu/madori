@@ -151,6 +151,9 @@ const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
 const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
 const furniturePicker = requiredElement<HTMLDivElement>("#furniturePicker");
+const structurePicker = requiredElement<HTMLDivElement>("#structurePicker");
+const paletteSearch = requiredElement<HTMLInputElement>("#paletteSearch");
+const paletteEmpty = requiredElement<HTMLParagraphElement>("#paletteEmpty");
 const roofPicker = requiredElement<HTMLDivElement>("#roofPicker");
 const roofList = requiredElement<HTMLDivElement>("#roofList");
 const floorTabs = requiredElement<HTMLDivElement>("#floorTabs");
@@ -198,16 +201,35 @@ function isMobileOrTabletDevice(): boolean {
 const INK = "#000000";
 const INK_SOFT = "#5b6470";
 
+// 家具は置く部屋ではなく種類で分ける。創作では部屋の種類が決まっていないことが多いため
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
-  { label: "リビング", kinds: ["sofa", "sofaCorner", "armchair", "table", "sideTable", "tv", "plant", "rug", "floorLamp"] },
-  { label: "時計・装飾", kinds: ["wallClock", "grandfatherClock", "aquarium", "piano"] },
-  { label: "ダイニング・キッチン", kinds: ["diningTable", "roundTable", "chair", "stool", "kitchen", "fridge"] },
-  { label: "寝室・書斎", kinds: ["bed", "bedDouble", "desk", "shelf"] },
-  { label: "水回り", kinds: ["bath", "toilet", "washbasin", "washer"] },
-  { label: "収納", kinds: ["closet", "wardrobe"] },
-  { label: "階段", kinds: ["stairs", "stairsU", "stairsSpiral"] },
-  { label: "屋外", kinds: ["bench", "car"] },
+  { label: "椅子・ソファ", kinds: ["sofa", "sofaCorner", "armchair", "chair", "stool", "bench"] },
+  { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "desk"] },
+  { label: "ベッド", kinds: ["bed", "bedDouble"] },
+  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf"] },
+  { label: "家電", kinds: ["fridge", "washer", "tv"] },
+  { label: "キッチン・水回り", kinds: ["kitchen", "bath", "toilet", "washbasin"] },
+  { label: "インテリア", kinds: ["plant", "rug", "floorLamp", "wallClock", "grandfatherClock", "aquarium", "piano"] },
+  { label: "乗り物", kinds: ["car"] },
 ];
+// 階段は家具ではなく建物の構造として「建物をつくる」に置く
+const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
+
+// 検索で表記ゆれ（ひらがな・別名）を拾うための語。表示名と分類名は自動で検索対象になる
+const SEARCH_KEYWORDS: Record<string, string> = {
+  sofa: "ソファー", sofaCorner: "ソファー コーナー", armchair: "椅子 いす イス チェア ソファー ひとりがけ",
+  chair: "いす イス チェア", stool: "椅子 いす イス", bench: "椅子 いす イス 屋外",
+  diningTable: "テーブル 食卓 しょくたく 椅子 いす", roundTable: "まるテーブル", table: "座卓 ちゃぶ台",
+  desk: "つくえ デスク 勉強", bed: "ベット 寝台 布団", bedDouble: "ベット 寝台 布団",
+  closet: "押入れ おしいれ 収納", wardrobe: "箪笥 たんす 収納", shelf: "たな ほんだな ラック",
+  fridge: "れいぞうこ", washer: "せんたくき", tv: "テレビ てれび TV",
+  kitchen: "台所 だいどころ 流し シンク コンロ", bath: "よくそう 風呂 ふろ お風呂 バス",
+  toilet: "便器 べんき", washbasin: "せんめんだい 洗面所",
+  plant: "かんようしょくぶつ 植物 しょくぶつ 木 グリーン", rug: "じゅうたん 絨毯 カーペット マット",
+  floorLamp: "照明 しょうめい ライト ランプ", wallClock: "とけい 時計", grandfatherClock: "とけい 時計 柱時計",
+  aquarium: "すいそう 魚 さかな", piano: "楽器 がっき", car: "くるま 自動車 じどうしゃ 屋外",
+  stairs: "かいだん", stairsU: "かいだん", stairsSpiral: "かいだん 螺旋",
+};
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
 const ROOF_LABELS: Record<RoofKind, string> = {
@@ -559,6 +581,7 @@ function setupUi(): void {
   });
 
   buildFurniturePicker();
+  paletteSearch.addEventListener("input", applyPaletteSearch);
 
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -723,85 +746,55 @@ function setupUi(): void {
 }
 
 function buildFurniturePicker(): void {
+  structurePicker.innerHTML = "";
   furniturePicker.innerHTML = "";
 
-  const surfaces = document.createElement("details");
-  surfaces.className = "furniture-category";
-  surfaces.open = true;
-  const surfaceSummary = document.createElement("summary");
-  surfaceSummary.textContent = "床・地面";
-  surfaces.appendChild(surfaceSummary);
-  const surfaceItems = document.createElement("div");
-  surfaceItems.className = "furniture-items";
+  const surfaces = createPaletteGroup("床・地面", true, "ゆか 床 素材");
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.surface = surface;
-    const swatch = document.createElement("span");
-    swatch.className = "surface-swatch";
-    swatch.style.backgroundImage = `url(${surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL()})`;
-    button.append(swatch, SURFACE_DEFS[surface].label);
-    button.addEventListener("click", () => {
+    const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
       activeTool = "room";
       setActiveButton("[data-surface]", surface);
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
     });
-    surfaceItems.appendChild(button);
+    button.dataset.surface = surface;
+    const swatch = document.createElement("span");
+    swatch.className = "surface-swatch";
+    swatch.style.backgroundImage = `url(${surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL()})`;
+    button.prepend(swatch);
+    surfaces.items.appendChild(button);
   });
-  surfaces.appendChild(surfaceItems);
-  furniturePicker.appendChild(surfaces);
+  structurePicker.appendChild(surfaces.details);
 
-  const fittings = document.createElement("details");
-  fittings.className = "furniture-category";
-  fittings.open = true;
-  const fittingsSummary = document.createElement("summary");
-  fittingsSummary.textContent = "建具（ドア・窓）";
-  fittings.appendChild(fittingsSummary);
-  const fittingsItems = document.createElement("div");
-  fittingsItems.className = "furniture-items";
+  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ");
   ([
-    ["door", "ドア"],
-    ["slidingDoor", "引き戸"],
-    ["window", "窓"],
-    ["window2", "窓（区切付き）"],
-  ] as [Tool, string][]).forEach(([tool, label]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.tool = tool;
-    button.textContent = label;
-    button.addEventListener("click", () => {
+    ["door", "ドア", "とびら 扉 開き戸"],
+    ["slidingDoor", "引き戸", "ひきど 扉 スライド"],
+    ["window", "窓", "まど"],
+    ["window2", "窓（区切付き）", "まど"],
+  ] as [Tool, string, string][]).forEach(([tool, label, keywords]) => {
+    const button = createPaletteButton(label, keywords, () => {
       activeTool = tool;
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
     });
-    fittingsItems.appendChild(button);
+    button.dataset.tool = tool;
+    fittings.items.appendChild(button);
   });
-  fittings.appendChild(fittingsItems);
-  furniturePicker.appendChild(fittings);
+  structurePicker.appendChild(fittings.details);
 
-  const shapes = document.createElement("details");
-  shapes.className = "furniture-category";
-  const shapesSummary = document.createElement("summary");
-  shapesSummary.textContent = "図形";
-  shapes.appendChild(shapesSummary);
-  const shapesItems = document.createElement("div");
-  shapesItems.className = "furniture-items";
+  const shapes = createPaletteGroup("図形の壁", false, "図形 ずけい 壁 かべ");
   ([
-    ["circle", 0, "円"],
-    ["arc", 0, "円弧"],
-    ["poly3", 3, "三角形"],
-    ["poly4", 4, "四角形"],
-    ["poly5", 5, "五角形"],
-    ["poly6", 6, "六角形"],
-    ["poly8", 8, "八角形"],
-  ] as [string, number, string][]).forEach(([key, sides, label]) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.dataset.shape = key;
-    button.textContent = label;
-    button.addEventListener("click", () => {
+    ["circle", 0, "円", "えん まる"],
+    ["arc", 0, "円弧", "えんこ カーブ"],
+    ["poly3", 3, "三角形", "さんかく"],
+    ["poly4", 4, "四角形", "しかく"],
+    ["poly5", 5, "五角形", "ごかく"],
+    ["poly6", 6, "六角形", "ろっかく"],
+    ["poly8", 8, "八角形", "はっかく"],
+  ] as [string, number, string, string][]).forEach(([key, sides, label, keywords]) => {
+    const button = createPaletteButton(label, keywords, () => {
       if (key === "circle" || key === "arc") {
         activeTool = key;
       } else {
@@ -812,38 +805,106 @@ function buildFurniturePicker(): void {
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
     });
-    shapesItems.appendChild(button);
+    button.dataset.shape = key;
+    shapes.items.appendChild(button);
   });
-  shapes.appendChild(shapesItems);
-  furniturePicker.appendChild(shapes);
+  structurePicker.appendChild(shapes.details);
+
+  const stairs = createPaletteGroup("階段", false, "かいだん");
+  STAIR_KINDS.forEach((kind) => stairs.items.appendChild(createFurnitureButton(kind)));
+  structurePicker.appendChild(stairs.details);
+
+  // 屋根の欄はHTMLに固定で置いてあるので、検索用の語だけ付ける
+  const roofCategory = requiredElement<HTMLDetailsElement>("#roofCategory");
+  roofCategory.dataset.search = normalizeSearchText("屋根 やね");
+  const roofKeywords: Record<RoofKind, string> = { gable: "きりづま", hip: "よせむね", flat: "ろくやね りくやね フラット" };
+  roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
+    const kind = button.dataset.roofAdd as RoofKind;
+    button.dataset.search = normalizeSearchText(`${ROOF_LABELS[kind]} ${roofKeywords[kind]}`);
+  });
 
   FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
-    const details = document.createElement("details");
-    details.className = "furniture-category";
-    if (categoryIndex === 0) details.open = true;
-    const summary = document.createElement("summary");
-    summary.textContent = category.label;
-    details.appendChild(summary);
-    const items = document.createElement("div");
-    items.className = "furniture-items";
-    category.kinds.forEach((kind) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.furniture = kind;
-      button.textContent = FURNITURE_DEFS[kind].label;
-      if (activeTool === "furniture" && kind === activeFurniture) button.classList.add("is-active");
-      button.addEventListener("click", () => {
-        activeFurniture = kind;
-        setActiveButton("[data-furniture]", activeFurniture);
-        activeTool = "furniture";
-        setActiveButton("[data-tool]", activeTool);
-        syncPlanCursor();
-      });
-      items.appendChild(button);
-    });
-    details.appendChild(items);
-    furniturePicker.appendChild(details);
+    const group = createPaletteGroup(category.label, categoryIndex === 0);
+    category.kinds.forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
+    furniturePicker.appendChild(group.details);
   });
+
+  applyPaletteSearch();
+}
+
+function createPaletteGroup(label: string, open: boolean, keywords = ""): { details: HTMLDetailsElement; items: HTMLDivElement } {
+  const details = document.createElement("details");
+  details.className = "furniture-category palette-group";
+  details.open = open;
+  details.dataset.search = normalizeSearchText(`${label} ${keywords}`);
+  const summary = document.createElement("summary");
+  summary.textContent = label;
+  const items = document.createElement("div");
+  items.className = "furniture-items";
+  details.append(summary, items);
+  return { details, items };
+}
+
+function createPaletteButton(label: string, keywords: string, onClick: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.dataset.search = normalizeSearchText(`${label} ${keywords}`);
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+function createFurnitureButton(kind: FurnitureKind): HTMLButtonElement {
+  const button = createPaletteButton(FURNITURE_DEFS[kind].label, SEARCH_KEYWORDS[kind] ?? "", () => {
+    activeFurniture = kind;
+    setActiveButton("[data-furniture]", activeFurniture);
+    activeTool = "furniture";
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+  });
+  button.dataset.furniture = kind;
+  if (activeTool === "furniture" && kind === activeFurniture) button.classList.add("is-active");
+  return button;
+}
+
+// カタカナをひらがなに、全角英数を半角にそろえ、「ソファ」と「そふぁ」などを同じ語として扱う
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[\u30a1-\u30f6]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60));
+}
+
+function applyPaletteSearch(): void {
+  const terms = normalizeSearchText(paletteSearch.value).split(/\s+/).filter(Boolean);
+  const searching = terms.length > 0;
+  let anyMatch = false;
+  document.querySelectorAll<HTMLElement>(".palette-section").forEach((section) => {
+    let sectionMatch = false;
+    section.querySelectorAll<HTMLDetailsElement>(".palette-group").forEach((group) => {
+      const groupText = group.dataset.search ?? "";
+      let groupMatch = false;
+      group.querySelectorAll<HTMLButtonElement>("button[data-search]").forEach((button) => {
+        const text = `${button.dataset.search} ${groupText}`;
+        const match = !searching || terms.every((term) => text.includes(term));
+        button.classList.toggle("palette-hidden", !match);
+        groupMatch ||= match;
+      });
+      // 検索中は該当する分類だけを開き、検索をやめたら元の開閉状態に戻す
+      if (searching) {
+        if (group.dataset.wasOpen === undefined) group.dataset.wasOpen = String(group.open);
+        group.open = groupMatch;
+      } else if (group.dataset.wasOpen !== undefined) {
+        group.open = group.dataset.wasOpen === "true";
+        delete group.dataset.wasOpen;
+      }
+      group.classList.toggle("palette-hidden", searching && !groupMatch);
+      sectionMatch ||= groupMatch;
+    });
+    section.classList.toggle("palette-hidden", searching && !sectionMatch);
+    anyMatch ||= sectionMatch;
+  });
+  paletteEmpty.hidden = !searching || anyMatch;
 }
 
 function renderFloorTabs(): void {
@@ -1805,7 +1866,7 @@ function drawFloorBelowGhost(): void {
   ctx.restore();
 }
 
-function drawRoof2d(roofItem: Roof, index: number): void {
+function drawRoof2d(roofItem: Roof): void {
   const selected = state.selectedId === roofItem.id;
   const horizontal = roofItem.w >= roofItem.h;
   const cx = roofItem.x + roofItem.w / 2;
@@ -1854,12 +1915,13 @@ function drawRoof2d(roofItem: Roof, index: number): void {
   }
   ctx.stroke();
 
-  ctx.fillStyle = selected ? "#145da8" : "#4d5967";
-  ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "bottom";
-  const roofSize = showDimensions ? `  ${formatMeters(roofItem.w)} x ${formatMeters(roofItem.h)}` : "";
-  ctx.fillText(`屋根 ${index + 1}${roofSize}`, roofItem.x + 6, roofItem.y - 5 / view.zoom);
+  if (showDimensions) {
+    ctx.fillStyle = selected ? "#145da8" : "#4d5967";
+    ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${formatMeters(roofItem.w)} x ${formatMeters(roofItem.h)}`, roofItem.x + 6, roofItem.y - 5 / view.zoom);
+  }
   ctx.restore();
 
   if (selected && !isLocked(roofItem)) drawResizeHandles(roofItem);
@@ -3214,7 +3276,7 @@ function updatePropertiesPanel(): void {
   }
 
   const selectedFurniture = selected as Furniture;
-  const kindOptions = FURNITURE_CATEGORIES.map(
+  const kindOptions = [...FURNITURE_CATEGORIES, { label: "階段", kinds: STAIR_KINDS }].map(
     (category) =>
       `<optgroup label="${category.label}">` +
       category.kinds

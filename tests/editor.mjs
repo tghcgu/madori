@@ -380,6 +380,10 @@ try {
   assert.equal(Buffer.concat(chunks).toString(), broken);
   const backups = await page.evaluate(key => Object.keys(localStorage).filter(k => k.startsWith(key+'-recovery-')).map(k => localStorage.getItem(k)), key);
   assert.deepEqual(backups, [broken]);
+  // Reopening the same broken autosave reuses the existing backup instead of adding a copy.
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.deepEqual(await page.evaluate(key => Object.keys(localStorage).filter(k => k.startsWith(key+'-recovery-')).map(k => localStorage.getItem(k)), key), [broken]);
   await page.locator('button[data-view-mode="plan"]').click();
   point = await planPoint(50, 50);
   await page.mouse.click(point.x, point.y);
@@ -388,6 +392,8 @@ try {
   assert.equal((await saved()).floors[0].entities[0].w, 640);
   await page.context().close();
   page = await open(broken);
+  // Drop the backup made on first load so the reload has to write a new one and hits the quota error.
+  await page.evaluate(key => Object.keys(localStorage).filter(k => k.startsWith(key+'-recovery-')).forEach(k => localStorage.removeItem(k)), key);
   await page.addInitScript(() => {
     const set = Storage.prototype.setItem;
     Storage.prototype.setItem = function(key, value) {

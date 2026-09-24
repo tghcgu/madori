@@ -138,18 +138,32 @@
           </section>
 
           <section class="tool-section">
-            <h2>家具・設備</h2>
-            <div id="furniturePicker" class="furniture-picker"></div>
+            <label class="palette-search">
+              <i data-lucide="search"></i>
+              <input type="search" id="paletteSearch" placeholder="パーツを検索（例: いす、窓、屋根）" aria-label="パーツを検索" autocomplete="off" />
+            </label>
+            <p class="palette-empty" id="paletteEmpty" hidden>見つかりませんでした</p>
           </section>
 
-          <section class="tool-section">
-            <h2>屋根</h2>
-            <div class="roof-picker" id="roofPicker">
-              <button type="button" data-roof-add="gable">+ 切妻</button>
-              <button type="button" data-roof-add="hip">+ 寄棟</button>
-              <button type="button" data-roof-add="flat">+ 陸屋根</button>
-            </div>
-            <div class="roof-list" id="roofList" aria-label="配置済みの屋根"></div>
+          <section class="tool-section palette-section">
+            <h2>建物をつくる</h2>
+            <div id="structurePicker" class="furniture-picker"></div>
+            <details class="furniture-category palette-group" id="roofCategory" open>
+              <summary>屋根</summary>
+              <div class="roof-body">
+                <div class="roof-picker" id="roofPicker">
+                  <button type="button" data-roof-add="gable">+ 切妻</button>
+                  <button type="button" data-roof-add="hip">+ 寄棟</button>
+                  <button type="button" data-roof-add="flat">+ 陸屋根</button>
+                </div>
+                <div class="roof-list" id="roofList" aria-label="配置済みの屋根"></div>
+              </div>
+            </details>
+          </section>
+
+          <section class="tool-section palette-section">
+            <h2>家具を置く</h2>
+            <div id="furniturePicker" class="furniture-picker"></div>
           </section>
 
           <section class="tool-section">

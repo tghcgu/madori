@@ -381,6 +381,60 @@ select:focus-visible {
   gap: 8px;
 }
 
+.palette-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: text;
+}
+
+.palette-search:focus-within {
+  border-color: rgba(39, 117, 209, 0.52);
+  box-shadow: 0 0 0 3px rgba(39, 117, 209, 0.14);
+}
+
+.palette-search svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.palette-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.palette-empty {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 検索で外れたボタン・分類・見出しを隠す。各要素の display 指定より優先する */
+.palette-hidden {
+  display: none !important;
+}
+
+#roofCategory {
+  margin-top: 8px;
+}
+
+.roof-body {
+  padding: 8px;
+}
+
 .roof-picker {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

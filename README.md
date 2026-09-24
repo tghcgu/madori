@@ -90,8 +90,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 部屋名を本文とは別にドラッグして自由配置
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定
-- 寸法ラベルの表示・非表示
+- 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
 - 下階を半透明で表示するゴースト機能
+- 2D上の屋根の一時表示・非表示
+- パーツ検索（ひらがな・カタカナ・別名でも検索可。例: いす、まど、れいぞうこ）
 - 選択した要素の配置固定
 - マウスホイールによるズーム
 - 右ドラッグによるキャンバス移動
@@ -133,6 +135,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 四隅のハンドルでサイズ変更
 - 幅と奥行を90度入れ替え
 - 2Dまたは3Dから屋根を選択
+- 2D上の屋根には名前を表示せず、寸法表示がONのときだけ大きさを表示
 - 屋根ごとの固定、選択、削除
 - 旧形式の1枚屋根データを自動移行
 
@@ -140,19 +143,25 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 家具・設備
 
-| 分類 | 収録要素 |
-| --- | --- |
-| 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
-| 図形 | 円、円弧、多角形 |
-| 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
-| リビング | ソファ、L字ソファ、1人掛け、ローテーブル、サイドテーブル、テレビ台、観葉植物、ラグ、フロアライト |
-| 時計・装飾 | 壁掛け時計、ホールクロック、水槽、ピアノ |
-| ダイニング・キッチン | ダイニングセット、丸テーブル、椅子、スツール、キッチン、冷蔵庫 |
-| 寝室・書斎 | シングルベッド、ダブルベッド、机、本棚 |
-| 水回り | 浴槽、トイレ、洗面台、洗濯機 |
-| 収納 | クローゼット、タンス |
-| 階段 | 直階段、折り返し階段、らせん階段 |
-| 屋外 | ベンチ、車 |
+左パネルのパーツは「建物をつくる」と「家具を置く」の2段に分かれています。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。
+
+| 段 | 分類 | 収録要素 |
+| --- | --- | --- |
+| 建物をつくる | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
+| | 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
+| | 図形の壁 | 円、円弧、三角形〜八角形 |
+| | 階段 | 直階段、折り返し階段、らせん階段 |
+| | 屋根 | 切妻、寄棟、陸屋根 |
+| 家具を置く | 椅子・ソファ | ソファ、L字ソファ、1人掛け、椅子、スツール、ベンチ |
+| | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、机 |
+| | ベッド | シングルベッド、ダブルベッド |
+| | 収納・棚 | クローゼット、タンス、棚・本棚 |
+| | 家電 | 冷蔵庫、洗濯機、テレビ台 |
+| | キッチン・水回り | キッチン、浴槽、トイレ、洗面台 |
+| | インテリア | 観葉植物、ラグ、フロアライト、壁掛け時計、ホールクロック、水槽、ピアノ |
+| | 乗り物 | 車 |
+
+パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
 各家具は2D用の平面記号と3Dモデルを持ちます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
@@ -185,8 +194,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | エリア | 役割 |
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、新規作成 |
-| 左パネル | 作図ツール、選択中のプロパティ、家具、屋根、雛形 |
-| 2Dペイン | 間取りの作成、選択、移動、リサイズ、寸法確認 |
+| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、「建物をつくる」（床・建具・図形の壁・階段・屋根）、「家具を置く」、雛形 |
+| 2Dペイン | 間取りの作成、選択、移動、リサイズ、寸法・下階・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
 左上のパネル切替ボタンで、編集パネルを一時的に隠せます。作業内容に応じて、上部の表示切替から2Dまたは3Dを広く表示できます。
@@ -567,8 +576,10 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Drag room labels independently from room geometry
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors
-- Toggle dimension labels
+- Toggle dimension labels for rooms and roofs (off by default)
 - Show the floor below as a translucent guide
+- Temporarily hide roofs on the 2D plan
+- Search parts by name, including hiragana, katakana, and common aliases
 - Lock selected items to prevent accidental movement or deletion
 - Zoom with the mouse wheel and pan with right-drag
 - Fit the complete plan to the viewport
@@ -606,6 +617,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Resize roofs from corner handles
 - Swap width and depth with a 90-degree rotation
 - Select roofs from either the 2D or 3D view
+- Roofs show no name on the 2D plan; their size appears only when dimension labels are on
 - Lock, select, and delete roofs independently
 - Automatically migrate legacy single-roof plans
 
@@ -613,19 +625,25 @@ If a room is selected before adding a roof, the new roof is sized around that ro
 
 ### Included objects
 
-| Category | Objects |
-| --- | --- |
-| Openings | Swing door, sliding door, window, divided window |
-| Shapes | Circle, arc, polygon |
-| Floors and ground | Plain, wood planks, tile, stone paving, grass |
-| Living | Sofa, corner sofa, armchair, low table, side table, TV stand, plant, rug, floor lamp |
-| Clocks and decor | Wall clock, grandfather clock, aquarium, upright piano |
-| Dining and kitchen | Dining set, round table, chair, stool, kitchen unit, refrigerator |
-| Bedroom and study | Single bed, double bed, desk, shelf |
-| Bathroom and utility | Bathtub, toilet, washbasin, washing machine |
-| Storage | Closet, wardrobe |
-| Stairs | Straight stairs, U-shaped stairs, spiral stairs |
-| Exterior | Bench, car |
+The palette is split into "Build the structure" and "Place furniture". Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types.
+
+| Tier | Category | Objects |
+| --- | --- | --- |
+| Build the structure | Floors and ground | Plain, wood planks, tile, stone paving, grass |
+| | Openings | Swing door, sliding door, window, divided window |
+| | Shape walls | Circle, arc, triangle to octagon |
+| | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
+| | Roofs | Gable, hip, flat |
+| Place furniture | Seating | Sofa, corner sofa, armchair, chair, stool, bench |
+| | Tables and desks | Dining set, round table, low table, side table, desk |
+| | Beds | Single bed, double bed |
+| | Storage | Closet, wardrobe, shelf |
+| | Appliances | Refrigerator, washing machine, TV stand |
+| | Kitchen and bathroom | Kitchen unit, bathtub, toilet, washbasin |
+| | Decor | Plant, rug, floor lamp, wall clock, grandfather clock, aquarium, upright piano |
+| | Vehicles | Car |
+
+Type in the search box at the top of the palette to show only matching parts.
 
 Each item has a dedicated 2D plan symbol and a generated 3D representation. The geometry adapts to user-defined width and depth where practical.
 
@@ -658,8 +676,8 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | Area | Purpose |
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, and new plan |
-| Left panel | Drawing tools, selected-item properties, furniture, roofs, and templates |
-| 2D pane | Drawing, selection, movement, resizing, and dimensions |
+| Left panel | Drawing tools, selected-item properties, part search, "Build the structure" (floors, openings, shape walls, stairs, roofs), "Place furniture", and templates |
+| 2D pane | Drawing, selection, movement, resizing, and toggles for dimensions, the floor below, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
 The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let you dedicate more space to the current task.
