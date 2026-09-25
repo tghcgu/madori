@@ -163,7 +163,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
-各家具は2D用の平面記号と3Dモデルを持ちます。2D記号は間取り図の慣例に合わせ、形だけでは見分けにくいものに「冷」（冷蔵庫）、「TV」、「CL」（クローゼット）、「タンス」、「食器」、「靴」、「AC」（エアコン）、「UB」（ユニットバス）、「2段」の文字を添えています。文字は家具を回転・反転しても水平のまま読めます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
+各家具は2D用の平面記号と3Dモデルを持ちます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
 - 家具・設備54種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
@@ -645,7 +645,7 @@ The furniture and equipment palette lists frequently used openings and furniture
 
 Type in the search box at the top of the palette to show only matching parts.
 
-Each item has a dedicated 2D plan symbol and a generated 3D representation. Following Japanese floor-plan conventions, symbols that are hard to tell apart by shape carry short marks such as 冷 (refrigerator), TV, CL (closet), タンス (wardrobe), 食器 (cupboard), 靴 (shoe cabinet), AC (air conditioner), UB (unit bath), and 2段 (bunk bed). The marks stay horizontal and unmirrored when an item is rotated or flipped. Items with a facing direction shade their back side, and the wall-mounted air conditioner is drawn with a dashed outline. The geometry adapts to user-defined width and depth where practical.
+Each item has a dedicated 2D plan symbol and a generated 3D representation. Items with a facing direction shade their back side, and the wall-mounted air conditioner is drawn with a dashed outline. The geometry adapts to user-defined width and depth where practical.
 
 - All 54 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
