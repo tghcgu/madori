@@ -201,6 +201,46 @@ try {
   await page.screenshot({ path: `${output}/diagonal.png` });
   console.log('PASS: dragging diagonal walls preserves length and angle');
 
+  // Free text labels are 2D-only annotations with editable content, size, rotation and color.
+  await importPlan(plan());
+  await page.locator('button[data-view-mode="plan"]').click();
+  await page.locator('[data-tool="text"]').click();
+  point = await planPoint(300, 200);
+  await page.mouse.click(point.x, point.y);
+  const textOf = async () => (await saved()).floors[0].entities.find(e => e.type === 'text');
+  let label = await textOf();
+  assert.equal(label.text, 'テキスト');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'textContentInput');
+  await change('#textContentInput', '寝室\nベッド');
+  await change('#textSizeInput', 40);
+  await change('#textRotationInput', 90);
+  label = await textOf();
+  assert.deepEqual([label.text, label.size, label.rotation], ['寝室\nベッド', 40, 90]);
+  await page.locator('[data-tool="text"]').click();
+  point = await planPoint(label.x, label.y);
+  await page.mouse.click(point.x, point.y);
+  assert.equal((await saved()).floors[0].entities.filter(e => e.type === 'text').length, 1);
+  await move(point, 60, 30);
+  const movedLabel = await textOf();
+  assert.ok(movedLabel.x > label.x && movedLabel.y > label.y);
+  await page.locator('#undoButton').click();
+  assert.deepEqual([(await textOf()).x, (await textOf()).y], [label.x, label.y]);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  const reloaded = await textOf();
+  assert.deepEqual([reloaded.text, reloaded.x, reloaded.y, reloaded.size, reloaded.rotation], [label.text, label.x, label.y, label.size, label.rotation]);
+  await page.locator('button[data-view-mode="plan"]').click();
+  point = await planPoint(label.x, label.y);
+  await page.mouse.click(point.x, point.y);
+  await change('#textContentInput', '');
+  assert.equal(await textOf(), undefined);
+  await page.locator('#undoButton').click();
+  assert.equal((await textOf()).text, '寝室\nベッド');
+  // Text is 2D-only: the 3D view of this bare floor must still render, and page errors are asserted at the end.
+  await page.locator('button[data-view-mode="three"]').click();
+  assert.ok((await pixels()).colors > 1);
+  console.log('PASS: free text labels: place, edit, resize, rotate, move, undo, reload and delete when emptied');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();

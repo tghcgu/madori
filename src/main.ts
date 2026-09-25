@@ -9,8 +9,8 @@ import { FURNITURE_DEFS, type FurnitureKind } from "./furniture-catalog";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 
-type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "erase";
-type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof";
+type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
+type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof" | "text";
 type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
 type LegacyRoofKind = RoofKind | "none";
@@ -97,7 +97,20 @@ interface Roof {
   locked?: boolean;
 }
 
-type Entity = Room | LinearElement | Furniture | Shape | Roof;
+// 2Dの間取りだけに表示する自由な文字。x, y は文字のまとまりの中心
+interface TextLabel {
+  id: string;
+  type: "text";
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+  color?: string;
+  locked?: boolean;
+}
+
+type Entity = Room | LinearElement | Furniture | Shape | Roof | TextLabel;
 
 interface Floor {
   id: string;
@@ -198,6 +211,10 @@ function isMobileOrTabletDevice(): boolean {
 }
 
 const INK = "#000000";
+const TEXT_FONT = '"Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif';
+const TEXT_LINE_HEIGHT = 1.25;
+const DEFAULT_TEXT_SIZE = 24;
+const MAX_TEXT_LENGTH = 500;
 // 椅子の背もたれ・枕など、向きを示す部分の塗り
 const SYMBOL_SHADE = "#dde4e2";
 const INK_SOFT = "#5b6470";
@@ -292,6 +309,7 @@ let threeDrag: ThreeDrag | null = null;
 let threeSceneCenter: Point = { x: 0, y: 0 };
 let threeNeedsRender = true;
 let pendingCameraFrame = true;
+let pendingTextFocus = false;
 let roofVisible3d = true;
 // 間取り(2D)上の屋根の一時的な表示切替。保存はしない
 let roofVisible2d = true;
@@ -484,6 +502,17 @@ function normalizeEntity(value: unknown): Entity {
       endAngle: finite(entity.endAngle) ? entity.endAngle : Math.PI * 2,
       sides: finite(entity.sides) ? clamp(Math.round(entity.sides!), 3, 12) : 6,
       rotation: finite(entity.rotation) ? entity.rotation : 0,
+    };
+  }
+  if (entity.type === "text") {
+    if (!finite(entity.x, entity.y)) throw new Error("Invalid text position");
+    return {
+      id: base.id, type: "text", locked: base.locked,
+      text: typeof entity.text === "string" ? entity.text.slice(0, MAX_TEXT_LENGTH) : "",
+      x: entity.x, y: entity.y,
+      size: finite(entity.size) ? clamp(entity.size, 5, 500) : DEFAULT_TEXT_SIZE,
+      rotation: finite(entity.rotation) ? entity.rotation : 0,
+      color: color(entity.color),
     };
   }
   throw new Error("Unknown plan entity");
@@ -1129,7 +1158,7 @@ function syncPlanCursor(): void {
     planCanvas.style.cursor = "grabbing";
     return;
   }
-  planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : "crosshair";
+  planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : activeTool === "text" ? "text" : "crosshair";
 }
 
 function updateDimensionToggle(): void {
@@ -1227,6 +1256,24 @@ function handlePointerDown(event: PointerEvent): void {
     }
     updateUi();
     render2d();
+    return;
+  }
+
+  if (activeTool === "text") {
+    // 既存の文字をクリックしたらそれを選び、何もない所なら新しく置く。どちらもすぐ入力できるよう選択ツールへ戻す
+    let target = hit.entity?.type === "text" ? hit.entity : null;
+    if (!target) {
+      target = { id: newId("text"), type: "text", text: "テキスト", x: Math.round(point.x), y: Math.round(point.y), size: DEFAULT_TEXT_SIZE, rotation: 0 };
+      activeEntities().push(target);
+      commitState();
+    }
+    state.selectedId = target.id;
+    activeTool = "select";
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    drag.dragMode = "none";
+    redrawAll();
+    pendingTextFocus = true;
     return;
   }
 
@@ -1344,6 +1391,11 @@ function handlePointerUp(event: PointerEvent): void {
   };
   syncPlanCursor();
   redrawAll();
+  // 置いた文字の入力欄へは、クリックを離して描き直した後に移る（先に移すと描き直しで外れる）
+  if (pendingTextFocus) {
+    pendingTextFocus = false;
+    focusTextContentInput();
+  }
 }
 
 function handleDoubleClick(event: MouseEvent): void {
@@ -1635,7 +1687,7 @@ function polygonPoints(shape: Shape): Point[] {
 
 function rotateEntity(entity: Entity, degrees: number): void {
   if (isLocked(entity)) return;
-  if (entity.type === "furniture") {
+  if (entity.type === "furniture" || entity.type === "text") {
     entity.rotation = (entity.rotation + degrees) % 360;
     return;
   }
@@ -1720,6 +1772,11 @@ function moveEntity(entity: Entity, origin: Entity, dx: number, dy: number): voi
   if (origin.type === "shape" && entity.type === "shape") {
     entity.x = snap(origin.x + moveX);
     entity.y = snap(origin.y + moveY);
+  }
+  if (origin.type === "text" && entity.type === "text") {
+    // 文字は細かく位置を合わせたいので、グリッドに吸着させずに動かす
+    entity.x = Math.round(origin.x + dx);
+    entity.y = Math.round(origin.y + dy);
   }
   if (isLinear(origin) && isLinear(entity)) {
     entity.x1 = origin.x1 + moveX;
@@ -1822,6 +1879,7 @@ function render2d(): void {
   entities.filter(isShape).forEach(drawShape2d);
   revealRoofsIfSelected();
   if (roofVisible2d) state.roofs.forEach(drawRoof2d);
+  entities.filter(isTextLabel).forEach(drawTextLabel);
   entities.filter(isLocked).forEach(drawLockedIndicator);
   if (roofVisible2d) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
 
@@ -1872,6 +1930,7 @@ function drawFloorBelowGhost(): void {
   entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
   entities.filter(isFurniture).forEach(drawFurniture2d);
   entities.filter(isShape).forEach(drawShape2d);
+  entities.filter(isTextLabel).forEach(drawTextLabel);
   ctx.restore();
 }
 
@@ -2870,13 +2929,66 @@ function drawResizeHandles(entity: Room | Furniture | Roof): void {
   });
 }
 
+function textLines(label: TextLabel): string[] {
+  return label.text.split("\n");
+}
+
+// 文字のまとまりの幅と高さ（ワールド座標）。フォントの大きさをそのまま cm として扱う
+function measureTextLabel(label: TextLabel): { w: number; h: number } {
+  ctx.save();
+  ctx.font = `${label.size}px ${TEXT_FONT}`;
+  const lines = textLines(label);
+  const w = Math.max(label.size * 0.6, ...lines.map((line) => ctx.measureText(line).width));
+  ctx.restore();
+  return { w, h: lines.length * label.size * TEXT_LINE_HEIGHT };
+}
+
+function drawTextLabel(label: TextLabel): void {
+  const lines = textLines(label);
+  const lineHeight = label.size * TEXT_LINE_HEIGHT;
+  ctx.save();
+  ctx.translate(label.x, label.y);
+  ctx.rotate(degreesToRadians(label.rotation));
+  ctx.font = `${label.size}px ${TEXT_FONT}`;
+  ctx.fillStyle = label.color ?? INK;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * lineHeight));
+  if (state.selectedId === label.id) {
+    const { w, h } = measureTextLabel(label);
+    const pad = 4 / view.zoom;
+    ctx.strokeStyle = "#2775d1";
+    ctx.lineWidth = 1.5 / view.zoom;
+    ctx.setLineDash([4 / view.zoom, 3 / view.zoom]);
+    ctx.strokeRect(-w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2);
+  }
+  ctx.restore();
+}
+
+function isPointInTextLabel(point: Point, label: TextLabel): boolean {
+  const { w, h } = measureTextLabel(label);
+  const angle = degreesToRadians(label.rotation);
+  const dx = point.x - label.x;
+  const dy = point.y - label.y;
+  const localX = dx * Math.cos(angle) + dy * Math.sin(angle);
+  const localY = -dx * Math.sin(angle) + dy * Math.cos(angle);
+  const pad = 6 / view.zoom;
+  return Math.abs(localX) <= w / 2 + pad && Math.abs(localY) <= h / 2 + pad;
+}
+
+function focusTextContentInput(): void {
+  const input = propertiesPanel.querySelector<HTMLTextAreaElement>("#textContentInput");
+  input?.focus();
+  input?.select();
+}
+
 function drawLockedIndicator(entity: Entity): void {
   let anchor: Point;
   if (entity.type === "room" || entity.type === "roof") {
     anchor = { x: entity.x + entity.w - 16 / view.zoom, y: entity.y + 16 / view.zoom };
   } else if (entity.type === "furniture") {
     anchor = { x: entity.x + entity.w / 2, y: entity.y + entity.h / 2 };
-  } else if (entity.type === "shape") {
+  } else if (entity.type === "shape" || entity.type === "text") {
     anchor = { x: entity.x, y: entity.y };
   } else {
     anchor = midpoint(entity);
@@ -3431,6 +3543,42 @@ function updatePropertiesPanel(): void {
     return;
   }
 
+  if (selected.type === "text") {
+    const label = selected;
+    propertiesPanel.innerHTML = `
+      <div class="property-grid">
+        ${lockRow}
+        <label>文字（改行もできます）<textarea id="textContentInput" rows="3" maxlength="${MAX_TEXT_LENGTH}" ${placementDisabled}>${escapeHtml(label.text)}</textarea></label>
+        <div class="two-col">
+          <label>大きさ cm<input id="textSizeInput" type="number" min="5" max="500" step="2" value="${label.size}" ${placementDisabled} /></label>
+          <label>回転 °<input id="textRotationInput" type="number" step="5" value="${label.rotation}" ${placementDisabled} /></label>
+        </div>
+        <label>色<input id="textColorInput" type="color" value="${label.color ?? "#000000"}" ${placementDisabled} /></label>
+      </div>
+    `;
+    bindEntityLock(label);
+    const content = propertiesPanel.querySelector<HTMLTextAreaElement>("#textContentInput");
+    // 入力中はその場で描き直し、確定（欄から出る）したときに履歴へ積む。空にしたら文字ごと消す
+    content?.addEventListener("input", () => {
+      label.text = content.value;
+      render2d();
+    });
+    content?.addEventListener("change", () => {
+      if (!content.value.trim()) {
+        removeEntityById(label.id);
+        state.selectedId = null;
+      } else {
+        label.text = content.value;
+      }
+      commitState();
+      redrawAll();
+    });
+    bindNumber("#textSizeInput", (value) => (label.size = clamp(Number.isFinite(value) ? value : DEFAULT_TEXT_SIZE, 5, 500)));
+    bindNumber("#textRotationInput", (value) => (label.rotation = Number.isFinite(value) ? value % 360 : 0));
+    bindInput("#textColorInput", (value) => (label.color = value));
+    return;
+  }
+
   if (selected.type === "shape") {
     const selectedShape = selected;
     const arcRows =
@@ -3732,7 +3880,7 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
   // Match visual stacking even when a floor or rug was placed after the furniture.
-  const layer = (entity: Entity): number => entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
+  const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedRoof = roofVisible2d ? state.roofs.find((item) => item.id === state.selectedId) : undefined;
   if (selectedRoof) {
@@ -3764,6 +3912,10 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       const localX = dx * Math.cos(angle) + dy * Math.sin(angle);
       const localY = -dx * Math.sin(angle) + dy * Math.cos(angle);
       if (Math.abs(localX) <= entity.w / 2 && Math.abs(localY) <= entity.h / 2) {
+        return { entity, corner: null };
+      }
+    } else if (entity.type === "text") {
+      if (isPointInTextLabel(point, entity)) {
         return { entity, corner: null };
       }
     } else if (entity.type === "shape") {
@@ -4239,6 +4391,10 @@ function isFurniture(entity: Entity): entity is Furniture {
   return entity.type === "furniture";
 }
 
+function isTextLabel(entity: Entity): entity is TextLabel {
+  return entity.type === "text";
+}
+
 function isShape(entity: Entity): entity is Shape {
   return entity.type === "shape";
 }
@@ -4300,6 +4456,12 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
       minY = Math.min(minY, entity.y);
       maxX = Math.max(maxX, entity.x + entity.w);
       maxY = Math.max(maxY, entity.y + entity.h);
+    } else if (entity.type === "text") {
+      const { w, h } = measureTextLabel(entity);
+      minX = Math.min(minX, entity.x - w / 2);
+      minY = Math.min(minY, entity.y - h / 2);
+      maxX = Math.max(maxX, entity.x + w / 2);
+      maxY = Math.max(maxY, entity.y + h / 2);
     } else if (entity.type === "shape") {
       minX = Math.min(minX, entity.x - entity.r);
       minY = Math.min(minY, entity.y - entity.r);

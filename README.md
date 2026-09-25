@@ -88,6 +88,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
 - 部屋名を本文とは別にドラッグして自由配置
+- 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定
 - 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
@@ -574,6 +575,7 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
 - Drag room labels independently from room geometry
+- Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors
 - Toggle dimension labels for rooms and roofs (off by default)
