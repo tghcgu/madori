@@ -307,6 +307,15 @@ select:focus-visible {
   grid-column: 2;
 }
 
+/* 境目を動かしたとき（data-split）だけ、2Dと3Dの広さを --plan-fr / --three-fr の比で決める */
+.workspace[data-view-mode="split"][data-split] {
+  grid-template-columns: 284px minmax(300px, var(--plan-fr)) minmax(300px, var(--three-fr));
+}
+
+.workspace[data-view-mode="split"][data-split][data-panel="hidden"] {
+  grid-template-columns: minmax(300px, var(--plan-fr)) minmax(300px, var(--three-fr));
+}
+
 .workspace[data-panel="hidden"] .tool-panel {
   display: none;
 }
@@ -924,6 +933,23 @@ select:focus-visible {
 .plan-pane {
   display: grid;
   grid-template-rows: 46px minmax(0, 1fr);
+  container: plan-pane / inline-size;
+}
+
+/* 境目を動かして2Dが細くなったら、ボタンを絵だけにして1行に収める */
+@container plan-pane (max-width: 540px) {
+  #planStats {
+    display: none;
+  }
+
+  .pane-bar .toggle-button {
+    min-width: 38px;
+    padding: 0 9px;
+  }
+
+  .pane-bar .toggle-button span {
+    display: none;
+  }
 }
 
 .pane-bar {
@@ -1001,6 +1027,88 @@ select:focus-visible {
 .three-pane {
   overflow: hidden;
   background: #e9edf3;
+  container: three-pane / inline-size;
+}
+
+/* 3Dが細くなったら、設定を折り返して画面からはみ出さないようにする */
+@container three-pane (max-width: 400px) {
+  .three-overlay {
+    right: 12px;
+  }
+
+  .three-settings {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  #threeStats {
+    display: none;
+  }
+}
+
+/* 3D側の端に置いた、2Dと3Dの境目のつまみ */
+.split-divider {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10px;
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.split-divider::after {
+  content: "";
+  width: 4px;
+  height: 44px;
+  border-radius: 2px;
+  background: var(--line-strong);
+}
+
+.split-divider[aria-orientation="horizontal"] {
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 10px;
+  cursor: row-resize;
+}
+
+.split-divider[aria-orientation="horizontal"]::after {
+  width: 44px;
+  height: 4px;
+}
+
+.split-divider:hover,
+.split-divider:focus-visible,
+.split-divider.is-dragging {
+  background: rgba(39, 117, 209, 0.16);
+}
+
+.split-divider:hover::after,
+.split-divider:focus-visible::after,
+.split-divider.is-dragging::after {
+  background: var(--accent);
+}
+
+.workspace:not([data-view-mode="split"]) .split-divider {
+  display: none;
+}
+
+/* ドラッグ中はカーソルを保ち、文字が選択されないようにする */
+body[data-resizing] {
+  user-select: none;
+}
+
+body[data-resizing="across"] {
+  cursor: col-resize;
+}
+
+body[data-resizing="down"] {
+  cursor: row-resize;
 }
 
 .three-overlay {
@@ -1130,6 +1238,11 @@ select:focus-visible {
   .workspace[data-view-mode="three"] .tool-panel {
     grid-row: 1;
   }
+
+  .workspace[data-view-mode="split"][data-split]:not([data-panel="hidden"]) {
+    grid-template-columns: 248px minmax(360px, 1fr);
+    grid-template-rows: minmax(180px, var(--plan-fr)) minmax(180px, var(--three-fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1187,5 +1300,11 @@ select:focus-visible {
     grid-column: 1;
     grid-row: 2;
     height: 68vh;
+  }
+
+  /* スマホでは2Dと3Dの高さの合計（120vh）を、境目の位置で分ける */
+  .workspace[data-view-mode="split"][data-split]:not([data-panel="hidden"]) {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto calc(var(--plan-share) * 120vh) calc((1 - var(--plan-share)) * 120vh);
   }
 }

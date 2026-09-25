@@ -161,6 +161,9 @@ function requiredElement<T extends Element>(selector: string): T {
 const planCanvas = requiredElement<HTMLCanvasElement>("#planCanvas");
 const threeCanvas = requiredElement<HTMLCanvasElement>("#threeCanvas");
 const workspace = requiredElement<HTMLElement>(".workspace");
+const planPane = requiredElement<HTMLElement>(".plan-pane");
+const threePane = requiredElement<HTMLElement>(".three-pane");
+const splitDivider = requiredElement<HTMLDivElement>("#splitDivider");
 const propertiesPanel = requiredElement<HTMLDivElement>("#propertiesPanel");
 const planStats = requiredElement<HTMLSpanElement>("#planStats");
 const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
@@ -188,6 +191,11 @@ const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
 const MOBILE_NOTICE_KEY = "madori-quick-3d-mobile-notice";
+const SPLIT_KEY = "madori-quick-3d-split";
+// 同時表示での2Dの広さの割合（2Dと3Dの合計に対して）。どちらも狭くなりすぎないよう範囲を決める
+const MIN_SPLIT = 0.15;
+const MAX_SPLIT = 0.85;
+const SPLIT_KEY_STEP = 0.05;
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -897,10 +905,12 @@ function setupUi(): void {
   threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
   window.addEventListener("keydown", handleKeyDown);
 
+  bindSplitDivider();
   appResizeObserver = new ResizeObserver(() => {
     resizeCanvases();
     render2d();
     render3dOnce();
+    updateSplitDivider();
   });
   appResizeObserver.observe(planCanvas);
   appResizeObserver.observe(threeCanvas);
@@ -1302,6 +1312,103 @@ function updateShadowToggle(): void {
   if (lightSelect) lightSelect.disabled = !shadowsEnabled;
 }
 
+// ---- 2Dと3Dの境目 ----
+
+function loadSplitRatio(): number | null {
+  const stored = Number(localStorage.getItem(SPLIT_KEY));
+  return Number.isFinite(stored) && stored > 0 ? clamp(stored, MIN_SPLIT, MAX_SPLIT) : null;
+}
+
+// null のときは画面幅ごとの標準の配分に戻す。数値のときは grid の比（fr）として渡す
+function applySplitRatio(ratio: number | null): void {
+  if (ratio === null) {
+    delete workspace.dataset.split;
+    for (const name of ["--plan-fr", "--three-fr", "--plan-share"]) workspace.style.removeProperty(name);
+  } else {
+    const share = clamp(ratio, MIN_SPLIT, MAX_SPLIT);
+    workspace.dataset.split = "custom";
+    // 比の合計が1未満だと、片側が最小幅で止まったときに余った幅が空白のまま残るため100倍して渡す
+    workspace.style.setProperty("--plan-fr", `${share * 100}fr`);
+    workspace.style.setProperty("--three-fr", `${(1 - share) * 100}fr`);
+    workspace.style.setProperty("--plan-share", String(share));
+  }
+  updateSplitDivider();
+}
+
+// 2Dの表示の中心を保ったまま境目を動かす（左上が固定されて図がずれて見えないように）
+function setSplitRatio(ratio: number | null): void {
+  const before = planCanvas.getBoundingClientRect();
+  applySplitRatio(ratio);
+  const after = planCanvas.getBoundingClientRect();
+  if (before.width > 0 && after.width > 0) {
+    view.x += (after.width - before.width) / 2;
+    view.y += (after.height - before.height) / 2;
+  }
+}
+
+function saveSplitRatio(): void {
+  const share = workspace.style.getPropertyValue("--plan-share");
+  if (share) localStorage.setItem(SPLIT_KEY, share);
+  else localStorage.removeItem(SPLIT_KEY);
+}
+
+// 2Dと3Dが横に並ぶ（広い画面）か、上下に並ぶ（タブレット・スマホ）かを実際の配置から判断する
+function splitLayout(): { across: boolean; share: number; ratioAt: (x: number, y: number) => number } {
+  const plan = planPane.getBoundingClientRect();
+  const three = threePane.getBoundingClientRect();
+  const across = three.left >= plan.right - 2;
+  const total = across ? three.right - plan.left : three.bottom - plan.top;
+  return {
+    across,
+    share: total > 0 ? (across ? plan.width : plan.height) / total : 0.5,
+    ratioAt: (x, y) => (total > 0 ? (across ? x - plan.left : y - plan.top) / total : 0.5),
+  };
+}
+
+function updateSplitDivider(): void {
+  if (viewMode !== "split") return;
+  const layout = splitLayout();
+  splitDivider.setAttribute("aria-orientation", layout.across ? "vertical" : "horizontal");
+  splitDivider.setAttribute("aria-valuenow", String(Math.round(layout.share * 100)));
+}
+
+function bindSplitDivider(): void {
+  applySplitRatio(loadSplitRatio());
+  splitDivider.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    splitDivider.setPointerCapture(event.pointerId);
+    splitDivider.classList.add("is-dragging");
+    document.body.dataset.resizing = splitLayout().across ? "across" : "down";
+  });
+  splitDivider.addEventListener("pointermove", (event) => {
+    if (!splitDivider.hasPointerCapture(event.pointerId)) return;
+    setSplitRatio(splitLayout().ratioAt(event.clientX, event.clientY));
+  });
+  const finish = () => {
+    if (!splitDivider.classList.contains("is-dragging")) return;
+    splitDivider.classList.remove("is-dragging");
+    delete document.body.dataset.resizing;
+    saveSplitRatio();
+  };
+  splitDivider.addEventListener("pointerup", finish);
+  splitDivider.addEventListener("pointercancel", finish);
+  splitDivider.addEventListener("lostpointercapture", finish);
+  splitDivider.addEventListener("dblclick", () => {
+    setSplitRatio(null);
+    saveSplitRatio();
+  });
+  // 矢印キーでも少しずつ動かせる。選択中の家具などを動かさないよう、ここで止める
+  splitDivider.addEventListener("keydown", (event) => {
+    const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSplitRatio(splitLayout().share + step * SPLIT_KEY_STEP);
+    saveSplitRatio();
+  });
+}
+
 function applyViewMode(nextMode: ViewMode, persist = true): void {
   viewMode = nextMode;
   workspace.dataset.viewMode = viewMode;
@@ -1312,6 +1419,7 @@ function applyViewMode(nextMode: ViewMode, persist = true): void {
   }
   requestAnimationFrame(() => {
     resizeCanvases();
+    updateSplitDivider();
     if (viewMode !== "three") {
       fitPlanToCanvas();
       render2d();

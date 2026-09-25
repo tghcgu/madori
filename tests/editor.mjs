@@ -312,6 +312,47 @@ try {
   await page.screenshot({ path: `${output}/grass-and-unnamed-ground.png` });
   console.log('PASS: new ground has no name, and grass blades follow the grass surface in 3D');
 
+  // The 2D/3D boundary can be dragged, nudged with arrow keys, reset by double-click, and is remembered.
+  await page.locator('button[data-view-mode="split"]').click();
+  const panes = () => page.evaluate(() => ['.plan-pane', '.three-pane', '#planCanvas', '#threeCanvas'].map(selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return { w: rect.width, h: rect.height };
+  }));
+  const dragDivider = async (dx, dy) => {
+    const handle = await page.locator('#splitDivider').boundingBox();
+    await move({ x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }, dx, dy);
+  };
+  const [plan0, three0] = await panes();
+  assert.ok(Math.abs(plan0.w - three0.w) < 2, 'panes start equal');
+  assert.equal(await page.locator('#splitDivider').getAttribute('aria-orientation'), 'vertical');
+  await dragDivider(200, 0);
+  let [plan1, three1, planCanvas1, threeCanvas1] = await panes();
+  assert.ok(Math.abs(plan1.w - plan0.w - 200) < 8, `2D grew ${plan1.w - plan0.w}`);
+  assert.ok(Math.abs(plan1.w + three1.w - plan0.w - three0.w) < 2);
+  assert.ok(Math.abs(planCanvas1.w - plan1.w) < 2 && Math.abs(threeCanvas1.w - three1.w) < 2, 'canvases follow the panes');
+  assert.ok(Number(await page.evaluate(() => localStorage.getItem('madori-quick-3d-split'))) > 0.6);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.ok(Math.abs((await panes())[0].w - plan1.w) < 2, 'boundary is remembered');
+  await page.locator('#splitDivider').focus();
+  await page.keyboard.press('ArrowLeft');
+  const total = plan0.w + three0.w;
+  assert.ok(Math.abs((await panes())[0].w - (plan1.w - total * 0.05)) < 4, 'arrow key moves 5%');
+  await dragDivider(-2000, 0);
+  assert.ok((await panes())[0].w >= 299, 'the 2D side keeps a usable width');
+  await dragDivider(4000, 0);
+  const [planWide, threeNarrow] = await panes();
+  assert.ok(threeNarrow.w >= 299, 'the 3D side keeps a usable width');
+  assert.ok(Math.abs(planWide.w + threeNarrow.w - plan0.w - three0.w) < 2, 'no empty strip is left at the edge');
+  await page.locator('#splitDivider').dblclick();
+  const [planReset, threeReset] = await panes();
+  assert.ok(Math.abs(planReset.w - threeReset.w) < 2, 'double-click restores the default split');
+  assert.equal(await page.evaluate(() => localStorage.getItem('madori-quick-3d-split')), null);
+  await page.locator('button[data-view-mode="plan"]').click();
+  assert.equal(await page.locator('#splitDivider').isVisible(), false);
+  await page.locator('button[data-view-mode="split"]').click();
+  console.log('PASS: 2D/3D boundary: drag, canvases follow, remembered, arrow keys, limits, reset and hidden in single views');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();
@@ -525,6 +566,17 @@ try {
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  await page.locator('button[data-view-mode="split"]').click();
+  assert.equal(await page.locator('#splitDivider').getAttribute('aria-orientation'), 'horizontal');
+  const mobilePlan = async () => (await page.locator('.plan-pane').boundingBox()).height;
+  const mobileBefore = await mobilePlan();
+  // スマホでは境目がページの下の方にあるので、見える所まで送ってからつかむ
+  await page.locator('#splitDivider').scrollIntoViewIfNeeded();
+  const mobileHandle = await page.locator('#splitDivider').boundingBox();
+  await move({ x: mobileHandle.x + mobileHandle.width / 2, y: mobileHandle.y + mobileHandle.height / 2 }, 0, -120);
+  const mobileAfter = await mobilePlan();
+  assert.ok(Math.abs(mobileAfter - (mobileBefore - 120)) < 8, `mobile boundary moves up and down: ${mobileBefore} -> ${mobileAfter}`);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.locator('button[data-view-mode="three"]').click();
   assert.ok((await pixels()).colors > 20);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);

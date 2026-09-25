@@ -108,6 +108,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 2D間取りをThree.jsでリアルタイム変換
 - `同時`、`2Dのみ`、`3Dのみ`の表示モード
+- `同時`表示では、2Dと3Dの境目をドラッグして広さを自由に変更（境目を選んで矢印キーでも5%ずつ動かせます。ダブルクリックで元の半分ずつに戻ります）。境目の位置はブラウザに記憶され、タブレットやスマホの上下表示でも使えます
 - マウスドラッグによる視点回転・移動
 - ホイールによるズーム
 - 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
@@ -248,7 +249,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 「新規」は作成済みの要素がある場合に確認を表示します。確定した後もUndoで戻せます。名前などの入力中は、Ctrl / Cmd + Zは入力欄の文字だけを取り消します。
 
 - 保存キー: `madori-quick-3d-plan`
-- 表示モード、寸法表示、影、光、下階表示もブラウザへ保存
+- 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、下階表示もブラウザへ保存
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
 - 別ブラウザ、別PC、別ドメインには自動同期されない
@@ -600,6 +601,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 
 - Real-time conversion from the 2D plan using Three.js
 - Split, 2D-only, and 3D-only view modes
+- In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
 - Orbit, pan, and zoom camera controls
 - 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
@@ -737,7 +739,7 @@ Plans are saved automatically to browser `localStorage`. There is no login or cl
 If some saved items are invalid, the original data is backed up before valid items are recovered. Use the recovery banner to download the original JSON unchanged. If the backup fails, for example because storage is full, autosave stops to protect the original; export ongoing work with the regular Export button. Malformed JSON cannot be recovered automatically, but remains downloadable. New asks for confirmation before removing existing items, and can be undone.
 
 - Main storage key: `madori-quick-3d-plan`
-- View mode, dimensions, shadows, lighting, and lower-floor display are also saved
+- View mode, the 2D/3D boundary position, dimensions, shadows, lighting, and lower-floor display are also saved
 - Data normally survives reloads and browser restarts
 - Clearing site storage deletes the saved plan
 - Data does not synchronize between browsers, computers, or domains
