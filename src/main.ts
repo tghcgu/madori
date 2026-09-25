@@ -2222,8 +2222,41 @@ function strokeArrowHead(x: number, y: number, angle: number, size: number): voi
 }
 
 function drawMiniChair(cx: number, cy: number, size: number, backSide: number): void {
-  strokeRoundedRect(cx - size / 2, cy - size / 2, size, size, 3, true);
-  strokeLine(cx - size / 2 + 2, cy + backSide * (size / 2 - 3), cx + size / 2 - 2, cy + backSide * (size / 2 - 3));
+  const backH = Math.max(3, size * 0.24);
+  const fill = ctx.fillStyle;
+  strokeRoundedRect(cx - size * 0.45, cy - size / 2 + (backSide < 0 ? backH * 0.5 : 0), size * 0.9, size - backH * 0.5, size * 0.14, true);
+  ctx.fillStyle = SYMBOL_SHADE;
+  strokeRoundedRect(cx - size / 2, backSide < 0 ? cy - size / 2 : cy + size / 2 - backH, size, backH, backH * 0.45, true);
+  ctx.fillStyle = fill;
+}
+
+// 冷蔵庫に描く雪の結晶。3本の軸と、各枝先の小さな枝
+function drawSnowflake(cx: number, cy: number, r: number): void {
+  for (let i = 0; i < 3; i += 1) {
+    const a = (i * Math.PI) / 3;
+    strokeLine(cx - Math.cos(a) * r, cy - Math.sin(a) * r, cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  for (let i = 0; i < 6; i += 1) {
+    const a = (i * Math.PI) / 3;
+    const bx = cx + Math.cos(a) * r * 0.62, by = cy + Math.sin(a) * r * 0.62;
+    for (const side of [-1, 1]) strokeLine(bx, by, bx + Math.cos(a + side * 0.75) * r * 0.32, by + Math.sin(a + side * 0.75) * r * 0.32);
+  }
+}
+
+// 上から見た靴の底。つま先（奥）が広く、かかと（手前）が細い。左右の足で少し外へ開く
+function drawShoe(cx: number, cy: number, halfWidth: number, length: number, angle: number): void {
+  const top = -length / 2, bottom = length / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, top);
+  ctx.bezierCurveTo(halfWidth * 1.15, top, halfWidth * 1.1, top + length * 0.45, halfWidth * 0.62, bottom - length * 0.18);
+  ctx.bezierCurveTo(halfWidth * 0.6, bottom, -halfWidth * 0.6, bottom, -halfWidth * 0.62, bottom - length * 0.18);
+  ctx.bezierCurveTo(-halfWidth * 1.1, top + length * 0.45, -halfWidth * 1.15, top, 0, top);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function traceLShape(w: number, h: number, arm: number): void {
@@ -2361,11 +2394,14 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "tv": {
+      // 奥に薄型テレビの画面（塗りつぶし）とスタンド、手前に台の扉と取っ手
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(-w * 0.42, -hh + 3, w * 0.84, Math.max(5, h * 0.18), 2);
-      for (const sign of [-1, 1]) strokeLine(sign * w * 0.26, -h * 0.29, sign * w * 0.31, h * 0.14);
-      strokeLine(-w * 0.17, h * 0.4, -w * 0.17, hh);
-      strokeLine(w * 0.17, h * 0.4, w * 0.17, hh);
+      strokeRoundedRect(-w * 0.1, -h * 0.16, w * 0.2, h * 0.22, 1.5);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      roundedRect(-w * 0.43, -h * 0.3, w * 0.86, Math.max(2.5, h * 0.12), 1.5);
+      ctx.fill();
+      strokeLine(0, hh - h * 0.2, 0, hh);
+      for (const sign of [-1, 1]) strokeLine(sign * w * 0.12, hh - h * 0.1, sign * w * 0.3, hh - h * 0.1);
       break;
     }
     case "plant":
@@ -2436,16 +2472,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "chair": {
-      strokeRoundedRect(-hw, -hh, w, h, 4, true);
-      strokeLine(-hw + 3, -hh + 4, hw - 3, -hh + 4);
-      strokeRoundedRect(-w * 0.37, -h * 0.28, w * 0.74, h * 0.66, 4);
-      const legRadius = Math.max(1.8, Math.min(w, h) * 0.055);
-      [
-        [-hw + legRadius * 1.8, -hh + legRadius * 1.8],
-        [hw - legRadius * 1.8, -hh + legRadius * 1.8],
-        [-hw + legRadius * 1.8, hh - legRadius * 1.8],
-        [hw - legRadius * 1.8, hh - legRadius * 1.8],
-      ].forEach(([x, y]) => strokeCircle(x, y, legRadius));
+      // 座面と、奥の背もたれを塗り分けて向きが分かるようにする
+      const backH = Math.max(4, h * 0.22);
+      strokeRoundedRect(-hw + w * 0.05, -hh + backH * 0.5, w * 0.9, h - backH * 0.5, Math.min(w, h) * 0.14, true);
+      ctx.fillStyle = SYMBOL_SHADE;
+      strokeRoundedRect(-hw, -hh, w, backH, backH * 0.45, true);
       break;
     }
     case "officeChair": {
@@ -2522,10 +2553,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "fridge": {
+      // 前面の扉と取っ手。冷やすものと分かるよう中央に雪の結晶を描く
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeLine(-hw + 3, hh - h * 0.18, hw - 3, hh - h * 0.18);
-      strokeLine(-hw + w * 0.16, hh - h * 0.09, -hw + w * 0.38, hh - h * 0.09);
-      strokeRoundedRect(-w * 0.45, -h * 0.45, w * 0.9, h * 0.74, 2);
+      strokeLine(-hw + 3, hh - h * 0.16, hw - 3, hh - h * 0.16);
+      strokeLine(-w * 0.14, hh - h * 0.08, w * 0.14, hh - h * 0.08);
+      drawSnowflake(0, -h * 0.08, Math.min(w, h) * 0.27);
       break;
     }
     case "bed":
@@ -2545,10 +2577,10 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "desk": {
+      // 天板、右の袖の引き出し3段、奥のケーブル穴
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(w * 0.15, -h * 0.38, w * 0.28, h * 0.76, 2);
-      strokeLine(w * 0.23, h * 0.32, w * 0.35, h * 0.32);
-      strokeCircle(-w * 0.3, -h * 0.32, Math.min(w, h) * 0.025);
+      drawDrawerStack(hw - w * 0.28, hw, -hh, hh);
+      strokeCircle(-w * 0.3, -h * 0.32, Math.min(w, h) * 0.035);
       break;
     }
     case "shelf": {
@@ -2590,39 +2622,60 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "closet": {
+      // 壁の塗りと紛らわしい斜線はやめ、ハンガーパイプ（破線）に掛けた服と前面の折れ戸で表す
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      const rodY = -h * 0.12;
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(-hw, -hh, w, h);
-      ctx.clip();
-      for (let x = -hw - h; x < hw; x += 16) {
-        strokeLine(x, hh, x + h, -hh);
-      }
+      ctx.setLineDash([Math.max(3, w * 0.03), Math.max(2, w * 0.02)]);
+      strokeLine(-hw + w * 0.05, rodY, hw - w * 0.05, rodY);
       ctx.restore();
-      strokeLine(0, h * 0.38, 0, hh);
-      strokeLine(-w * 0.12, h * 0.42, -w * 0.04, h * 0.42);
-      strokeLine(w * 0.04, h * 0.42, w * 0.12, h * 0.42);
+      const hangers = Math.max(3, Math.floor((w * 0.86) / 14));
+      for (let i = 0; i < hangers; i += 1) {
+        const x = -w * 0.43 + (w * 0.86 * (i + 0.5)) / hangers;
+        strokeLine(x, rodY - h * 0.2, x, rodY + h * 0.2);
+      }
+      const doors = Math.max(2, Math.min(4, Math.round(w / 60)));
+      ctx.beginPath();
+      for (let i = 0; i < doors; i += 1) {
+        const x0 = -hw + (w * i) / doors, x1 = x0 + w / doors;
+        ctx.moveTo(x0, hh);
+        ctx.lineTo(x0 + (x1 - x0) * 0.25, hh - h * 0.2);
+        ctx.lineTo((x0 + x1) / 2, hh);
+        ctx.lineTo(x1 - (x1 - x0) * 0.25, hh - h * 0.2);
+        ctx.lineTo(x1, hh);
+      }
+      ctx.stroke();
       break;
     }
     case "wardrobe": {
+      // 手前に引き出しの前板と、左右に並んだ取っ手
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
-      strokeLine(0, -h * 0.4, 0, h * 0.42);
-      strokeRoundedRect(-w * 0.45, -h * 0.4, w * 0.9, h * 0.83, 2);
-      for (const sign of [-1, 1]) strokeLine(sign * w * 0.15, h * 0.35, sign * w * 0.33, h * 0.35);
+      strokeLine(-hw, hh - h * 0.18, hw, hh - h * 0.18);
+      strokeLine(0, hh - h * 0.18, 0, hh);
+      for (const x of [-0.25, 0.25]) strokeRoundedRect(w * x - w * 0.08, hh - h * 0.12, w * 0.16, h * 0.06, 1);
       break;
     }
     case "cupboard": {
-      // 手前のガラス戸（二重線）
+      // 手前のガラス戸（二重線）と、中に重ねたお皿
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
       strokeLine(-hw + 2, hh - h * 0.14, hw - 2, hh - h * 0.14);
       strokeLine(-hw + 2, hh - h * 0.08, hw - 2, hh - h * 0.08);
       strokeLine(0, hh - h * 0.14, 0, hh);
+      const plate = Math.min(w * 0.12, h * 0.28);
+      for (const x of [-0.28, 0, 0.28]) {
+        strokeCircle(w * x, -h * 0.1, plate);
+        strokeCircle(w * x, -h * 0.1, plate * 0.55);
+      }
       break;
     }
     case "shoeCabinet": {
+      // 前面の扉と、中に並べた靴2足
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
       strokeLine(-hw + 2, hh - h * 0.16, hw - 2, hh - h * 0.16);
       strokeLine(0, hh - h * 0.16, 0, hh);
+      for (const x of [-0.24, 0.24]) {
+        for (const side of [-1, 1]) drawShoe(w * x + side * w * 0.06, -h * 0.1, w * 0.05, h * 0.58, side * 0.14);
+      }
       break;
     }
     case "airConditioner": {
@@ -2632,6 +2685,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeRoundedRect(-hw, -hh, w, h, Math.min(w, h) * 0.3, true);
       ctx.restore();
       strokeLine(-w * 0.4, hh - h * 0.22, w * 0.4, hh - h * 0.22);
+      // 吹き出し口の羽根
+      for (let i = 0; i < 6; i += 1) {
+        const x = -w * 0.35 + (w * 0.7 * i) / 5;
+        strokeLine(x, hh - h * 0.22, x + w * 0.03, hh - h * 0.06);
+      }
       break;
     }
     case "bunkBed": {
@@ -2641,6 +2699,8 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeLine(-hw, -hh + h * 0.2, hw, -hh + h * 0.2);
       strokeRoundedRect(hw - w * 0.1, h * 0.2, w * 0.07, h * 0.24, 1);
       for (const t of [0.28, 0.36]) strokeLine(hw - w * 0.1, h * t, hw - w * 0.03, h * t);
+      // 上段の柵（左の辺）
+      strokeRoundedRect(-hw + w * 0.02, -hh + h * 0.24, w * 0.05, h * 0.6, 1);
       ctx.fillStyle = String(ctx.strokeStyle);
       const post = Math.min(w, h) * 0.07;
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) ctx.fillRect(sx < 0 ? -hw : hw - post, sy < 0 ? -hh : hh - post, post, post);
@@ -2741,6 +2801,10 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       strokeLine(-hw + 3, -hh + tubH, hw - 3, -hh + tubH);
       strokeRoundedRect(-w * 0.42, -hh + tubH * 0.16, w * 0.84, tubH * 0.66, Math.min(w, tubH) * 0.2);
       strokeCircle(w * 0.28, h * 0.3, Math.min(w, h) * 0.035);
+      // 洗い場の風呂椅子と、右の壁のシャワー
+      strokeRoundedRect(-w * 0.18 - w * 0.094, h * 0.24 - h * 0.069, w * 0.188, h * 0.138, 2);
+      strokeCircle(hw - w * 0.1, h * 0.05, Math.min(w, h) * 0.04);
+      strokeLine(hw - w * 0.06, h * 0.05, hw - 3, h * 0.05);
       break;
     }
     case "shower": {
