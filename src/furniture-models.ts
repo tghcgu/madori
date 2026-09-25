@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import type { FurnitureKind } from "./furniture-catalog";
+// テストでは Node がそのまま読むため、値を読み込むときは拡張子まで書く
+import { FURNITURE_DEFS, type FurnitureKind } from "./furniture-catalog.ts";
 
 type Position = [number, number, number];
 type Material = THREE.MeshStandardMaterial;
@@ -12,6 +13,8 @@ export interface FurnitureModelOptions {
   color?: string;
   color3d?: string;
   rise?: number;
+  // 高さを変えられる種類（木・フェンスなど）の高さ cm。省略時は種類ごとの標準
+  height?: number;
 }
 
 const clamp = THREE.MathUtils.clamp;
@@ -128,9 +131,38 @@ class Model {
   }
 }
 
+// 頂点を少しずつ押し引きした多面体（岩や石）。同じ位置の頂点は同じだけ動かし、面の間にすき間を作らない
+function rockGeometry(seed: number): THREE.BufferGeometry {
+  const geometry = new THREE.IcosahedronGeometry(0.5, 1);
+  const positions = geometry.getAttribute("position");
+  const v = new THREE.Vector3();
+  for (let i = 0; i < positions.count; i += 1) {
+    v.fromBufferAttribute(positions, i);
+    const noise = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719 + seed) * 43758.5453;
+    v.multiplyScalar(0.8 + (noise - Math.floor(noise)) * 0.32);
+    v.y = Math.max(v.y, -0.22);
+    positions.setXYZ(i, v.x, v.y, v.z);
+  }
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  return geometry;
+}
+
+// 岩を、底が床に着き、いちばん高い所が height になるように置く
+function placeRock(m: Model, material: Material, seed: number, x: number, z: number, sx: number, height: number, sz: number, turn = 0): void {
+  const geometry = rockGeometry(seed);
+  const box = geometry.boundingBox!;
+  const scaleY = height / (box.max.y - box.min.y);
+  const mesh = m.mesh(geometry, [x, -box.min.y * scaleY, z], material);
+  mesh.scale.set(sx, scaleY, sz);
+  mesh.rotation.y = turn;
+}
+
 export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true): THREE.Group {
   if (!Number.isFinite(item.w) || !Number.isFinite(item.h) || item.w <= 0 || item.h <= 0) throw new Error("Invalid furniture dimensions");
   const w = item.w / 100, d = item.h / 100;
+  // 高さを指定できる種類では、いちばん高い所がちょうどこの高さになるように作る
+  const tall = clamp((item.height ?? FURNITURE_DEFS[item.kind].height ?? 100) / 100, 0.1, 30);
   const m = new Model(item.color3d ?? item.color);
   const wood = m.material("wood", 0xb59b76, 0.6, 0, true);
   const darkWood = m.material("wood-endgrain", 0x76604c, 0.7);
@@ -863,6 +895,234 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       m.rod([0, hub, front], [0, moto ? 0.95 : 0.98, front + r * 0.35], moto ? 0.024 : 0.016, metal);
       m.rod([-w * 0.45, moto ? 1.0 : 1.02, front + r * 0.4], [w * 0.45, moto ? 1.0 : 1.02, front + r * 0.4], 0.015, black);
+      break;
+    }
+    case "tree":
+    case "shrub": {
+      // 葉の塊をいくつか重ねた樹冠。木には幹と枝を付け、低木は地面から茂らせる
+      const isTree = item.kind === "tree";
+      const foliage = m.material("foliage", 0x5f9150, 0.92, 0, true);
+      const shade = m.material("foliage-shade", 0x4b7a43, 0.95, 0, true);
+      const crownBottom = isTree ? tall * 0.38 : 0;
+      const crownH = tall - crownBottom;
+      if (isTree) {
+        const bark = m.material("bark", 0x6d5844, 0.95);
+        const trunkR = Math.min(clamp(tall * 0.028, 0.04, 0.3), Math.min(w, d) * 0.1);
+        const trunkTop = crownBottom + crownH * 0.3;
+        m.cylinder(trunkR * 0.65, trunkR, trunkTop, [0, trunkTop / 2, 0], bark, 10);
+        for (let i = 0; i < 3; i += 1) {
+          const a = i * 2.1 + 0.5;
+          m.rod([0, crownBottom * 0.85, 0], [Math.cos(a) * w * 0.2, crownBottom + crownH * 0.25, Math.sin(a) * d * 0.2], trunkR * 0.35, bark);
+        }
+      }
+      const mainY = isTree ? 0.42 : 0.36;
+      m.ellipsoid(w * 0.8, crownH * 0.72, d * 0.8, [0, crownBottom + crownH * mainY, 0], foliage);
+      m.ellipsoid(w * 0.5, crownH * 0.46, d * 0.5, [0, tall - crownH * 0.23, 0], foliage);
+      const lumps: Position[] = [[0.26, 0.4, 0.05], [-0.25, 0.46, 0.14], [0.04, 0.38, -0.27], [-0.1, 0.52, 0.24], [0.2, 0.5, -0.18], [-0.22, 0.35, -0.16]];
+      lumps.forEach(([x, y, z], i) => m.ellipsoid(w * 0.46, crownH * 0.44, d * 0.46, [x * w, crownBottom + crownH * y, z * d], i % 2 ? shade : foliage));
+      break;
+    }
+    case "conifer": {
+      // 細い幹と、上ほど小さくなる円すいを4段重ねる
+      const needles = m.material("needles", 0x3f6f47, 0.92, 0, true);
+      const bark = m.material("bark", 0x6d5844, 0.95);
+      const trunkR = Math.min(clamp(tall * 0.025, 0.03, 0.25), Math.min(w, d) * 0.08);
+      m.cylinder(trunkR * 0.7, trunkR, tall * 0.2, [0, tall * 0.1, 0], bark, 8);
+      const tiers: [number, number, number][] = [[0.12, 0.55, 0.5], [0.34, 0.74, 0.4], [0.53, 0.9, 0.3], [0.7, 1, 0.2]];
+      for (const [from, to, radius] of tiers) {
+        const cone = m.cylinder(0, 1, tall * (to - from), [0, tall * (from + to) / 2, 0], needles, 14);
+        cone.scale.set(w * radius, 1, d * radius);
+      }
+      break;
+    }
+    case "palmTree": {
+      // 少し反った幹の先に、四方へ垂れる長い葉とヤシの実
+      const bark = m.material("palm-bark", 0x8a7456, 0.95);
+      const frond = m.material("palm-frond", 0x4f8a46, 0.88, 0, true);
+      const nut = m.material("coconut", 0x6b4f2e, 0.8);
+      const reach = Math.min(Math.min(w, d) * 0.5, tall * 0.45);
+      const up = 0.35;
+      // 上向きの葉の先がちょうど指定の高さになるよう、幹を低くしておく
+      const topY = tall - Math.sin(up) * reach;
+      // 低いヤシでも幹が寝すぎたり太すぎたりしないよう、反りと太さは高さにも合わせる
+      const lean = Math.min(Math.min(w, d) * 0.12, tall * 0.08);
+      const radius = Math.max(0.012, Math.min(Math.min(w, d) * 0.035, tall * 0.025));
+      let previous: Position = [0, 0, 0];
+      for (let i = 1; i <= 6; i += 1) {
+        const t = i / 6;
+        const next: Position = [lean * t * t, topY * t, 0];
+        m.rod(previous, next, radius * (1.15 - t * 0.35), bark);
+        previous = next;
+      }
+      const [tx, ty, tz] = previous;
+      for (let i = 0; i < 12; i += 1) {
+        const a = (i / 12) * Math.PI * 2 + (i % 2) * 0.12;
+        const droop = i % 3 === 0 ? -up : 0.28 + (i % 2) * 0.3;
+        const dx = Math.cos(droop) * Math.cos(a), dy = -Math.sin(droop), dz = -Math.cos(droop) * Math.sin(a);
+        const leaf = m.ellipsoid(reach, 0.035, reach * 0.3, [tx + dx * reach / 2, ty + dy * reach / 2, tz + dz * reach / 2], frond);
+        leaf.rotation.set(0, a, -droop);
+      }
+      for (let i = 0; i < 3; i += 1) {
+        const a = i * 2.1;
+        m.ellipsoid(0.12, 0.13, 0.12, [tx + Math.cos(a) * 0.08, ty - 0.1, tz + Math.sin(a) * 0.08], nut);
+      }
+      break;
+    }
+    case "rock": {
+      // 頂点を少しずつ押し引きした多面体。角ばって見えるよう面ごとに陰を付ける
+      const stone = m.material("rock", 0x8e8b83, 0.96, 0, true);
+      stone.flatShading = true;
+      placeRock(m, stone, 0, 0, 0, w * 0.85, tall, d * 0.9);
+      placeRock(m, stone, 3.1, w * 0.4, d * 0.28, w * 0.3, tall * 0.35, d * 0.3);
+      break;
+    }
+    case "steppingStones": {
+      // 歩く向きに並べた、角の取れた平たい石。左右に少しずらし、向きも変える
+      const stone = m.material("stepping-stone", 0x9c998f, 0.93, 0, true);
+      stone.flatShading = true;
+      const along = d >= w;
+      const length = along ? d : w, span = along ? w : d;
+      const count = Math.max(2, Math.round(length / 0.55));
+      for (let i = 0; i < count; i += 1) {
+        const t = -length / 2 + (length * (i + 0.5)) / count;
+        const side = (i % 2 ? 1 : -1) * span * 0.12;
+        const rx = Math.min(span * 0.72, (length / count) * 0.84), rz = Math.min(span * 0.6, (length / count) * 0.72);
+        placeRock(m, stone, i * 1.7, along ? side : t, along ? t : side, along ? rx : rz, 0.07, along ? rz : rx, i * 0.7);
+      }
+      break;
+    }
+    case "flowerBed": {
+      // れんがの縁、土、茎の先に色とりどりの花
+      const border = m.material("bed-border", 0xa86f4c, 0.85, 0, true);
+      const soil = m.material("soil", 0x4a3b2c, 1);
+      const stem = m.material("stem", 0x4f7a3d, 0.9);
+      const blooms = [0xe8506a, 0xf2c14e, 0xf4f1ea, 0xb07cd8].map((color, i) => m.material(`flower-${i}`, color, 0.7));
+      const edgeH = 0.25, t = Math.min(0.08, w * 0.12, d * 0.2);
+      for (const side of [-1, 1]) {
+        m.box(w, edgeH, t, 0, edgeH / 2, side * (d / 2 - t / 2), border, 0.004);
+        m.box(t, edgeH, d - t * 2, side * (w / 2 - t / 2), edgeH / 2, 0, border, 0.004);
+      }
+      const innerW = w - t * 2, innerD = d - t * 2, soilTop = edgeH * 0.8;
+      m.box(innerW, soilTop, innerD, 0, soilTop / 2, 0, soil, 0);
+      const cols = clamp(Math.round(innerW / 0.2), 1, 12), rows = clamp(Math.round(innerD / 0.2), 1, 4);
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const x = -innerW / 2 + (innerW * (col + 0.5)) / cols, z = -innerD / 2 + (innerD * (row + 0.5)) / rows;
+          const top = soilTop + 0.14 + ((row * 3 + col * 7) % 4) * 0.03;
+          m.rod([x, soilTop, z], [x, top, z], 0.006, stem);
+          m.ellipsoid(0.08, 0.045, 0.08, [x, top + 0.015, z], blooms[(row + col * 3) % blooms.length]);
+        }
+      }
+      break;
+    }
+    case "pond": {
+      // つやのある水面と、ふちを囲む石
+      const rim = m.material("pond-stone", 0x9a968c, 0.95);
+      const water = m.material("water", 0x4a8aa3, 0.06, 0.15, true);
+      const surface = m.cylinder(0.5, 0.5, 0.04, [0, 0.03, 0], water, 40);
+      surface.scale.set(w * 0.88, 1, d * 0.88);
+      const count = clamp(Math.round((Math.PI * (w + d)) / 2 / 0.32), 10, 28);
+      for (let i = 0; i < count; i += 1) {
+        const a = (i / count) * Math.PI * 2;
+        const size = 0.16 + (i * 37 % 5) * 0.02;
+        const rock = m.ellipsoid(size * 1.3, size * 0.7, size, [Math.cos(a) * w * 0.45, size * 0.35, Math.sin(a) * d * 0.45], rim);
+        rock.rotation.y = -a;
+      }
+      break;
+    }
+    case "fence": {
+      // 長い辺に沿って、支柱・横木・縦板を並べる。いちばん高い支柱が指定の高さ
+      const boards = m.material("fence", 0xc8b08a, 0.8, 0, true);
+      const along = w >= d;
+      const length = along ? w : d;
+      const place = (x: number, y: number, z: number, sx: number, sy: number, sz: number) =>
+        along ? m.box(sx, sy, sz, x, y, z, boards, 0) : m.box(sz, sy, sx, z, y, x, boards, 0);
+      const posts = Math.max(2, Math.round(length / 0.9) + 1);
+      const post = Math.min(0.08, (length / posts) * 0.5);
+      for (let i = 0; i < posts; i += 1) place(-length / 2 + post / 2 + ((length - post) * i) / (posts - 1), tall / 2, 0, post, tall, post);
+      for (const y of [0.22, 0.78]) place(0, tall * y, 0.03, length, 0.05, 0.025);
+      const slats = clamp(Math.floor(length / 0.12), 1, 80);
+      for (let i = 0; i < slats; i += 1) place(-length / 2 + (length * (i + 0.5)) / slats, tall * 0.47, 0.05, Math.min(0.085, length / slats * 0.7), tall * 0.86, 0.016);
+      break;
+    }
+    case "gardenLight": {
+      // 台座、細い柱、光る灯り、笠
+      const pole = m.material("lamp-pole", 0x30353a, 0.5, 0.2, true);
+      const glow = m.material("lamp-glow", 0xfff1c6, 0.35);
+      glow.emissive.set(0xffdf8a);
+      glow.emissiveIntensity = 0.55;
+      const poleTop = tall * 0.84, lampH = tall * 0.11;
+      m.cylinder(0.11, 0.13, 0.08, [0, 0.04, 0], pole, 20);
+      m.cylinder(0.03, 0.04, poleTop, [0, poleTop / 2, 0], pole, 12);
+      m.cylinder(0.1, 0.075, lampH, [0, poleTop + lampH / 2, 0], glow, 20);
+      m.cylinder(0.02, 0.15, tall - poleTop - lampH, [0, (tall + poleTop + lampH) / 2, 0], pole, 20);
+      break;
+    }
+    case "stoneLantern": {
+      // 石灯籠: 基礎、竿、中台、火袋（窓は暗く）、六角の笠、宝珠
+      const granite = m.material("granite", 0xaaa79e, 0.93, 0, true);
+      const opening = m.material("lantern-opening", 0x2e2b27, 0.9);
+      const part = (top: number, bottom: number, height: number, y: number, scale: number, segments: number) => {
+        const mesh = m.cylinder(top, bottom, height, [0, y + height / 2, 0], granite, segments);
+        mesh.scale.set(w * scale, 1, d * scale);
+      };
+      part(0.5, 0.5, 0.1, 0, 0.8, 6);
+      part(0.5, 0.5, 0.4, 0.1, 0.28, 12);
+      part(0.5, 0.36, 0.1, 0.5, 0.66, 6);
+      m.box(w * 0.42, 0.22, d * 0.42, 0, 0.71, 0, granite, 0.01);
+      m.box(w * 0.2, 0.12, d * 0.44, 0, 0.72, 0, opening, 0);
+      m.box(w * 0.44, 0.12, d * 0.2, 0, 0.72, 0, opening, 0);
+      part(0.1, 0.5, 0.18, 0.82, 1, 6);
+      m.ellipsoid(w * 0.14, 0.14, d * 0.14, [0, 1.05, 0], granite);
+      break;
+    }
+    case "mailbox": {
+      // 柱の上に、丸いふたの箱と投函口
+      const paint = m.material("mailbox", 0x3d4448, 0.45, 0.25, true);
+      m.box(w * 0.18, 0.85, d * 0.22, 0, 0.425, 0, black, 0.01);
+      m.box(w, 0.34, d, 0, 1.0, 0, paint, 0.025);
+      const lid = m.cylinder(d / 2, d / 2, w, [0, 1.17, 0], paint, 20);
+      lid.rotation.z = Math.PI / 2;
+      m.box(w * 0.5, 0.025, 0.012, 0, 1.08, d / 2 + 0.004, black, 0);
+      break;
+    }
+    case "shed": {
+      // 金属の物置: 土台、本体、前へ少し高い片流れの屋根、2枚の引き戸と取っ手
+      const panel = m.material("shed-panel", 0xc6cbc4, 0.55, 0.2, true);
+      const trim = m.material("shed-trim", 0x575d63, 0.5, 0.3);
+      m.box(w, 0.08, d, 0, 0.04, 0, trim, 0.005);
+      m.box(w * 0.96, 1.78, d * 0.9, 0, 0.97, 0, panel, 0.01);
+      const roof = m.box(w, 0.05, d, 0, 1.9, 0, trim, 0.008);
+      roof.rotation.x = -0.07;
+      for (const side of [-1, 1]) {
+        m.box(w * 0.47, 1.62, 0.02, side * w * 0.235, 0.9, d * 0.45 + (side > 0 ? 0.012 : 0.024), panel, 0.004);
+        m.box(0.02, 0.18, 0.02, side * w * 0.04, 0.95, d * 0.45 + 0.04, trim, 0);
+      }
+      break;
+    }
+    case "dogHouse": {
+      // 箱形の本体に三角の妻壁と切妻屋根、手前にアーチ形の出入口
+      const wallMat = m.material("doghouse-wall", 0xd9b98c, 0.75, 0, true);
+      const roofMat = m.material("doghouse-roof", 0x9a4a3a, 0.7);
+      const hole = m.material("doghouse-opening", 0x2a2521, 0.9);
+      const bw = w * 0.84, bd = d * 0.9, wallH = 0.45, gable = Math.min(bw * 0.45, 0.3);
+      m.box(bw, wallH, bd, 0, wallH / 2, 0, wallMat, 0.01);
+      const shape = new THREE.Shape();
+      shape.moveTo(-bw / 2, 0);
+      shape.lineTo(bw / 2, 0);
+      shape.lineTo(0, gable);
+      shape.closePath();
+      const gableGeometry = new THREE.ExtrudeGeometry(shape, { depth: bd, bevelEnabled: false });
+      gableGeometry.translate(0, 0, -bd / 2);
+      m.mesh(gableGeometry, [0, wallH, 0], wallMat);
+      const slope = Math.atan2(gable, bw / 2), length = Math.hypot(bw / 2, gable) + 0.06;
+      for (const side of [-1, 1]) {
+        const plank = m.box(length, 0.03, d, side * (bw / 4 + 0.012), wallH + gable / 2 + 0.02, 0, roofMat, 0.006);
+        plank.rotation.z = -side * slope;
+      }
+      m.box(bw * 0.34, 0.26, 0.02, 0, 0.15, bd / 2 + 0.006, hole, 0);
+      const arch = m.cylinder(bw * 0.17, bw * 0.17, 0.02, [0, 0.28, bd / 2 + 0.006], hole, 20);
+      arch.rotation.x = Math.PI / 2;
       break;
     }
     default: {

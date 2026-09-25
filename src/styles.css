@@ -842,6 +842,46 @@ select:focus-visible {
   font-size: 13px;
 }
 
+.symbol-picker {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.symbol-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.symbol-option {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.symbol-option:hover {
+  border-color: var(--line-strong);
+}
+
+.symbol-option.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(39, 117, 209, 0.22);
+}
+
+.symbol-option canvas {
+  display: block;
+  width: 48px;
+  height: 48px;
+}
+
 .property-grid .prop-button {
   min-height: 32px;
   border: 1px solid var(--line);

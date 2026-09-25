@@ -52,11 +52,27 @@ export type FurnitureKind =
   | "plantLarge"
   | "fireplace"
   | "bicycle"
-  | "motorcycle";
+  | "motorcycle"
+  | "tree"
+  | "conifer"
+  | "palmTree"
+  | "shrub"
+  | "rock"
+  | "steppingStones"
+  | "flowerBed"
+  | "pond"
+  | "fence"
+  | "gardenLight"
+  | "stoneLantern"
+  | "mailbox"
+  | "shed"
+  | "dogHouse";
 export interface FurnitureDef {
   label: string;
   w: number;
   h: number;
+  // 高さを変えられる種類だけが持つ、標準の高さ cm
+  height?: number;
 }
 
 export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
@@ -114,4 +130,18 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   fireplace: { label: "暖炉", w: 120, h: 45 },
   bicycle: { label: "自転車", w: 60, h: 180 },
   motorcycle: { label: "バイク", w: 80, h: 210 },
+  tree: { label: "木", w: 300, h: 300, height: 450 },
+  conifer: { label: "針葉樹", w: 180, h: 180, height: 500 },
+  palmTree: { label: "ヤシの木", w: 320, h: 320, height: 600 },
+  shrub: { label: "低木・植え込み", w: 120, h: 80, height: 90 },
+  rock: { label: "岩", w: 120, h: 90, height: 70 },
+  steppingStones: { label: "飛び石", w: 60, h: 200 },
+  flowerBed: { label: "花壇", w: 180, h: 60 },
+  pond: { label: "池", w: 300, h: 200 },
+  fence: { label: "フェンス", w: 180, h: 20, height: 120 },
+  gardenLight: { label: "外灯", w: 30, h: 30, height: 200 },
+  stoneLantern: { label: "石灯籠", w: 60, h: 60 },
+  mailbox: { label: "郵便ポスト", w: 40, h: 30 },
+  shed: { label: "物置", w: 180, h: 90 },
+  dogHouse: { label: "犬小屋", w: 70, h: 90 },
 };

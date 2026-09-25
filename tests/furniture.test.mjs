@@ -85,3 +85,15 @@ test('merging parts keeps the same model geometry bounds', () => {
 test('invalid dimensions fail instead of producing corrupt geometry', () => {
   for (const w of [0, -20, NaN, Infinity]) assert.throws(() => buildFurnitureModel({ kind: 'chair', w, h: 40 }));
 });
+
+test('trees, rocks, fences and garden lights reach the requested height', () => {
+  for (const kind of Object.keys(FURNITURE_DEFS).filter(kind => FURNITURE_DEFS[kind].height)) {
+    for (const height of [FURNITURE_DEFS[kind].height, 50, 1200]) {
+      const group = buildFurnitureModel({ kind, ...FURNITURE_DEFS[kind], height });
+      const box = new THREE.Box3().setFromObject(group, true);
+      assert.ok(box.min.y >= -1e-5, `${kind} ${height}: below floor`);
+      assert.ok(Math.abs(box.max.y - height / 100) < 0.02, `${kind} ${height}: top ${box.max.y}`);
+      dispose(group);
+    }
+  }
+});

@@ -42,6 +42,9 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         const r = planCanvas.getBoundingClientRect();
         return { x:r.left+x*view.zoom+view.x, y:r.top+y*view.zoom+view.y };
       },
+      grassTufts() {
+        return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
+      },
       floorPieces(id) {
         return planGroup.children.filter(o => o.userData.entityId===id).flatMap(o => o.children.filter(c=>c.isMesh).map(c=>{
           const b = new THREE.Box3().setFromObject(c); return { min:b.min.toArray(),max:b.max.toArray() };
@@ -159,7 +162,8 @@ try {
   await page.locator('#undoButton').click();
   await page.locator('#dimensionToggle').click();
   assert.ok(await page.evaluate(() => window.__editorTest.roomLabelBounds('room')));
-  point = await planPoint(35, 40);
+  // 名前がないときは寸法が1行目に詰まるので、その行をつかむ
+  point = await planPoint(35, 20);
   await move(point, 60, 40);
   const movedDimensions = (await saved()).floors[0].entities[0];
   assert.equal(movedDimensions.x, 0);
@@ -240,6 +244,73 @@ try {
   await page.locator('button[data-view-mode="three"]').click();
   assert.ok((await pixels()).colors > 1);
   console.log('PASS: free text labels: place, edit, resize, rotate, move, undo, reload and delete when emptied');
+
+  // 2D symbol variants are picked from thumbnails or with V, remembered for new items, and validated on load.
+  await importPlan(plan([room(), { id: 'seat', type: 'furniture', kind: 'chair', x: 200, y: 100, w: 45, h: 45, rotation: 0, symbol: 99 }, { id: 'oak', type: 'furniture', kind: 'tree', x: 300, y: 100, w: 300, h: 300, rotation: 0, height: -5 }]));
+  await page.locator('button[data-view-mode="split"]').click();
+  const itemOf = async id => (await saved()).floors[0].entities.find(e => e.id === id);
+  assert.equal((await itemOf('seat')).symbol, undefined);
+  assert.equal((await itemOf('oak')).height, 10);
+  point = await planPoint(222, 122);
+  await page.mouse.click(point.x, point.y);
+  assert.equal(await page.locator('.symbol-option').count(), 3);
+  assert.ok(await page.locator('.symbol-option canvas').nth(2).evaluate(canvas => canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data.some((value, index) => index % 4 === 3 && value > 0)));
+  await page.locator('.symbol-option[data-symbol="2"]').click();
+  assert.equal((await itemOf('seat')).symbol, 2);
+  assert.equal(await page.locator('.symbol-option.is-active').getAttribute('data-symbol'), '2');
+  await page.keyboard.press('v');
+  assert.equal((await itemOf('seat')).symbol, undefined);
+  await page.keyboard.press('Shift+V');
+  assert.equal((await itemOf('seat')).symbol, 2);
+  await page.locator('#undoButton').click();
+  assert.equal((await itemOf('seat')).symbol, undefined);
+  await page.locator('#redoButton').click();
+  assert.equal((await itemOf('seat')).symbol, 2);
+  await choose('[data-furniture="chair"]');
+  point = await planPoint(100, 330);
+  await page.mouse.click(point.x, point.y);
+  const chairs = (await saved()).floors[0].entities.filter(e => e.kind === 'chair');
+  assert.equal(chairs.length, 2);
+  assert.ok(chairs.every(e => e.symbol === 2));
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal((await itemOf('seat')).symbol, 2);
+  console.log('PASS: 2D symbol variants: thumbnails, V key, undo/redo, remembered for new items, reload and invalid numbers');
+
+  // Trees and other outdoor items with a height setting grow to that height in 3D.
+  await page.locator('button[data-view-mode="split"]').click();
+  point = await planPoint(450, 250);
+  await page.mouse.click(point.x, point.y);
+  assert.equal(await page.locator('#furnitureHeightInput').inputValue(), '10');
+  await change('#furnitureHeightInput', 800);
+  assert.equal((await itemOf('oak')).height, 800);
+  let top = (await page.evaluate(() => window.__editorTest.bounds('oak'))).max[1];
+  assert.ok(Math.abs(top - 8.08) < 0.03, `tree top ${top}`);
+  await change('#furnitureHeightInput', 450);
+  assert.equal((await itemOf('oak')).height, undefined);
+  top = (await page.evaluate(() => window.__editorTest.bounds('oak'))).max[1];
+  assert.ok(Math.abs(top - 4.58) < 0.03, `default tree top ${top}`);
+  point = await planPoint(222, 122);
+  await page.mouse.click(point.x, point.y);
+  assert.equal(await page.locator('#furnitureHeightInput').count(), 0);
+  console.log('PASS: outdoor tree height: field, 3D top, back to default, and hidden for fixed-height items');
+
+  // New rooms and ground start without a name; grass ground grows blades in 3D only while it is grass.
+  await importPlan(plan());
+  await page.locator('button[data-view-mode="split"]').click();
+  await choose('[data-surface="grass"]');
+  point = await planPoint(40, 40);
+  const corner = await planPoint(440, 340);
+  await move(point, corner.x - point.x, corner.y - point.y);
+  const ground = (await saved()).floors[0].entities.find(e => e.type === 'room' && e.id !== 'room');
+  assert.deepEqual([ground.name, ground.surface, ground.w, ground.h], ['', 'grass', 400, 300]);
+  assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), Math.round(400 * 300 / 10000 * 70));
+  await page.locator('#roomSurfaceInput').selectOption('stone');
+  assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), 0);
+  await page.locator('#undoButton').click();
+  assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), 840);
+  await page.screenshot({ path: `${output}/grass-and-unnamed-ground.png` });
+  console.log('PASS: new ground has no name, and grass blades follow the grass surface in 3D');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);

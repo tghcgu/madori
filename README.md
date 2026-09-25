@@ -82,11 +82,12 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 2D間取り編集
 
-- 部屋をドラッグして作成
+- 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 壁を直線・斜線で作成
 - 開き戸、引き戸、通常窓、中央区切り付き窓を配置
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
+- 家具の2D記号のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・トイレ・植物・ラグなど27種類）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。3Dの形は変わりません
 - 部屋名を本文とは別にドラッグして自由配置
 - 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
@@ -110,6 +111,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - マウスドラッグによる視点回転・移動
 - ホイールによるズーム
 - 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
+- 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
 - 影のON/OFF
 - 5段階の明るさ調整
 - 8方位と真上から選べる光の向き
@@ -156,6 +158,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン |
 | キッチン・水回り | キッチン、L型キッチン、アイランドキッチン、浴槽、ユニットバス、シャワー、トイレ、洗面台 |
 | インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ |
+| 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、フェンス、外灯、石灯籠、郵便ポスト、物置、犬小屋 |
 | 乗り物 | 車、バイク、自転車 |
 | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
 | 階段 | 直階段、折り返し階段、らせん階段 |
@@ -166,7 +169,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 各家具は2D用の平面記号と3Dモデルを持ちます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
-- 家具・設備54種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備68種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯は「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
+- 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています。
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
 - 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
 - 開き戸は3Dでは閉じた状態です。引き戸は別々のレールに配置した2枚の扉、窓は枠・サッシ・ガラス・取っ手で表現します。
@@ -224,6 +229,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | `R` | 選択中の要素を90度回転。屋根では幅と奥行を入れ替え |
 | `Shift + R` | 家具や線要素を15度単位で細かく回転 |
 | `F` | 家具の左右反転、ドアの開き・引き戸の重なりを反転 |
+| `V` / `Shift + V` | 家具の2D記号のデザインを切り替え（逆順） |
 | `L` | 選択中の要素を固定・固定解除 |
 | `Delete` / `Backspace` | 選択中の要素を削除 |
 | `Ctrl + Z` / `Cmd + Z` | 元に戻す |
@@ -314,7 +320,7 @@ npm.cmd run dev
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
-家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全54種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
+家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全68種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
 
 本番ビルド:
 
@@ -361,7 +367,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
-│  ├─ furniture-models.ts    # 家具54種類の3D形状と材質
+│  ├─ furniture-models.ts    # 家具68種類の3D形状と材質
 │  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
@@ -415,7 +421,7 @@ madori/
 }
 ```
 
-座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`です。屋根は全階共通の`roofs`配列で管理し、各屋根の`floorId`で設置階を指定します。未指定の旧データは読み込み時の最上階に割り当てます。設置階を削除すると対応する屋根も削除され、Undoで一緒に戻せます。
+座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`、`text`です。家具の`symbol`は2D記号のデザイン番号（標準のときは省略）、`height`は高さを変えられる家具の高さ（標準のときは省略）です。屋根は全階共通の`roofs`配列で管理し、各屋根の`floorId`で設置階を指定します。未指定の旧データは読み込み時の最上階に割り当てます。設置階を削除すると対応する屋根も削除され、Undoで一緒に戻せます。
 
 ## ブランチとデプロイ
 
@@ -569,12 +575,13 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 
 ### 2D editing
 
-- Draw rooms by dragging
+- Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls
 - Add swing doors, sliding doors, windows, and divided windows
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
 - Drag room labels independently from room geometry
+- Choose a different 2D symbol design for furniture from the thumbnails under Selection (27 types, including chairs, sofas, beds, tables, fridges, toilets, plants, and rugs). Press `V` to cycle through them. New items of the same type use the last design you picked. The 3D model does not change
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors
@@ -595,6 +602,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Split, 2D-only, and 3D-only view modes
 - Orbit, pan, and zoom camera controls
 - 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
+- Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
 - Optional shadows
 - Five light intensity levels
 - Eight compass directions plus overhead lighting
@@ -639,6 +647,7 @@ The furniture and equipment palette lists frequently used openings and furniture
 | Appliances | Refrigerator, washing machine, TV stand, air conditioner |
 | Kitchen and bathroom | Kitchen unit, L-shaped kitchen, island kitchen, bathtub, unit bath, shower, toilet, washbasin |
 | Decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano |
+| Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, fence, garden light, stone lantern, mailbox, shed, dog house |
 | Vehicles | Car, motorcycle, bicycle |
 | Floors and ground | Plain, wood planks, tile, stone paving, grass |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
@@ -649,7 +658,9 @@ Type in the search box at the top of the palette to show only matching parts.
 
 Each item has a dedicated 2D plan symbol and a generated 3D representation. Items with a facing direction shade their back side, and the wall-mounted air conditioner is drawn with a dashed outline. The geometry adapts to user-defined width and depth where practical.
 
-- All 54 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- Trees, conifers, palm trees, shrubs, rocks, fences, and garden lights have a height setting (10 cm to 30 m) under Selection. The top of the 3D model matches that height.
+- 2D symbols never use text. They are drawn with shapes, lines, and shading only.
+- All 68 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
 - Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
@@ -707,6 +718,7 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | `R` | Rotate the selected item by 90 degrees; swaps roof width and depth |
 | `Shift + R` | Fine 15-degree rotation for furniture and line elements |
 | `F` | Flip furniture or reverse a door/sliding-door side |
+| `V` / `Shift + V` | Cycle the 2D symbol design of the selected furniture (forward / backward) |
 | `L` | Lock or unlock the selected item |
 | `Delete` / `Backspace` | Delete the selected item |
 | `Ctrl + Z` / `Cmd + Z` | Undo |
@@ -794,7 +806,7 @@ npm.cmd run dev
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
-Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 54 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
+Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 68 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
 
 Production build:
 
@@ -841,7 +853,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
-│  ├─ furniture-models.ts    # Geometry and materials for 54 furniture types
+│  ├─ furniture-models.ts    # Geometry and materials for 68 furniture types
 │  ├─ opening-models.ts      # Door, sliding door, and window geometry
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection
@@ -895,7 +907,7 @@ The exported JSON has the following high-level shape:
 }
 ```
 
-Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, and `shape`. Roofs are stored in the plan-level `roofs` array, with each roof's `floorId` identifying its supporting floor. Legacy roofs without this field are assigned to the highest floor at load time. Deleting a floor also deletes its roofs; Undo restores both.
+Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, `shape`, and `text`. A furniture item's `symbol` is its 2D symbol design number and `height` is the height of adjustable items; both are omitted at their defaults. Roofs are stored in the plan-level `roofs` array, with each roof's `floorId` identifying its supporting floor. Legacy roofs without this field are assigned to the highest floor at load time. Deleting a floor also deletes its roofs; Undo restores both.
 
 ## Branches and Deployment
 
