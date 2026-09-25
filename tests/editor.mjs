@@ -353,7 +353,8 @@ try {
   await page.locator('button[data-view-mode="three"]').click();
   assert.ok((await pixels()).colors > 20);
   await page.screenshot({ path: `${output}/furniture-edited.png` });
-  const contact = await browser.newPage({ viewport: { width: 1200, height: 2430 } });
+  const contactHeight = Math.ceil(symbols.length / 4) * 270;
+  const contact = await browser.newPage({ viewport: { width: 1200, height: contactHeight } });
   await contact.setContent('<style>*{box-sizing:border-box}body{margin:0;display:grid;grid-template-columns:repeat(4,300px);font:14px system-ui;background:white}figure{margin:0;height:270px;padding:14px;border:1px solid #ddd;display:flex;flex-direction:column;gap:10px}img{width:100%;height:210px;object-fit:contain}</style>');
   await contact.evaluate(symbols => {
     for (const { label, url } of symbols) {
@@ -362,10 +363,10 @@ try {
     }
   }, symbols);
   await contact.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())));
-  for (let part = 0; part < 3; part += 1) await contact.screenshot({ path: `${output}/symbols-${part+1}.png`, clip: { x:0, y:part*810, width:1200, height:810 } });
+  for (let part = 0; part * 810 < contactHeight; part += 1) await contact.screenshot({ path: `${output}/symbols-${part+1}.png`, clip: { x:0, y:part*810, width:1200, height:Math.min(810, contactHeight - part*810) } });
   await contact.close();
   await page.context().close();
-  console.log('PASS: all 34 furniture symbols, resizing, rotation, flip, color, 3D footprints and reload');
+  console.log(`PASS: all ${symbols.length} furniture symbols, resizing, rotation, flip, color, 3D footprints and reload`);
 
   // Recovery is tested through actual localStorage and the download UI.
   const broken = JSON.stringify(plan([room(), { type: 'furniture', kind: 'unknown', x: 0, y: 0, w: 100, h: 100 }]));

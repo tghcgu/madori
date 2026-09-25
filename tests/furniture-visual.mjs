@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
+import { FURNITURE_DEFS } from '../src/furniture-catalog.ts';
 
 const output = '.codex/furniture-quality';
+// Furniture kinds plus the four opening models rendered by the gallery page.
+const entryCount = Object.keys(FURNITURE_DEFS).length + 4;
+const galleryHeight = Math.ceil(entryCount / 4) * 290;
 await mkdir(output, { recursive: true });
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
 *{box-sizing:border-box}body{margin:0;background:#edf0f1;font:14px system-ui}canvas{display:block}#labels{position:absolute;inset:0;pointer-events:none}label{position:absolute;padding:8px 14px;color:#35444a;background:#ffffffdd;font-weight:600}
@@ -55,11 +59,11 @@ await server.listen();
 let browser;
 try {
   browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 2900 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1280, height: galleryHeight }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(new URL('/__furniture-gallery', server.resolvedUrls.local[0]).href);
-  await page.waitForFunction(() => window.galleryStats?.length === 38);
+  await page.waitForFunction(count => window.galleryStats?.length === count, entryCount);
   assert.deepEqual(errors, []);
   const stats = await page.evaluate(() => {
     const canvas = document.querySelector('canvas'), copy=document.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;
@@ -71,7 +75,7 @@ try {
     });
   });
   for (const entry of stats) assert.ok(entry.colors > 40, `${entry.kind}: blank canvas`);
-  for (let part = 0; part < 4; part += 1) await page.screenshot({ path: `${output}/catalog-${part + 1}.png`, clip: { x: 0, y: part * 870, width: 1280, height: Math.min(870, 2900-part*870) } });
+  for (let part = 0; part * 870 < galleryHeight; part += 1) await page.screenshot({ path: `${output}/catalog-${part + 1}.png`, clip: { x: 0, y: part * 870, width: 1280, height: Math.min(870, galleryHeight - part * 870) } });
   console.log(JSON.stringify(stats));
 } finally {
   await browser?.close();

@@ -190,6 +190,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
 
   switch (item.kind) {
     case "sofa":
+    case "sofa2":
     case "armchair":
     case "sofaCorner": {
       const corner = item.kind === "sofaCorner";
@@ -218,9 +219,10 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "table":
+    case "longTable":
     case "sideTable":
     case "desk": {
-      const height = item.kind === "desk" ? 0.74 : item.kind === "sideTable" ? 0.55 : 0.42;
+      const height = item.kind === "desk" ? 0.74 : item.kind === "longTable" ? 0.72 : item.kind === "sideTable" ? 0.55 : 0.42;
       m.box(w, 0.045, d, 0, height - 0.0225, 0, wood, 0.018);
       legs(w, d, height - 0.045);
       m.box(w * 0.77, 0.07, d * 0.06, 0, height - 0.08, -d * 0.36, darkWood);
@@ -255,6 +257,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "bed":
+    case "bedSemiDouble":
     case "bedDouble": {
       legs(w * 0.88, d * 0.88, 0.14);
       m.box(w, 0.2, d * 0.96, 0, 0.23, d * 0.02, darkWood, 0.018);
@@ -263,7 +266,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w * 0.95, 0.21, d * 0.91, 0, 0.435, d * 0.026, ivory, 0.045);
       m.box(w * 0.965, 0.075, d * 0.66, 0, 0.553, d * 0.15, fabric, 0.035);
       m.box(w * 0.96, 0.04, d * 0.12, 0, 0.61, -d * 0.135, cushion, 0.025);
-      const pillows = item.kind === "bed" ? 1 : 2;
+      const pillows = item.kind === "bedDouble" ? 2 : 1;
       for (let i = 0; i < pillows; i += 1) m.box(w * (pillows === 1 ? 0.62 : 0.38), 0.13, d * 0.18, (i - (pillows - 1) / 2) * w * 0.46, 0.597, -d * 0.31, ivory, 0.06);
       break;
     }
@@ -321,7 +324,8 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       break;
     }
-    case "kitchen": {
+    case "kitchen":
+    case "kitchenIsland": {
       m.box(w * 0.94, 0.1, d * 0.83, 0, 0.05, -d * 0.04, black);
       m.box(w, 0.73, d * 0.94, 0, 0.465, -d * 0.025, white);
       const count = Math.max(2, Math.min(8, Math.round(w / 0.6)));
@@ -423,7 +427,8 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       for (const sign of [-1, 1]) m.rod([0, 1.37, 0], [sign * w * 0.39, 1.37, 0], 0.004, metal);
       break;
     }
-    case "plant": {
+    case "plant":
+    case "plantLarge": {
       const height = clamp(Math.sqrt(w * d) * 2.7, 0.65, 2.6), potH = height * 0.24;
       const pot = m.material("planter", 0xd3cec1, 0.78, 0, true);
       m.vessel([[0, 0], [0.3, 0], [0.4, potH * 0.94], [0.4, potH], [0.35, potH], [0.27, 0.04], [0, 0.04]], w * 0.75, d * 0.75, [0, 0, 0], pot);
@@ -636,11 +641,235 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w * 0.25, 0.085, 0.022, 0, 0.57, d * 0.475, ivory);
       break;
     }
+    case "officeChair": {
+      // 5本脚のキャスター台、昇降の支柱、座面、背もたれ、肘掛け
+      for (let i = 0; i < 5; i += 1) {
+        const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+        const end: Position = [Math.cos(a) * w * 0.44, 0.06, Math.sin(a) * d * 0.44];
+        m.rod([0, 0.09, 0], end, 0.018, black);
+        m.ellipsoid(0.05, 0.05, 0.05, [end[0], 0.025, end[2]], black);
+      }
+      m.cylinder(0.025, 0.03, 0.34, [0, 0.27, 0], metal);
+      m.box(w * 0.78, 0.08, d * 0.72, 0, 0.47, d * 0.05, fabric, 0.03);
+      const back = m.box(w * 0.72, 0.5, 0.06, 0, 0.8, -d * 0.36, fabric, 0.03);
+      back.rotation.x = -0.12;
+      m.rod([0, 0.45, -d * 0.18], [0, 0.62, -d * 0.35], 0.02, black);
+      for (const sign of [-1, 1]) {
+        m.rod([sign * w * 0.37, 0.47, 0], [sign * w * 0.37, 0.63, 0], 0.012, black);
+        m.box(0.05, 0.03, d * 0.34, sign * w * 0.37, 0.645, d * 0.02, black, 0.01);
+      }
+      break;
+    }
+    case "zaisu": {
+      // 床に置く座面と、後ろへ倒れた背もたれ
+      m.box(w, 0.1, d * 0.6, 0, 0.05, d * 0.2, fabric, 0.04);
+      const back = m.box(w * 0.96, 0.08, d * 0.62, 0, 0.3, -d * 0.24, fabric, 0.04);
+      back.rotation.x = 1.0;
+      m.rod([-w * 0.45, 0.07, -d * 0.1], [w * 0.45, 0.07, -d * 0.1], 0.012, black);
+      break;
+    }
+    case "kotatsu": {
+      // 床に広がるこたつ布団と、その上の天板
+      const futon = m.material("kotatsu-futon", 0xc98a6d, 0.97, 0, true);
+      m.box(w, 0.05, d, 0, 0.025, 0, futon, 0.025);
+      // 天板の縁からほぼ垂直に垂れる布団。面ごとに陰影が付くよう法線を面単位にする
+      const indexedSkirt = new THREE.CylinderGeometry(0.3 * Math.SQRT2, 0.36 * Math.SQRT2, 0.34, 4, 1);
+      indexedSkirt.rotateY(Math.PI / 4);
+      const skirt = indexedSkirt.toNonIndexed();
+      indexedSkirt.dispose();
+      skirt.computeVertexNormals();
+      m.mesh(skirt, [0, 0.21, 0], futon).scale.set(w, 1, d);
+      m.box(w * 0.64, 0.035, d * 0.64, 0, 0.395, 0, wood, 0.012);
+      m.box(w * 0.3, 0.02, d * 0.18, w * 0.05, 0.418, -d * 0.04, m.material("kotatsu-cloth", 0xe7dfcf, 0.9));
+      break;
+    }
+    case "deskL": {
+      // 奥の天板を全幅に、左の天板を手前へ伸ばしたL字。右奥に引き出し
+      const height = 0.74, arm = Math.min(w, d) * 0.43;
+      m.box(w, 0.035, arm, 0, height - 0.0175, -d / 2 + arm / 2, wood, 0.012);
+      m.box(arm, 0.035, d - arm, -w / 2 + arm / 2, height - 0.0175, arm / 2, wood, 0.012);
+      for (const [x, z] of [[-w / 2 + 0.04, -d / 2 + 0.04], [w / 2 - 0.04, -d / 2 + arm - 0.04], [-w / 2 + 0.04, d / 2 - 0.04], [-w / 2 + arm - 0.04, d / 2 - 0.04]]) {
+        m.rod([x, 0, z], [x, height - 0.035, z], 0.02, darkWood, "leg");
+      }
+      m.box(w * 0.26, height - 0.1, arm * 0.9, w / 2 - w * 0.14, (height - 0.1) / 2 + 0.03, -d / 2 + arm / 2, darkWood);
+      for (let i = 0; i < 3; i += 1) drawer(w / 2 - w * 0.14, height - 0.16 - i * 0.2, -d / 2 + arm * 0.96, w * 0.24, 0.19);
+      break;
+    }
+    case "bunkBed": {
+      // 上下2段の寝台、四隅の柱、上段の柵、足元のはしご
+      for (const y of [0.28, 1.2]) {
+        m.box(w, 0.12, d, 0, y, 0, wood, 0.012);
+        m.box(w * 0.92, 0.14, d * 0.93, 0, y + 0.13, 0, ivory, 0.03);
+        m.box(w * 0.93, 0.05, d * 0.6, 0, y + 0.225, d * 0.15, fabric, 0.02);
+        m.box(w * 0.55, 0.1, d * 0.14, 0, y + 0.25, -d * 0.36, ivory, 0.04);
+      }
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.box(0.06, 1.72, 0.06, sx * (w / 2 - 0.03), 0.86, sz * (d / 2 - 0.03), wood, 0.01);
+      m.box(0.04, 0.18, d * 0.62, -(w / 2 - 0.02), 1.55, -d * 0.1, wood, 0.01);
+      m.box(0.04, 0.18, d * 0.4, w / 2 - 0.02, 1.55, -d * 0.2, wood, 0.01);
+      for (const z of [d * 0.22, d * 0.42]) m.rod([w / 2 - 0.02, 0.2, z], [w / 2 - 0.02, 1.62, z], 0.018, wood);
+      for (let i = 0; i < 5; i += 1) m.rod([w / 2 - 0.02, 0.45 + i * 0.25, d * 0.22], [w / 2 - 0.02, 0.45 + i * 0.25, d * 0.42], 0.014, darkWood);
+      break;
+    }
+    case "futon": {
+      // 敷布団・掛け布団・枕。脚や枠はなく床に直接置く
+      m.box(w, 0.09, d, 0, 0.045, 0, ivory, 0.04);
+      m.box(w * 0.98, 0.07, d * 0.7, 0, 0.12, d * 0.14, fabric, 0.05);
+      m.box(w * 0.98, 0.05, d * 0.08, 0, 0.13, -d * 0.2, fabric, 0.03);
+      m.box(w * 0.55, 0.09, d * 0.15, 0, 0.135, -d * 0.36, ivory, 0.045);
+      break;
+    }
+    case "cupboard": {
+      // 下は扉付きの収納、上はガラス戸越しに皿が見える棚
+      m.box(w * 0.9, 0.08, d * 0.86, 0, 0.04, 0, darkWood);
+      m.box(w, 0.8, d, 0, 0.48, 0, wood);
+      for (const sign of [-1, 1]) drawer(sign * w * 0.245, 0.5, d * 0.505, w * 0.49, 0.74);
+      m.box(w, 0.03, d, 0, 0.895, 0, darkWood);
+      const upperD = d * 0.62, upperZ = -d / 2 + upperD / 2;
+      m.box(w, 0.86, 0.02, 0, 1.34, -d / 2 + 0.01, darkWood);
+      for (const sign of [-1, 1]) m.box(0.025, 0.86, upperD, sign * (w / 2 - 0.0125), 1.34, upperZ, wood);
+      for (const y of [1.2, 1.48, 1.765]) m.box(w - 0.05, 0.025, upperD, 0, y, upperZ, wood);
+      for (const y of [1.2, 1.48]) for (let i = 0; i < 3; i += 1) {
+        const plate = m.cylinder(Math.min(w, upperD) * 0.16, Math.min(w, upperD) * 0.13, 0.03, [-w * 0.28 + i * w * 0.28, y + 0.03, upperZ], ceramic);
+        plate.scale.z = 0.7;
+      }
+      m.box(w * 0.96, 0.84, 0.006, 0, 1.34, upperZ + upperD / 2, m.glass("cupboard-glass"), 0);
+      break;
+    }
+    case "shoeCabinet": {
+      const height = 1.0;
+      m.box(w * 0.9, 0.06, d * 0.86, 0, 0.03, 0, darkWood);
+      m.box(w, height - 0.06, d, 0, (height + 0.06) / 2, 0, wood);
+      for (const sign of [-1, 1]) drawer(sign * w * 0.245, height / 2 + 0.03, d * 0.505, w * 0.49, height - 0.12);
+      m.box(w * 1.02, 0.03, d * 1.03, 0, height + 0.015, 0, darkWood);
+      break;
+    }
+    case "airConditioner": {
+      // 壁の高い位置に付く室内機。本体・吹き出し口・ルーバー
+      const y = 2.15, height = 0.29;
+      m.box(w, height, d, 0, y, 0, white, 0.03);
+      m.box(w * 0.86, 0.035, d * 0.25, 0, y - height * 0.32, d * 0.4, black, 0.01);
+      m.box(w * 0.86, 0.02, d * 0.3, 0, y - height * 0.44, d * 0.42, white, 0.008);
+      const vent = m.material("vent", 0xb7c0c5, 0.5);
+      for (let i = 0; i < 3; i += 1) m.box(w * 0.8, 0.006, 0.004, 0, y + height * (0.05 + i * 0.1), d / 2 + 0.002, vent, 0);
+      m.ellipsoid(0.01, 0.01, 0.004, [w * 0.38, y - height * 0.12, d / 2 + 0.003], m.material("status-led", 0x75c9b1));
+      break;
+    }
+    case "kitchenL": {
+      // 奥の辺に流し台、左の辺にコンロを置いたL型
+      const depth = Math.min(w, d) * 0.36, counter = m.material("countertop", 0xb8bdbc, 0.34);
+      m.box(w * 0.98, 0.1, depth * 0.85, 0, 0.05, -d / 2 + depth / 2, black);
+      m.box(depth * 0.85, 0.1, (d - depth) * 0.98, -w / 2 + depth / 2, 0.05, depth / 2, black);
+      m.box(w, 0.73, depth, 0, 0.465, -d / 2 + depth / 2, white);
+      m.box(depth, 0.73, d - depth, -w / 2 + depth / 2, 0.465, depth / 2, white);
+      m.box(w, 0.04, depth, 0, 0.85, -d / 2 + depth / 2, counter);
+      m.box(depth, 0.04, d - depth, -w / 2 + depth / 2, 0.85, depth / 2, counter);
+      const doors = Math.max(2, Math.min(6, Math.round((w - depth) / 0.6)));
+      for (let i = 0; i < doors; i += 1) drawer(-w / 2 + depth + (w - depth) / doors * (i + 0.5), 0.47, -d / 2 + depth + 0.013, (w - depth) / doors, 0.7, white);
+      m.box(w * 0.2, 0.012, depth * 0.6, w * 0.18, 0.874, -d / 2 + depth / 2, metal);
+      m.box(w * 0.18, 0.01, depth * 0.5, w * 0.18, 0.875, -d / 2 + depth / 2, basinInterior);
+      faucet(w * 0.18, 0.87, -d / 2 + depth * 0.12, 0.2);
+      m.box(depth * 0.75, 0.016, (d - depth) * 0.5, -w / 2 + depth / 2, 0.879, depth / 2 + (d - depth) * 0.05, black);
+      for (const z of [-0.12, 0.12]) {
+        const ring = m.ring(Math.min(depth * 0.18, 0.12), 0.004, [-w / 2 + depth / 2, 0.89, depth / 2 + (d - depth) * (0.05 + z)], metal);
+        ring.rotation.x = -Math.PI / 2;
+      }
+      break;
+    }
+    case "unitBath": {
+      // 一体成型の床、奥の浴槽、洗い場の排水口と風呂椅子、壁側のシャワー
+      m.box(w, 0.1, d, 0, 0.05, 0, m.material("bath-floor", 0xdfe6e4, 0.55, 0, true), 0.01);
+      const tubD = d * 0.45, tubZ = -d / 2 + tubD / 2;
+      m.box(w, 0.5, tubD, 0, 0.35, tubZ, ceramic, 0.03);
+      m.box(w * 0.88, 0.012, tubD * 0.76, 0, 0.6, tubZ, basinInterior, 0.004);
+      faucet(w * 0.32, 0.6, -d / 2 + 0.05, 0.16);
+      m.cylinder(0.04, 0.04, 0.004, [w * 0.28, 0.102, d * 0.3], metal);
+      m.box(0.3, 0.22, 0.22, -w * 0.18, 0.21, d * 0.24, m.material("bath-stool", 0xcfd9dc, 0.4));
+      m.rod([w / 2 - 0.05, 0.1, d * 0.05], [w / 2 - 0.05, 1.8, d * 0.05], 0.012, metal);
+      const head = m.cylinder(0.05, 0.04, 0.03, [w / 2 - 0.1, 1.72, d * 0.05], metal);
+      head.rotation.z = Math.PI / 2;
+      break;
+    }
+    case "shower": {
+      // 床の受け皿、中央の排水口、2面のガラス、奥のシャワー
+      m.box(w, 0.06, d, 0, 0.03, 0, ceramic, 0.012);
+      m.cylinder(0.035, 0.035, 0.004, [0, 0.062, 0], metal);
+      const glass = m.glass("shower-glass", 0xcfe3e8, 0.18);
+      m.box(w, 1.9, 0.008, 0, 1.01, d / 2 - 0.004, glass, 0);
+      m.box(0.008, 1.9, d, w / 2 - 0.004, 1.01, 0, glass, 0);
+      m.rod([-w / 2, 1.96, d / 2 - 0.01], [w / 2, 1.96, d / 2 - 0.01], 0.012, metal);
+      m.rod([w / 2 - 0.01, 1.96, -d / 2], [w / 2 - 0.01, 1.96, d / 2], 0.012, metal);
+      m.rod([-w / 2 + 0.06, 0.06, -d / 2 + 0.06], [-w / 2 + 0.06, 1.95, -d / 2 + 0.06], 0.012, metal);
+      m.rod([-w / 2 + 0.06, 1.92, -d / 2 + 0.06], [-w / 2 + 0.2, 1.92, -d / 2 + 0.2], 0.01, metal);
+      m.cylinder(0.08, 0.07, 0.02, [-w / 2 + 0.2, 1.91, -d / 2 + 0.2], metal);
+      break;
+    }
+    case "fireplace": {
+      // 石積みの本体と炉、上のマントル、薪と炎
+      const stone = m.material("fireplace-stone", 0xb7ab98, 0.92, 0, true);
+      const soot = m.material("firebox", 0x2a2522, 0.95);
+      const height = 1.1;
+      m.box(w, 0.08, d, 0, 0.04, 0, stone, 0.01);
+      for (const sign of [-1, 1]) m.box(w * 0.2, height - 0.08, d * 0.8, sign * w * 0.4, (height + 0.08) / 2, -d * 0.1, stone);
+      m.box(w * 0.6, 0.3, d * 0.8, 0, height - 0.15, -d * 0.1, stone);
+      m.box(w * 0.6, height - 0.38, d * 0.08, 0, (height - 0.38) / 2 + 0.08, -d * 0.46, soot);
+      m.box(w * 0.6, 0.01, d * 0.7, 0, 0.085, -d * 0.12, soot);
+      m.box(w, 0.05, d * 0.9, 0, height + 0.025, -d * 0.05, wood, 0.01);
+      m.rod([-w * 0.17, 0.12, -d * 0.18], [w * 0.17, 0.12, -d * 0.06], 0.035, darkWood);
+      m.rod([-w * 0.17, 0.12, -d * 0.06], [w * 0.17, 0.12, -d * 0.18], 0.035, darkWood);
+      const flame = m.material("flame", 0xffa04a, 0.6);
+      flame.emissive.setHex(0xff7a1a);
+      flame.emissiveIntensity = 0.9;
+      for (const [x, size] of [[-0.09, 0.8], [0, 1], [0.09, 0.75]]) {
+        m.mesh(new THREE.ConeGeometry(0.05 * size, 0.24 * size, 8), [w * x, 0.15 + 0.12 * size, -d * 0.12], flame);
+      }
+      break;
+    }
+    case "bicycle":
+    case "motorcycle": {
+      // 前を奥（-z）に向ける。車輪は縦向き、車体は中心線に沿って置く
+      const moto = item.kind === "motorcycle", r = moto ? 0.3 : 0.33, tube = moto ? 0.065 : 0.022;
+      const hub = r + tube, front = -d * 0.31, rear = d * 0.31;
+      const tire = m.material("tire", 0x23282b, 0.8);
+      const paint = m.material(moto ? "bike-body" : "bike-frame", moto ? 0xa34445 : 0x3f7f8f, 0.35, 0.2, true);
+      for (const z of [front, rear]) {
+        m.ring(r, tube, [0, hub, z], tire).rotation.y = Math.PI / 2;
+        if (moto) {
+          m.cylinder(r * 0.55, r * 0.55, 0.05, [0, hub, z], metal).rotation.z = Math.PI / 2;
+        } else {
+          for (let i = 0; i < 6; i += 1) {
+            const a = i * Math.PI / 3;
+            m.rod([0, hub, z], [0, hub + Math.sin(a) * r * 0.95, z + Math.cos(a) * r * 0.95], 0.004, metal);
+          }
+        }
+      }
+      if (moto) {
+        m.box(0.28, 0.34, d * 0.34, 0, hub + 0.1, d * 0.02, black, 0.05);
+        m.ellipsoid(0.32, 0.2, d * 0.2, [0, 0.85, -d * 0.08], paint);
+        m.box(0.26, 0.08, d * 0.3, 0, 0.82, d * 0.16, black, 0.03);
+        m.box(0.2, 0.05, d * 0.22, 0, 0.72, rear - r * 0.2, paint, 0.02);
+        m.rod([0.15, 0.36, d * 0.06], [0.15, 0.42, rear + r * 0.1], 0.035, metal);
+        const light = m.cylinder(0.07, 0.07, 0.05, [0, 0.9, front + r * 0.35], ivory);
+        light.rotation.x = Math.PI / 2;
+      } else {
+        const crank: Position = [0, hub * 0.95, d * 0.02], seatTop: Position = [0, 0.92, d * 0.1];
+        const headTop: Position = [0, 0.95, -d * 0.2], headLow: Position = [0, 0.7, -d * 0.22];
+        m.rod([0, hub, rear], crank, 0.017, paint);
+        m.rod(crank, seatTop, 0.019, paint);
+        m.rod([0, hub, rear], seatTop, 0.015, paint);
+        m.rod(seatTop, headTop, 0.019, paint);
+        m.rod(crank, headLow, 0.021, paint);
+        m.box(0.12, 0.05, 0.25, 0, 0.99, d * 0.12, black, 0.02);
+        m.rod([0, 0.92, d * 0.1], [0, 0.97, d * 0.12], 0.013, metal);
+      }
+      m.rod([0, hub, front], [0, moto ? 0.95 : 0.98, front + r * 0.35], moto ? 0.024 : 0.016, metal);
+      m.rod([-w * 0.45, moto ? 1.0 : 1.02, front + r * 0.4], [w * 0.45, moto ? 1.0 : 1.02, front + r * 0.4], 0.015, black);
+      break;
+    }
     default: {
       const unsupported: never = item.kind;
       throw new Error(`Unsupported furniture: ${unsupported}`);
     }
   }
   m.group.name = item.kind;
-  return m.finish(w, d, item.kind === "wallClock", optimize);
+  return m.finish(w, d, item.kind === "wallClock" || item.kind === "airConditioner", optimize);
 }

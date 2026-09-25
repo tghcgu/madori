@@ -198,18 +198,20 @@ function isMobileOrTabletDevice(): boolean {
 }
 
 const INK = "#000000";
+// 椅子の背もたれ・枕など、向きを示す部分の塗り
+const SYMBOL_SHADE = "#dde4e2";
 const INK_SOFT = "#5b6470";
 
 // 家具は置く部屋ではなく種類で分ける。創作では部屋の種類が決まっていないことが多いため
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
-  { label: "椅子・ソファ", kinds: ["sofa", "sofaCorner", "armchair", "chair", "stool", "bench"] },
-  { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "desk"] },
-  { label: "ベッド", kinds: ["bed", "bedDouble"] },
-  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf"] },
-  { label: "家電", kinds: ["fridge", "washer", "tv"] },
-  { label: "キッチン・水回り", kinds: ["kitchen", "bath", "toilet", "washbasin"] },
-  { label: "インテリア", kinds: ["plant", "rug", "floorLamp", "wallClock", "grandfatherClock", "aquarium", "piano"] },
-  { label: "乗り物", kinds: ["car"] },
+  { label: "椅子・ソファ", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "bench"] },
+  { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"] },
+  { label: "ベッド", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon"] },
+  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf", "cupboard", "shoeCabinet"] },
+  { label: "家電", kinds: ["fridge", "washer", "tv", "airConditioner"] },
+  { label: "キッチン・水回り", kinds: ["kitchen", "kitchenL", "kitchenIsland", "bath", "unitBath", "shower", "toilet", "washbasin"] },
+  { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano"] },
+  { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
 ];
 // 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
 const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
@@ -228,6 +230,14 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   floorLamp: "照明 しょうめい ライト ランプ", wallClock: "とけい 時計", grandfatherClock: "とけい 時計 柱時計",
   aquarium: "すいそう 魚 さかな", piano: "楽器 がっき", car: "くるま 自動車 じどうしゃ 屋外",
   stairs: "かいだん", stairsU: "かいだん", stairsSpiral: "かいだん 螺旋",
+  sofa2: "ソファー 2人掛け ふたりがけ", officeChair: "椅子 いす イス チェア デスクチェア 事務",
+  zaisu: "ざいす 椅子 いす イス 和室", kotatsu: "テーブル 炬燵 和室", longTable: "会議 机 つくえ 折りたたみ",
+  deskL: "つくえ 机 デスク 勉強", bedSemiDouble: "ベット 寝台", bunkBed: "ベット 2段 にだん 子供",
+  futon: "ふとん 寝具 和室", cupboard: "しょっきだな 棚 たな 収納", shoeCabinet: "くつばこ 下駄箱 げたばこ 玄関 収納",
+  airConditioner: "えあこん クーラー 冷房 暖房 AC", kitchenL: "台所 だいどころ", kitchenIsland: "台所 だいどころ",
+  unitBath: "ゆにっとばす 風呂 ふろ お風呂 浴室 UB", shower: "風呂 ふろ 浴室",
+  plantLarge: "かんようしょくぶつ 植物 しょくぶつ 木 グリーン", fireplace: "だんろ 暖房",
+  bicycle: "じてんしゃ チャリ", motorcycle: "オートバイ 二輪",
 };
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
@@ -2153,8 +2163,49 @@ function strokeArrowHead(x: number, y: number, angle: number, size: number): voi
 }
 
 function drawMiniChair(cx: number, cy: number, size: number, backSide: number): void {
-  strokeRoundedRect(cx - size / 2, cy - size / 2, size, size, 3, true);
-  strokeLine(cx - size / 2 + 2, cy + backSide * (size / 2 - 3), cx + size / 2 - 2, cy + backSide * (size / 2 - 3));
+  const backH = Math.max(3, size * 0.24);
+  const fill = ctx.fillStyle;
+  strokeRoundedRect(cx - size * 0.45, cy - size / 2 + (backSide < 0 ? backH * 0.5 : 0), size * 0.9, size - backH * 0.5, size * 0.14, true);
+  ctx.fillStyle = SYMBOL_SHADE;
+  strokeRoundedRect(cx - size / 2, backSide < 0 ? cy - size / 2 : cy + size / 2 - backH, size, backH, backH * 0.45, true);
+  ctx.fillStyle = fill;
+}
+
+// 冷蔵庫の「冷」など、間取り図でよく使う文字記号。家具を反転・回転しても鏡文字にならず、常に水平に書く
+function drawSymbolMark(text: string, x: number, y: number, size: number): void {
+  if (size * view.zoom < 7) return;
+  ctx.save();
+  ctx.translate(x, y);
+  const mirrored = ctx.getTransform();
+  if (mirrored.a * mirrored.d - mirrored.b * mirrored.c < 0) ctx.scale(-1, 1);
+  const turned = ctx.getTransform();
+  ctx.rotate(-Math.atan2(turned.b, turned.a));
+  ctx.fillStyle = String(ctx.strokeStyle);
+  ctx.font = `600 ${size}px "Yu Gothic UI", "Hiragino Sans", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
+function traceLShape(w: number, h: number, arm: number): void {
+  const hw = w / 2, hh = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(-hw, -hh);
+  ctx.lineTo(hw, -hh);
+  ctx.lineTo(hw, -hh + arm);
+  ctx.lineTo(-hw + arm, -hh + arm);
+  ctx.lineTo(-hw + arm, hh);
+  ctx.lineTo(-hw, hh);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+function drawDrawerStack(x0: number, x1: number, y0: number, y1: number): void {
+  strokeLine(x0, y0, x0, y1);
+  for (const t of [1 / 3, 2 / 3]) strokeLine(x0, y0 + (y1 - y0) * t, x1, y0 + (y1 - y0) * t);
+  for (const t of [1 / 6, 1 / 2, 5 / 6]) strokeLine(x0 + (x1 - x0) * 0.3, y0 + (y1 - y0) * t, x1 - (x1 - x0) * 0.3, y0 + (y1 - y0) * t);
 }
 
 function drawFurniture2d(furnitureItem: Furniture): void {
@@ -2168,8 +2219,8 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   ctx.fillStyle = "#ffffff";
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  if (["sofa", "sofaCorner", "armchair", "stool", "bed", "bedDouble"].includes(furnitureItem.kind)) ctx.fillStyle = "#edf3f2";
-  if (["table", "sideTable", "roundTable", "desk", "bench", "shelf", "closet", "wardrobe"].includes(furnitureItem.kind)) ctx.fillStyle = "#f7f5f0";
+  if (["sofa", "sofa2", "sofaCorner", "armchair", "officeChair", "zaisu", "stool", "bed", "bedSemiDouble", "bedDouble", "bunkBed"].includes(furnitureItem.kind)) ctx.fillStyle = "#edf3f2";
+  if (["table", "sideTable", "roundTable", "longTable", "desk", "deskL", "bench", "shelf", "closet", "wardrobe", "cupboard", "shoeCabinet"].includes(furnitureItem.kind)) ctx.fillStyle = "#f7f5f0";
   drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h);
   if (selected) {
     ctx.strokeStyle = "#2775d1";
@@ -2183,6 +2234,7 @@ function drawFurniture2d(furnitureItem: Furniture): void {
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
   const hw = w / 2;
   const hh = h / 2;
+  const baseFill = ctx.fillStyle;
   switch (kind) {
     case "sofaCorner": {
       ctx.beginPath();
@@ -2251,6 +2303,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "sofa":
+    case "sofa2":
     case "armchair": {
       strokeRoundedRect(-hw, -hh, w, h, 8, true);
       const t = Math.min(w, h) * 0.22;
@@ -2270,14 +2323,16 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "tv": {
+      // 台の上の薄型テレビを塗りつぶしで描き、手前に「TV」
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(-w * 0.42, -hh + 3, w * 0.84, Math.max(5, h * 0.18), 2);
-      for (const sign of [-1, 1]) strokeLine(sign * w * 0.26, -h * 0.29, sign * w * 0.31, h * 0.14);
-      strokeLine(-w * 0.17, h * 0.4, -w * 0.17, hh);
-      strokeLine(w * 0.17, h * 0.4, w * 0.17, hh);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      roundedRect(-w * 0.43, -h * 0.26, w * 0.86, Math.max(2.5, h * 0.12), 1.5);
+      ctx.fill();
+      drawSymbolMark("TV", 0, h * 0.2, Math.min(h * 0.4, w * 0.22));
       break;
     }
-    case "plant": {
+    case "plant":
+    case "plantLarge": {
       ctx.fillStyle = "#e8f1e7";
       strokeEllipse(0, 0, w * 0.22, h * 0.22, true);
       for (let i = 0; i < 8; i += 1) {
@@ -2344,20 +2399,74 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "chair": {
-      strokeRoundedRect(-hw, -hh, w, h, 4, true);
-      strokeLine(-hw + 3, -hh + 4, hw - 3, -hh + 4);
-      strokeRoundedRect(-w * 0.37, -h * 0.28, w * 0.74, h * 0.66, 4);
-      const legRadius = Math.max(1.8, Math.min(w, h) * 0.055);
-      [
-        [-hw + legRadius * 1.8, -hh + legRadius * 1.8],
-        [hw - legRadius * 1.8, -hh + legRadius * 1.8],
-        [-hw + legRadius * 1.8, hh - legRadius * 1.8],
-        [hw - legRadius * 1.8, hh - legRadius * 1.8],
-      ].forEach(([x, y]) => strokeCircle(x, y, legRadius));
+      // 座面と、奥の背もたれを塗り分けて向きが分かるようにする
+      const backH = Math.max(4, h * 0.22);
+      strokeRoundedRect(-hw + w * 0.05, -hh + backH * 0.5, w * 0.9, h - backH * 0.5, Math.min(w, h) * 0.14, true);
+      ctx.fillStyle = SYMBOL_SHADE;
+      strokeRoundedRect(-hw, -hh, w, backH, backH * 0.45, true);
       break;
     }
-    case "kitchen": {
+    case "officeChair": {
+      // 5本脚のキャスター、座面、肘掛け、塗り分けた背もたれ
+      for (let i = 0; i < 5; i += 1) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
+        const x = Math.cos(a) * hw * 0.88, y = Math.sin(a) * hh * 0.88;
+        strokeLine(0, 0, x, y);
+        strokeCircle(x, y, Math.min(w, h) * 0.06, true);
+      }
+      strokeRoundedRect(-w * 0.26, -h * 0.14, w * 0.52, h * 0.44, Math.min(w, h) * 0.1, true);
+      for (const sign of [-1, 1]) strokeRoundedRect(sign * w * 0.3 - w * 0.04, -h * 0.08, w * 0.08, h * 0.3, 2, true);
+      ctx.fillStyle = SYMBOL_SHADE;
+      strokeRoundedRect(-w * 0.28, -h * 0.3, w * 0.56, h * 0.14, h * 0.07, true);
+      break;
+    }
+    case "zaisu": {
+      // 後ろへ倒れた背もたれ（奥・塗り分け）と、床置きの座面（手前）
+      const r = Math.min(w, h) * 0.12;
+      ctx.fillStyle = SYMBOL_SHADE;
+      strokeRoundedRect(-hw + w * 0.03, -hh, w * 0.94, h * 0.48, r, true);
+      ctx.fillStyle = baseFill;
+      strokeRoundedRect(-hw, -hh + h * 0.4, w, h * 0.6, r, true);
+      break;
+    }
+    case "kotatsu": {
+      // 床に広がる布団（縫い目は破線）と中央の天板
+      ctx.fillStyle = "#f3e6de";
+      strokeRoundedRect(-hw, -hh, w, h, Math.min(w, h) * 0.1, true);
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      strokeRoundedRect(-w * 0.36, -h * 0.36, w * 0.72, h * 0.72, Math.min(w, h) * 0.05);
+      ctx.restore();
+      ctx.fillStyle = "#f7f5f0";
+      strokeRoundedRect(-w * 0.32, -h * 0.32, w * 0.64, h * 0.64, 3, true);
+      break;
+    }
+    case "longTable": {
+      // 天板と、天板の下に隠れる両端の脚（破線）
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      for (const sign of [-1, 1]) strokeLine(sign * w * 0.41, -hh + h * 0.12, sign * w * 0.41, hh - h * 0.12);
+      ctx.restore();
+      break;
+    }
+    case "deskL": {
+      // L字の天板と、右奥の袖の引き出し
+      const arm = Math.min(w, h) * 0.43;
+      traceLShape(w, h, arm);
+      drawDrawerStack(hw - w * 0.26, hw, -hh, -hh + arm);
+      break;
+    }
+    case "kitchen":
+    case "kitchenIsland": {
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      if (kind === "kitchenIsland") {
+        // 壁に付かない独立型。奥の張り出し（カウンター席側）を破線で示す
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        strokeLine(-hw + 3, -hh + h * 0.07, hw - 3, -hh + h * 0.07);
+        ctx.restore();
+      }
       strokeRoundedRect(-hw + w * 0.07, -h * 0.3, w * 0.24, h * 0.6, 5);
       strokeCircle(-hw + w * 0.19, -hh + h * 0.12, 2.5);
       const bx = hw - w * 0.16;
@@ -2371,17 +2480,18 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "fridge": {
+      // 間取り図の慣例どおり「冷」を入れる。手前の線は扉
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeLine(-hw + 3, hh - h * 0.18, hw - 3, hh - h * 0.18);
-      strokeLine(-hw + w * 0.16, hh - h * 0.09, -hw + w * 0.38, hh - h * 0.09);
-      strokeRoundedRect(-w * 0.45, -h * 0.45, w * 0.9, h * 0.74, 2);
+      strokeLine(-hw + 3, hh - h * 0.14, hw - 3, hh - h * 0.14);
+      drawSymbolMark("冷", 0, -h * 0.07, Math.min(w, h) * 0.46);
       break;
     }
     case "bed":
+    case "bedSemiDouble":
     case "bedDouble": {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
       strokeRoundedRect(-w * 0.45, -h * 0.48, w * 0.9, h * 0.035, 2);
-      if (kind === "bed") {
+      if (kind !== "bedDouble") {
         strokeRoundedRect(-w * 0.28, -hh + h * 0.04, w * 0.56, h * 0.1, 4);
       } else {
         strokeRoundedRect(-w * 0.43, -hh + h * 0.04, w * 0.37, h * 0.1, 4);
@@ -2393,10 +2503,10 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "desk": {
+      // 天板、右の袖の引き出し3段、奥のケーブル穴
       strokeRoundedRect(-hw, -hh, w, h, 3, true);
-      strokeRoundedRect(w * 0.15, -h * 0.38, w * 0.28, h * 0.76, 2);
-      strokeLine(w * 0.23, h * 0.32, w * 0.35, h * 0.32);
-      strokeCircle(-w * 0.3, -h * 0.32, Math.min(w, h) * 0.025);
+      drawDrawerStack(hw - w * 0.28, hw, -hh, hh);
+      strokeCircle(-w * 0.3, -h * 0.32, Math.min(w, h) * 0.035);
       break;
     }
     case "shelf": {
@@ -2438,25 +2548,87 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       break;
     }
     case "closet": {
+      // 壁の塗りと紛らわしい斜線はやめ、ハンガーパイプ（破線）と前面の折れ戸、「CL」で表す
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(-hw, -hh, w, h);
-      ctx.clip();
-      for (let x = -hw - h; x < hw; x += 16) {
-        strokeLine(x, hh, x + h, -hh);
-      }
+      ctx.setLineDash([Math.max(3, w * 0.03), Math.max(2, w * 0.02)]);
+      strokeLine(-hw + w * 0.05, -h * 0.22, hw - w * 0.05, -h * 0.22);
       ctx.restore();
-      strokeLine(0, h * 0.38, 0, hh);
-      strokeLine(-w * 0.12, h * 0.42, -w * 0.04, h * 0.42);
-      strokeLine(w * 0.04, h * 0.42, w * 0.12, h * 0.42);
+      const doors = Math.max(2, Math.min(4, Math.round(w / 60)));
+      ctx.beginPath();
+      for (let i = 0; i < doors; i += 1) {
+        const x0 = -hw + (w * i) / doors, x1 = x0 + w / doors;
+        ctx.moveTo(x0, hh);
+        ctx.lineTo(x0 + (x1 - x0) * 0.25, hh - h * 0.2);
+        ctx.lineTo((x0 + x1) / 2, hh);
+        ctx.lineTo(x1 - (x1 - x0) * 0.25, hh - h * 0.2);
+        ctx.lineTo(x1, hh);
+      }
+      ctx.stroke();
+      drawSymbolMark("CL", 0, h * 0.06, Math.min(h * 0.3, w * 0.2));
       break;
     }
     case "wardrobe": {
+      // 手前に引き出しの前板と取っ手、中央に「タンス」
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
-      strokeLine(0, -h * 0.4, 0, h * 0.42);
-      strokeRoundedRect(-w * 0.45, -h * 0.4, w * 0.9, h * 0.83, 2);
-      for (const sign of [-1, 1]) strokeLine(sign * w * 0.15, h * 0.35, sign * w * 0.33, h * 0.35);
+      strokeLine(-hw, hh - h * 0.16, hw, hh - h * 0.16);
+      for (const x of [-0.25, 0.25]) strokeLine(w * x - w * 0.07, hh - h * 0.08, w * x + w * 0.07, hh - h * 0.08);
+      drawSymbolMark("タンス", 0, -h * 0.08, Math.min(h * 0.32, w * 0.16));
+      break;
+    }
+    case "cupboard": {
+      // 手前のガラス戸（二重線）と「食器」
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeLine(-hw + 2, hh - h * 0.14, hw - 2, hh - h * 0.14);
+      strokeLine(-hw + 2, hh - h * 0.08, hw - 2, hh - h * 0.08);
+      strokeLine(0, hh - h * 0.14, 0, hh);
+      drawSymbolMark("食器", 0, -h * 0.1, Math.min(h * 0.36, w * 0.2));
+      break;
+    }
+    case "shoeCabinet": {
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeLine(-hw + 2, hh - h * 0.16, hw - 2, hh - h * 0.16);
+      strokeLine(0, hh - h * 0.16, 0, hh);
+      drawSymbolMark("靴", 0, -h * 0.08, Math.min(h * 0.45, w * 0.3));
+      break;
+    }
+    case "airConditioner": {
+      // 壁の高い位置にあるので破線で描き、手前に吹き出し口、「AC」
+      ctx.save();
+      ctx.setLineDash([Math.max(3, w * 0.05), Math.max(2, w * 0.03)]);
+      strokeRoundedRect(-hw, -hh, w, h, Math.min(w, h) * 0.3, true);
+      ctx.restore();
+      strokeLine(-w * 0.4, hh - h * 0.22, w * 0.4, hh - h * 0.22);
+      drawSymbolMark("AC", 0, -h * 0.1, Math.min(h * 0.5, w * 0.2));
+      break;
+    }
+    case "bunkBed": {
+      // 四隅の柱、枕と掛け布団の境目、足元のはしご、「2段」
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeRoundedRect(-w * 0.28, -hh + h * 0.04, w * 0.56, h * 0.09, 3);
+      strokeLine(-hw, -hh + h * 0.2, hw, -hh + h * 0.2);
+      strokeRoundedRect(hw - w * 0.1, h * 0.2, w * 0.07, h * 0.24, 1);
+      for (const t of [0.28, 0.36]) strokeLine(hw - w * 0.1, h * t, hw - w * 0.03, h * t);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      const post = Math.min(w, h) * 0.07;
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) ctx.fillRect(sx < 0 ? -hw : hw - post, sy < 0 ? -hh : hh - post, post, post);
+      drawSymbolMark("2段", -w * 0.06, h * 0.12, Math.min(w * 0.22, h * 0.1));
+      break;
+    }
+    case "futon": {
+      // 枠のない敷布団（角を大きく丸める）、枕、縫い目の入った掛け布団
+      const r = Math.min(w, h) * 0.12;
+      ctx.fillStyle = "#f8f7f2";
+      strokeRoundedRect(-hw, -hh, w, h, r, true);
+      strokeRoundedRect(-w * 0.26, -hh + h * 0.05, w * 0.52, h * 0.1, 5);
+      ctx.fillStyle = "#edf3f2";
+      strokeRoundedRect(-hw + w * 0.03, -hh + h * 0.27, w * 0.94, h * 0.7, r * 0.8, true);
+      const stitch = Math.min(w, h) * 0.04;
+      for (let row = 1; row <= 3; row += 1) for (const col of [-1, 0, 1]) {
+        const x = col * w * 0.28, y = -hh + h * 0.27 + (h * 0.7 * row) / 4;
+        strokeLine(x - stitch, y, x + stitch, y);
+        strokeLine(x, y - stitch, x, y + stitch);
+      }
       break;
     }
     case "stairs": {
@@ -2517,6 +2689,77 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number): void {
       const endAngle = Math.PI * 1.75;
       strokeArrowHead(Math.cos(endAngle) * r * 0.55, Math.sin(endAngle) * r * 0.55, endAngle + Math.PI / 2, 7);
       ctx.restore();
+      break;
+    }
+    case "kitchenL": {
+      // 奥の辺に流し台、左の辺にコンロ
+      const depth = Math.min(w, h) * 0.36;
+      traceLShape(w, h, depth);
+      strokeRoundedRect(w * 0.08, -hh + depth * 0.2, w * 0.2, depth * 0.6, 4);
+      strokeCircle(w * 0.18, -hh + depth * 0.12, 2.5);
+      const bx = -hw + depth / 2, cy = depth / 2 + (h - depth) * 0.05, span = h - depth;
+      strokeRoundedRect(bx - depth * 0.375, cy - span * 0.25, depth * 0.75, span * 0.5, 2);
+      for (const t of [-0.12, 0.12]) strokeCircle(bx, cy + span * t, Math.min(depth * 0.17, span * 0.1));
+      break;
+    }
+    case "unitBath": {
+      // 二重線の外枠（一体成型）、奥の浴槽、洗い場の排水口、「UB」
+      strokeRoundedRect(-hw, -hh, w, h, 3, true);
+      strokeRoundedRect(-hw + 3, -hh + 3, w - 6, h - 6, 2);
+      const tubH = h * 0.45;
+      strokeLine(-hw + 3, -hh + tubH, hw - 3, -hh + tubH);
+      strokeRoundedRect(-w * 0.42, -hh + tubH * 0.16, w * 0.84, tubH * 0.66, Math.min(w, tubH) * 0.2);
+      strokeCircle(w * 0.28, h * 0.3, Math.min(w, h) * 0.035);
+      drawSymbolMark("UB", -w * 0.1, h * 0.22, Math.min(w, h) * 0.18);
+      break;
+    }
+    case "shower": {
+      // 受け皿の対角線（中央の排水口へ傾斜）、手前と右のガラス、奥のシャワー
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      strokeLine(-hw, -hh, hw, hh);
+      strokeLine(hw, -hh, -hw, hh);
+      ctx.fillStyle = "#ffffff";
+      strokeCircle(0, 0, Math.min(w, h) * 0.07, true);
+      strokeLine(-hw, hh - 2.5, hw, hh - 2.5);
+      strokeLine(hw - 2.5, -hh, hw - 2.5, hh);
+      strokeCircle(-hw + w * 0.22, -hh + h * 0.22, Math.min(w, h) * 0.07, true);
+      break;
+    }
+    case "fireplace": {
+      // 本体、手前に開いた炉、炎
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      ctx.beginPath();
+      ctx.moveTo(-w * 0.3, hh);
+      ctx.lineTo(-w * 0.22, -hh + h * 0.2);
+      ctx.lineTo(w * 0.22, -hh + h * 0.2);
+      ctx.lineTo(w * 0.3, hh);
+      ctx.stroke();
+      for (const [x, size] of [[-0.09, 0.8], [0, 1], [0.09, 0.75]]) {
+        const fx = w * x, fh = h * 0.45 * size, base = hh - h * 0.1, fw = w * 0.05 * size;
+        ctx.beginPath();
+        ctx.moveTo(fx - fw, base);
+        ctx.quadraticCurveTo(fx - fw * 0.2, base - fh * 0.6, fx, base - fh);
+        ctx.quadraticCurveTo(fx + fw * 0.2, base - fh * 0.6, fx + fw, base);
+        ctx.closePath();
+        ctx.stroke();
+      }
+      break;
+    }
+    case "bicycle":
+    case "motorcycle": {
+      // 上から見た二輪。前（上）にハンドル、細い車輪、サドルまたは車体
+      const moto = kind === "motorcycle";
+      const tire = Math.max(3, w * (moto ? 0.16 : 0.08));
+      for (const cy of [-h * 0.31, h * 0.31]) strokeRoundedRect(-tire / 2, cy - h * 0.19, tire, h * 0.38, tire / 2, true);
+      if (moto) {
+        strokeRoundedRect(-w * 0.2, -h * 0.2, w * 0.4, h * 0.46, w * 0.15, true);
+        strokeLine(-w * 0.15, h * 0.02, w * 0.15, h * 0.02);
+      } else {
+        strokeLine(0, -h * 0.25, 0, h * 0.3);
+        strokeRoundedRect(-w * 0.1, h * 0.04, w * 0.2, h * 0.12, w * 0.08, true);
+      }
+      strokeLine(-w * 0.45, -h * 0.2, w * 0.45, -h * 0.2);
+      for (const sign of [-1, 1]) strokeRoundedRect(sign * w * 0.45 - w * 0.05, -h * 0.215, w * 0.1, h * 0.03, 1);
       break;
     }
     case "car": {

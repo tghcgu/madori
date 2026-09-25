@@ -148,14 +148,14 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 分類 | 収録要素 |
 | --- | --- |
 | 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
-| 椅子・ソファ | ソファ、L字ソファ、1人掛け、椅子、スツール、ベンチ |
-| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、机 |
-| ベッド | シングルベッド、ダブルベッド |
-| 収納・棚 | クローゼット、タンス、棚・本棚 |
-| 家電 | 冷蔵庫、洗濯機、テレビ台 |
-| キッチン・水回り | キッチン、浴槽、トイレ、洗面台 |
-| インテリア | 観葉植物、ラグ、フロアライト、壁掛け時計、ホールクロック、水槽、ピアノ |
-| 乗り物 | 車 |
+| 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、ベンチ |
+| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク |
+| ベッド | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団 |
+| 収納・棚 | クローゼット、タンス、棚・本棚、食器棚、靴箱 |
+| 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン |
+| キッチン・水回り | キッチン、L型キッチン、アイランドキッチン、浴槽、ユニットバス、シャワー、トイレ、洗面台 |
+| インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ |
+| 乗り物 | 車、バイク、自転車 |
 | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
 | 階段 | 直階段、折り返し階段、らせん階段 |
 | 図形の壁 | 円、円弧、三角形〜八角形 |
@@ -163,9 +163,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
-各家具は2D用の平面記号と3Dモデルを持ちます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
+各家具は2D用の平面記号と3Dモデルを持ちます。2D記号は間取り図の慣例に合わせ、形だけでは見分けにくいものに「冷」（冷蔵庫）、「TV」、「CL」（クローゼット）、「タンス」、「食器」、「靴」、「AC」（エアコン）、「UB」（ユニットバス）、「2段」の文字を添えています。文字は家具を回転・反転しても水平のまま読めます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
-- 家具・設備34種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備54種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
 - 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
 - 開き戸は3Dでは閉じた状態です。引き戸は別々のレールに配置した2枚の扉、窓は枠・サッシ・ガラス・取っ手で表現します。
@@ -313,7 +313,7 @@ npm.cmd run dev
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
-家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全34種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
+家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全54種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
 
 本番ビルド:
 
@@ -360,7 +360,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
-│  ├─ furniture-models.ts    # 家具34種類の3D形状と材質
+│  ├─ furniture-models.ts    # 家具54種類の3D形状と材質
 │  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
@@ -630,14 +630,14 @@ The furniture and equipment palette lists frequently used openings and furniture
 | Category | Objects |
 | --- | --- |
 | Openings | Swing door, sliding door, window, divided window |
-| Seating | Sofa, corner sofa, armchair, chair, stool, bench |
-| Tables and desks | Dining set, round table, low table, side table, desk |
-| Beds | Single bed, double bed |
-| Storage | Closet, wardrobe, shelf |
-| Appliances | Refrigerator, washing machine, TV stand |
-| Kitchen and bathroom | Kitchen unit, bathtub, toilet, washbasin |
-| Decor | Plant, rug, floor lamp, wall clock, grandfather clock, aquarium, upright piano |
-| Vehicles | Car |
+| Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bench |
+| Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk |
+| Beds | Single bed, semi-double bed, double bed, bunk bed, futon |
+| Storage | Closet, wardrobe, shelf, cupboard, shoe cabinet |
+| Appliances | Refrigerator, washing machine, TV stand, air conditioner |
+| Kitchen and bathroom | Kitchen unit, L-shaped kitchen, island kitchen, bathtub, unit bath, shower, toilet, washbasin |
+| Decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano |
+| Vehicles | Car, motorcycle, bicycle |
 | Floors and ground | Plain, wood planks, tile, stone paving, grass |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
 | Shape walls | Circle, arc, triangle to octagon |
@@ -645,9 +645,9 @@ The furniture and equipment palette lists frequently used openings and furniture
 
 Type in the search box at the top of the palette to show only matching parts.
 
-Each item has a dedicated 2D plan symbol and a generated 3D representation. The geometry adapts to user-defined width and depth where practical.
+Each item has a dedicated 2D plan symbol and a generated 3D representation. Following Japanese floor-plan conventions, symbols that are hard to tell apart by shape carry short marks such as 冷 (refrigerator), TV, CL (closet), タンス (wardrobe), 食器 (cupboard), 靴 (shoe cabinet), AC (air conditioner), UB (unit bath), and 2段 (bunk bed). The marks stay horizontal and unmirrored when an item is rotated or flipped. Items with a facing direction shade their back side, and the wall-mounted air conditioner is drawn with a dashed outline. The geometry adapts to user-defined width and depth where practical.
 
-- All 34 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- All 54 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
 - Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
@@ -792,7 +792,7 @@ npm.cmd run dev
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
-Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 34 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
+Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 54 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
 
 Production build:
 
@@ -839,7 +839,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
-│  ├─ furniture-models.ts    # Geometry and materials for 34 furniture types
+│  ├─ furniture-models.ts    # Geometry and materials for 54 furniture types
 │  ├─ opening-models.ts      # Door, sliding door, and window geometry
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection

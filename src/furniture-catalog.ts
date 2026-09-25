@@ -32,7 +32,27 @@ export type FurnitureKind =
   | "stairs"
   | "stairsU"
   | "stairsSpiral"
-  | "car";
+  | "car"
+  | "sofa2"
+  | "officeChair"
+  | "zaisu"
+  | "kotatsu"
+  | "longTable"
+  | "deskL"
+  | "bedSemiDouble"
+  | "bunkBed"
+  | "futon"
+  | "cupboard"
+  | "shoeCabinet"
+  | "airConditioner"
+  | "kitchenL"
+  | "kitchenIsland"
+  | "unitBath"
+  | "shower"
+  | "plantLarge"
+  | "fireplace"
+  | "bicycle"
+  | "motorcycle";
 export interface FurnitureDef {
   label: string;
   w: number;
@@ -74,4 +94,24 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   stairsU: { label: "折返し階段", w: 180, h: 180 },
   stairsSpiral: { label: "らせん階段", w: 140, h: 140 },
   car: { label: "車", w: 180, h: 460 },
+  sofa2: { label: "2人掛けソファ", w: 140, h: 80 },
+  officeChair: { label: "オフィスチェア", w: 60, h: 60 },
+  zaisu: { label: "座椅子", w: 55, h: 65 },
+  kotatsu: { label: "こたつ", w: 180, h: 180 },
+  longTable: { label: "長テーブル", w: 180, h: 60 },
+  deskL: { label: "L字デスク", w: 140, h: 140 },
+  bedSemiDouble: { label: "セミダブルベッド", w: 120, h: 200 },
+  bunkBed: { label: "二段ベッド", w: 100, h: 210 },
+  futon: { label: "布団", w: 100, h: 210 },
+  cupboard: { label: "食器棚", w: 90, h: 45 },
+  shoeCabinet: { label: "靴箱", w: 80, h: 35 },
+  airConditioner: { label: "エアコン", w: 80, h: 25 },
+  kitchenL: { label: "L型キッチン", w: 240, h: 180 },
+  kitchenIsland: { label: "アイランドキッチン", w: 240, h: 100 },
+  unitBath: { label: "ユニットバス", w: 160, h: 160 },
+  shower: { label: "シャワー", w: 90, h: 90 },
+  plantLarge: { label: "大きな観葉植物", w: 60, h: 60 },
+  fireplace: { label: "暖炉", w: 120, h: 45 },
+  bicycle: { label: "自転車", w: 60, h: 180 },
+  motorcycle: { label: "バイク", w: 80, h: 210 },
 };
