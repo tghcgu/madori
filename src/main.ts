@@ -203,6 +203,10 @@ const MIN_CAMERA_DISTANCE = 0.01;
 const MAX_CAMERA_DISTANCE = 100000;
 // 2Dの方眼の線の間隔が、画面上でこれより狭くならないように間隔を5倍ずつ変える
 const MIN_GRID_PIXELS = 10;
+// これより拡大したら、部屋の中にも方眼を薄く重ねる。白い部屋の中まで寄ったときも、動かしているのが分かるように
+const GRID_OVER_ROOMS_ZOOM = 4;
+// 3Dの右ドラッグ移動で、つかんだ物がこれより近くても、この距離（m）にある物をつかんだ速さで動かす
+const MIN_PAN_DEPTH = 0.5;
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -1663,6 +1667,10 @@ function handleDoubleClick(event: MouseEvent): void {
 }
 
 function handleThreePointerDown(event: PointerEvent): void {
+  // 右ドラッグ（またはShift・Ctrl＋左ドラッグ）の移動は、つかんだ物の奥行きに合わせた速さにする
+  if (!threeDrag && (event.button === 2 || (event.button === 0 && (event.shiftKey || event.ctrlKey || event.metaKey)))) {
+    anchorPanToPointer(event);
+  }
   if (event.button !== 0 || threeDrag) {
     threePointerDown = null;
     return;
@@ -1713,7 +1721,22 @@ function handleThreePointerDown(event: PointerEvent): void {
   redrawAll();
 }
 
-function setThreeRay(event: PointerEvent): void {
+// 右ドラッグで動かす前に、回転の中心（controls.target）を視線の中心線上で、マウスの下にある物と同じ奥行きへ移す。
+// 中心線上なので画面は動かない。OrbitControls の移動の速さは中心までの距離で決まるため、
+// つかんだ物がマウスについてくる速さになる。すぐ目の前の物をつかんでも止まったように見えないよう、奥行きには下限を設ける
+function anchorPanToPointer(event: MouseEvent): void {
+  setThreeRay(event);
+  planGroup.updateMatrixWorld(true);
+  const hit = raycaster
+    .intersectObjects(planGroup.children, true)
+    .find((item) => (item.object as THREE.Mesh).isMesh && item.object.visible);
+  const point = hit?.point ?? raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+  const forward = camera.getWorldDirection(new THREE.Vector3());
+  const depth = point ? point.sub(camera.position).dot(forward) : camera.position.distanceTo(controls.target);
+  controls.target.copy(camera.position).addScaledVector(forward, clamp(depth, MIN_PAN_DEPTH, MAX_CAMERA_DISTANCE));
+}
+
+function setThreeRay(event: MouseEvent): void {
   const rect = threeCanvas.getBoundingClientRect();
   pointerNdc.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointerNdc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2134,6 +2157,12 @@ function render2d(): void {
 
   const entities = activeEntities();
   entities.filter(isRoom).forEach(drawRoom);
+  if (view.zoom > GRID_OVER_ROOMS_ZOOM) {
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    drawGrid(width, height);
+    ctx.restore();
+  }
   // 現在の階の部屋の塗りの上・線画の下に、下階のゴーストを挟む
   drawFloorBelowGhost();
   entities.filter(isFurniture).filter((item) => item.kind === "rug").forEach(drawFurniture2d);

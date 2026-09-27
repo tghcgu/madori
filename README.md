@@ -97,7 +97,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 2D上の屋根の一時表示・非表示
 - パーツ検索（ひらがな・カタカナ・別名でも検索可。例: いす、まど、れいぞうこ）
 - 選択した要素の配置固定
-- マウスホイールによるズーム（0.0001倍〜1万倍まで、ほぼ無限に拡大・縮小。遠くまで引くと方眼の間隔も自動で広がります）
+- マウスホイールによるズーム（0.0001倍〜1万倍まで、ほぼ無限に拡大・縮小。遠くまで引くと方眼の間隔も自動で広がり、大きく拡大したときは部屋の中にも方眼を薄く表示して、右ドラッグで動かしていることが分かるようにします）
 - 右ドラッグによるキャンバス移動
 - 全体表示への自動フィット
 - Undo / Redo
@@ -111,6 +111,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - `同時`表示では、2Dと3Dの境目をドラッグして広さを自由に変更（境目を選んで矢印キーでも5%ずつ動かせます。ダブルクリックで元の半分ずつに戻ります）。境目の位置はブラウザに記憶され、タブレットやスマホの上下表示でも使えます
 - マウスドラッグによる視点回転・移動
 - ホイールによるズーム（マウスのある場所に向かって、1cmの距離から100kmまでほぼ無限に寄ったり引いたりできます）
+- 右ドラッグの移動は、つかんだ物がマウスについてくる速さで動きます。すぐ目の前まで寄ったあとでも、止まったようにならず動かせます
 - 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
 - 影のON/OFF
@@ -591,7 +592,7 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Temporarily hide roofs on the 2D plan
 - Search parts by name, including hiragana, katakana, and common aliases
 - Lock selected items to prevent accidental movement or deletion
-- Zoom with the mouse wheel (almost without limit, from 0.0001x to 10,000x; the grid spacing widens automatically when zoomed far out) and pan with right-drag
+- Zoom with the mouse wheel (almost without limit, from 0.0001x to 10,000x; the grid spacing widens automatically when zoomed far out, and when zoomed far in the grid also shows faintly inside rooms so you can see the view moving) and pan with right-drag
 - Fit the complete plan to the viewport
 - Undo and redo editing operations
 
@@ -602,7 +603,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Real-time conversion from the 2D plan using Three.js
 - Split, 2D-only, and 3D-only view modes
 - In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
-- Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer, almost without limit (from 1 cm to 100 km away)
+- Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer, almost without limit (from 1 cm to 100 km away). Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
 - 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
 - Optional shadows

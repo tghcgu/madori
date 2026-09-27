@@ -48,6 +48,9 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       cameraDistance() {
         return camera.position.distanceTo(controls.target);
       },
+      cameraPosition() {
+        return camera.position.toArray();
+      },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
@@ -368,14 +371,42 @@ try {
   };
   await zoomWith('#planCanvas', -200, 40);
   assert.ok(await page.evaluate(() => window.__editorTest.planZoom()) > 1000, '2D zooms far in');
+  // Deep inside a white room the grid is drawn over the floor, so panning visibly moves something.
+  const planColors = () => page.locator('#planCanvas').evaluate(canvas => {
+    const copy = document.createElement('canvas'); copy.width = canvas.width; copy.height = canvas.height;
+    const context = copy.getContext('2d'); context.drawImage(canvas, 0, 0);
+    const { data } = context.getImageData(0, 0, copy.width, copy.height), colors = new Set();
+    for (let i = 0; i < data.length; i += 16) colors.add(`${data[i]},${data[i+1]},${data[i+2]}`);
+    return colors.size;
+  });
+  assert.ok(await planColors() > 1, 'grid shows inside rooms when zoomed in');
+  const zoomedPlan = await page.locator('#planCanvas').boundingBox();
+  const zoomedView = await planPoint(0, 0);
+  await page.mouse.move(zoomedPlan.x + 200, zoomedPlan.y + 200);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(zoomedPlan.x + 400, zoomedPlan.y + 300, { steps: 6 });
+  await page.mouse.up({ button: 'right' });
+  const pannedView = await planPoint(0, 0);
+  assert.ok(Math.abs(pannedView.x - zoomedView.x - 200) < 1 && Math.abs(pannedView.y - zoomedView.y - 100) < 1, '2D right-drag follows the mouse when zoomed in');
   await zoomWith('#planCanvas', 200, 90);
   assert.ok(await page.evaluate(() => window.__editorTest.planZoom()) < 0.01, '2D zooms far out');
   await zoomWith('#threeCanvas', -200, 40);
   assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) < 0.5, '3D zooms far in');
+  // Right-drag still moves the camera a usable distance after zooming right up to a surface.
+  const threeBox = await page.locator('#threeCanvas').boundingBox();
+  const cameraBefore = await page.evaluate(() => window.__editorTest.cameraPosition());
+  await page.mouse.move(threeBox.x + threeBox.width / 2, threeBox.y + threeBox.height / 2);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(threeBox.x + threeBox.width / 2 + 250, threeBox.y + threeBox.height / 2 + 120, { steps: 10 });
+  await page.mouse.up({ button: 'right' });
+  await page.waitForTimeout(300);
+  const cameraAfter = await page.evaluate(() => window.__editorTest.cameraPosition());
+  const panned = Math.hypot(...cameraAfter.map((value, index) => value - cameraBefore[index]));
+  assert.ok(panned > 0.2, `3D right-drag moves after zooming in: ${panned}`);
   await zoomWith('#threeCanvas', 200, 70);
   assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) > 5000, '3D zooms far out');
   await page.locator('#fitButton').click();
-  console.log('PASS: 2D and 3D zoom almost without limit in both directions');
+  console.log('PASS: 2D and 3D zoom almost without limit in both directions, and right-drag still pans when zoomed in');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
