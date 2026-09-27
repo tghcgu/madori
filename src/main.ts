@@ -196,6 +196,13 @@ const SPLIT_KEY = "madori-quick-3d-split";
 const MIN_SPLIT = 0.15;
 const MAX_SPLIT = 0.85;
 const SPLIT_KEY_STEP = 0.05;
+// 2Dの倍率（1cmあたりの画面上のpx）と3Dのカメラ距離（m）の範囲。どちらもほぼ無限に寄ったり引いたりできる
+const MIN_PLAN_ZOOM = 0.0001;
+const MAX_PLAN_ZOOM = 10000;
+const MIN_CAMERA_DISTANCE = 0.01;
+const MAX_CAMERA_DISTANCE = 100000;
+// 2Dの方眼の線の間隔が、画面上でこれより狭くならないように間隔を5倍ずつ変える
+const MIN_GRID_PIXELS = 10;
 const HISTORY_LIMIT = 60;
 const GRID = 20;
 const SCALE_3D = 0.01;
@@ -216,9 +223,14 @@ function isMobileOrTabletDevice(): boolean {
     userAgentData?: { mobile?: boolean };
   };
   const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  // 「PC版サイトを表示」にしているスマホは名乗りがPCと同じになるため、指で操作する小さめの画面かどうかでも見分ける
+  const touchFirstScreen =
+    window.matchMedia("(pointer: coarse) and (hover: none)").matches &&
+    Math.min(window.screen.width, window.screen.height) <= 1100;
   return Boolean(
     navigatorWithUserAgentData.userAgentData?.mobile ||
       isIpadOs ||
+      touchFirstScreen ||
       /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent),
   );
 }
@@ -464,8 +476,11 @@ const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = false;
-controls.minDistance = 4;
-controls.maxDistance = 48;
+controls.minDistance = MIN_CAMERA_DISTANCE;
+controls.maxDistance = MAX_CAMERA_DISTANCE;
+// 奥まで寄れるよう、マウスのある場所に向かって拡大縮小する。1目盛りの倍率は2Dとほぼ同じ
+controls.zoomToCursor = true;
+controls.zoomSpeed = 2;
 controls.maxPolarAngle = Math.PI * 0.48;
 controls.addEventListener("change", () => { threeNeedsRender = true; });
 
@@ -804,12 +819,14 @@ function setupUi(): void {
   const mobileNotice = document.querySelector<HTMLElement>("#mobileNotice");
   if (mobileNotice && isMobileOrTabletDevice()) {
     mobileNotice.classList.add("is-mobile-device");
-    if (localStorage.getItem(MOBILE_NOTICE_KEY) === "dismissed") {
+    // 閉じた記録を残し続けると二度と出なくなるため、閉じても開いている間だけ隠す。以前の記録は消す
+    localStorage.removeItem(MOBILE_NOTICE_KEY);
+    if (sessionStorage.getItem(MOBILE_NOTICE_KEY) === "dismissed") {
       mobileNotice.classList.add("is-dismissed");
     }
     document.querySelector<HTMLButtonElement>("#mobileNoticeClose")?.addEventListener("click", () => {
       mobileNotice.classList.add("is-dismissed");
-      localStorage.setItem(MOBILE_NOTICE_KEY, "dismissed");
+      sessionStorage.setItem(MOBILE_NOTICE_KEY, "dismissed");
       requestAnimationFrame(() => {
         resizeCanvases();
         render2d();
@@ -1778,8 +1795,9 @@ function handleThreePointerUp(event: PointerEvent): void {
 function handleWheel(event: WheelEvent): void {
   event.preventDefault();
   const before = screenToWorld(event);
-  const factor = event.deltaY > 0 ? 0.9 : 1.1;
-  view.zoom = clamp(view.zoom * factor, 0.25, 3.6);
+  // ホイール1目盛り（100）でおよそ1.1倍。タッチパッドの細かい動きは、その分だけ少しずつ拡大縮小する
+  const delta = clamp(event.deltaMode === 1 ? event.deltaY * 33 : event.deltaY, -200, 200);
+  view.zoom = clamp(view.zoom * Math.exp(-delta * 0.001), MIN_PLAN_ZOOM, MAX_PLAN_ZOOM);
   const after = screenToWorld(event);
   view.x += (after.x - before.x) * view.zoom;
   view.y += (after.y - before.y) * view.zoom;
@@ -2139,27 +2157,37 @@ function render2d(): void {
   ctx.restore();
 }
 
+// 方眼の間隔。20cmを基準に、画面上で狭すぎれば5倍ずつ広げ、広すぎれば1/5ずつ細かくする
+function gridStep(): number {
+  let step = GRID;
+  while (step * view.zoom < MIN_GRID_PIXELS) step *= 5;
+  while ((step / 5) * view.zoom >= MIN_GRID_PIXELS) step /= 5;
+  return step;
+}
+
 function drawGrid(canvasWidth: number, canvasHeight: number): void {
   const left = -view.x / view.zoom;
   const top = -view.y / view.zoom;
   const right = left + canvasWidth / view.zoom;
   const bottom = top + canvasHeight / view.zoom;
-  const startX = Math.floor(left / GRID) * GRID;
-  const startY = Math.floor(top / GRID) * GRID;
+  const step = gridStep();
+  // 5本ごとの太い線は、線の番号で見分ける（小数の間隔でも割り算の誤差が出ない）
+  const firstX = Math.floor(left / step), lastX = Math.ceil(right / step);
+  const firstY = Math.floor(top / step), lastY = Math.ceil(bottom / step);
 
   ctx.lineWidth = 1 / view.zoom;
-  for (let x = startX; x <= right; x += GRID) {
+  for (let i = firstX; i <= lastX; i += 1) {
     ctx.beginPath();
-    ctx.strokeStyle = x % (GRID * 5) === 0 ? "#e2e6ec" : "#f2f4f7";
-    ctx.moveTo(x, top);
-    ctx.lineTo(x, bottom);
+    ctx.strokeStyle = i % 5 === 0 ? "#e2e6ec" : "#f2f4f7";
+    ctx.moveTo(i * step, top);
+    ctx.lineTo(i * step, bottom);
     ctx.stroke();
   }
-  for (let y = startY; y <= bottom; y += GRID) {
+  for (let i = firstY; i <= lastY; i += 1) {
     ctx.beginPath();
-    ctx.strokeStyle = y % (GRID * 5) === 0 ? "#e2e6ec" : "#f2f4f7";
-    ctx.moveTo(left, y);
-    ctx.lineTo(right, y);
+    ctx.strokeStyle = i % 5 === 0 ? "#e2e6ec" : "#f2f4f7";
+    ctx.moveTo(left, i * step);
+    ctx.lineTo(right, i * step);
     ctx.stroke();
   }
 }
@@ -4548,6 +4576,10 @@ function render3dOnce(): void {
   if (rect.width <= 0 || rect.height <= 0) return;
   renderer.setSize(rect.width, rect.height, false);
   camera.aspect = rect.width / rect.height;
+  // 寄ったときに手前が切れず、引いたときに奥が消えないよう、見える範囲をカメラの距離に合わせる
+  const distance = camera.position.distanceTo(controls.target);
+  camera.near = clamp(distance * 0.002, 0.0005, 0.1);
+  camera.far = Math.max(distance * 200, 1000);
   camera.updateProjectionMatrix();
   controls.update();
   renderer.render(scene, camera);
@@ -4998,7 +5030,8 @@ function fitPlanToCanvas(): void {
   const padding = 70;
   const zoomX = (rect.width - padding * 2) / bounds.w;
   const zoomY = (rect.height - padding * 2) / bounds.h;
-  const zoom = clamp(Math.min(zoomX, zoomY), 0.25, 2.2);
+  // 広い敷地も全体が入るよう縮小側は制限しない。小さな図を画面いっぱいまで拡大しすぎないよう、拡大は2.2倍まで
+  const zoom = clamp(Math.min(zoomX, zoomY), MIN_PLAN_ZOOM, 2.2);
   view.zoom = zoom;
   view.x = rect.width / 2 - (bounds.x + bounds.w / 2) * zoom;
   view.y = rect.height / 2 - (bounds.y + bounds.h / 2) * zoom;

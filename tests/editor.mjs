@@ -42,6 +42,12 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         const r = planCanvas.getBoundingClientRect();
         return { x:r.left+x*view.zoom+view.x, y:r.top+y*view.zoom+view.y };
       },
+      planZoom() {
+        return view.zoom;
+      },
+      cameraDistance() {
+        return camera.position.distanceTo(controls.target);
+      },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
@@ -353,6 +359,24 @@ try {
   await page.locator('button[data-view-mode="split"]').click();
   console.log('PASS: 2D/3D boundary: drag, canvases follow, remembered, arrow keys, limits, reset and hidden in single views');
 
+  // Both views zoom far beyond the old limits (2D 0.25-3.6x, 3D 4-48 m) without freezing.
+  const zoomWith = async (selector, dy, count) => {
+    const box = await page.locator(selector).boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let i = 0; i < count; i += 1) await page.mouse.wheel(0, dy);
+    await page.waitForTimeout(300);
+  };
+  await zoomWith('#planCanvas', -200, 40);
+  assert.ok(await page.evaluate(() => window.__editorTest.planZoom()) > 1000, '2D zooms far in');
+  await zoomWith('#planCanvas', 200, 90);
+  assert.ok(await page.evaluate(() => window.__editorTest.planZoom()) < 0.01, '2D zooms far out');
+  await zoomWith('#threeCanvas', -200, 40);
+  assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) < 0.5, '3D zooms far in');
+  await zoomWith('#threeCanvas', 200, 70);
+  assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) > 5000, '3D zooms far out');
+  await page.locator('#fitButton').click();
+  console.log('PASS: 2D and 3D zoom almost without limit in both directions');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();
@@ -581,6 +605,19 @@ try {
   assert.ok((await pixels()).colors > 20);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: `${output}/mobile.png`, fullPage: true });
+  // Closing the notice hides it only while this visit lasts; it comes back on the next visit.
+  await page.locator('#mobileNoticeClose').click();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  await page.reload();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  await page.context().close();
+  // A phone showing the desktop site (desktop user agent) is still recognized by its touch-first screen,
+  // and an old permanent "dismissed" record no longer hides the notice.
+  page = await open(JSON.stringify(plan()), { viewport: { width: 412, height: 915 }, screen: { width: 412, height: 915 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' });
+  await page.evaluate(() => localStorage.setItem('madori-quick-3d-mobile-notice', 'dismissed'));
+  await page.reload();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
 } catch (error) {
