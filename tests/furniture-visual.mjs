@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
-import { FURNITURE_DEFS } from '../src/furniture-catalog.ts';
+import { FURNITURE_DEFS, FURNITURE_VARIANTS } from '../src/furniture-catalog.ts';
 
 const output = '.codex/furniture-quality';
-// Furniture kinds plus the four opening models rendered by the gallery page.
-const entryCount = Object.keys(FURNITURE_DEFS).length + 4;
+// Furniture kinds, each design variant, plus the four opening models rendered by the gallery page.
+const variantCount = Object.values(FURNITURE_VARIANTS).reduce((sum, labels) => sum + labels.length, 0);
+const entryCount = Object.keys(FURNITURE_DEFS).length + variantCount + 4;
 const galleryHeight = Math.ceil(entryCount / 4) * 290;
 await mkdir(output, { recursive: true });
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -14,9 +15,10 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><style>
 </style></head><body><canvas id="gallery"></canvas><div id="labels"></div><script type="module">
 import * as THREE from '/node_modules/three/build/three.module.js';
 import {buildFurnitureModel} from '/src/furniture-models.ts';
-import {FURNITURE_DEFS} from '/src/furniture-catalog.ts';
+import {FURNITURE_DEFS,FURNITURE_VARIANTS} from '/src/furniture-catalog.ts';
 import {buildOpeningModel} from '/src/opening-models.ts';
-const entries=[...Object.entries(FURNITURE_DEFS),
+const entries=[...Object.entries(FURNITURE_DEFS).flatMap(([kind,def])=>[[kind,def],
+    ...(FURNITURE_VARIANTS[kind]??[]).map((label,index)=>[kind,{...def,symbol:index+1,label:def.label+'（'+label+'）'}])]),
   ['door',{label:'Door',type:'door',length:0.9}],
   ['sliding-door',{label:'Sliding door',type:'door',doorStyle:'sliding',length:1.6}],
   ['window',{label:'Window',type:'window',length:1.2}],

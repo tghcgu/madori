@@ -13,6 +13,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
     if (!id.replaceAll('\\', '/').endsWith('/src/main.ts')) return;
     return `${code}\nwindow.__editorTest = {
       catalog: FURNITURE_DEFS,
+      variants: FURNITURE_VARIANTS,
       roomLabelBounds(id) {
         const room = findEntity(id);
         return room?.type === 'room' ? getRoomLabelBounds(room) : null;
@@ -257,15 +258,21 @@ try {
   // 2D symbol variants are picked from thumbnails or with V, remembered for new items, and validated on load.
   await importPlan(plan([room(), { id: 'seat', type: 'furniture', kind: 'chair', x: 200, y: 100, w: 45, h: 45, rotation: 0, symbol: 99 }, { id: 'oak', type: 'furniture', kind: 'tree', x: 300, y: 100, w: 300, h: 300, rotation: 0, height: -5 }]));
   await page.locator('button[data-view-mode="split"]').click();
+  // 表示の切り替えは次の描画で全体に合わせ直すので、それを待ってから座標を求める
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const itemOf = async id => (await saved()).floors[0].entities.find(e => e.id === id);
   assert.equal((await itemOf('seat')).symbol, undefined);
   assert.equal((await itemOf('oak')).height, 10);
   point = await planPoint(222, 122);
   await page.mouse.click(point.x, point.y);
-  assert.equal(await page.locator('.symbol-option').count(), 3);
+  assert.equal(await page.locator('.symbol-option').count(), 3, await page.locator('#propertiesPanel').innerText());
   assert.ok(await page.locator('.symbol-option canvas').nth(2).evaluate(canvas => canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data.some((value, index) => index % 4 === 3 && value > 0)));
+  const standardSeat = await page.evaluate(() => window.__editorTest.bounds('seat'));
   await page.locator('.symbol-option[data-symbol="2"]').click();
   assert.equal((await itemOf('seat')).symbol, 2);
+  // The 3D model follows the chosen design too (the round-seat chair has a lower bentwood back).
+  const roundSeat = await page.evaluate(() => window.__editorTest.bounds('seat'));
+  assert.ok(Math.abs(roundSeat.max[1] - standardSeat.max[1]) > 0.01, '3D chair changes with the design');
   assert.equal(await page.locator('.symbol-option.is-active').getAttribute('data-symbol'), '2');
   await page.keyboard.press('v');
   assert.equal((await itemOf('seat')).symbol, undefined);
@@ -582,8 +589,11 @@ try {
   await page.mouse.click(point.x, point.y);
   const catalog = await page.evaluate(() => window.__editorTest.catalog);
   const symbols = [];
+  const variants = await page.evaluate(() => window.__editorTest.variants);
   for (const [kind, defaults] of Object.entries(catalog)) {
     await page.locator('#furnitureKindInput').selectOption(kind);
+    const designs = variants[kind]?.length ?? 0;
+    assert.equal(await page.locator('.symbol-option').count(), designs ? designs + 1 : 0, `${kind}: design picker`);
     await change('#furnitureRotationInput', 0);
     await page.locator('#furnitureFlipInput').uncheck();
     await page.locator('#fitButton').click();

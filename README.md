@@ -87,7 +87,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 開き戸、引き戸、通常窓、中央区切り付き窓を配置
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
-- 家具の2D記号のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・トイレ・植物・ラグなど27種類）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。3Dの形は変わりません
+- 家具のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・トイレ・植物・ラグなど27種類）。2Dの記号と3Dの形が同じデザインに変わります（例: 丸い座面の椅子は3Dでも丸い座面と曲げ木の背もたれ、布団を折り返したベッドは3Dでも掛け布団の角が折れ、ガラス天板のテーブルは3Dでもガラス越しに下の棚が見える）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います
 - 部屋名を本文とは別にドラッグして自由配置
 - 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
@@ -231,7 +231,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | `R` | 選択中の要素を90度回転。屋根では幅と奥行を入れ替え |
 | `Shift + R` | 家具や線要素を15度単位で細かく回転 |
 | `F` | 家具の左右反転、ドアの開き・引き戸の重なりを反転 |
-| `V` / `Shift + V` | 家具の2D記号のデザインを切り替え（逆順） |
+| `V` / `Shift + V` | 家具のデザイン（2Dの記号と3Dの形）を切り替え（逆順） |
 | `L` | 選択中の要素を固定・固定解除 |
 | `Delete` / `Backspace` | 選択中の要素を削除 |
 | `Ctrl + Z` / `Cmd + Z` | 元に戻す |
@@ -251,7 +251,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 保存キー: `madori-quick-3d-plan`
 - 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、下階表示もブラウザへ保存
-- 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだ2D記号のデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
+- 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
 - 別ブラウザ、別PC、別ドメインには自動同期されない
@@ -424,7 +424,7 @@ madori/
 }
 ```
 
-座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`、`text`です。家具の`symbol`は2D記号のデザイン番号（標準のときは省略）、`height`は高さを変えられる家具の高さ（標準のときは省略）です。屋根は全階共通の`roofs`配列で管理し、各屋根の`floorId`で設置階を指定します。未指定の旧データは読み込み時の最上階に割り当てます。設置階を削除すると対応する屋根も削除され、Undoで一緒に戻せます。
+座標と寸法の単位はセンチメートルです。主な`entity.type`は`room`、`wall`、`door`、`window`、`furniture`、`shape`、`text`です。家具の`symbol`はデザイン番号（2Dの記号と3Dの形で共通。標準のときは省略）、`height`は高さを変えられる家具の高さ（標準のときは省略）です。屋根は全階共通の`roofs`配列で管理し、各屋根の`floorId`で設置階を指定します。未指定の旧データは読み込み時の最上階に割り当てます。設置階を削除すると対応する屋根も削除され、Undoで一緒に戻せます。
 
 ## ブランチとデプロイ
 
@@ -584,7 +584,7 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
 - Drag room labels independently from room geometry
-- Choose a different 2D symbol design for furniture from the thumbnails under Selection (27 types, including chairs, sofas, beds, tables, fridges, toilets, plants, and rugs). Press `V` to cycle through them. New items of the same type use the last design you picked. The 3D model does not change
+- Choose a different design for furniture from the thumbnails under Selection (27 types, including chairs, sofas, beds, tables, fridges, toilets, plants, and rugs). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors
@@ -722,7 +722,7 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | `R` | Rotate the selected item by 90 degrees; swaps roof width and depth |
 | `Shift + R` | Fine 15-degree rotation for furniture and line elements |
 | `F` | Flip furniture or reverse a door/sliding-door side |
-| `V` / `Shift + V` | Cycle the 2D symbol design of the selected furniture (forward / backward) |
+| `V` / `Shift + V` | Cycle the design (2D symbol and 3D model) of the selected furniture (forward / backward) |
 | `L` | Lock or unlock the selected item |
 | `Delete` / `Backspace` | Delete the selected item |
 | `Ctrl + Z` / `Cmd + Z` | Undo |
@@ -742,7 +742,7 @@ If some saved items are invalid, the original data is backed up before valid ite
 
 - Main storage key: `madori-quick-3d-plan`
 - View mode, the 2D/3D boundary position, dimensions, shadows, lighting, and lower-floor display are also saved
-- Reloading or reopening the app restores where you were looking in 2D (position and zoom), the 3D camera position and direction, floors and roofs hidden in 3D, the 2D roof display, the collapsed tool panel, which palette groups are open, and the 2D symbol design picked for each furniture type (switching the view mode, or loading a template, a new plan, or a file, still frames the whole plan)
+- Reloading or reopening the app restores where you were looking in 2D (position and zoom), the 3D camera position and direction, floors and roofs hidden in 3D, the 2D roof display, the collapsed tool panel, which palette groups are open, and the design picked for each furniture type (switching the view mode, or loading a template, a new plan, or a file, still frames the whole plan)
 - Data normally survives reloads and browser restarts
 - Clearing site storage deletes the saved plan
 - Data does not synchronize between browsers, computers, or domains
@@ -912,7 +912,7 @@ The exported JSON has the following high-level shape:
 }
 ```
 
-Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, `shape`, and `text`. A furniture item's `symbol` is its 2D symbol design number and `height` is the height of adjustable items; both are omitted at their defaults. Roofs are stored in the plan-level `roofs` array, with each roof's `floorId` identifying its supporting floor. Legacy roofs without this field are assigned to the highest floor at load time. Deleting a floor also deletes its roofs; Undo restores both.
+Coordinates and dimensions use centimeters. Common entity types are `room`, `wall`, `door`, `window`, `furniture`, `shape`, and `text`. A furniture item's `symbol` is its design number (shared by the 2D symbol and the 3D model) and `height` is the height of adjustable items; both are omitted at their defaults. Roofs are stored in the plan-level `roofs` array, with each roof's `floorId` identifying its supporting floor. Legacy roofs without this field are assigned to the highest floor at load time. Deleting a floor also deletes its roofs; Undo restores both.
 
 ## Branches and Deployment
 

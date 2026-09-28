@@ -5,7 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
-import { FURNITURE_DEFS, type FurnitureKind } from "./furniture-catalog";
+import { FURNITURE_DEFS, FURNITURE_VARIANTS, type FurnitureKind } from "./furniture-catalog";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 
@@ -256,93 +256,52 @@ const GRASS_MAX_TUFTS = 7000;
 // 草が突き抜けて見えてしまう、低くて平たいもの。この下には草を生やさない
 const GRASS_FREE_KINDS: FurnitureKind[] = ["pond", "steppingStones", "rug"];
 
-// 2D記号の別デザイン。同じ家具を違う描き方で見せるだけで、3Dの形は変えない。
+// 家具の別デザインの2Dの描き方。名前と数は FURNITURE_VARIANTS（3Dと共通）に合わせ、同じ順に並べる。
 // 0番（標準）は drawFurnitureSymbol の本体で描き、ここには1番以降を並べる
+type SymbolDraw = (w: number, h: number) => void;
+
 interface SymbolVariant {
   label: string;
-  draw: (w: number, h: number) => void;
+  draw: SymbolDraw;
 }
 
-const SYMBOL_VARIANTS: Partial<Record<FurnitureKind, SymbolVariant[]>> = {
-  chair: [
-    { label: "脚付き", draw: drawChairWithLegs },
-    { label: "丸い座面", draw: drawRoundSeatChair },
-  ],
-  diningTable: [
-    { label: "脚付きの椅子", draw: (w, h) => drawDiningSet(w, h, drawChairWithLegs) },
-    { label: "丸い座面の椅子", draw: (w, h) => drawDiningSet(w, h, drawRoundSeatChair) },
-  ],
-  sofa: [
-    { label: "丸い肘", draw: drawRoundArmSofa },
-    { label: "背クッション", draw: (w, h) => drawCushionSofa(w, h, sofaSeats("sofa", w)) },
-  ],
-  sofa2: [
-    { label: "丸い肘", draw: drawRoundArmSofa },
-    { label: "背クッション", draw: (w, h) => drawCushionSofa(w, h, sofaSeats("sofa2", w)) },
-  ],
-  armchair: [
-    { label: "丸い肘", draw: drawRoundArmSofa },
-    { label: "背クッション", draw: (w, h) => drawCushionSofa(w, h, 1) },
-  ],
-  bed: [
-    { label: "布団を折り返す", draw: (w, h) => drawFoldedBed(w, h, 1) },
-    { label: "足元に帯", draw: (w, h) => drawRunnerBed(w, h, 1) },
-  ],
-  bedSemiDouble: [
-    { label: "布団を折り返す", draw: (w, h) => drawFoldedBed(w, h, 1) },
-    { label: "足元に帯", draw: (w, h) => drawRunnerBed(w, h, 1) },
-  ],
-  bedDouble: [
-    { label: "布団を折り返す", draw: (w, h) => drawFoldedBed(w, h, 2) },
-    { label: "足元に帯", draw: (w, h) => drawRunnerBed(w, h, 2) },
-  ],
-  futon: [{ label: "布団を折り返す", draw: drawFoldedFuton }],
-  desk: [
-    { label: "シンプル", draw: drawSimpleDesk },
-    { label: "両袖", draw: drawDoublePedestalDesk },
-  ],
-  table: [
-    { label: "ガラス天板", draw: (w, h) => drawGlassTable(w, h, false) },
-    { label: "木目", draw: (w, h) => drawWoodTable(w, h, false) },
-  ],
-  roundTable: [
-    { label: "ガラス天板", draw: (w, h) => drawGlassTable(w, h, true) },
-    { label: "木目", draw: (w, h) => drawWoodTable(w, h, true) },
-  ],
-  tv: [{ label: "脚付きのテレビ", draw: drawTvWithLegs }],
-  fridge: [
-    { label: "観音開き", draw: drawFrenchDoorFridge },
-    { label: "シンプル", draw: drawSimpleFridge },
-  ],
-  washer: [{ label: "四角いふた", draw: drawLidWasher }],
-  toilet: [
-    { label: "タンクレス", draw: drawTanklessToilet },
-    { label: "手洗い付き", draw: drawHandWashToilet },
-  ],
-  bath: [{ label: "四角い浴槽", draw: drawSquareBath }],
-  washbasin: [{ label: "角形ボウル", draw: drawSquareWashbasin }],
-  kitchen: [{ label: "ガスコンロ", draw: (w, h) => drawKitchenSymbol(w, h, false, true) }],
-  kitchenIsland: [{ label: "ガスコンロ", draw: (w, h) => drawKitchenSymbol(w, h, true, true) }],
-  closet: [
-    { label: "引き戸", draw: drawSlidingCloset },
-    { label: "斜線", draw: drawHatchedCloset },
-  ],
-  wardrobe: [{ label: "両開き", draw: drawDoubleDoorWardrobe }],
-  shelf: [{ label: "オープン棚", draw: drawOpenShelf }],
-  plant: [
-    { label: "丸い葉", draw: drawRoundLeafPlant },
-    { label: "細い葉", draw: drawPalmPlant },
-  ],
-  plantLarge: [
-    { label: "丸い葉", draw: drawRoundLeafPlant },
-    { label: "細い葉", draw: drawPalmPlant },
-  ],
-  rug: [
-    { label: "二重の縁", draw: drawBorderRug },
-    { label: "ひし形の柄", draw: drawDiamondRug },
-  ],
-  car: [{ label: "ワゴン", draw: drawWagonCar }],
+const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
+  chair: [drawChairWithLegs, drawRoundSeatChair],
+  diningTable: [(w, h) => drawDiningSet(w, h, drawChairWithLegs), (w, h) => drawDiningSet(w, h, drawRoundSeatChair)],
+  sofa: [drawRoundArmSofa, (w, h) => drawCushionSofa(w, h, sofaSeats("sofa", w))],
+  sofa2: [drawRoundArmSofa, (w, h) => drawCushionSofa(w, h, sofaSeats("sofa2", w))],
+  armchair: [drawRoundArmSofa, (w, h) => drawCushionSofa(w, h, 1)],
+  bed: [(w, h) => drawFoldedBed(w, h, 1), (w, h) => drawRunnerBed(w, h, 1)],
+  bedSemiDouble: [(w, h) => drawFoldedBed(w, h, 1), (w, h) => drawRunnerBed(w, h, 1)],
+  bedDouble: [(w, h) => drawFoldedBed(w, h, 2), (w, h) => drawRunnerBed(w, h, 2)],
+  futon: [drawFoldedFuton],
+  desk: [drawSimpleDesk, drawDoublePedestalDesk],
+  table: [(w, h) => drawGlassTable(w, h, false), (w, h) => drawWoodTable(w, h, false)],
+  roundTable: [(w, h) => drawGlassTable(w, h, true), (w, h) => drawWoodTable(w, h, true)],
+  tv: [drawTvWithLegs],
+  fridge: [drawFrenchDoorFridge, drawSimpleFridge],
+  washer: [drawLidWasher],
+  toilet: [drawTanklessToilet, drawHandWashToilet],
+  bath: [drawSquareBath],
+  washbasin: [drawSquareWashbasin],
+  kitchen: [(w, h) => drawKitchenSymbol(w, h, false, true)],
+  kitchenIsland: [(w, h) => drawKitchenSymbol(w, h, true, true)],
+  closet: [drawSlidingCloset, drawHatchedCloset],
+  wardrobe: [drawDoubleDoorWardrobe],
+  shelf: [drawOpenShelf],
+  plant: [drawRoundLeafPlant, drawPalmPlant],
+  plantLarge: [drawRoundLeafPlant, drawPalmPlant],
+  rug: [drawBorderRug, drawDiamondRug],
+  car: [drawWagonCar],
 };
+
+const SYMBOL_VARIANTS: Partial<Record<FurnitureKind, SymbolVariant[]>> = Object.fromEntries(
+  (Object.entries(FURNITURE_VARIANTS) as [FurnitureKind, string[]][]).map(([kind, labels]) => {
+    const draws = SYMBOL_DRAWS[kind] ?? [];
+    if (draws.length !== labels.length) throw new Error(`2D symbol variants do not match the catalog: ${kind}`);
+    return [kind, labels.map((label, index) => ({ label, draw: draws[index] }))];
+  }),
+);
 const INK_SOFT = "#5b6470";
 // 屋外の記号の塗り（葉・幹・石・土・水）
 const OUTDOOR_LEAF = "#e3eedb";
@@ -5062,8 +5021,8 @@ function updatePropertiesPanel(): void {
   // 見た目だけの設定なので、配置を固定していても選べる
   const symbolPicker = symbolLabels.length > 1
     ? `<div class="symbol-picker">
-        <span>2Dの記号（Vキーで切り替え）</span>
-        <div class="symbol-options" role="radiogroup" aria-label="2Dの記号">
+        <span>デザイン（2Dの記号と3Dの形。Vキーで切り替え）</span>
+        <div class="symbol-options" role="radiogroup" aria-label="デザイン">
           ${symbolLabels.map((label, index) => `<button type="button" class="symbol-option${index === currentSymbol ? " is-active" : ""}" data-symbol="${index}" role="radio" aria-checked="${index === currentSymbol}" title="${label}" aria-label="${label}"><canvas></canvas></button>`).join("")}
         </div>
       </div>`
