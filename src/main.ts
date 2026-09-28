@@ -192,6 +192,7 @@ const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
 const MOBILE_NOTICE_KEY = "madori-quick-3d-mobile-notice";
 const SPLIT_KEY = "madori-quick-3d-split";
+const VIEW_STATE_KEY = "madori-quick-3d-view-state";
 // 同時表示での2Dの広さの割合（2Dと3Dの合計に対して）。どちらも狭くなりすぎないよう範囲を決める
 const MIN_SPLIT = 0.15;
 const MAX_SPLIT = 0.85;
@@ -425,7 +426,7 @@ const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
-// 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（保存はしない）
+// 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（見ていた場所などと一緒にブラウザへ保存）
 const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
 let activePolygonSides = 6;
@@ -486,7 +487,10 @@ controls.maxDistance = MAX_CAMERA_DISTANCE;
 controls.zoomToCursor = true;
 controls.zoomSpeed = 2;
 controls.maxPolarAngle = Math.PI * 0.48;
-controls.addEventListener("change", () => { threeNeedsRender = true; });
+controls.addEventListener("change", () => {
+  threeNeedsRender = true;
+  scheduleViewStateSave();
+});
 
 const planGroup = new THREE.Group();
 scene.add(planGroup);
@@ -515,12 +519,33 @@ const sharedMaterials = new Set<THREE.Material>([
   wallMaterial, wallCapMaterial, edgeMaterial, roofMaterial, slabMaterial,
 ]);
 
+// 再読み込みしても、見ていた場所や表示の切り替えをそのまま戻す（間取りのデータとは別に、このブラウザだけに保存）
+interface SavedViewState {
+  // 2Dの画面の中央にある点（cm）と倍率。画面の大きさが変わっても同じ所が中央に来るようにする
+  plan?: { x: number; y: number; zoom: number };
+  // 3Dのカメラと回転の中心。シーンの中心ではなく、間取りの原点からの位置（m）で持つ
+  camera?: { position: number[]; target: number[] };
+  hiddenFloors?: string[];
+  roofs2d?: boolean;
+  roofs3d?: boolean;
+  panelHidden?: boolean;
+  // 左の一覧の開閉。見出しの文字ごとに持つ
+  panels?: Record<string, boolean>;
+  symbols?: Partial<Record<FurnitureKind, number>>;
+}
+
+const viewState: SavedViewState = loadViewState();
+// 起動して元に戻し終えるまでは、途中の表示で記録を上書きしない
+let viewStateReady = false;
+let viewStateTimer = 0;
+applySavedDisplaySettings();
+
 createIcons({ icons });
 setupUi();
 fitPlanToCanvas();
 render2d();
 rebuildThree();
-applyViewMode(viewMode, false);
+applyViewMode(viewMode, false, true);
 animate3d();
 
 function isRoofKind(value: unknown): value is RoofKind {
@@ -774,6 +799,7 @@ function setupUi(): void {
   });
 
   buildFurniturePicker();
+  restorePanelOpenStates();
   paletteSearch.addEventListener("input", applyPaletteSearch);
 
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
@@ -853,6 +879,7 @@ function setupUi(): void {
       render2d();
       render3dOnce();
     });
+    scheduleViewStateSave();
   });
 
   document.querySelector<HTMLButtonElement>("#shadowToggle")?.addEventListener("click", () => {
@@ -1430,7 +1457,7 @@ function bindSplitDivider(): void {
   });
 }
 
-function applyViewMode(nextMode: ViewMode, persist = true): void {
+function applyViewMode(nextMode: ViewMode, persist = true, restore = false): void {
   viewMode = nextMode;
   workspace.dataset.viewMode = viewMode;
   workspace.classList.remove("is-active");
@@ -1441,15 +1468,133 @@ function applyViewMode(nextMode: ViewMode, persist = true): void {
   requestAnimationFrame(() => {
     resizeCanvases();
     updateSplitDivider();
+    // 起動したときは前回の視点に戻す。記録がない（または使えない）ときと、表示を切り替えたときは全体が入るように合わせる
+    const cameraRestored = restore && restoreCamera();
     if (viewMode !== "three") {
-      fitPlanToCanvas();
+      if (!(restore && restorePlanView())) fitPlanToCanvas();
       render2d();
     }
     if (viewMode !== "plan") {
-      frameCamera(getGlobalBounds());
+      if (!cameraRestored) frameCamera(getGlobalBounds());
       render3dOnce();
     }
+    if (restore) {
+      viewStateReady = true;
+      window.addEventListener("pagehide", saveViewState);
+    }
+    scheduleViewStateSave();
   });
+}
+
+// ---- 見ていた場所・表示の切り替えの保存 ----
+
+function loadViewState(): SavedViewState {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(VIEW_STATE_KEY) ?? "null");
+    return value && typeof value === "object" ? (value as SavedViewState) : {};
+  } catch {
+    return {};
+  }
+}
+
+// 画面を作る前に戻しておく設定（階・屋根の表示、ツールパネル、家具の2D記号）
+function applySavedDisplaySettings(): void {
+  const floorIds = new Set(state.floors.map((floor) => floor.id));
+  if (Array.isArray(viewState.hiddenFloors)) {
+    viewState.hiddenFloors.filter((id) => floorIds.has(id)).forEach((id) => hiddenFloorIds.add(id));
+  }
+  if (typeof viewState.roofs2d === "boolean") roofVisible2d = viewState.roofs2d;
+  if (typeof viewState.roofs3d === "boolean") roofVisible3d = viewState.roofs3d;
+  if (viewState.panelHidden === true) {
+    workspace.dataset.panel = "hidden";
+    document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", "true");
+  }
+  if (viewState.symbols && typeof viewState.symbols === "object") {
+    for (const [kind, symbol] of Object.entries(viewState.symbols)) {
+      if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
+        const valid = validSymbol(kind as FurnitureKind, symbol);
+        if (valid) lastSymbolByKind[kind as FurnitureKind] = valid;
+      }
+    }
+  }
+}
+
+function toolPanelDetails(): HTMLDetailsElement[] {
+  return [...document.querySelectorAll<HTMLDetailsElement>(".tool-panel details")];
+}
+
+function detailsKey(details: HTMLDetailsElement): string {
+  return details.querySelector("summary")?.textContent?.trim() ?? "";
+}
+
+// 左の一覧の開閉を前回の状態に戻し、開け閉めしたら記録する
+function restorePanelOpenStates(): void {
+  const panels = viewState.panels && typeof viewState.panels === "object" ? viewState.panels : {};
+  toolPanelDetails().forEach((details) => {
+    const open = panels[detailsKey(details)];
+    if (typeof open === "boolean") details.open = open;
+    details.addEventListener("toggle", scheduleViewStateSave);
+  });
+}
+
+function restorePlanView(): boolean {
+  const saved = viewState.plan;
+  if (!saved || ![saved.x, saved.y, saved.zoom].every(Number.isFinite) || saved.zoom <= 0) return false;
+  const rect = planCanvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return false;
+  view.zoom = clamp(saved.zoom, MIN_PLAN_ZOOM, MAX_PLAN_ZOOM);
+  view.x = rect.width / 2 - saved.x * view.zoom;
+  view.y = rect.height / 2 - saved.y * view.zoom;
+  return true;
+}
+
+function sceneOrigin(): THREE.Vector3 {
+  return new THREE.Vector3(threeSceneCenter.x * SCALE_3D, 0, threeSceneCenter.y * SCALE_3D);
+}
+
+function restoreCamera(): boolean {
+  const saved = viewState.camera;
+  const isVector = (value: unknown): value is number[] => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
+  if (!saved || !isVector(saved.position) || !isVector(saved.target)) return false;
+  const position = new THREE.Vector3().fromArray(saved.position).sub(sceneOrigin());
+  const target = new THREE.Vector3().fromArray(saved.target).sub(sceneOrigin());
+  const distance = position.distanceTo(target);
+  if (distance < MIN_CAMERA_DISTANCE * 0.99 || distance > MAX_CAMERA_DISTANCE * 1.01) return false;
+  camera.position.copy(position);
+  controls.target.copy(target);
+  controls.update();
+  return true;
+}
+
+function scheduleViewStateSave(): void {
+  if (!viewStateReady) return;
+  window.clearTimeout(viewStateTimer);
+  viewStateTimer = window.setTimeout(saveViewState, 400);
+}
+
+function saveViewState(): void {
+  if (!viewStateReady) return;
+  window.clearTimeout(viewStateTimer);
+  const rect = planCanvas.getBoundingClientRect();
+  // 2Dを隠しているあいだは2Dの視点が決まらないので、前回の記録を残す
+  if (rect.width > 0 && rect.height > 0) {
+    viewState.plan = { x: (rect.width / 2 - view.x) / view.zoom, y: (rect.height / 2 - view.y) / view.zoom, zoom: view.zoom };
+  }
+  viewState.camera = { position: camera.position.clone().add(sceneOrigin()).toArray(), target: controls.target.clone().add(sceneOrigin()).toArray() };
+  viewState.hiddenFloors = [...hiddenFloorIds];
+  viewState.roofs2d = roofVisible2d;
+  viewState.roofs3d = roofVisible3d;
+  viewState.panelHidden = workspace.dataset.panel === "hidden";
+  // 検索で一時的に開閉している一覧は、検索する前の状態を記録する
+  viewState.panels = Object.fromEntries(
+    toolPanelDetails().map((details) => [detailsKey(details), details.dataset.wasOpen !== undefined ? details.dataset.wasOpen === "true" : details.open]),
+  );
+  viewState.symbols = { ...lastSymbolByKind };
+  try {
+    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
+  } catch {
+    // 保存できなくても編集は続けられる。次に開いたときに全体表示へ戻るだけ
+  }
 }
 
 function handlePointerDown(event: PointerEvent): void {
@@ -2184,6 +2329,7 @@ function render2d(): void {
   }
 
   ctx.restore();
+  scheduleViewStateSave();
 }
 
 // 方眼の間隔。20cmを基準に、画面上で狭すぎれば5倍ずつ広げ、広すぎれば1/5ずつ細かくする
@@ -4629,6 +4775,7 @@ function redrawAll(rebuild = true): void {
 }
 
 function updateUi(): void {
+  scheduleViewStateSave();
   updateStats();
   updatePropertiesPanel();
   renderFloorTabs();
@@ -5080,8 +5227,10 @@ function commitState(): void {
 
 function replaceState(next: PlanState, pushHistory: boolean): void {
   state = cloneState(next);
+  // 別の間取りに入れ替えたときは、隠していた階や屋根をすべて表示に戻す
   hiddenFloorIds.clear();
   roofVisible2d = true;
+  roofVisible3d = true;
   if (pushHistory) commitState();
   persistState();
   fitPlanToCanvas();

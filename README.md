@@ -251,6 +251,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 保存キー: `madori-quick-3d-plan`
 - 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、下階表示もブラウザへ保存
+- 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだ2D記号のデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
 - 別ブラウザ、別PC、別ドメインには自動同期されない
@@ -741,6 +742,7 @@ If some saved items are invalid, the original data is backed up before valid ite
 
 - Main storage key: `madori-quick-3d-plan`
 - View mode, the 2D/3D boundary position, dimensions, shadows, lighting, and lower-floor display are also saved
+- Reloading or reopening the app restores where you were looking in 2D (position and zoom), the 3D camera position and direction, floors and roofs hidden in 3D, the 2D roof display, the collapsed tool panel, which palette groups are open, and the 2D symbol design picked for each furniture type (switching the view mode, or loading a template, a new plan, or a file, still frames the whole plan)
 - Data normally survives reloads and browser restarts
 - Clearing site storage deletes the saved plan
 - Data does not synchronize between browsers, computers, or domains

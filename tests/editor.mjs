@@ -408,6 +408,55 @@ try {
   await page.locator('#fitButton').click();
   console.log('PASS: 2D and 3D zoom almost without limit in both directions, and right-drag still pans when zoomed in');
 
+  // Reloading keeps the 2D view, the 3D camera, visibility toggles, the tool panel and the palette groups as they were.
+  await importPlan({ floors: [{ id: 'f1', name: '1F', entities: [room()] }, { id: 'f2', name: '2F', entities: [room('upper')] }], activeFloor: 0, selectedId: null,
+    roofs: [{ id: 'roof1', type: 'roof', kind: 'gable', x: -40, y: -40, w: 680, h: 480, floorId: 'f2' }] });
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.waitForTimeout(200);
+  await zoomWith('#planCanvas', -200, 4);
+  const planArea = await page.locator('#planCanvas').boundingBox();
+  await page.mouse.move(planArea.x + 150, planArea.y + 150);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(planArea.x + 230, planArea.y + 110, { steps: 5 });
+  await page.mouse.up({ button: 'right' });
+  const threeArea = await page.locator('#threeCanvas').boundingBox();
+  await move({ x: threeArea.x + threeArea.width * 0.8, y: threeArea.y + 120 }, 90, 30);
+  await zoomWith('#threeCanvas', -200, 3);
+  await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).click();
+  await page.locator('#floorVisibility button').filter({ hasText: /^屋根/ }).click();
+  await page.locator('#roofToggle2d').click();
+  const bedGroup = page.locator('.palette-group').filter({ has: page.locator('summary', { hasText: /^ベッド$/ }) });
+  const bedWasOpen = await bedGroup.evaluate(details => details.open);
+  await bedGroup.locator('summary').click();
+  await page.locator('#panelToggle').click();
+  await page.waitForTimeout(300);
+  const viewSnapshot = async () => ({
+    origin: await planPoint(0, 0),
+    zoom: await page.evaluate(() => window.__editorTest.planZoom()),
+    camera: await page.evaluate(() => window.__editorTest.cameraPosition()),
+    distance: await page.evaluate(() => window.__editorTest.cameraDistance()),
+  });
+  const beforeReload = await viewSnapshot();
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  await page.waitForTimeout(400);
+  const afterReload = await viewSnapshot();
+  assert.ok(Math.abs(afterReload.zoom - beforeReload.zoom) < 1e-9, '2D zoom is kept');
+  assert.ok(Math.abs(afterReload.origin.x - beforeReload.origin.x) < 1 && Math.abs(afterReload.origin.y - beforeReload.origin.y) < 1, '2D position is kept');
+  assert.ok(afterReload.camera.every((value, index) => Math.abs(value - beforeReload.camera[index]) < 1e-3), '3D camera is kept');
+  assert.ok(Math.abs(afterReload.distance - beforeReload.distance) < 1e-3, '3D orbit center is kept');
+  assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.panel), 'hidden');
+  assert.equal(await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#floorVisibility button').filter({ hasText: /^屋根/ }).getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#roofToggle2d').getAttribute('aria-pressed'), 'false');
+  await page.locator('#panelToggle').click();
+  assert.equal(await bedGroup.evaluate(details => details.open), !bedWasOpen, 'palette group open state is kept');
+  // Switching the view mode still frames everything, as before.
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.waitForTimeout(200);
+  assert.notEqual(await page.evaluate(() => window.__editorTest.planZoom()), afterReload.zoom);
+  console.log('PASS: reload keeps the 2D view, 3D camera, floor/roof visibility, tool panel and palette groups');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();
