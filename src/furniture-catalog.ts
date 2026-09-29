@@ -162,17 +162,24 @@ export const FURNITURE_VARIANTS: Partial<Record<FurnitureKind, string[]>> = {
   roundTable: ["ガラス天板", "木目"],
   tv: ["脚付きのテレビ"],
   fridge: ["観音開き", "シンプル"],
-  washer: ["四角いふた"],
+  washer: ["四角いふた", "ドラム式"],
   toilet: ["タンクレス", "手洗い付き"],
   bath: ["四角い浴槽"],
   washbasin: ["角形ボウル"],
   kitchen: ["ガスコンロ"],
   kitchenIsland: ["ガスコンロ"],
-  closet: ["引き戸", "ルーバー扉"],
+  closet: ["引き戸", "ルーバー扉", "斜線"],
   wardrobe: ["両開き"],
   shelf: ["オープン棚"],
   plant: ["丸い葉", "細い葉"],
   plantLarge: ["丸い葉", "細い葉"],
   rug: ["二重の縁", "ひし形の柄"],
   car: ["ワゴン"],
+  rock: ["2つの岩"],
+  gardenLight: ["笠付き"],
+};
+
+// 2Dの記号だけのデザイン（番号）。3Dは標準の形のまま
+export const FURNITURE_VARIANTS_2D_ONLY: Partial<Record<FurnitureKind, number[]>> = {
+  closet: [3],
 };

@@ -2,7 +2,12 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 // テストでは Node がそのまま読むため、値を読み込むときは拡張子まで書く
-import { FURNITURE_DEFS, FURNITURE_VARIANTS, type FurnitureKind } from "./furniture-catalog.ts";
+import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog.ts";
+import {
+  CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
+  bezierPoint, closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, rockVertexHeights, rugDiamonds,
+  steppingStoneLayout, woodGrain, type Point2, type RockShape,
+} from "./furniture-shapes.ts";
 
 type Position = [number, number, number];
 type Material = THREE.MeshStandardMaterial;
@@ -95,6 +100,19 @@ class Model {
     return mesh;
   }
 
+  // 形の外側に余白があっても、上から見た大きさを設置範囲（w×d）ちょうどに保つための見えない板。
+  // これがないと、余白のぶん形が引き伸ばされ、2Dの記号と大きさがずれる
+  reserveFootprint(w: number, d: number): void {
+    const material = this.material("footprint", 0xffffff);
+    material.transparent = true;
+    material.opacity = 0;
+    material.visible = false;
+    material.depthWrite = false;
+    const mesh = this.mesh(new THREE.BoxGeometry(w, 0.001, d), [0, 0.0005, 0], material);
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+  }
+
   finish(w: number, d: number, mounted: boolean, optimize: boolean): THREE.Group {
     this.group.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(this.group, true);
@@ -133,31 +151,60 @@ class Model {
   }
 }
 
-// 頂点を少しずつ押し引きした多面体（岩や石）。同じ位置の頂点は同じだけ動かし、面の間にすき間を作らない
-function rockGeometry(seed: number): THREE.BufferGeometry {
-  const geometry = new THREE.IcosahedronGeometry(0.5, 1);
-  const positions = geometry.getAttribute("position");
-  const v = new THREE.Vector3();
-  for (let i = 0; i < positions.count; i += 1) {
-    v.fromBufferAttribute(positions, i);
-    const noise = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719 + seed) * 43758.5453;
-    v.multiplyScalar(0.8 + (noise - Math.floor(noise)) * 0.32);
-    v.y = Math.max(v.y, -0.22);
-    positions.setXYZ(i, v.x, v.y, v.z);
-  }
+// 2Dの記号と同じ輪郭・頂上・稜線から、頂上へ向かう平らな面でできた岩を作る。
+// 稜線と稜線の間を1枚の平面にするので、上から見ると2Dの記号と同じ面の分かれ方になる。側面は垂直
+function rockSolidGeometry(shape: RockShape, height: number): THREE.BufferGeometry {
+  const heights = rockVertexHeights(shape).map((k) => k * height * shape.height);
+  const peak = new THREE.Vector3(shape.peak[0] / 100, height * shape.height, shape.peak[1] / 100);
+  const top = shape.outline.map(([x, y], i) => new THREE.Vector3(x / 100, heights[i], y / 100));
+  const bottom = shape.outline.map(([x, y]) => new THREE.Vector3(x / 100, 0, y / 100));
+  const center = bottom.reduce((sum, v) => sum.add(v), new THREE.Vector3()).multiplyScalar(1 / bottom.length);
+  const positions: number[] = [];
+  const triangle = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, outward: THREE.Vector3) => {
+    const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a));
+    const [p, q] = normal.dot(outward) >= 0 ? [b, c] : [c, b];
+    positions.push(a.x, a.y, a.z, p.x, p.y, p.z, q.x, q.y, q.z);
+  };
+  const up = new THREE.Vector3(0, 1, 0), down = new THREE.Vector3(0, -1, 0);
+  top.forEach((vertex, i) => {
+    const next = (i + 1) % top.length;
+    triangle(peak, vertex, top[next], up);
+    const outward = new THREE.Vector3().addVectors(bottom[i], bottom[next]).multiplyScalar(0.5).sub(center).setY(0);
+    triangle(vertex, bottom[i], bottom[next], outward);
+    triangle(vertex, bottom[next], top[next], outward);
+    triangle(center, bottom[next], bottom[i], down);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
   return geometry;
 }
 
-// 岩を、底が床に着き、いちばん高い所が height になるように置く
-function placeRock(m: Model, material: Material, seed: number, x: number, z: number, sx: number, height: number, sz: number, turn = 0): void {
-  const geometry = rockGeometry(seed);
-  const box = geometry.boundingBox!;
-  const scaleY = height / (box.max.y - box.min.y);
-  const mesh = m.mesh(geometry, [x, -box.min.y * scaleY, z], material);
-  mesh.scale.set(sx, scaleY, sz);
-  mesh.rotation.y = turn;
+// 上から見た輪郭（cm）を、上面が top・厚み thickness の板にする
+function shapeSlab(shape: THREE.Shape, thickness: number, top: number, m: Model, material: Material, segments = 12): THREE.Mesh {
+  const mesh = m.mesh(new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: segments }), [0, top, 0], material);
+  mesh.rotation.x = Math.PI / 2;
+  return mesh;
+}
+
+// 2Dの記号と同じ木目の曲線と節を、天板の上に細い溝として付ける（丸い天板では縁の内側だけ）
+function addWoodGrain(m: Model, wCm: number, hCm: number, top: number, round: boolean, material: Material): void {
+  const grain = woodGrain(wCm, hCm);
+  const inside = ([x, y]: Point2) => !round || (x / (wCm / 2)) ** 2 + (y / (hCm / 2)) ** 2 <= 0.94;
+  const tube = (points: Point2[], closed: boolean) => {
+    const curve = new THREE.CatmullRomCurve3(points.map(([x, y]) => new THREE.Vector3(x / 100, top, y / 100)), closed);
+    m.mesh(new THREE.TubeGeometry(curve, closed ? 24 : 32, 0.0018, 4, closed), [0, 0, 0], material);
+  };
+  for (const line of grain.lines) {
+    const points = Array.from({ length: 25 }, (_, i) => bezierPoint(line, i / 24)).filter(inside);
+    if (points.length >= 2) tube(points, false);
+  }
+  const { x, y, rx, ry } = grain.knot;
+  tube(Array.from({ length: 16 }, (_, i): Point2 => [x + Math.cos((i / 16) * Math.PI * 2) * rx, y + Math.sin((i / 16) * Math.PI * 2) * ry]), true);
+}
+
+function polygonShape(points: Point2[]): THREE.Shape {
+  return new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
 }
 
 export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true): THREE.Group {
@@ -168,7 +215,8 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
   const m = new Model(item.color3d ?? item.color);
   // 別デザインの番号。0は標準。範囲外の番号は標準として作る
   const variantCount = FURNITURE_VARIANTS[item.kind]?.length ?? 0;
-  const variant = typeof item.symbol === "number" && Number.isInteger(item.symbol) && item.symbol >= 1 && item.symbol <= variantCount ? item.symbol : 0;
+  const only2d = FURNITURE_VARIANTS_2D_ONLY[item.kind] ?? [];
+  const variant = typeof item.symbol === "number" && Number.isInteger(item.symbol) && item.symbol >= 1 && item.symbol <= variantCount && !only2d.includes(item.symbol) ? item.symbol : 0;
   const wood = m.material("wood", 0xb59b76, 0.6, 0, true);
   const darkWood = m.material("wood-endgrain", 0x76604c, 0.7);
   const fabric = m.material("upholstery", 0x668e94, 0.94, 0, true);
@@ -244,9 +292,9 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     return mesh;
   };
   // 布団の角を斜めに折り返した形。本体は角を切った板、折り返しは裏地の色の三角の板
-  const foldedCover = (left: number, right: number, top: number, bottom: number, fold: number, thickness: number, surface: number, cover: Material, lining: Material) => {
-    slab([[left, top], [right - fold, top], [right, top + fold], [right, bottom], [left, bottom]], thickness, surface, cover);
-    slab([[right - fold, top], [right, top + fold], [right - fold, top + fold]], 0.018, surface + 0.018, lining);
+  const foldedCover = (left: number, right: number, top: number, bottom: number, fold: number, thickness: number, surface: number, cover: Material, lining: Material, foldZ = fold) => {
+    slab([[left, top], [right - fold, top], [right, top + foldZ], [right, bottom], [left, bottom]], thickness, surface, cover);
+    slab([[right - fold, top], [right, top + foldZ], [right - fold, top + foldZ]], 0.018, surface + 0.018, lining);
   };
   const faucet = (x: number, y: number, z: number, size: number) => {
     m.cylinder(size * 0.18, size * 0.2, 0.016, [x, y, z], metal);
@@ -307,8 +355,25 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         }
         break;
       }
-      const seatD = corner ? d * 0.52 : d;
-      const z = corner ? -d * 0.24 : 0;
+      if (corner) {
+        // 2Dの記号と同じ区切り: 奥の背もたれ、右の肘、座面3つ（左・中・右）と、右手前へ伸びる寝椅子、左端のクッション
+        const back = d * 0.14, arm = w * 0.1, seatFront = 0;
+        legs(w * 0.95, d * 0.46, 0.13, 0, 0, -d * 0.25, black);
+        legs(w * 0.34, d * 0.46, 0.13, 0, w * 0.31, d * 0.25, black);
+        m.box(w, 0.2, d * 0.5, 0, 0.22, -d * 0.25, fabric, 0.045);
+        m.box(w * 0.38, 0.2, d * 0.5, w * 0.31, 0.22, d * 0.25, fabric, 0.045);
+        m.box(w - arm, 0.6, back, -arm / 2, 0.53, -d / 2 + back / 2, fabric, 0.055);
+        m.box(arm, 0.45, d, w / 2 - arm / 2, 0.4, 0, fabric, 0.045);
+        for (const [x0, x1] of [[-0.5, -0.18], [-0.18, 0.12], [0.12, 0.4]]) {
+          m.box((x1 - x0) * w * 0.97, 0.14, (seatFront + d * 0.36) * 0.97, ((x0 + x1) / 2) * w, 0.39, (seatFront - d * 0.36) / 2, fabric, 0.045);
+        }
+        m.box(w * 0.22, 0.14, d * 0.41, w * 0.26, 0.39, d * 0.245, fabric, 0.045);
+        const cornerPillow = m.box(w * 0.16, 0.26, d * 0.1, -w * 0.33, 0.58, -d * 0.22, cushion, 0.06);
+        cornerPillow.rotation.x = -0.35;
+        break;
+      }
+      const seatD = d;
+      const z = 0;
       legs(w * 0.91, seatD * 0.88, 0.13, 0, 0, z, black);
       m.box(w * 0.96, 0.2, seatD * 0.94, 0, 0.22, z, fabric, 0.045);
       m.box(w * 0.96, 0.6, seatD * 0.18, 0, 0.53, z - seatD * 0.39, fabric, 0.055);
@@ -321,14 +386,6 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         back.rotation.x = -0.09;
       }
       for (const sx of [-1, 1]) m.box(w * 0.105, 0.4, seatD * 0.96, sx * w * 0.447, 0.4, z, fabric, 0.045);
-      if (corner) {
-        m.box(w * 0.34, 0.2, d * 0.47, w * 0.28, 0.22, d * 0.265, fabric, 0.045);
-        m.box(w * 0.335, 0.14, d * 0.45, w * 0.28, 0.39, d * 0.255, fabric, 0.045);
-        m.box(w * 0.1, 0.4, d * 0.48, w * 0.45, 0.4, d * 0.26, fabric, 0.045);
-        legs(w * 0.3, d * 0.42, 0.13, 0, w * 0.28, d * 0.27, black);
-      }
-      const pillow = m.box(Math.min(w * 0.24, 0.33), 0.3, seatD * 0.19, -w * 0.27, 0.6, z - seatD * 0.14, cushion, 0.065);
-      pillow.rotation.z = 0.17;
       break;
     }
     case "table":
@@ -352,12 +409,9 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         break;
       }
       if (item.kind === "table" && variant === 2) {
-        // 長い辺に沿って板を並べた天板（2Dの木目の向き）と、太い角脚
-        const plank = m.material("wood-plank", 0x9c7f5c, 0.62, 0, true);
-        const boards = Math.max(3, Math.round(d / 0.14));
-        for (let i = 0; i < boards; i += 1) {
-          m.box(w, 0.05, d / boards - 0.006, 0, height - 0.025, -d / 2 + (d * (i + 0.5)) / boards, i % 2 ? plank : wood, 0.008);
-        }
+        // 厚い無垢板の天板に、2Dの記号と同じ木目と節。太い角脚
+        m.box(w, 0.05, d, 0, height - 0.025, 0, wood, 0.008);
+        addWoodGrain(m, item.w, item.h, height + 0.001, false, darkWood);
         const leg = Math.min(w, d) * 0.12;
         for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.box(leg, height - 0.05, leg, sx * (w / 2 - leg * 0.8), (height - 0.05) / 2, sz * (d / 2 - leg * 0.8), darkWood, 0.006);
         break;
@@ -380,7 +434,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w, 0.045, d, 0, height - 0.0225, 0, wood, 0.018);
       legs(w, d, height - 0.045);
       m.box(w * 0.77, 0.07, d * 0.06, 0, height - 0.08, -d * 0.36, darkWood);
-      if (item.kind === "sideTable") m.box(w * 0.79, 0.025, d * 0.76, 0, 0.14, 0, wood);
+      if (item.kind === "sideTable") {
+        m.box(w * 0.79, 0.025, d * 0.76, 0, 0.14, 0, wood);
+        // 天板の内側の段と、天板から少し出た四隅の脚の頭（2Dの内側の四角と四隅の丸）
+        m.box(w * 0.8, 0.004, d * 0.8, 0, height + 0.002, 0, m.material("wood-inlay", 0xc9b18d, 0.6, 0, true), 0.001);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.cylinder(Math.min(w, d) * 0.025, Math.min(w, d) * 0.025, 0.006, [sx * w * 0.36, height + 0.003, sz * d * 0.36], darkWood, 12);
+      }
+      if (item.kind === "table") {
+        // 天板の縁に沿った溝（2Dの内側の四角）
+        for (const sz of [-1, 1]) m.box(w * 0.92, 0.003, 0.004, 0, height + 0.0015, sz * d * 0.44, darkWood, 0);
+        for (const sx of [-1, 1]) m.box(0.004, 0.003, d * 0.88, sx * w * 0.46, height + 0.0015, 0, darkWood, 0);
+      }
       if (item.kind === "desk") {
         if (variant === 1) {
           // シンプルな机: 天板の下の右に浅い引き出しが一つだけ
@@ -418,11 +482,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         // 厚い無垢板の天板（板の継ぎ目の溝）、太い支柱と十字の脚
         const top = m.cylinder(0.5, 0.49, 0.05, [0, height - 0.025, 0], wood, 48);
         top.scale.set(w, 1, d);
-        for (let k = 1; k <= 3; k += 1) {
-          const gz = -d / 2 + (d * k) / 4;
-          const half = (w / 2) * Math.sqrt(Math.max(0, 1 - ((2 * gz) / d) ** 2));
-          m.box(half * 1.96, 0.004, 0.006, 0, height + 0.001, gz, darkWood, 0);
-        }
+        addWoodGrain(m, item.w, item.h, height + 0.001, true, darkWood);
         m.cylinder(0.05, 0.06, height - 0.05, [0, (height - 0.05) / 2, 0], darkWood, 16);
         m.box(w * 0.7, 0.05, 0.08, 0, 0.025, 0, darkWood, 0.01);
         m.box(0.08, 0.05, d * 0.7, 0, 0.025, 0, darkWood, 0.01);
@@ -430,6 +490,16 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       const top = m.cylinder(0.5, 0.48, 0.055, [0, height - 0.0275, 0], stool ? fabric : wood, 48);
       top.scale.set(w, 1, d);
+      if (stool) {
+        // 座面の上の丸いクッション（2Dの内側の円）
+        const pad = m.cylinder(0.4, 0.4, 0.02, [0, height + 0.01, 0], cushion, 40);
+        pad.scale.set(w, 1, d);
+      } else {
+        // 天板の縁に沿った溝（2Dの内側の円）
+        const groove = m.ring(0.46, 0.003, [0, height + 0.0005, 0], darkWood);
+        groove.rotation.x = Math.PI / 2;
+        groove.scale.set(w, d, 1);
+      }
       legs(w * 0.7, d * 0.7, height - 0.055);
       if (stool) {
         for (const sign of [-1, 1]) {
@@ -454,19 +524,24 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w, 0.94, d * 0.045, 0, 0.51, -d * 0.475, wood, 0.025);
       m.box(w * 0.9, 0.53, d * 0.027, 0, 0.66, -d * 0.447, cushion, 0.045);
       m.box(w * 0.95, 0.21, d * 0.91, 0, 0.435, d * 0.026, ivory, 0.045);
+      // 掛け布団の頭側の端は、2Dの記号の横線（頭から全長の24%）の位置
+      const coverTop = -d * 0.26;
       if (variant === 1) {
         // 2Dと同じく、掛け布団の頭側・右の角を斜めに折り返して裏地を見せる
-        foldedCover(-w * 0.4825, w * 0.4825, -d * 0.18, d * 0.48, Math.min(w * 0.5, d * 0.36), 0.075, 0.5905, fabric, ivory);
+        foldedCover(-w * 0.4825, w * 0.4825, coverTop, d * 0.48, Math.min(w * 0.5, d * 0.36), 0.075, 0.5905, fabric, ivory);
+      } else if (variant === 2) {
+        m.box(w * 0.965, 0.075, d * 0.74, 0, 0.553, (coverTop + d * 0.48) / 2, fabric, 0.035);
       } else {
-        m.box(w * 0.965, 0.075, d * 0.66, 0, 0.553, d * 0.15, fabric, 0.035);
-        m.box(w * 0.96, 0.04, d * 0.12, 0, 0.61, -d * 0.135, cushion, 0.025);
+        // 標準: 足元の手前（2Dの足元の線）で終わる掛け布団と、右の角の小さな折り返し（2Dの短い斜線）
+        foldedCover(-w * 0.4825, w * 0.4825, coverTop, d * 0.38, w * 0.3, 0.075, 0.5905, fabric, fabric, d * 0.12);
       }
       if (variant === 2) {
         // 足元に掛けた帯（ベッドスロー）。両脇へ垂らす
         m.box(w * 0.985, 0.09, d * 0.14, 0, 0.555, d * 0.27, m.material("bed-runner", 0x8c6f5a, 0.9), 0.02);
       }
+      // 枕は2Dの記号と同じ位置と大きさ（頭側の板のすぐ手前）
       const pillows = item.kind === "bedDouble" ? 2 : 1;
-      for (let i = 0; i < pillows; i += 1) m.box(w * (pillows === 1 ? 0.62 : 0.38), 0.13, d * 0.18, (i - (pillows - 1) / 2) * w * 0.46, 0.597, -d * 0.31, ivory, 0.06);
+      for (let i = 0; i < pillows; i += 1) m.box(w * (pillows === 1 ? 0.56 : 0.37), 0.13, d * 0.1, (i - (pillows - 1) / 2) * w * 0.49, 0.6, -d * 0.41, ivory, 0.045);
       break;
     }
     case "tv": {
@@ -527,7 +602,9 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "wardrobe": {
       const closet = item.kind === "closet", height = closet ? 2.3 : 1.2;
       m.box(w * 0.9, 0.09, d * 0.86, 0, 0.045, 0, darkWood);
-      m.box(w, height - 0.09, d * 0.94, 0, (height + 0.09) / 2, -d * 0.03, wood);
+      const foldingDoors = closet && variant === 0;
+      const bodyD = foldingDoors ? d * 0.78 : d * 0.94;
+      m.box(w, height - 0.09, bodyD, 0, (height + 0.09) / 2, foldingDoors ? -d * 0.11 : -d * 0.03, wood);
       if (closet && variant === 1) {
         // 引き戸: 前後2本のレールに交互に並べ、少し重ねた扉と、扉の端の縦長の引き手
         const count = Math.max(2, Math.min(4, Math.round(w / 0.9)));
@@ -558,11 +635,18 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
           m.rod([x + doorW * 0.32, 0.96, d * 0.52], [x + doorW * 0.32, 1.21, d * 0.52], 0.008, metal, "handle");
         }
       } else if (closet) {
-        const count = Math.max(2, Math.min(4, Math.round(w / 0.6)));
-        for (let i = 0; i < count; i += 1) {
-          const x = -w / 2 + w / count * (i + 0.5);
-          m.box(w / count * 0.97, height - 0.14, d * 0.035, x, height / 2 + 0.025, d * 0.473, wood);
-          m.rod([x + w / count * 0.31, 0.96, d * 0.52], [x + w / count * 0.31, 1.21, d * 0.52], 0.008, metal, "handle");
+        // 折れ戸: 2Dの記号と同じく、扉1枚ごとに4枚の板がW字に折れて奥へ引っ込む
+        const doors = closetDoorCount(item.w);
+        const doorH = height - 0.14, fold = d * 0.2;
+        for (let i = 0; i < doors; i += 1) {
+          const x0 = -w / 2 + (w * i) / doors, span = w / doors;
+          const points: [number, number][] = [[x0, d / 2], [x0 + span * 0.25, d / 2 - fold], [x0 + span * 0.5, d / 2], [x0 + span * 0.75, d / 2 - fold], [x0 + span, d / 2]];
+          for (let k = 0; k < 4; k += 1) {
+            const [ax, az] = points[k], [bx, bz] = points[k + 1];
+            const leaf = m.box(Math.hypot(bx - ax, bz - az), doorH, 0.018, (ax + bx) / 2, doorH / 2 + 0.095, (az + bz) / 2 - 0.009, wood, 0.003);
+            leaf.rotation.y = -Math.atan2(bz - az, bx - ax);
+          }
+          m.rod([x0 + span * 0.5, 0.96, d / 2 + 0.012], [x0 + span * 0.5, 1.21, d / 2 + 0.012], 0.008, metal, "handle");
         }
       } else if (variant === 1) {
         // 両開きのタンス: 中央で分かれる2枚の扉と、合わせ目の両側の取っ手
@@ -737,6 +821,19 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         m.box(w * 0.2, 0.015, 0.03, 0, 0.945, d * 0.37, black, 0.005);
         break;
       }
+      if (variant === 0) {
+        // 縦型（標準）: 2Dの記号と同じく、上面の中央に丸いふた（中に窓）、奥の左に操作パネル、左奥の角にボタン
+        m.box(w, 0.9, d * 0.94, 0, 0.47, 0, white, 0.03);
+        legs(w * 0.84, d * 0.83, 0.04, 0, 0, 0, black);
+        m.box(w * 0.55, 0.03, d * 0.11, -w * 0.145, 0.935, -d * 0.395, white, 0.008);
+        m.box(w * 0.42, 0.004, d * 0.06, -w * 0.145, 0.952, -d * 0.395, black, 0);
+        m.cylinder(0.02, 0.02, 0.012, [-w / 2 + 0.06, 0.926, -d / 2 + 0.06], metal, 16);
+        const radius = Math.min(w, d) * 0.3;
+        m.cylinder(radius, radius, 0.022, [0, 0.931, 0.01], white, 40);
+        m.cylinder(radius * 0.5, radius * 0.5, 0.006, [0, 0.945, 0.01], m.glass("washer-glass", 0x587481, 0.5), 32);
+        break;
+      }
+      // ドラム式（デザイン2）: 前面の丸い扉と操作部
       m.box(w, 0.88, d * 0.92, 0, 0.47, -d * 0.04, white, 0.02);
       legs(w * 0.84, d * 0.83, 0.04, 0, 0, 0, black);
       m.box(w * 1.01, 0.025, d, 0, 0.925, 0, white);
@@ -762,28 +859,18 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       if (variant === 2) {
         // ひし形の柄: 縁の内側に、2色のひし形をすき間なく並べる
-        const inset = band * 0.08, fieldW = w - inset * 2, fieldD = d - inset * 2;
+        const inset = rugDiamonds(item.w, item.h).inset / 100, fieldW = w - inset * 2, fieldD = d - inset * 2;
         m.box(w, 0.012, d, 0, 0.006, 0, fabric, 0.006);
         m.box(fieldW + band * 0.03, 0.003, fieldD + band * 0.03, 0, 0.0135, 0, ivory, 0.002);
         m.box(fieldW, 0.003, fieldD, 0, 0.0165, 0, fabric, 0.002);
-        const accent = m.material("rug-accent", 0x8a5a4a, 0.95);
-        const step = Math.max(0.12, band * 0.2), half = (step / 2) * 0.88;
-        for (const [offset, material] of [[0, ivory], [0.5, accent]] as [number, Material][]) {
-          for (let i = -Math.ceil(fieldW / step); i <= Math.ceil(fieldW / step); i += 1) {
-            for (let j = -Math.ceil(fieldD / step); j <= Math.ceil(fieldD / step); j += 1) {
-              const x = (i + offset) * step, z = (j + offset) * step;
-              if (Math.abs(x) + half > fieldW / 2 || Math.abs(z) + half > fieldD / 2) continue;
-              const diamond = m.cylinder(1, 1, 0.003, [x, 0.0195, z], material, 4);
-              diamond.scale.set(half, 1, half);
-            }
-          }
-        }
+        // 2Dの記号と同じ斜めの格子で区切った升目を、1つずつ明るい色のひし形にする（縁で切れた升目も同じ形）
+        for (const cell of rugDiamonds(item.w, item.h).cells) shapeSlab(polygonShape(cell), 0.002, 0.0195, m, ivory, 1);
         break;
       }
       m.box(w, 0.012, d, 0, 0.006, 0, fabric, 0.006);
       m.box(w * 0.91, 0.003, d * 0.87, 0, 0.0135, 0, ivory, 0.002);
       m.box(w * 0.87, 0.003, d * 0.82, 0, 0.0165, 0, fabric, 0.002);
-      for (const sign of [-1, 1]) for (let i = 0; i < 18; i += 1) m.rod([-w * 0.45 + i * w * 0.9 / 17, 0.006, sign * d * 0.49], [-w * 0.45 + i * w * 0.9 / 17, 0.006, sign * d * 0.515], 0.003, ivory);
+      for (const sign of [-1, 1]) for (let i = 0; i < 18; i += 1) m.rod([-w * 0.45 + i * w * 0.9 / 17, 0.006, sign * d * 0.49], [-w * 0.45 + i * w * 0.9 / 17, 0.006, sign * d * 0.515], 0.005, ivory);
       break;
     }
     case "floorLamp": {
@@ -804,55 +891,82 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "plantLarge": {
       const height = clamp(Math.sqrt(w * d) * 2.7, 0.65, 2.6), potH = height * 0.24;
       const pot = m.material("planter", 0xd3cec1, 0.78, 0, true);
-      m.vessel([[0, 0], [0.3, 0], [0.4, potH * 0.94], [0.4, potH], [0.35, potH], [0.27, 0.04], [0, 0.04]], w * 0.75, d * 0.75, [0, 0, 0], pot);
+      // 鉢の口は、2Dの記号の中央の丸（幅の44%）と同じ大きさ
+      const potScale = 0.55;
+      m.vessel([[0, 0], [0.3, 0], [0.4, potH * 0.94], [0.4, potH], [0.35, potH], [0.27, 0.04], [0, 0.04]], w * potScale, d * potScale, [0, 0, 0], pot);
       const soil = m.cylinder(0.35, 0.35, 0.02, [0, potH * 0.87, 0], m.material("soil", 0x443d31, 1));
-      soil.scale.set(w * 0.75, 1, d * 0.75);
+      soil.scale.set(w * potScale, 1, d * potScale);
       const stemMat = m.material("stem", 0x66724b, 0.9);
       const leafColors = [0x42775a, 0x62956b, 0x7ba773];
+      const radiusX = w / 2, radiusZ = d / 2;
+      // 方向 a での、設置範囲の楕円の半径
+      const reachAt = (a: number) => 1 / Math.sqrt((Math.cos(a) / radiusX) ** 2 + (Math.sin(a) / radiusZ) ** 2);
+      const leafMaterial = (i: number) => m.material(`leaf-${i % 3}`, leafColors[i % 3], 0.87);
       if (variant === 1) {
-        // 丸い葉: 短い幹の上に、丸い葉の塊をこんもり重ねる。上から見ると2Dと同じ丸い茂み
+        // 丸い葉: 2Dの記号と同じ位置・大きさの丸い葉の塊（外側9つ・内側5つ）を短い幹の上に重ねる
         const crownH = Math.min(height * 0.62, Math.max(w, d) * 0.95);
-        const crownY = height - crownH * 0.5;
+        const crownY = height - crownH * 0.55;
         m.rod([0, potH * 0.9, 0], [0, crownY, 0], Math.min(w, d) * 0.03, stemMat);
-        m.ellipsoid(w * 0.8, crownH * 0.8, d * 0.8, [0, crownY, 0], m.material("leaf-0", leafColors[0], 0.87));
-        for (let i = 0; i < 9; i += 1) {
-          const a = (i / 9) * Math.PI * 2, rise = ((i % 3) - 1) * 0.16;
-          m.ellipsoid(w * 0.42, crownH * 0.42, d * 0.42, [Math.cos(a) * w * 0.29, crownY + crownH * rise, Math.sin(a) * d * 0.29], m.material(`leaf-${1 + (i % 2)}`, leafColors[1 + (i % 2)], 0.87));
-        }
-        m.ellipsoid(w * 0.46, crownH * 0.4, d * 0.46, [0, height - crownH * 0.2, 0], m.material("leaf-1", leafColors[1], 0.87));
+        m.ellipsoid(w * 0.72, crownH * 0.7, d * 0.72, [0, crownY, 0], leafMaterial(0));
+        ROUND_LEAF_CLUMPS.forEach((clump, i) => {
+          const inner = clump.distance < 0.5;
+          m.ellipsoid(radiusX * clump.size * 2, crownH * (inner ? 0.45 : 0.5), radiusZ * clump.size * 2,
+            [Math.cos(clump.angle) * radiusX * clump.distance, crownY + crownH * (inner ? 0.2 : -0.05), Math.sin(clump.angle) * radiusZ * clump.distance], leafMaterial(1 + (i % 2)));
+        });
+        m.reserveFootprint(w, d);
         break;
       }
       if (variant === 2) {
-        // 細い葉: 鉢の中心から弓なりに四方へ広がる細長い葉（ヤシの仲間）。上から見ると2Dと同じ放射状
-        for (let i = 0; i < 12; i += 1) {
-          const a = i * 2.4, lift = 0.3 + (i % 4) * 0.09;
-          const tip: Position = [Math.cos(a) * w * 0.2, height * lift, Math.sin(a) * d * 0.2];
-          m.rod([0, potH * 0.9, 0], tip, Math.min(w, d) * 0.012, stemMat);
-          const reach = Math.max(w, d) * (0.7 - (i % 3) * 0.08), droop = 0.15 + (i % 3) * 0.22;
-          const dx = Math.cos(droop) * Math.cos(a), dy = -Math.sin(droop), dz = Math.cos(droop) * Math.sin(a);
-          const leaf = m.ellipsoid(reach, 0.012, reach * 0.22, [tip[0] + dx * reach / 2, tip[1] + dy * reach / 2, tip[2] + dz * reach / 2], m.material(`leaf-${i % 3}`, leafColors[i % 3], 0.87));
-          leaf.rotation.set(0, -a, -droop);
+        // 細い葉: 2Dの記号と同じ7本の葉軸（弓なりに上がって垂れる）と、その両側の小葉
+        const base = potH * 0.9, rise = Math.min(height * 0.3, Math.max(w, d) * 0.45);
+        const lift = (t: number) => base + rise * Math.sin(Math.PI * t * 0.9) * (1 - 0.35 * t);
+        for (const [i, frond] of fernFronds().entries()) {
+          const toWorld = ([lx, ly]: Point2, y: number): Position => {
+            const x = lx * Math.cos(frond.angle) - ly * Math.sin(frond.angle), z = lx * Math.sin(frond.angle) + ly * Math.cos(frond.angle);
+            return [x * radiusX, y, z * radiusZ];
+          };
+          const [[x0, y0], [cx, cy], [x1, y1]] = frond.spine;
+          const spineAt = (t: number): Point2 => [(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1];
+          let previous = toWorld([0, 0], base);
+          for (let k = 0; k <= 4; k += 1) {
+            const t = k / 4, next = toWorld(spineAt(t), lift(t));
+            m.rod(previous, next, Math.min(w, d) * 0.008, stemMat);
+            previous = next;
+          }
+          frond.leaflets.forEach(([from, to], k) => {
+            // 小葉の付け根の高さは、葉軸上のいちばん近い点の高さにそろえる
+            const t = Math.min(1, Math.max(0, (from[0] - x0) / (x1 - x0)));
+            const a = toWorld(from, lift(t)), b = toWorld(to, lift(t) - 0.02);
+            const length = Math.hypot(b[0] - a[0], b[2] - a[2]);
+            const leaflet = m.ellipsoid(length, 0.006, length * 0.3, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], leafMaterial(i + k));
+            leaflet.rotation.y = -Math.atan2(b[2] - a[2], b[0] - a[0]);
+          });
         }
+        m.reserveFootprint(w, d);
         break;
       }
+      // 標準: 2Dの記号と同じ8枚の葉を、茎から放射状に広げる
       m.rod([0, potH * 0.9, 0], [0, height * 0.94, 0], Math.min(w, d) * 0.022, stemMat);
-      for (let i = 0; i < 13; i += 1) {
-        const a = i * 2.4, y = potH + height * (0.19 + i * 0.038);
-        const length = 0.32 - i * 0.009;
-        const end: Position = [Math.cos(a) * w * length * 0.75, y + height * 0.07, Math.sin(a) * d * length * 0.75];
-        m.rod([0, y, 0], end, Math.min(w, d) * 0.008, stemMat);
-        const leafMaterial = m.material(`leaf-${i % 3}`, [0x42775a, 0x62956b, 0x7ba773][i % 3], 0.87);
+      PLANT_LEAF_ANGLES.forEach((a, i) => {
+        const y = potH + height * (0.22 + (i % 4) * 0.16 + (i >= 4 ? 0.06 : 0));
+        const elevation = i % 2 ? 0.45 : 0.25;
+        const start: Position = [Math.cos(a) * radiusX * 0.06, y, Math.sin(a) * radiusZ * 0.06];
+        m.rod([0, y - 0.03, 0], start, Math.min(w, d) * 0.008, stemMat);
         const leaf = new THREE.Shape();
         leaf.moveTo(0, 0); leaf.bezierCurveTo(0.22, 0.17, 0.15, 0.75, 0, 1); leaf.bezierCurveTo(-0.15, 0.75, -0.22, 0.17, 0, 0);
         const geometry = new THREE.ShapeGeometry(leaf, 7);
         const positions = geometry.getAttribute("position");
-        for (let p = 0; p < positions.count; p += 1) positions.setZ(p, Math.sin(positions.getY(p) * Math.PI) * 0.14);
+        for (let q = 0; q < positions.count; q += 1) positions.setZ(q, Math.sin(positions.getY(q) * Math.PI) * 0.14);
         geometry.computeVertexNormals();
-        leafMaterial.side = THREE.DoubleSide;
-        const mesh = m.mesh(geometry, end, leafMaterial, "leaf");
-        mesh.scale.set(w * 0.8, Math.max(w, d) * length, Math.min(w, d));
-        mesh.rotation.set(0.75, -a, -0.5);
-      }
+        const material = leafMaterial(i);
+        material.side = THREE.DoubleSide;
+        const mesh = m.mesh(geometry, start, material, "leaf");
+        // 葉の長さは、上から見て設置範囲の縁近くまで届くように
+        const length = (reachAt(a) * 0.9) / Math.cos(elevation);
+        mesh.scale.set(Math.min(radiusX, radiusZ) * 0.64, length, Math.min(w, d));
+        mesh.rotation.set(-(Math.PI / 2 - elevation), -(a + Math.PI / 2), 0, "YXZ");
+      });
+      m.reserveFootprint(w, d);
       break;
     }
     case "wallClock": {
@@ -1091,7 +1205,6 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       skirt.computeVertexNormals();
       m.mesh(skirt, [0, 0.21, 0], futon).scale.set(w, 1, d);
       m.box(w * 0.64, 0.035, d * 0.64, 0, 0.395, 0, wood, 0.012);
-      m.box(w * 0.3, 0.02, d * 0.18, w * 0.05, 0.418, -d * 0.04, m.material("kotatsu-cloth", 0xe7dfcf, 0.9));
       break;
     }
     case "deskL": {
@@ -1111,11 +1224,11 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       for (const y of [0.28, 1.2]) {
         m.box(w, 0.12, d, 0, y, 0, wood, 0.012);
         m.box(w * 0.92, 0.14, d * 0.93, 0, y + 0.13, 0, ivory, 0.03);
-        m.box(w * 0.93, 0.05, d * 0.6, 0, y + 0.225, d * 0.15, fabric, 0.02);
-        m.box(w * 0.55, 0.1, d * 0.14, 0, y + 0.25, -d * 0.36, ivory, 0.04);
+        m.box(w * 0.9, 0.05, d * 0.76, 0, y + 0.225, d * 0.08, fabric, 0.02);
+        m.box(w * 0.56, 0.1, d * 0.09, 0, y + 0.25, -d * 0.415, ivory, 0.035);
       }
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.box(0.06, 1.72, 0.06, sx * (w / 2 - 0.03), 0.86, sz * (d / 2 - 0.03), wood, 0.01);
-      m.box(0.04, 0.18, d * 0.62, -(w / 2 - 0.02), 1.55, -d * 0.1, wood, 0.01);
+      m.box(0.04, 0.18, d * 0.6, -(w / 2 - 0.02), 1.55, d * 0.04, wood, 0.01);
       m.box(0.04, 0.18, d * 0.4, w / 2 - 0.02, 1.55, -d * 0.2, wood, 0.01);
       for (const z of [d * 0.22, d * 0.42]) m.rod([w / 2 - 0.02, 0.2, z], [w / 2 - 0.02, 1.62, z], 0.018, wood);
       for (let i = 0; i < 5; i += 1) m.rod([w / 2 - 0.02, 0.45 + i * 0.25, d * 0.22], [w / 2 - 0.02, 0.45 + i * 0.25, d * 0.42], 0.014, darkWood);
@@ -1124,14 +1237,24 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "futon": {
       // 敷布団・掛け布団・枕。脚や枠はなく床に直接置く
       m.box(w, 0.09, d, 0, 0.045, 0, ivory, 0.04);
+      // 掛け布団は2Dの記号と同じ範囲（幅の94%、頭から27%の所から足元の手前まで）
+      const coverTop = -d * 0.23, coverBottom = d * 0.47;
       if (variant === 1) {
         // 2Dと同じく、掛け布団の頭側・右の角を斜めに折り返して裏地を見せる
-        foldedCover(-w * 0.49, w * 0.49, -d * 0.21, d * 0.49, Math.min(w * 0.5, d * 0.3), 0.07, 0.155, fabric, m.material("futon-lining", 0xebe6da, 0.95));
+        foldedCover(-w * 0.47, w * 0.47, coverTop, coverBottom, Math.min(w * 0.5, d * 0.3), 0.07, 0.155, fabric, m.material("futon-lining", 0xebe6da, 0.95));
       } else {
-        m.box(w * 0.98, 0.07, d * 0.7, 0, 0.12, d * 0.14, fabric, 0.05);
-        m.box(w * 0.98, 0.05, d * 0.08, 0, 0.13, -d * 0.2, fabric, 0.03);
+        m.box(w * 0.94, 0.07, coverBottom - coverTop, 0, 0.12, (coverTop + coverBottom) / 2, fabric, 0.05);
+        // 2Dの「＋」と同じ位置の縫い目
+        const stitch = Math.min(w, d) * 0.04;
+        for (let row = 1; row <= 3; row += 1) {
+          for (const col of [-1, 0, 1]) {
+            const x = col * w * 0.28, z = coverTop + ((coverBottom - coverTop) * row) / 4;
+            m.box(stitch * 2, 0.003, 0.004, x, 0.156, z, darkWood, 0);
+            m.box(0.004, 0.003, stitch * 2, x, 0.156, z, darkWood, 0);
+          }
+        }
       }
-      m.box(w * 0.55, 0.09, d * 0.15, 0, 0.135, -d * 0.36, ivory, 0.045);
+      m.box(w * 0.52, 0.09, d * 0.1, 0, 0.135, -d * 0.4, ivory, 0.04);
       break;
     }
     case "cupboard": {
@@ -1307,16 +1430,32 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "conifer": {
-      // 細い幹と、上ほど小さくなる円すいを4段重ねる
+      // 細い幹と、2Dの記号と同じ星形の断面の円すい2段（下の段がとがった葉先の輪郭、上の段が内側の星）
       const needles = m.material("needles", 0x3f6f47, 0.92, 0, true);
       const bark = m.material("bark", 0x6d5844, 0.95);
       const trunkR = Math.min(clamp(tall * 0.025, 0.03, 0.25), Math.min(w, d) * 0.08);
       m.cylinder(trunkR * 0.7, trunkR, tall * 0.2, [0, tall * 0.1, 0], bark, 8);
-      const tiers: [number, number, number][] = [[0.12, 0.55, 0.5], [0.34, 0.74, 0.4], [0.53, 0.9, 0.3], [0.7, 1, 0.2]];
-      for (const [from, to, radius] of tiers) {
-        const cone = m.cylinder(0, 1, tall * (to - from), [0, tall * (from + to) / 2, 0], needles, 14);
-        cone.scale.set(w * radius, 1, d * radius);
-      }
+      const spans: [number, number][] = [[0.12, 0.72], [0.45, 1]];
+      CONIFER_TIERS.forEach((tier, index) => {
+        const [from, to] = spans[index];
+        const ring = Array.from({ length: tier.points * 2 }, (_, i) => {
+          const a = (i / (tier.points * 2)) * Math.PI * 2 - Math.PI / 2;
+          const k = (i % 2 ? tier.inner : 1) * tier.radius;
+          return new THREE.Vector3(Math.cos(a) * (w / 2) * k, tall * from, Math.sin(a) * (d / 2) * k);
+        });
+        const apex = new THREE.Vector3(0, tall * to, 0), base = new THREE.Vector3(0, tall * from, 0);
+        const positions: number[] = [];
+        ring.forEach((vertex, i) => {
+          const next = ring[(i + 1) % ring.length];
+          positions.push(apex.x, apex.y, apex.z, next.x, next.y, next.z, vertex.x, vertex.y, vertex.z);
+          positions.push(base.x, base.y, base.z, vertex.x, vertex.y, vertex.z, next.x, next.y, next.z);
+        });
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geometry.computeVertexNormals();
+        m.mesh(geometry, [0, 0, 0], needles);
+      });
+      m.reserveFootprint(w, d);
       break;
     }
     case "palmTree": {
@@ -1324,7 +1463,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       const bark = m.material("palm-bark", 0x8a7456, 0.95);
       const frond = m.material("palm-frond", 0x4f8a46, 0.88, 0, true);
       const nut = m.material("coconut", 0x6b4f2e, 0.8);
-      const reach = Math.min(Math.min(w, d) * 0.5, tall * 0.45);
+      const reach = Math.min(Math.min(w, d) * 0.52, tall * 0.45);
       const up = 0.35;
       // 上向きの葉の先がちょうど指定の高さになるよう、幹を低くしておく
       const topY = tall - Math.sin(up) * reach;
@@ -1339,79 +1478,89 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         previous = next;
       }
       const [tx, ty, tz] = previous;
-      for (let i = 0; i < 12; i += 1) {
-        const a = (i / 12) * Math.PI * 2 + (i % 2) * 0.12;
-        const droop = i % 3 === 0 ? -up : 0.28 + (i % 2) * 0.3;
-        const dx = Math.cos(droop) * Math.cos(a), dy = -Math.sin(droop), dz = -Math.cos(droop) * Math.sin(a);
+      // 葉は2Dの記号と同じ8枚・同じ向き。上向きと下向きを交互にする
+      PALM_FROND_ANGLES.forEach((angle, i) => {
+        const droop = i % 2 ? 0.45 : -up;
+        const dx = Math.cos(droop) * Math.cos(angle), dy = -Math.sin(droop), dz = Math.cos(droop) * Math.sin(angle);
         const leaf = m.ellipsoid(reach, 0.035, reach * 0.3, [tx + dx * reach / 2, ty + dy * reach / 2, tz + dz * reach / 2], frond);
-        leaf.rotation.set(0, a, -droop);
-      }
+        leaf.rotation.set(0, -angle, -droop);
+      });
       for (let i = 0; i < 3; i += 1) {
         const a = i * 2.1;
         m.ellipsoid(0.12, 0.13, 0.12, [tx + Math.cos(a) * 0.08, ty - 0.1, tz + Math.sin(a) * 0.08], nut);
       }
+      m.reserveFootprint(w, d);
       break;
     }
     case "rock": {
-      // 頂点を少しずつ押し引きした多面体。角ばって見えるよう面ごとに陰を付ける
+      // 2Dの記号と同じ輪郭・稜線の、平らな面でできた岩（デザイン1は大小2つ）
       const stone = m.material("rock", 0x8e8b83, 0.96, 0, true);
       stone.flatShading = true;
-      placeRock(m, stone, 0, 0, 0, w * 0.85, tall, d * 0.9);
-      placeRock(m, stone, 3.1, w * 0.4, d * 0.28, w * 0.3, tall * 0.35, d * 0.3);
+      for (const shape of rockShapes(item.w, item.h, variant)) m.mesh(rockSolidGeometry(shape, tall), [0, 0, 0], stone);
+      m.reserveFootprint(w, d);
       break;
     }
     case "steppingStones": {
-      // 歩く向きに並べた、角の取れた平たい石。左右に少しずらし、向きも変える
+      // 2Dの記号と同じ位置・大きさ・向きの、少し丸みのある平たい石
       const stone = m.material("stepping-stone", 0x9c998f, 0.93, 0, true);
+      // 面ごとに陰を付けて、角の取れた石らしく見せる（上から見た形は2Dと同じ楕円）
       stone.flatShading = true;
-      const along = d >= w;
-      const length = along ? d : w, span = along ? w : d;
-      const count = Math.max(2, Math.round(length / 0.55));
-      for (let i = 0; i < count; i += 1) {
-        const t = -length / 2 + (length * (i + 0.5)) / count;
-        const side = (i % 2 ? 1 : -1) * span * 0.12;
-        const rx = Math.min(span * 0.72, (length / count) * 0.84), rz = Math.min(span * 0.6, (length / count) * 0.72);
-        placeRock(m, stone, i * 1.7, along ? side : t, along ? t : side, along ? rx : rz, 0.07, along ? rz : rx, i * 0.7);
+      for (const slab of steppingStoneLayout(item.w, item.h)) {
+        const mesh = m.ellipsoid((slab.rx * 2) / 100, 0.07, (slab.ry * 2) / 100, [slab.x / 100, 0.035, slab.y / 100], stone);
+        mesh.rotation.y = -slab.angle;
       }
+      m.reserveFootprint(w, d);
       break;
     }
     case "flowerBed": {
-      // れんがの縁、土、茎の先に色とりどりの花
+      // れんがの縁、土、茎の先に5枚の花びらの花。縁の幅と花の位置・数は2Dの記号と同じ
       const border = m.material("bed-border", 0xa86f4c, 0.85, 0, true);
       const soil = m.material("soil", 0x4a3b2c, 1);
       const stem = m.material("stem", 0x4f7a3d, 0.9);
-      const blooms = [0xe8506a, 0xf2c14e, 0xf4f1ea, 0xb07cd8].map((color, i) => m.material(`flower-${i}`, color, 0.7));
-      const edgeH = 0.25, t = Math.min(0.08, w * 0.12, d * 0.2);
+      const center = m.material("flower-center", 0xf2c14e, 0.7);
+      const petals = [0xe8506a, 0xf4f1ea, 0xb07cd8].map((color, i) => m.material(`flower-${i}`, color, 0.7));
+      const bed = flowerBedLayout(item.w, item.h);
+      const edgeH = 0.25, t = bed.edge / 100;
       for (const side of [-1, 1]) {
         m.box(w, edgeH, t, 0, edgeH / 2, side * (d / 2 - t / 2), border, 0.004);
         m.box(t, edgeH, d - t * 2, side * (w / 2 - t / 2), edgeH / 2, 0, border, 0.004);
       }
-      const innerW = w - t * 2, innerD = d - t * 2, soilTop = edgeH * 0.8;
-      m.box(innerW, soilTop, innerD, 0, soilTop / 2, 0, soil, 0);
-      const cols = clamp(Math.round(innerW / 0.2), 1, 12), rows = clamp(Math.round(innerD / 0.2), 1, 4);
-      for (let row = 0; row < rows; row += 1) {
-        for (let col = 0; col < cols; col += 1) {
-          const x = -innerW / 2 + (innerW * (col + 0.5)) / cols, z = -innerD / 2 + (innerD * (row + 0.5)) / rows;
-          const top = soilTop + 0.14 + ((row * 3 + col * 7) % 4) * 0.03;
-          m.rod([x, soilTop, z], [x, top, z], 0.006, stem);
-          m.ellipsoid(0.08, 0.045, 0.08, [x, top + 0.015, z], blooms[(row + col * 3) % blooms.length]);
-        }
-      }
+      const soilTop = edgeH * 0.8;
+      m.box(w - t * 2, soilTop, d - t * 2, 0, soilTop / 2, 0, soil, 0);
+      const r = bed.size / 200;
+      bed.flowers.forEach(([fx, fy], i) => {
+        const x = fx / 100, z = fy / 100, top = soilTop + 0.12 + (i % 3) * 0.03;
+        m.rod([x, soilTop, z], [x, top, z], 0.006, stem);
+        for (const a of PETAL_ANGLES) m.ellipsoid(r * 0.84, 0.02, r * 0.84, [x + Math.cos(a) * r * 0.5, top, z + Math.sin(a) * r * 0.5], petals[i % petals.length]);
+        m.ellipsoid(r * 0.52, 0.03, r * 0.52, [x, top + 0.012, z], center);
+      });
       break;
     }
     case "pond": {
-      // つやのある水面と、ふちを囲む石
+      // 2Dの記号と同じ輪郭の水面、同じ位置と大きさのふちの石、水面のさざ波
       const rim = m.material("pond-stone", 0x9a968c, 0.95);
       const water = m.material("water", 0x4a8aa3, 0.06, 0.15, true);
-      const surface = m.cylinder(0.5, 0.5, 0.04, [0, 0.03, 0], water, 40);
-      surface.scale.set(w * 0.88, 1, d * 0.88);
-      const count = clamp(Math.round((Math.PI * (w + d)) / 2 / 0.32), 10, 28);
-      for (let i = 0; i < count; i += 1) {
-        const a = (i / count) * Math.PI * 2;
-        const size = 0.16 + (i * 37 % 5) * 0.02;
-        const rock = m.ellipsoid(size * 1.3, size * 0.7, size, [Math.cos(a) * w * 0.45, size * 0.35, Math.sin(a) * d * 0.45], rim);
-        rock.rotation.y = -a;
+      const ripple = m.material("pond-ripple", 0xd6ecf2, 0.3);
+      const pond = pondShape(item.w, item.h);
+      const points = pond.points.map(([x, y]) => new THREE.Vector2(x / 100, y / 100));
+      const outline = new THREE.Shape();
+      const last = points[points.length - 1];
+      outline.moveTo((last.x + points[0].x) / 2, (last.y + points[0].y) / 2);
+      points.forEach((point, i) => {
+        const next = points[(i + 1) % points.length];
+        outline.quadraticCurveTo(point.x, point.y, (point.x + next.x) / 2, (point.y + next.y) / 2);
+      });
+      shapeSlab(outline, 0.04, 0.05, m, water, 10);
+      for (const stone of pond.stones) {
+        const size = Math.min(stone.rx, stone.ry) / 100;
+        m.ellipsoid((stone.rx * 2) / 100, size * 1.1, (stone.ry * 2) / 100, [stone.x / 100, size * 0.5, stone.y / 100], rim);
       }
+      for (const wave of pond.ripples) {
+        const arc = m.mesh(new THREE.TorusGeometry(1, 0.004, 4, 24, RIPPLE_END - RIPPLE_START), [wave.x / 100, 0.052, wave.y / 100], ripple);
+        arc.rotation.set(Math.PI / 2, 0, RIPPLE_START);
+        arc.scale.set(wave.rx / 100, wave.ry / 100, 1);
+      }
+      m.reserveFootprint(w, d);
       break;
     }
     case "fence": {
@@ -1430,16 +1579,39 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "gardenLight": {
-      // 台座、細い柱、光る灯り、笠
       const pole = m.material("lamp-pole", 0x30353a, 0.5, 0.2, true);
       const glow = m.material("lamp-glow", 0xfff1c6, 0.35);
       glow.emissive.set(0xffdf8a);
       glow.emissiveIntensity = 0.55;
-      const poleTop = tall * 0.84, lampH = tall * 0.11;
-      m.cylinder(0.11, 0.13, 0.08, [0, 0.04, 0], pole, 20);
-      m.cylinder(0.03, 0.04, poleTop, [0, poleTop / 2, 0], pole, 12);
-      m.cylinder(0.1, 0.075, lampH, [0, poleTop + lampH / 2, 0], glow, 20);
-      m.cylinder(0.02, 0.15, tall - poleTop - lampH, [0, (tall + poleTop + lampH) / 2, 0], pole, 20);
+      if (variant === 1) {
+        // 笠付き: 台座、細い柱、光る灯り、暗い色の円すいの笠
+        const poleTop = tall * 0.84, lampH = tall * 0.11;
+        m.cylinder(0.11, 0.13, 0.08, [0, 0.04, 0], pole, 20);
+        m.cylinder(0.03, 0.04, poleTop, [0, poleTop / 2, 0], pole, 12);
+        m.cylinder(0.1, 0.075, lampH, [0, poleTop + lampH / 2, 0], glow, 20);
+        m.cylinder(0.02, 0.15, tall - poleTop - lampH, [0, (tall + poleTop + lampH) / 2, 0], pole, 20);
+        break;
+      }
+      // 標準: 細い柱の上に白い受け皿と、光る丸い玉（2Dの記号の白い輪と黄色い丸）
+      const radius = Math.min(w, d) / 2;
+      const saucer = m.material("lamp-saucer", 0xf2f2ee, 0.4, 0.1);
+      const globe = radius * 0.34, poleTop = tall - globe * 2;
+      const globeMat = m.material("lamp-globe", 0xfff4d2, 0.25);
+      globeMat.emissive.set(0xffd98a);
+      globeMat.emissiveIntensity = 0.3;
+      m.cylinder(radius * 0.3, radius * 0.34, 0.06, [0, 0.03, 0], pole, 20);
+      m.cylinder(radius * 0.12, radius * 0.16, 0.3, [0, 0.21, 0], pole, 16);
+      m.cylinder(0.026, 0.032, poleTop, [0, poleTop / 2, 0], pole, 12);
+      // 受け皿: 下側は柱と同じ暗い金属、上面は2Dの白い輪
+      m.cylinder(radius * 0.6, radius * 0.1, 0.06, [0, poleTop - 0.03, 0], pole, 32);
+      m.cylinder(radius * 0.62, radius * 0.62, 0.012, [0, poleTop + 0.006, 0], saucer, 32);
+      m.ellipsoid(globe * 2, globe * 2, globe * 2, [0, poleTop + globe, 0], globeMat);
+      // 受け皿の下から斜め上へ伸びる8本の飾りの腕（2Dの記号の光の筋と同じ向き・長さ）
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2;
+        m.rod([Math.cos(a) * radius * 0.2, poleTop - 0.12, Math.sin(a) * radius * 0.2], [Math.cos(a) * radius * 0.97, poleTop + 0.01, Math.sin(a) * radius * 0.97], 0.006, pole);
+      }
+      m.reserveFootprint(w, d);
       break;
     }
     case "stoneLantern": {
@@ -1478,6 +1650,14 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w * 0.96, 1.78, d * 0.9, 0, 0.97, 0, panel, 0.01);
       const roof = m.box(w, 0.05, d, 0, 1.9, 0, trim, 0.008);
       roof.rotation.x = -0.07;
+      // 屋根の波板の筋（2Dの縦線と同じ本数）と、手前の軒の線
+      const ribs = Math.max(3, Math.round(item.w / 18));
+      for (let i = 1; i < ribs; i += 1) {
+        const rib = m.box(0.012, 0.012, d * 0.86, -w / 2 + (w * i) / ribs, 1.93, -d * 0.06, panel, 0);
+        rib.rotation.x = -0.07;
+      }
+      const eave = m.box(w, 0.014, 0.02, 0, 1.932 + d * 0.38 * Math.sin(0.07), d * 0.38, panel, 0);
+      eave.rotation.x = -0.07;
       for (const side of [-1, 1]) {
         m.box(w * 0.47, 1.62, 0.02, side * w * 0.235, 0.9, d * 0.45 + (side > 0 ? 0.012 : 0.024), panel, 0.004);
         m.box(0.02, 0.18, 0.02, side * w * 0.04, 0.95, d * 0.45 + 0.04, trim, 0);

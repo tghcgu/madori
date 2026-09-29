@@ -76,7 +76,7 @@ try {
       return {...entry,colors:colors.size};
     });
   });
-  for (const entry of stats) assert.ok(entry.colors > 40, `${entry.kind}: blank canvas`);
+  for (const entry of stats) assert.ok(entry.colors > 40, `${entry.kind}: blank canvas (${entry.colors} colors)`);
   for (let part = 0; part * 870 < galleryHeight; part += 1) await page.screenshot({ path: `${output}/catalog-${part + 1}.png`, clip: { x: 0, y: part * 870, width: 1280, height: Math.min(870, galleryHeight - part * 870) } });
   console.log(JSON.stringify(stats));
 } finally {

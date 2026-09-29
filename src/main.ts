@@ -5,7 +5,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
-import { FURNITURE_DEFS, FURNITURE_VARIANTS, type FurnitureKind } from "./furniture-catalog";
+import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
+import {
+  CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
+  closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
+} from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 
@@ -280,19 +284,21 @@ const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
   roundTable: [(w, h) => drawGlassTable(w, h, true), (w, h) => drawWoodTable(w, h, true)],
   tv: [drawTvWithLegs],
   fridge: [drawFrenchDoorFridge, drawSimpleFridge],
-  washer: [drawLidWasher],
+  washer: [drawLidWasher, drawDrumWasher],
   toilet: [drawTanklessToilet, drawHandWashToilet],
   bath: [drawSquareBath],
   washbasin: [drawSquareWashbasin],
   kitchen: [(w, h) => drawKitchenSymbol(w, h, false, true)],
   kitchenIsland: [(w, h) => drawKitchenSymbol(w, h, true, true)],
-  closet: [drawSlidingCloset, drawHatchedCloset],
+  closet: [drawSlidingCloset, drawLouverCloset, drawHatchedCloset],
   wardrobe: [drawDoubleDoorWardrobe],
   shelf: [drawOpenShelf],
   plant: [drawRoundLeafPlant, drawPalmPlant],
   plantLarge: [drawRoundLeafPlant, drawPalmPlant],
   rug: [drawBorderRug, drawDiamondRug],
   car: [drawWagonCar],
+  rock: [(w, h) => drawRocks(rockShapes(w, h, 1))],
+  gardenLight: [drawCappedGardenLight],
 };
 
 const SYMBOL_VARIANTS: Partial<Record<FurnitureKind, SymbolVariant[]>> = Object.fromEntries(
@@ -2830,10 +2836,10 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
     case "plantLarge": {
       ctx.fillStyle = "#e8f1e7";
       strokeEllipse(0, 0, w * 0.22, h * 0.22, true);
-      for (let i = 0; i < 8; i += 1) {
+      for (const angle of PLANT_LEAF_ANGLES) {
         ctx.save();
         ctx.scale(w / Math.max(w, h), h / Math.max(w, h));
-        ctx.rotate((i / 8) * Math.PI * 2);
+        ctx.rotate(angle);
         const r = Math.max(w, h) * 0.5;
         strokeEllipse(r * 0.5, 0, r * 0.44, r * 0.14, true);
         strokeLine(r * 0.06, 0, r * 0.9, 0);
@@ -3088,8 +3094,9 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       strokeLine(-hw, -hh + h * 0.2, hw, -hh + h * 0.2);
       strokeRoundedRect(hw - w * 0.1, h * 0.2, w * 0.07, h * 0.24, 1);
       for (const t of [0.28, 0.36]) strokeLine(hw - w * 0.1, h * t, hw - w * 0.03, h * t);
-      // 上段の柵（左の辺）
+      // 上段の柵（左の辺と、はしごより奥の右の辺）
       strokeRoundedRect(-hw + w * 0.02, -hh + h * 0.24, w * 0.05, h * 0.6, 1);
+      strokeRoundedRect(hw - w * 0.07, -hh + h * 0.1, w * 0.05, h * 0.4, 1);
       ctx.fillStyle = String(ctx.strokeStyle);
       const post = Math.min(w, h) * 0.07;
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) ctx.fillRect(sx < 0 ? -hw : hw - post, sy < 0 ? -hh : hh - post, post, post);
@@ -3282,11 +3289,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
     case "conifer": {
       // とがった葉先が並ぶ星形の輪郭を二重にし、中央に幹
       ctx.fillStyle = OUTDOOR_LEAF;
-      traceStar(hw, hh, 18, 0.8);
-      ctx.fill();
-      ctx.stroke();
-      traceStar(w * 0.3, h * 0.3, 12, 0.72);
-      ctx.stroke();
+      CONIFER_TIERS.forEach((tier, i) => {
+        traceStar(hw * tier.radius, hh * tier.radius, tier.points, tier.inner);
+        if (i === 0) ctx.fill();
+        ctx.stroke();
+      });
       ctx.fillStyle = OUTDOOR_TRUNK;
       strokeCircle(0, 0, Math.min(w, h) * 0.05, true);
       break;
@@ -3297,9 +3304,9 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       ctx.save();
       ctx.scale(w / m, h / m);
       ctx.fillStyle = OUTDOOR_LEAF;
-      for (let i = 0; i < 8; i += 1) {
+      for (const angle of PALM_FROND_ANGLES) {
         ctx.save();
-        ctx.rotate((i / 8) * Math.PI * 2 + 0.2);
+        ctx.rotate(angle);
         ctx.beginPath();
         ctx.moveTo(r * 0.08, 0);
         ctx.bezierCurveTo(r * 0.35, -r * 0.2, r * 0.8, -r * 0.15, r * 0.98, r * 0.03);
@@ -3333,42 +3340,17 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       break;
     }
     case "rock": {
-      // ごつごつした多角形と、頂点から伸びる稜線。手前の面を塗って立体に見せる
-      const radii = [0.96, 0.8, 1, 0.86, 0.97, 0.78, 0.93, 0.84, 0.9];
-      const points = radii.map((k, i) => {
-        const a = (i / radii.length) * Math.PI * 2 + 0.2;
-        return { x: Math.cos(a) * hw * k, y: Math.sin(a) * hh * k };
-      });
-      const peak = { x: -w * 0.12, y: -h * 0.08 };
-      ctx.fillStyle = OUTDOOR_STONE;
-      ctx.beginPath();
-      points.forEach((point, i) => (i ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)));
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = SYMBOL_SHADE;
-      ctx.beginPath();
-      ctx.moveTo(peak.x, peak.y);
-      for (const i of [1, 2, 3, 4]) ctx.lineTo(points[i].x, points[i].y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      strokeLine(peak.x, peak.y, points[7].x, points[7].y);
+      drawRocks(rockShapes(w, h));
       break;
     }
     case "steppingStones": {
-      // 歩く向きに並んだ平たい石。左右に少しずらす
-      const along = h >= w;
-      const length = along ? h : w, span = along ? w : h;
-      const count = Math.max(2, Math.round(length / 55));
+      // 歩く向きに並んだ平たい石。左右に少しずらす（3Dと同じ配置）
       ctx.fillStyle = OUTDOOR_STONE;
-      for (let i = 0; i < count; i += 1) {
-        const t = -length / 2 + (length * (i + 0.5)) / count;
-        const side = (i % 2 ? 1 : -1) * span * 0.12;
+      for (const stone of steppingStoneLayout(w, h)) {
         ctx.save();
-        ctx.translate(along ? side : t, along ? t : side);
-        ctx.rotate(i * 0.7);
-        strokeEllipse(0, 0, Math.min(span * 0.36, (length / count) * 0.42), Math.min(span * 0.3, (length / count) * 0.36), true);
+        ctx.translate(stone.x, stone.y);
+        ctx.rotate(stone.angle);
+        strokeEllipse(0, 0, stone.rx, stone.ry, true);
         ctx.restore();
       }
       break;
@@ -3377,52 +3359,33 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       // 縁で囲んだ土と、上から見た5枚の花びらの花
       ctx.fillStyle = OUTDOOR_SOIL;
       strokeRoundedRect(-hw, -hh, w, h, 2, true);
-      const edge = Math.min(w, h) * 0.12;
-      strokeRoundedRect(-hw + edge, -hh + edge, w - edge * 2, h - edge * 2, 1);
-      const innerW = w - edge * 2, innerH = h - edge * 2;
-      const size = Math.min(innerH * 0.72, innerW * 0.72, 26);
-      const cols = Math.max(1, Math.floor(innerW / (size * 1.25)));
-      const rows = Math.max(1, Math.floor(innerH / (size * 1.25)));
-      for (let row = 0; row < rows; row += 1) {
-        for (let col = 0; col < cols; col += 1) {
-          drawFlower(-innerW / 2 + (innerW * (col + 0.5)) / cols, -innerH / 2 + (innerH * (row + 0.5)) / rows, size / 2);
-        }
-      }
+      const bed = flowerBedLayout(w, h);
+      strokeRoundedRect(-bed.innerW / 2, -bed.innerH / 2, bed.innerW, bed.innerH, 1);
+      for (const [x, y] of bed.flowers) drawFlower(x, y, bed.size / 2);
       break;
     }
     case "pond": {
-      // 自然な形の水面、さざ波、ふちに並べた石
-      const radii = [1, 0.9, 0.97, 0.86, 0.95, 1, 0.88, 0.93];
-      const points = radii.map((k, i) => {
-        const a = (i / radii.length) * Math.PI * 2;
-        return { x: Math.cos(a) * hw * 0.86 * k, y: Math.sin(a) * hh * 0.86 * k };
-      });
+      // 自然な形の水面、さざ波、ふちに並べた石（3Dと同じ輪郭と石の位置）
+      const pond = pondShape(w, h);
+      const points = pond.points;
       ctx.fillStyle = OUTDOOR_WATER;
       ctx.beginPath();
       const last = points[points.length - 1];
-      ctx.moveTo((last.x + points[0].x) / 2, (last.y + points[0].y) / 2);
+      ctx.moveTo((last[0] + points[0][0]) / 2, (last[1] + points[0][1]) / 2);
       points.forEach((point, i) => {
         const next = points[(i + 1) % points.length];
-        ctx.quadraticCurveTo(point.x, point.y, (point.x + next.x) / 2, (point.y + next.y) / 2);
+        ctx.quadraticCurveTo(point[0], point[1], (point[0] + next[0]) / 2, (point[1] + next[1]) / 2);
       });
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(-w * 0.1, -h * 0.04, w * 0.16, h * 0.07, 0, Math.PI * 1.1, Math.PI * 1.9);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.ellipse(w * 0.14, h * 0.14, w * 0.1, h * 0.05, 0, Math.PI * 1.1, Math.PI * 1.9);
-      ctx.stroke();
-      // ふちの石は、水面の輪郭の上（各曲線のつなぎ目と中ほど）に並べる
+      for (const ripple of pond.ripples) {
+        ctx.beginPath();
+        ctx.ellipse(ripple.x, ripple.y, ripple.rx, ripple.ry, 0, RIPPLE_START, RIPPLE_END);
+        ctx.stroke();
+      }
       ctx.fillStyle = OUTDOOR_STONE;
-      const stone = Math.min(w, h) * 0.055;
-      points.forEach((point, i) => {
-        const before = points[(i + points.length - 1) % points.length], next = points[(i + 1) % points.length];
-        const start = { x: (before.x + point.x) / 2, y: (before.y + point.y) / 2 }, end = { x: (point.x + next.x) / 2, y: (point.y + next.y) / 2 };
-        strokeEllipse(end.x, end.y, stone * 1.2, stone, true);
-        strokeEllipse(start.x * 0.25 + point.x * 0.5 + end.x * 0.25, start.y * 0.25 + point.y * 0.5 + end.y * 0.25, stone, stone * 0.85, true);
-      });
+      for (const stone of pond.stones) strokeEllipse(stone.x, stone.y, stone.rx, stone.ry, true);
       break;
     }
     case "fence": {
@@ -3444,14 +3407,14 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       break;
     }
     case "gardenLight": {
-      // 上から見た丸い笠、光る灯り、周りに広がる光の筋
+      // 上から見た白い受け皿、光る玉、受け皿から外へ伸びる8本の飾りの腕（3Dと同じ）
       const r = Math.min(hw, hh);
       strokeCircle(0, 0, r * 0.62, true);
       ctx.fillStyle = "#fff3c4";
       strokeCircle(0, 0, r * 0.34, true);
       for (let i = 0; i < 8; i += 1) {
         const a = (i / 8) * Math.PI * 2;
-        strokeLine(Math.cos(a) * r * 0.74, Math.sin(a) * r * 0.74, Math.cos(a) * r * 0.97, Math.sin(a) * r * 0.97);
+        strokeLine(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, Math.cos(a) * r * 0.97, Math.sin(a) * r * 0.97);
       }
       break;
     }
@@ -3559,10 +3522,7 @@ function tracePolygon(rx: number, ry: number, sides: number, scale: number): voi
 function drawFlower(cx: number, cy: number, r: number): void {
   const fill = ctx.fillStyle;
   ctx.fillStyle = "#ffffff";
-  for (let i = 0; i < 5; i += 1) {
-    const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-    strokeCircle(cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.5, r * 0.42, true);
-  }
+  for (const a of PETAL_ANGLES) strokeCircle(cx + Math.cos(a) * r * 0.5, cy + Math.sin(a) * r * 0.5, r * 0.42, true);
   ctx.fillStyle = "#f2d98b";
   strokeCircle(cx, cy, r * 0.26, true);
   ctx.fillStyle = fill;
@@ -3794,6 +3754,26 @@ function drawGlassTable(w: number, h: number, round: boolean): void {
   ctx.stroke();
   traceTableTop(w, h, round, Math.min(w, h) * 0.07);
   ctx.stroke();
+  if (round) {
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    const fill = ctx.fillStyle;
+    ctx.fillStyle = SYMBOL_SHADE;
+    strokeEllipse(0, 0, w * 0.225, h * 0.225, true);
+    ctx.fillStyle = fill;
+    for (let i = 0; i < 3; i += 1) {
+      const a = (i * Math.PI * 2) / 3;
+      strokeLine(0, 0, Math.cos(a) * w * 0.44, Math.sin(a) * h * 0.44);
+    }
+    ctx.restore();
+  } else {
+    // ガラス越しに見える下の棚（破線）
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    traceTableTop(w, h, round, Math.min(w, h) * 0.12);
+    ctx.stroke();
+    ctx.restore();
+  }
   const s = Math.min(w, h);
   const cx = -w * 0.2, cy = -h * 0.1;
   for (const [offset, length] of [[0, 0.3], [0.09, 0.18]]) {
@@ -3804,30 +3784,21 @@ function drawGlassTable(w: number, h: number, round: boolean): void {
 }
 
 function drawWoodTable(w: number, h: number, round: boolean): void {
-  // 天板に沿って流れる木目（薄い線）と節
+  // 天板に沿って流れる木目（薄い線）と節。3Dも同じ曲線で溝を付ける
   traceTableTop(w, h, round);
   ctx.fill();
   ctx.save();
   traceTableTop(w, h, round);
   ctx.clip();
   ctx.globalAlpha = 0.55;
-  const hw = w / 2, hh = h / 2;
-  const along = w >= h;
-  const span = along ? h : w;
-  for (let i = 1; i <= 4; i += 1) {
-    const offset = -span / 2 + (span * i) / 5 + (i % 2 ? span * 0.03 : -span * 0.02);
-    const wave = span * (i % 2 ? 0.05 : -0.04);
+  const grain = woodGrain(w, h);
+  for (const [p0, c1, c2, p1] of grain.lines) {
     ctx.beginPath();
-    if (along) {
-      ctx.moveTo(-hw, offset);
-      ctx.bezierCurveTo(-w * 0.2, offset + wave, w * 0.2, offset - wave, hw, offset + wave * 0.5);
-    } else {
-      ctx.moveTo(offset, -hh);
-      ctx.bezierCurveTo(offset + wave, -h * 0.2, offset - wave, h * 0.2, offset + wave * 0.5, hh);
-    }
+    ctx.moveTo(p0[0], p0[1]);
+    ctx.bezierCurveTo(c1[0], c1[1], c2[0], c2[1], p1[0], p1[1]);
     ctx.stroke();
   }
-  strokeEllipse(along ? w * 0.22 : w * 0.1, along ? h * 0.1 : h * 0.22, along ? span * 0.1 : span * 0.05, along ? span * 0.05 : span * 0.1);
+  strokeEllipse(grain.knot.x, grain.knot.y, grain.knot.rx, grain.knot.ry);
   ctx.restore();
   traceTableTop(w, h, round);
   ctx.stroke();
@@ -3976,6 +3947,70 @@ function drawSlidingCloset(w: number, h: number): void {
   }
 }
 
+// 岩: 輪郭、頂上から下りる稜線、手前の面の塗り。3Dも同じ輪郭と稜線で面を作る
+function drawRocks(shapes: RockShape[]): void {
+  const fill = ctx.fillStyle;
+  for (const shape of shapes) {
+    const { outline, peak, ridges } = shape;
+    ctx.fillStyle = OUTDOOR_STONE;
+    ctx.beginPath();
+    outline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // 最初の稜線から次の稜線までの面（手前の面）を陰にする
+    ctx.fillStyle = SYMBOL_SHADE;
+    ctx.beginPath();
+    ctx.moveTo(peak[0], peak[1]);
+    for (let i = ridges[0]; ; i = (i + 1) % outline.length) {
+      ctx.lineTo(outline[i][0], outline[i][1]);
+      if (i === ridges[1]) break;
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    for (const index of ridges.slice(2)) strokeLine(peak[0], peak[1], outline[index][0], outline[index][1]);
+  }
+  ctx.fillStyle = fill;
+}
+
+function drawDrumWasher(w: number, h: number): void {
+  // ドラム式: 平らな上面と、手前に少し出た丸い扉。中のドラムは隠れた線（破線）
+  const hw = w / 2, hh = h / 2;
+  strokeRoundedRect(-hw, -hh, w, h, 4, true);
+  strokeRoundedRect(-w * 0.31, hh - h * 0.02, w * 0.62, h * 0.05, h * 0.02);
+  strokeRoundedRect(-w * 0.44, hh - h * 0.03, w * 0.21, h * 0.03, 1);
+  ctx.save();
+  ctx.setLineDash([Math.min(w, h) * 0.05, Math.min(w, h) * 0.035]);
+  strokeCircle(0, h * 0.04, Math.min(w, h) * 0.3);
+  ctx.restore();
+}
+
+function drawCappedGardenLight(w: number, h: number): void {
+  // 笠付き: 上から見ると暗い色の丸い笠と、てっぺんの小さな飾り
+  const r = Math.min(w, h) / 2;
+  const fill = ctx.fillStyle;
+  ctx.fillStyle = "#3a4046";
+  strokeCircle(0, 0, r * 0.96, true);
+  ctx.fillStyle = "#ffffff";
+  strokeCircle(0, 0, r * 0.14, true);
+  ctx.fillStyle = fill;
+}
+
+function drawLouverCloset(w: number, h: number): void {
+  // ルーバー扉: 中のハンガーパイプと服、手前の扉の帯に斜めの羽根板
+  const hw = w / 2, hh = h / 2;
+  strokeRoundedRect(-hw, -hh, w, h, 2, true);
+  drawClosetRod(w, h);
+  const doors = closetDoorCount(w);
+  const band = Math.max(4, h * 0.1);
+  for (let i = 0; i < doors; i += 1) {
+    const x0 = -hw + (w * i) / doors, x1 = x0 + w / doors;
+    strokeRoundedRect(x0 + 1, hh - band, x1 - x0 - 2, band - 1, 1);
+    for (let x = x0 + band * 0.6; x < x1 - band * 0.5; x += band * 0.7) strokeLine(x, hh - band * 0.85, x + band * 0.45, hh - band * 0.2);
+  }
+}
+
 function drawHatchedCloset(w: number, h: number): void {
   // 収納を斜線で塗り、手前に両開きの扉の合わせ目と取っ手
   const hw = w / 2, hh = h / 2;
@@ -4011,45 +4046,31 @@ function drawOpenShelf(w: number, h: number): void {
 }
 
 function drawRoundLeafPlant(w: number, h: number): void {
-  // 丸い葉がこんもり茂った鉢植え
+  // 丸い葉がこんもり茂った鉢植え（葉の塊の位置は3Dと共通）
   const m = Math.max(w, h), r = m / 2;
   ctx.save();
   ctx.scale(w / m, h / m);
   ctx.fillStyle = "#e8f1e7";
-  for (let i = 0; i < 9; i += 1) {
-    const a = (i / 9) * Math.PI * 2;
-    strokeCircle(Math.cos(a) * r * 0.58, Math.sin(a) * r * 0.58, r * 0.4, true);
-  }
-  for (let i = 0; i < 5; i += 1) {
-    const a = (i / 5) * Math.PI * 2 + 0.3;
-    strokeCircle(Math.cos(a) * r * 0.24, Math.sin(a) * r * 0.24, r * 0.3, true);
-  }
+  for (const clump of ROUND_LEAF_CLUMPS) strokeCircle(Math.cos(clump.angle) * r * clump.distance, Math.sin(clump.angle) * r * clump.distance, r * clump.size, true);
   ctx.restore();
 }
 
 function drawPalmPlant(w: number, h: number): void {
-  // 鉢から放射状に伸びる細長い葉（葉軸と両側の小葉）
+  // 鉢から放射状に伸びる細長い葉（葉軸と両側の小葉）。3Dも同じ葉軸と小葉で作る
   const m = Math.max(w, h), r = m / 2;
   ctx.save();
   ctx.scale(w / m, h / m);
   ctx.fillStyle = "#e8f1e7";
   strokeCircle(0, 0, r * 0.22, true);
-  const fronds = 7;
-  for (let i = 0; i < fronds; i += 1) {
+  for (const frond of fernFronds()) {
     ctx.save();
-    ctx.rotate((i / fronds) * Math.PI * 2 - Math.PI / 2);
-    const x0 = r * 0.12, cx = r * 0.55, cy = -r * 0.12, x1 = r * 0.95, y1 = r * 0.06;
+    ctx.rotate(frond.angle);
+    const [[x0, y0], [cx, cy], [x1, y1]] = frond.spine;
     ctx.beginPath();
-    ctx.moveTo(x0, 0);
-    ctx.quadraticCurveTo(cx, cy, x1, y1);
+    ctx.moveTo(r * x0, r * y0);
+    ctx.quadraticCurveTo(r * cx, r * cy, r * x1, r * y1);
     ctx.stroke();
-    for (let t = 0.3; t < 0.95; t += 0.13) {
-      const x = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1;
-      const y = 2 * (1 - t) * t * cy + t * t * y1;
-      const leaf = r * 0.15 * (1.1 - t * 0.5);
-      strokeLine(x, y, x - leaf * 0.45, y - leaf);
-      strokeLine(x, y, x - leaf * 0.45, y + leaf);
-    }
+    for (const [[ax, ay], [bx, by]] of frond.leaflets) strokeLine(r * ax, r * ay, r * bx, r * by);
     ctx.restore();
   }
   ctx.restore();
@@ -5016,7 +5037,9 @@ function updatePropertiesPanel(): void {
   const heightRow = defaultHeight !== undefined
     ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${MIN_FURNITURE_HEIGHT}" max="${MAX_FURNITURE_HEIGHT}" step="10" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
     : "";
-  const symbolLabels = ["標準", ...(SYMBOL_VARIANTS[selectedFurniture.kind] ?? []).map((variant) => variant.label)];
+  // 2Dの記号だけのデザインは、3Dが標準の形のままになることを名前に添える
+  const only2d = FURNITURE_VARIANTS_2D_ONLY[selectedFurniture.kind] ?? [];
+  const symbolLabels = ["標準", ...(SYMBOL_VARIANTS[selectedFurniture.kind] ?? []).map((variant, index) => (only2d.includes(index + 1) ? `${variant.label}（2Dの記号のみ・3Dは標準）` : variant.label))];
   const currentSymbol = selectedFurniture.symbol ?? 0;
   // 見た目だけの設定なので、配置を固定していても選べる
   const symbolPicker = symbolLabels.length > 1
