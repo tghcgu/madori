@@ -66,7 +66,14 @@ export type FurnitureKind =
   | "stoneLantern"
   | "mailbox"
   | "shed"
-  | "dogHouse";
+  | "dogHouse"
+  | "parasol"
+  | "clothesDryer"
+  | "swing"
+  | "trashCan"
+  | "coatStand"
+  | "crib"
+  | "catTower";
 export interface FurnitureDef {
   label: string;
   w: number;
@@ -144,6 +151,13 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   mailbox: { label: "郵便ポスト", w: 40, h: 30 },
   shed: { label: "物置", w: 180, h: 90 },
   dogHouse: { label: "犬小屋", w: 70, h: 90 },
+  parasol: { label: "パラソル", w: 240, h: 240 },
+  clothesDryer: { label: "物干し台", w: 240, h: 60 },
+  swing: { label: "ブランコ", w: 200, h: 120 },
+  trashCan: { label: "ゴミ箱", w: 40, h: 40 },
+  coatStand: { label: "コートハンガー", w: 50, h: 50 },
+  crib: { label: "ベビーベッド", w: 70, h: 120 },
+  catTower: { label: "キャットタワー", w: 60, h: 60, height: 170 },
 };
 
 // 家具ごとの別デザインの名前（1番以降。0番は標準）。2Dの記号と3Dのモデルが、この番号で同じデザインになる
@@ -177,6 +191,16 @@ export const FURNITURE_VARIANTS: Partial<Record<FurnitureKind, string[]>> = {
   car: ["ワゴン"],
   rock: ["2つの岩"],
   gardenLight: ["笠付き"],
+  sideTable: ["丸"],
+  stool: ["四角"],
+  bench: ["背もたれなし"],
+  floorLamp: ["四角いシェード"],
+  kotatsu: ["布団なし"],
+  officeChair: ["ハイバック"],
+  tree: ["丸く刈り込み"],
+  shrub: ["生垣"],
+  fence: ["ブロック塀"],
+  flowerBed: ["丸い花壇"],
 };
 
 // 2Dの記号だけのデザイン（番号）。3Dは標準の形のまま

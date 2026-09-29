@@ -9,6 +9,8 @@ import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type Fu
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
+  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
+  blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -299,6 +301,16 @@ const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
   car: [drawWagonCar],
   rock: [(w, h) => drawRocks(rockShapes(w, h, 1))],
   gardenLight: [drawCappedGardenLight],
+  sideTable: [drawRoundSideTable],
+  stool: [drawSquareStool],
+  bench: [drawBacklessBench],
+  floorLamp: [drawSquareFloorLamp],
+  kotatsu: [drawKotatsuTable],
+  officeChair: [drawHighBackOfficeChair],
+  tree: [drawTopiaryTree],
+  shrub: [drawHedge],
+  fence: [drawBlockWall],
+  flowerBed: [drawRoundFlowerBed],
 };
 
 const SYMBOL_VARIANTS: Partial<Record<FurnitureKind, SymbolVariant[]>> = Object.fromEntries(
@@ -320,12 +332,12 @@ const OUTDOOR_WATER = "#dcebf2";
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "椅子・ソファ", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "bench"] },
   { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"] },
-  { label: "ベッド", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon"] },
-  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf", "cupboard", "shoeCabinet"] },
+  { label: "ベッド", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon", "crib"] },
+  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf", "cupboard", "shoeCabinet", "coatStand"] },
   { label: "家電", kinds: ["fridge", "washer", "tv", "airConditioner"] },
   { label: "キッチン・水回り", kinds: ["kitchen", "kitchenL", "kitchenIsland", "bath", "unitBath", "shower", "toilet", "washbasin"] },
-  { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano"] },
-  { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "mailbox", "shed", "dogHouse"] },
+  { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"] },
+  { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
   { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
 ];
 // 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
@@ -367,6 +379,13 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   mailbox: "ゆうびん ポスト 郵便受け 玄関 げんかん 屋外 外 そと",
   shed: "ものおき 倉庫 そうこ 収納 庭 にわ 屋外 外 そと",
   dogHouse: "いぬごや 犬 いぬ ペット 庭 にわ 屋外 外 そと",
+  parasol: "ぱらそる 日傘 ひがさ 傘 かさ ガーデン 庭 にわ 屋外 外 そと",
+  clothesDryer: "ものほし 物干し竿 ものほしざお 洗濯 せんたく 干す ベランダ 庭 にわ 屋外 外 そと",
+  swing: "ぶらんこ 遊具 ゆうぐ 公園 こうえん 子供 庭 にわ 屋外 外 そと",
+  trashCan: "ごみばこ ごみ箱 ダストボックス くずかご",
+  coatStand: "こーとはんがー ハンガー ポールハンガー 衣類 いるい 収納",
+  crib: "べびーべっど 赤ちゃん あかちゃん 子供 こども ベット",
+  catTower: "きゃっとたわー 猫 ねこ ペット",
 };
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
@@ -2767,7 +2786,8 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       if (kind === "stool") strokeEllipse(0, 0, w * 0.4, h * 0.4);
       if (kind === "roundTable") strokeEllipse(0, 0, w * 0.46, h * 0.46);
       if (kind === "floorLamp") {
-        strokeEllipse(0, 0, w * 0.22, h * 0.22);
+        // 内側の円は、3Dのシェードの上の口と同じ大きさ
+        strokeEllipse(0, 0, w * 0.32, h * 0.32);
         strokeLine(-w * 0.15, -h * 0.15, w * 0.15, h * 0.15);
         strokeLine(w * 0.15, -h * 0.15, -w * 0.15, h * 0.15);
       }
@@ -2908,17 +2928,92 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       break;
     }
     case "officeChair": {
-      // 5本脚のキャスター、座面、肘掛け、塗り分けた背もたれ
-      for (let i = 0; i < 5; i += 1) {
-        const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
-        const x = Math.cos(a) * hw * 0.88, y = Math.sin(a) * hh * 0.88;
-        strokeLine(0, 0, x, y);
-        strokeCircle(x, y, Math.min(w, h) * 0.06, true);
+      drawOfficeChair(w, h);
+      break;
+    }
+    case "parasol": {
+      // 8角形の傘と、中心から角へ伸びる骨の線、てっぺんの飾り（3Dと同じ角の向き）
+      ctx.fillStyle = "#f6efe2";
+      ctx.beginPath();
+      PARASOL_CORNERS.forEach((a, i) => (i ? ctx.lineTo(Math.cos(a) * hw, Math.sin(a) * hh) : ctx.moveTo(Math.cos(a) * hw, Math.sin(a) * hh)));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      for (const a of PARASOL_CORNERS) strokeLine(0, 0, Math.cos(a) * hw, Math.sin(a) * hh);
+      ctx.fillStyle = OUTDOOR_TRUNK;
+      strokeCircle(0, 0, Math.min(w, h) * 0.03, true);
+      break;
+    }
+    case "clothesDryer": {
+      // 両端の台（足と横木、柱）と、端から端へ渡した2本の竿
+      const foot = dryerFootWidth(w);
+      for (const sx of [-1, 1]) {
+        const x = sx * (hw - foot / 2);
+        strokeRoundedRect(x - foot / 2, -hh, foot, h, 2, true);
+        strokeRoundedRect(x - foot * 0.3, -h * 0.45, foot * 0.6, h * 0.9, 1);
+        strokeCircle(x, 0, Math.min(foot, h) * 0.12);
       }
-      strokeRoundedRect(-w * 0.26, -h * 0.14, w * 0.52, h * 0.44, Math.min(w, h) * 0.1, true);
-      for (const sign of [-1, 1]) strokeRoundedRect(sign * w * 0.3 - w * 0.04, -h * 0.08, w * 0.08, h * 0.3, 2, true);
-      ctx.fillStyle = SYMBOL_SHADE;
-      strokeRoundedRect(-w * 0.28, -h * 0.3, w * 0.56, h * 0.14, h * 0.07, true);
+      for (const offset of DRYER_POLES) strokeRoundedRect(-hw + foot * 0.3, offset * h - 1.8, w - foot * 0.6, 3.6, 1.8);
+      break;
+    }
+    case "swing": {
+      // 真ん中の座面、両端のA字の脚（上から見ると1本の線）、座面の上を通る横木
+      const inset = w * 0.05, seatW = w * 0.3, seatD = h * 0.22;
+      strokeRoundedRect(-seatW / 2, -seatD / 2, seatW, seatD, 2, true);
+      for (const sx of [-1, 1]) strokeRoundedRect(sx * (hw - inset) - 3.5, -h * 0.47, 7, h * 0.94, 3.5);
+      ctx.fillStyle = "#dfe7ee";
+      strokeRoundedRect(-hw + inset * 0.5, -4, w - inset, 8, 4, true);
+      break;
+    }
+    case "trashCan": {
+      // 丸い胴と少し内側のふた、奥のちょうつがい、手前のペダル
+      const r = Math.min(hw, hh);
+      strokeCircle(0, 0, r * 0.84, true);
+      strokeCircle(0, 0, r * 0.8);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      strokeRoundedRect(-r * 0.2, -r * 0.89, r * 0.4, r * 0.1, 1, true);
+      strokeRoundedRect(-r * 0.16, r * 0.77, r * 0.32, r * 0.22, 1, true);
+      break;
+    }
+    case "coatStand": {
+      // 丸い台座、柱の頭の玉、6本のフックと先の玉
+      const r = Math.min(hw, hh);
+      strokeEllipse(0, 0, hw, hh, true);
+      for (const a of COAT_HOOK_ANGLES) {
+        const tx = Math.cos(a) * r * COAT_HOOK_REACH, ty = Math.sin(a) * r * COAT_HOOK_REACH;
+        strokeLine(Math.cos(a) * r * 0.1, Math.sin(a) * r * 0.1, tx, ty);
+        strokeCircle(tx, ty, r * 0.06, true);
+      }
+      ctx.fillStyle = "#e9dfd2";
+      strokeCircle(0, 0, r * 0.14, true);
+      break;
+    }
+    case "crib": {
+      // 手すりの帯、四隅の柱の頭、マットレス、枕、掛け布団
+      const rail = cribRail(w, h);
+      ctx.fillStyle = "#f5eee2";
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      ctx.fillStyle = "#fbfaf6";
+      ctx.beginPath();
+      ctx.rect(-hw + rail, -hh + rail, w - rail * 2, h - rail * 2);
+      ctx.fill();
+      ctx.stroke();
+      strokeRoundedRect(-w * 0.25, -h * 0.39, w * 0.5, h * 0.12, 3, true);
+      ctx.fillStyle = "#edf3f2";
+      strokeRoundedRect(-hw + rail + 1, -h * 0.055, w - rail * 2 - 2, h * 0.45, 2, true);
+      ctx.fillStyle = "#f5eee2";
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) strokeCircle(sx * (hw - rail / 2), sy * (hh - rail / 2), rail * 0.55, true);
+      break;
+    }
+    case "catTower": {
+      // 床の台と、高さの違う板（低い板から順に重ねて描く。3Dと同じ位置・大きさ・丸と四角）
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      CAT_TOWER_DECKS.forEach((deck, i) => {
+        ctx.fillStyle = i % 2 ? "#f3ebdd" : "#e9dfcd";
+        const x = deck.x * w, y = deck.y * h;
+        if (deck.round) strokeEllipse(x, y, (deck.w * w) / 2, (deck.h * h) / 2, true);
+        else strokeRoundedRect(x - (deck.w * w) / 2, y - (deck.h * h) / 2, deck.w * w, deck.h * h, 2, true);
+      });
       break;
     }
     case "zaisu": {
@@ -3972,6 +4067,107 @@ function drawRocks(shapes: RockShape[]): void {
     for (const index of ridges.slice(2)) strokeLine(peak[0], peak[1], outline[index][0], outline[index][1]);
   }
   ctx.fillStyle = fill;
+}
+
+function drawOfficeChair(w: number, h: number): void {
+  // 5本脚のキャスター、座面、肘掛け、塗り分けた背もたれ
+  const hw = w / 2, hh = h / 2;
+  for (let i = 0; i < 5; i += 1) {
+    const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
+    const x = Math.cos(a) * hw * 0.88, y = Math.sin(a) * hh * 0.88;
+    strokeLine(0, 0, x, y);
+    strokeCircle(x, y, Math.min(w, h) * 0.06, true);
+  }
+  strokeRoundedRect(-w * 0.26, -h * 0.14, w * 0.52, h * 0.44, Math.min(w, h) * 0.1, true);
+  for (const sign of [-1, 1]) strokeRoundedRect(sign * w * 0.3 - w * 0.04, -h * 0.08, w * 0.08, h * 0.3, 2, true);
+  const fill = ctx.fillStyle;
+  ctx.fillStyle = SYMBOL_SHADE;
+  strokeRoundedRect(-w * 0.28, -h * 0.3, w * 0.56, h * 0.14, h * 0.07, true);
+  ctx.fillStyle = fill;
+}
+
+function drawHighBackOfficeChair(w: number, h: number): void {
+  // ハイバック: 背もたれの奥に、頭をのせる枕の帯（3Dと同じ位置）
+  drawOfficeChair(w, h);
+  const fill = ctx.fillStyle;
+  ctx.fillStyle = SYMBOL_SHADE;
+  strokeRoundedRect(-w * 0.23, -h * 0.48, w * 0.46, h * 0.1, h * 0.04, true);
+  ctx.fillStyle = fill;
+}
+
+function drawRoundSideTable(w: number, h: number): void {
+  // 丸い天板と、縁に沿った溝
+  strokeEllipse(0, 0, w / 2, h / 2, true);
+  strokeEllipse(0, 0, w * 0.46, h * 0.46);
+}
+
+function drawSquareStool(w: number, h: number): void {
+  // 角の丸い四角の座面と、内側のクッション
+  strokeRoundedRect(-w / 2, -h / 2, w, h, 3, true);
+  strokeRoundedRect(-w * 0.4, -h * 0.4, w * 0.8, h * 0.8, 1);
+}
+
+function drawBacklessBench(w: number, h: number): void {
+  // 背もたれなし: 奥行いっぱいに並べた4枚の板（継ぎ目は3本）
+  strokeRoundedRect(-w / 2, -h / 2, w, h, 3, true);
+  for (const y of [-0.25, 0, 0.25]) strokeLine(-w / 2, h * y, w / 2, h * y);
+}
+
+function drawSquareFloorLamp(w: number, h: number): void {
+  // 四角いシェード: すその四角と上の口の四角、中の明かりの印
+  strokeRoundedRect(-w / 2, -h / 2, w, h, 2, true);
+  ctx.strokeRect(-w * 0.32, -h * 0.32, w * 0.64, h * 0.64);
+  strokeLine(-w * 0.15, -h * 0.15, w * 0.15, h * 0.15);
+  strokeLine(w * 0.15, -h * 0.15, -w * 0.15, h * 0.15);
+}
+
+function drawKotatsuTable(w: number, h: number): void {
+  // 布団なし: 天板と縁の溝だけ（周りの床は空く）
+  const fill = ctx.fillStyle;
+  ctx.fillStyle = "#f7f5f0";
+  strokeRoundedRect(-w * 0.32, -h * 0.32, w * 0.64, h * 0.64, 3, true);
+  ctx.strokeRect(-w * 0.29, -h * 0.29, w * 0.58, h * 0.58);
+  ctx.fillStyle = fill;
+}
+
+function drawTopiaryTree(w: number, h: number): void {
+  // 丸く刈り込んだ木: 設置範囲いっぱいの丸い葉の玉と、光の当たる弧
+  ctx.fillStyle = OUTDOOR_LEAF;
+  strokeEllipse(0, 0, w / 2, h / 2, true);
+  ctx.beginPath();
+  ctx.ellipse(-w * 0.1, -h * 0.1, w * 0.26, h * 0.2, 0, Math.PI * 1.1, Math.PI * 1.75);
+  ctx.stroke();
+}
+
+function drawHedge(w: number, h: number): void {
+  // 生垣: 四角く刈り込んだ植え込み（角の丸い四角と、上面の縁）
+  const m = Math.min(w, h);
+  ctx.fillStyle = OUTDOOR_LEAF;
+  strokeRoundedRect(-w / 2, -h / 2, w, h, m * 0.15, true);
+  strokeRoundedRect(-w / 2 + m * 0.08, -h / 2 + m * 0.08, w - m * 0.16, h - m * 0.16, m * 0.08);
+}
+
+function drawBlockWall(w: number, h: number): void {
+  // ブロック塀: 上から見える笠木の帯と、40cmごとの目地（3Dと同じ数）
+  const along = w >= h;
+  const length = along ? w : h;
+  const band = Math.min(15, along ? h : w) * 0.85 * 1.18;
+  const caps = blockWallCaps(length);
+  ctx.save();
+  if (!along) ctx.rotate(Math.PI / 2);
+  ctx.fillStyle = OUTDOOR_STONE;
+  strokeRoundedRect(-length / 2, -band / 2, length, band, 1, true);
+  for (let i = 1; i < caps; i += 1) strokeLine(-length / 2 + (length * i) / caps, -band / 2, -length / 2 + (length * i) / caps, band / 2);
+  ctx.restore();
+}
+
+function drawRoundFlowerBed(w: number, h: number): void {
+  // 丸い花壇: 丸い縁と土、輪に並んだ花（3Dと同じ位置）
+  const bed = roundFlowerBedLayout(w, h);
+  ctx.fillStyle = OUTDOOR_SOIL;
+  strokeEllipse(0, 0, w / 2, h / 2, true);
+  strokeEllipse(0, 0, bed.innerW / 2, bed.innerH / 2);
+  for (const [x, y] of bed.flowers) drawFlower(x, y, bed.size / 2);
 }
 
 function drawDrumWasher(w: number, h: number): void {

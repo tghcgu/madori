@@ -292,3 +292,61 @@ export const CONIFER_TIERS = [
 export function closetDoorCount(w: number): number {
   return Math.max(2, Math.min(4, Math.round(w / 60)));
 }
+
+// ---- 新しい家具・デザインの形 ----
+
+// パラソル: 8角形の傘。角の向き（右から時計回り）
+export const PARASOL_CORNERS = Array.from({ length: 8 }, (_, i) => (i / 8) * Math.PI * 2);
+
+// コートハンガー: 6本のフックの向きと、柱からの長さ（半径に対する割合）
+export const COAT_HOOK_ANGLES = Array.from({ length: 6 }, (_, i) => (i / 6) * Math.PI * 2 - Math.PI / 2);
+export const COAT_HOOK_REACH = 0.45;
+
+// 物干し台: 2本の竿の位置（奥行に対する割合）と、両端の台の幅
+export const DRYER_POLES = [-0.3, 0.3];
+export function dryerFootWidth(w: number): number {
+  return Math.min(w * 0.08, 25);
+}
+
+// キャットタワー: 板の中心・大きさ（幅と奥行に対する割合）と高さ（全体に対する割合）。高い板ほど上に重なる
+export interface TowerDeck {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  height: number;
+  round: boolean;
+}
+export const CAT_TOWER_DECKS: TowerDeck[] = [
+  { x: -0.2, y: 0.2, w: 0.56, h: 0.56, height: 0.35, round: false },
+  { x: 0.22, y: -0.22, w: 0.52, h: 0.52, height: 0.62, round: true },
+  { x: -0.18, y: -0.2, w: 0.5, h: 0.5, height: 0.82, round: false },
+  { x: 0.16, y: 0.18, w: 0.48, h: 0.48, height: 1, round: true },
+];
+
+// ベビーベッド: 手すりの太さ（cm）と、縦の桟の本数
+export function cribRail(w: number, h: number): number {
+  return Math.min(w, h) * 0.07;
+}
+export function cribBars(lengthCm: number): number {
+  return Math.max(3, Math.round(lengthCm / 9));
+}
+
+// ブロック塀: 上の笠木の数（40cmごとに目地）
+export function blockWallCaps(lengthCm: number): number {
+  return Math.max(1, Math.round(lengthCm / 40));
+}
+
+// 丸い花壇: 縁の幅、花の直径、花の位置
+export function roundFlowerBedLayout(w: number, h: number): FlowerBedLayout {
+  const edge = Math.min(w, h) * 0.1;
+  const innerW = w - edge * 2, innerH = h - edge * 2;
+  const size = Math.min(26, Math.min(w, h) * 0.22);
+  const count = Math.max(5, Math.min(12, Math.round((Math.PI * Math.min(innerW, innerH) * 0.55) / (size * 1.25))));
+  const flowers: Point2[] = Array.from({ length: count }, (_, i): Point2 => {
+    const a = (i / count) * Math.PI * 2 - Math.PI / 2;
+    return [Math.cos(a) * (innerW / 2) * 0.62, Math.sin(a) * (innerH / 2) * 0.62];
+  });
+  if (Math.min(innerW, innerH) > size * 3.2) flowers.push([0, 0]);
+  return { edge, innerW, innerH, size, flowers };
+}

@@ -7,6 +7,8 @@ import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   bezierPoint, closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, rockVertexHeights, rugDiamonds,
   steppingStoneLayout, woodGrain, type Point2, type RockShape,
+  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
+  blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
 } from "./furniture-shapes.ts";
 
 type Position = [number, number, number];
@@ -203,6 +205,30 @@ function addWoodGrain(m: Model, wCm: number, hCm: number, top: number, round: bo
   tube(Array.from({ length: 16 }, (_, i): Point2 => [x + Math.cos((i / 16) * Math.PI * 2) * rx, y + Math.sin((i / 16) * Math.PI * 2) * ry]), true);
 }
 
+// 花壇の花: 2Dと同じ位置に、茎の先の5枚の花びらと花芯
+function plantFlowers(m: Model, layout: FlowerBedLayout, soilTop: number, stem: Material, petals: Material[], center: Material): void {
+  const r = layout.size / 200;
+  layout.flowers.forEach(([fx, fy], i) => {
+    const x = fx / 100, z = fy / 100, top = soilTop + 0.12 + (i % 3) * 0.03;
+    m.rod([x, soilTop, z], [x, top, z], 0.006, stem);
+    for (const a of PETAL_ANGLES) m.ellipsoid(r * 0.84, 0.02, r * 0.84, [x + Math.cos(a) * r * 0.5, top, z + Math.sin(a) * r * 0.5], petals[i % petals.length]);
+    m.ellipsoid(r * 0.52, 0.03, r * 0.52, [x, top + 0.012, z], center);
+  });
+}
+
+// 中心の頂点と周りの点から、傘や円すいの面を作る（周りの点は上から見て時計回り）
+function fanGeometry(apex: THREE.Vector3, ring: THREE.Vector3[]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  ring.forEach((vertex, i) => {
+    const next = ring[(i + 1) % ring.length];
+    positions.push(apex.x, apex.y, apex.z, next.x, next.y, next.z, vertex.x, vertex.y, vertex.z);
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function polygonShape(points: Point2[]): THREE.Shape {
   return new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
 }
@@ -397,6 +423,21 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         const hole = m.cylinder(Math.min(w, d) * 0.025, Math.min(w, d) * 0.025, 0.003, [-w * 0.3, height + 0.002, -d * 0.32], black);
         hole.name = "cable-grommet";
       };
+      if (item.kind === "sideTable" && variant === 1) {
+        // 丸いサイドテーブル: 丸い天板と縁の溝、3本脚、丸い棚板
+        const top = m.cylinder(0.5, 0.48, 0.035, [0, height - 0.0175, 0], wood, 40);
+        top.scale.set(w, 1, d);
+        const groove = m.ring(0.46, 0.003, [0, height + 0.0005, 0], darkWood);
+        groove.rotation.x = Math.PI / 2;
+        groove.scale.set(w, d, 1);
+        for (let i = 0; i < 3; i += 1) {
+          const a = (i * Math.PI * 2) / 3 - Math.PI / 2;
+          m.rod([Math.cos(a) * w * 0.28, height - 0.035, Math.sin(a) * d * 0.28], [Math.cos(a) * w * 0.4, 0, Math.sin(a) * d * 0.4], Math.min(w, d) * 0.03, darkWood, "leg");
+        }
+        const shelf = m.cylinder(0.5, 0.5, 0.02, [0, 0.16, 0], wood, 32);
+        shelf.scale.set(w * 0.7, 1, d * 0.7);
+        break;
+      }
       if (item.kind === "table" && variant === 1) {
         // 細い金属の枠にガラスの天板。ガラス越しに下の木の棚が見える
         const frame = m.material("table-frame", 0x3a3f44, 0.4, 0.5, true);
@@ -461,6 +502,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "roundTable":
     case "stool": {
       const stool = item.kind === "stool", height = stool ? 0.47 : 0.75;
+      if (stool && variant === 1) {
+        // 四角いスツール: 角の丸い四角の座面と、内側のクッション、4本脚と貫
+        m.box(w, 0.05, d, 0, height - 0.025, 0, fabric, 0.03);
+        m.box(w * 0.8, 0.02, d * 0.8, 0, height + 0.01, 0, cushion, 0.01);
+        legs(w, d, height - 0.05);
+        for (const sign of [-1, 1]) {
+          m.rod([-w * 0.36, 0.19, sign * d * 0.36], [w * 0.36, 0.19, sign * d * 0.36], Math.min(w, d) * 0.02, darkWood);
+          m.rod([sign * w * 0.37, 0.19, -d * 0.35], [sign * w * 0.37, 0.19, d * 0.35], Math.min(w, d) * 0.02, darkWood);
+        }
+        break;
+      }
       if (!stool && variant === 1) {
         // ガラスの丸い天板と金属の縁、1本の支柱から天板を支える3本の腕、丸い台座
         const frame = m.material("table-frame", 0x3a3f44, 0.4, 0.5, true);
@@ -874,12 +926,15 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "floorLamp": {
-      const base = m.cylinder(0.5, 0.5, 0.035, [0, 0.0175, 0], black, 40);
+      const base = variant === 1 ? m.box(1, 0.035, 1, 0, 0.0175, 0, black, 0.005) : m.cylinder(0.5, 0.5, 0.035, [0, 0.0175, 0], black, 40);
       base.scale.set(w * 0.65, 1, d * 0.65);
       m.rod([0, 0.035, 0], [0, 1.52, 0], 0.014, metal);
       const shadeMat = m.material("lampshade", 0xf4e9d3, 0.96, 0, true);
       shadeMat.side = THREE.DoubleSide;
-      const shade = m.mesh(new THREE.CylinderGeometry(0.32, 0.5, 0.35, 40, 1, true), [0, 1.5, 0], shadeMat);
+      // 四角いシェードは、4面のすそ広がりの筒（上から見ると外の四角と上の口の四角）
+      const square = variant === 1;
+      const shade = m.mesh(new THREE.CylinderGeometry(square ? 0.32 * Math.SQRT2 : 0.32, square ? 0.5 * Math.SQRT2 : 0.5, 0.35, square ? 4 : 40, 1, true), [0, 1.5, 0], shadeMat);
+      if (square) shade.rotation.y = Math.PI / 4;
       shade.scale.set(w, 1, d);
       const bulbMat = m.material("bulb", 0xffe8b4, 0.4);
       bulbMat.emissive.setHex(0xffdca0); bulbMat.emissiveIntensity = 0.25;
@@ -1047,6 +1102,12 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "bench": {
+      if (variant === 1) {
+        // 背もたれなし: 奥行いっぱいに4枚の板（2Dの3本の継ぎ目と同じ位置）
+        legs(w * 0.85, d * 0.82, 0.43, 0, 0, 0, black);
+        for (let i = 0; i < 4; i += 1) m.box(w, 0.044, d * 0.23, 0, 0.452, -d * 0.375 + i * d * 0.25, wood);
+        break;
+      }
       legs(w * 0.85, d * 0.82, 0.43, 0, 0, 0, black);
       for (let i = 0; i < 4; i += 1) m.box(w, 0.044, d * 0.17, 0, 0.452, -d * 0.24 + i * d * 0.19, wood);
       for (const sign of [-1, 1]) {
@@ -1176,8 +1237,16 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       m.cylinder(0.025, 0.03, 0.34, [0, 0.27, 0], metal);
       m.box(w * 0.78, 0.08, d * 0.72, 0, 0.47, d * 0.05, fabric, 0.03);
-      const back = m.box(w * 0.72, 0.5, 0.06, 0, 0.8, -d * 0.36, fabric, 0.03);
+      const highBack = variant === 1;
+      const backH = highBack ? 0.72 : 0.5;
+      const back = m.box(w * 0.72, backH, 0.06, 0, 0.55 + backH / 2, -d * 0.36, fabric, 0.03);
       back.rotation.x = -0.12;
+      if (highBack) {
+        // ハイバック: 背もたれの上に頭をのせる枕（2Dのいちばん奥の帯）
+        const head = m.box(w * 0.46, 0.15, 0.08, 0, 0.55 + backH + 0.1, -d * 0.44, fabric, 0.035);
+        head.rotation.x = -0.15;
+        m.rod([0, 0.55 + backH - 0.05, -d * 0.43], [0, 0.55 + backH + 0.05, -d * 0.44], 0.012, black);
+      }
       m.rod([0, 0.45, -d * 0.18], [0, 0.62, -d * 0.35], 0.02, black);
       for (const sign of [-1, 1]) {
         m.rod([sign * w * 0.37, 0.47, 0], [sign * w * 0.37, 0.63, 0], 0.012, black);
@@ -1194,6 +1263,16 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "kotatsu": {
+      if (variant === 1) {
+        // 布団なし: 天板（2Dと同じ大きさ）と縁の溝、4本の脚と幕板
+        m.box(w * 0.64, 0.035, d * 0.64, 0, 0.395, 0, wood, 0.012);
+        for (const sz of [-1, 1]) m.box(w * 0.58, 0.003, 0.004, 0, 0.4135, sz * d * 0.29, darkWood, 0);
+        for (const sx of [-1, 1]) m.box(0.004, 0.003, d * 0.58, sx * w * 0.29, 0.4135, 0, darkWood, 0);
+        m.box(w * 0.58, 0.08, d * 0.58, 0, 0.335, 0, darkWood, 0.006);
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) m.box(0.05, 0.3, 0.05, sx * w * 0.28, 0.15, sz * d * 0.28, darkWood, 0.006);
+        m.reserveFootprint(w, d);
+        break;
+      }
       // 床に広がるこたつ布団と、その上の天板
       const futon = m.material("kotatsu-futon", 0xc98a6d, 0.97, 0, true);
       m.box(w, 0.05, d, 0, 0.025, 0, futon, 0.025);
@@ -1410,6 +1489,20 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       const isTree = item.kind === "tree";
       const foliage = m.material("foliage", 0x5f9150, 0.92, 0, true);
       const shade = m.material("foliage-shade", 0x4b7a43, 0.95, 0, true);
+      if (isTree && variant === 1) {
+        // 丸く刈り込んだ木: 幹の上に、設置範囲いっぱいの丸い葉の玉（上から見ると2Dの丸）
+        const bark = m.material("bark", 0x6d5844, 0.95);
+        const crownH = Math.min(tall * 0.6, Math.max(w, d));
+        const trunkR = Math.min(clamp(tall * 0.028, 0.04, 0.3), Math.min(w, d) * 0.1);
+        m.cylinder(trunkR * 0.7, trunkR, tall - crownH * 0.7, [0, (tall - crownH * 0.7) / 2, 0], bark, 10);
+        m.ellipsoid(w, crownH, d, [0, tall - crownH / 2, 0], foliage);
+        break;
+      }
+      if (!isTree && variant === 1) {
+        // 生垣: 四角く刈り込んだ植え込み（角の丸い箱）
+        m.box(w, tall, d, 0, tall / 2, 0, foliage, Math.min(w, d, tall) * 0.15);
+        break;
+      }
       const crownBottom = isTree ? tall * 0.38 : 0;
       const crownH = tall - crownBottom;
       if (isTree) {
@@ -1519,6 +1612,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       const stem = m.material("stem", 0x4f7a3d, 0.9);
       const center = m.material("flower-center", 0xf2c14e, 0.7);
       const petals = [0xe8506a, 0xf4f1ea, 0xb07cd8].map((color, i) => m.material(`flower-${i}`, color, 0.7));
+      if (variant === 1) {
+        // 丸い花壇: れんがの丸い縁（上から見ると輪）、土、輪に並んだ花（2Dと同じ位置）
+        const round = roundFlowerBedLayout(item.w, item.h);
+        const edge = round.edge / 100, soilTop = 0.2;
+        const ring = m.vessel([[0.5, 0], [0.5, 0.25], [0.5 - edge / Math.max(w, d), 0.25], [0.5 - edge / Math.max(w, d), soilTop]], w, d, [0, 0, 0], border);
+        ring.name = "bed-border";
+        const soilDisc = m.cylinder(0.5, 0.5, soilTop, [0, soilTop / 2, 0], soil, 40);
+        soilDisc.scale.set(w - edge * 2, 1, d - edge * 2);
+        plantFlowers(m, round, soilTop, stem, petals, center);
+        break;
+      }
       const bed = flowerBedLayout(item.w, item.h);
       const edgeH = 0.25, t = bed.edge / 100;
       for (const side of [-1, 1]) {
@@ -1527,13 +1631,7 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       const soilTop = edgeH * 0.8;
       m.box(w - t * 2, soilTop, d - t * 2, 0, soilTop / 2, 0, soil, 0);
-      const r = bed.size / 200;
-      bed.flowers.forEach(([fx, fy], i) => {
-        const x = fx / 100, z = fy / 100, top = soilTop + 0.12 + (i % 3) * 0.03;
-        m.rod([x, soilTop, z], [x, top, z], 0.006, stem);
-        for (const a of PETAL_ANGLES) m.ellipsoid(r * 0.84, 0.02, r * 0.84, [x + Math.cos(a) * r * 0.5, top, z + Math.sin(a) * r * 0.5], petals[i % petals.length]);
-        m.ellipsoid(r * 0.52, 0.03, r * 0.52, [x, top + 0.012, z], center);
-      });
+      plantFlowers(m, bed, soilTop, stem, petals, center);
       break;
     }
     case "pond": {
@@ -1568,6 +1666,29 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       const boards = m.material("fence", 0xc8b08a, 0.8, 0, true);
       const along = w >= d;
       const length = along ? w : d;
+      if (variant === 1) {
+        // ブロック塀: 20cmの段ごとに半分ずらして積んだブロックと、40cmごとに目地のある笠木（2Dの目地と同じ位置）
+        const block = m.material("block", 0x9a968d, 0.95, 0, true);
+        const coping = m.material("block-coping", 0xd2cdc2, 0.9);
+        const span = Math.min(0.15, along ? d : w) * 0.85;
+        const put = (x: number, y: number, sx: number, sy: number, sz: number, material: Material) =>
+          along ? m.box(sx, sy, sz, x, y, 0, material, 0) : m.box(sz, sy, sx, 0, y, x, material, 0);
+        const capH = 0.05, bodyH = Math.max(0.1, tall - capH);
+        const courses = Math.max(1, Math.round(bodyH / 0.2)), courseH = bodyH / courses;
+        const blocks = Math.max(1, Math.round(length / 0.4)), blockL = length / blocks;
+        for (let c = 0; c < courses; c += 1) {
+          const shift = c % 2 ? blockL / 2 : 0;
+          for (let i = 0; i <= blocks; i += 1) {
+            const start = Math.max(-length / 2, -length / 2 + i * blockL - shift), end = Math.min(length / 2, -length / 2 + (i + 1) * blockL - shift);
+            if (end - start < 0.02) continue;
+            put((start + end) / 2, c * courseH + courseH / 2, end - start - 0.008, courseH - 0.008, span, block);
+          }
+        }
+        const caps = blockWallCaps(item.w >= item.h ? item.w : item.h), capL = length / caps;
+        for (let i = 0; i < caps; i += 1) put(-length / 2 + capL * (i + 0.5), bodyH + capH / 2, capL - 0.008, capH, span * 1.18, coping);
+        m.reserveFootprint(w, d);
+        break;
+      }
       const place = (x: number, y: number, z: number, sx: number, sy: number, sz: number) =>
         along ? m.box(sx, sy, sz, x, y, z, boards, 0) : m.box(sz, sy, sx, z, y, x, boards, 0);
       const posts = Math.max(2, Math.round(length / 0.9) + 1);
@@ -1687,6 +1808,120 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(bw * 0.34, 0.26, 0.02, 0, 0.15, bd / 2 + 0.006, hole, 0);
       const arch = m.cylinder(bw * 0.17, bw * 0.17, 0.02, [0, 0.28, bd / 2 + 0.006], hole, 20);
       arch.rotation.x = Math.PI / 2;
+      break;
+    }
+    case "parasol": {
+      // 8角形の傘（2Dと同じ角の向き）、傘の下の骨、柱と重しの台座
+      const cloth = m.material("parasol-cloth", 0xe9dcc3, 0.9, 0, true);
+      cloth.side = THREE.DoubleSide;
+      const pole = m.material("parasol-pole", 0x6d5844, 0.7);
+      const rim = 2.05, apex = 2.4;
+      const corners = PARASOL_CORNERS.map((a) => new THREE.Vector3(Math.cos(a) * (w / 2), rim, Math.sin(a) * (d / 2)));
+      m.mesh(fanGeometry(new THREE.Vector3(0, apex, 0), corners), [0, 0, 0], cloth);
+      for (const corner of corners) m.rod([0, apex - 0.05, 0], [corner.x * 0.97, rim - 0.015, corner.z * 0.97], 0.008, pole);
+      m.rod([0, 0.08, 0], [0, apex + 0.06, 0], 0.024, pole);
+      m.ellipsoid(0.06, 0.08, 0.06, [0, apex + 0.08, 0], pole);
+      m.cylinder(0.24, 0.27, 0.08, [0, 0.04, 0], m.material("parasol-base", 0x55595c, 0.8), 24);
+      break;
+    }
+    case "clothesDryer": {
+      // 両端の台（奥行いっぱいの足）と柱、上の横木に渡した2本の竿（2Dと同じ位置）
+      const frame = m.material("dryer-frame", 0xd8dcdc, 0.35, 0.4, true);
+      const poleMat = m.material("dryer-pole", 0xb9c3c7, 0.3, 0.6);
+      const foot = dryerFootWidth(item.w) / 100, top = 1.7;
+      for (const sx of [-1, 1]) {
+        const x = sx * (w / 2 - foot / 2);
+        m.box(foot, 0.06, d, x, 0.03, 0, frame, 0.01);
+        m.rod([x, 0.06, 0], [x, top, 0], 0.025, frame);
+        m.box(foot * 0.6, 0.04, d * 0.9, x, top, 0, frame, 0.008);
+      }
+      for (const offset of DRYER_POLES) m.rod([-w / 2 + foot * 0.3, top + 0.035, offset * d], [w / 2 - foot * 0.3, top + 0.035, offset * d], 0.018, poleMat);
+      break;
+    }
+    case "swing": {
+      // 両端のA字の脚、上の横木、真ん中に鎖で吊るした座面
+      const frame = m.material("swing-frame", 0x3f6f8f, 0.5, 0.2, true);
+      const topY = 2.0, inset = w * 0.05;
+      for (const sx of [-1, 1]) {
+        const x = sx * (w / 2 - inset);
+        for (const sz of [-1, 1]) m.rod([x, 0, sz * d * 0.47], [x, topY, 0], 0.035, frame);
+      }
+      m.rod([-w / 2 + inset * 0.5, topY, 0], [w / 2 - inset * 0.5, topY, 0], 0.04, frame);
+      const seatW = w * 0.3, seatD = d * 0.22, seatY = 0.45;
+      m.box(seatW, 0.04, seatD, 0, seatY, 0, wood, 0.01);
+      for (const sx of [-1, 1]) m.rod([sx * seatW * 0.42, seatY, 0], [sx * seatW * 0.42, topY, 0], 0.008, metal);
+      break;
+    }
+    case "trashCan": {
+      // 丸い胴、少し内側の丸いふた、奥のちょうつがい、手前のペダル（2Dと同じ大きさ）
+      const body = m.material("bin-body", 0xdfe3e2, 0.4, 0.2, true);
+      const r = Math.min(w, d) / 2;
+      m.cylinder(r * 0.84, r * 0.78, 0.55, [0, 0.275, 0], body, 32);
+      m.cylinder(r * 0.8, r * 0.8, 0.03, [0, 0.565, 0], body, 32);
+      m.box(r * 0.4, 0.03, r * 0.1, 0, 0.57, -r * 0.84, black, 0.005);
+      m.box(r * 0.32, 0.03, r * 0.22, 0, 0.03, r * 0.88, black, 0.008);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "coatStand": {
+      // 丸い台座、1本の柱、上の6本のフック（2Dと同じ向き）と頭の玉
+      const stand = m.material("coat-stand", 0x6d5844, 0.6, 0, true);
+      const r = Math.min(w, d) / 2;
+      const base = m.cylinder(0.5, 0.5, 0.03, [0, 0.015, 0], stand, 32);
+      base.scale.set(w, 1, d);
+      m.rod([0, 0.03, 0], [0, 1.75, 0], 0.022, stand);
+      for (const a of COAT_HOOK_ANGLES) {
+        const tip: Position = [Math.cos(a) * r * COAT_HOOK_REACH, 1.68, Math.sin(a) * r * COAT_HOOK_REACH];
+        m.rod([0, 1.58, 0], tip, 0.012, stand);
+        m.ellipsoid(0.03, 0.03, 0.03, tip, stand);
+      }
+      m.ellipsoid(0.07, 0.07, 0.07, [0, 1.78, 0], stand);
+      break;
+    }
+    case "crib": {
+      // ベビーベッド: 四隅の柱と頭の玉、上下の手すり、縦の桟、マットレス・枕・掛け布団（2Dと同じ位置）
+      const frame = m.material("crib-wood", 0xe9dcc6, 0.6, 0, true);
+      const rail = cribRail(item.w, item.h) / 100, height = 0.95;
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const x = sx * (w / 2 - rail / 2), z = sz * (d / 2 - rail / 2);
+        m.box(rail, height, rail, x, height / 2, z, frame, 0.008);
+        m.ellipsoid(rail * 1.1, rail * 1.1, rail * 1.1, [x, height + rail * 0.4, z], frame);
+      }
+      for (const y of [0.3, height - 0.02]) {
+        for (const sz of [-1, 1]) m.box(w - rail * 2, 0.04, rail * 0.8, 0, y, sz * (d / 2 - rail / 2), frame, 0.006);
+        for (const sx of [-1, 1]) m.box(rail * 0.8, 0.04, d - rail * 2, sx * (w / 2 - rail / 2), y, 0, frame, 0.006);
+      }
+      const barsX = cribBars((w - rail * 2) * 100), barsZ = cribBars((d - rail * 2) * 100);
+      for (let i = 1; i < barsX; i += 1) for (const sz of [-1, 1]) {
+        const x = -w / 2 + rail + ((w - rail * 2) * i) / barsX;
+        m.rod([x, 0.32, sz * (d / 2 - rail / 2)], [x, height - 0.04, sz * (d / 2 - rail / 2)], rail * 0.18, frame);
+      }
+      for (let i = 1; i < barsZ; i += 1) for (const sx of [-1, 1]) {
+        const z = -d / 2 + rail + ((d - rail * 2) * i) / barsZ;
+        m.rod([sx * (w / 2 - rail / 2), 0.32, z], [sx * (w / 2 - rail / 2), height - 0.04, z], rail * 0.18, frame);
+      }
+      m.box(w - rail * 2, 0.1, d - rail * 2, 0, 0.37, 0, ivory, 0.02);
+      m.box(w * 0.5, 0.06, d * 0.12, 0, 0.45, -d * 0.33, ivory, 0.025);
+      m.box(w - rail * 2 - 0.02, 0.03, d * 0.45, 0, 0.435, d * 0.17, fabric, 0.012);
+      break;
+    }
+    case "catTower": {
+      // 床の台と、高さの違う板（2Dと同じ位置・大きさ・丸と四角）、板を支える麻縄巻きの柱
+      const carpet = m.material("cat-carpet", 0xd9cbb4, 0.95, 0, true);
+      const rope = m.material("sisal", 0xb89b6a, 0.95);
+      m.box(w, 0.04, d, 0, 0.02, 0, carpet, 0.01);
+      // 板は2Dの記号と同じく2色を交互に（重なった板の縁が上から見分けられる）
+      const decks = [m.material("cat-deck-dark", 0xcdbb9b, 0.95), m.material("cat-deck-light", 0xefe5d3, 0.95)];
+      CAT_TOWER_DECKS.forEach((deck, i) => {
+        const x = deck.x * w, z = deck.y * d, y = deck.height * tall;
+        m.cylinder(0.045, 0.045, y - 0.03, [x, (y - 0.03) / 2 + 0.02, z], rope, 12);
+        if (deck.round) {
+          const disc = m.cylinder(0.5, 0.5, 0.03, [x, y - 0.015, z], decks[i % 2], 32);
+          disc.scale.set(deck.w * w, 1, deck.h * d);
+        } else {
+          m.box(deck.w * w, 0.03, deck.h * d, x, y - 0.015, z, decks[i % 2], 0.01);
+        }
+      });
       break;
     }
     default: {
