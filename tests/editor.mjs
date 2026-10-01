@@ -464,6 +464,105 @@ try {
   assert.notEqual(await page.evaluate(() => window.__editorTest.planZoom()), afterReload.zoom);
   console.log('PASS: reload keeps the 2D view, 3D camera, floor/roof visibility, tool panel and palette groups');
 
+  // Basements can be added below 1F any number of times, upper floors have no limit, and basements sit below ground in 3D.
+  await importPlan(plan());
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const addBasementButton = page.locator('#floorTabs button[title^="地下の階を追加"]');
+  const addAboveButton = page.locator('#floorTabs button[title="上の階を追加"]');
+  const floorNames = async () => (await saved()).floors.map(floor => floor.name);
+  await addBasementButton.click();
+  assert.deepEqual(await floorNames(), ['B1F', '1F']);
+  assert.equal((await saved()).basements, 1);
+  assert.equal((await saved()).activeFloor, 0);
+  await addBasementButton.click();
+  assert.deepEqual(await floorNames(), ['B2F', 'B1F', '1F']);
+  for (let i = 0; i < 5; i += 1) await addAboveButton.click();
+  assert.deepEqual(await floorNames(), ['B2F', 'B1F', '1F', '2F', '3F', '4F', '5F', '6F']);
+  // With many floors only the floor tabs scroll: the add/remove buttons and the active tab stay visible, and the 2D pane keeps its width.
+  const tabLayout = await page.evaluate(() => {
+    const box = selector => document.querySelector(selector).getBoundingClientRect();
+    const list = document.querySelector('.floor-tab-list'), shown = list.getBoundingClientRect(), active = list.querySelector('.is-active').getBoundingClientRect();
+    return { pane: box('.plan-pane').width, canvas: box('#planCanvas').width, bar: box('.pane-bar').right, add: box('#floorTabs button[title="上の階を追加"]').right,
+      remove: box('#floorTabs button[title="表示中の階を削除"]').right, scrolls: list.scrollWidth > list.clientWidth,
+      activeVisible: active.left >= shown.left - 1 && active.right <= shown.right + 1, stats: getComputedStyle(document.querySelector('#planStats')).display };
+  });
+  assert.ok(Math.abs(tabLayout.canvas - tabLayout.pane) < 1, `the 2D canvas stays inside its pane: ${JSON.stringify(tabLayout)}`);
+  assert.ok(tabLayout.scrolls && tabLayout.add <= tabLayout.bar && tabLayout.remove <= tabLayout.bar, `the add and remove buttons stay visible: ${JSON.stringify(tabLayout)}`);
+  assert.ok(tabLayout.activeVisible, 'the active floor tab is scrolled into view');
+  assert.equal(tabLayout.stats, 'none', 'the counts give way to the floor tabs');
+  assert.match(await page.locator('#threeStats').textContent(), /^地上6階・地下2階/);
+  // Deleting a basement renumbers the rest; the plan keeps one ground floor.
+  await page.locator('#floorTabs button').filter({ hasText: /^B2F$/ }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.locator('#floorTabs button[title="表示中の階を削除"]').click();
+  assert.deepEqual(await floorNames(), ['B1F', '1F', '2F', '3F', '4F', '5F', '6F']);
+  assert.equal((await saved()).basements, 1);
+  await importPlan({ floors: [{ id: 'b1', name: '', entities: [room('cellar')] }, { id: 'f1', name: '', entities: [room()] }], basements: 1, activeFloor: 1, selectedId: null, roofs: [] });
+  assert.deepEqual(await floorNames(), ['B1F', '1F']);
+  const cellar = await page.evaluate(() => window.__editorTest.bounds('cellar'));
+  const groundRoom = await page.evaluate(() => window.__editorTest.bounds('room'));
+  assert.ok(cellar.max[1] < -1, `basement floor below ground: ${cellar.max[1]}`);
+  assert.ok(groundRoom.min[1] < -0.05 && Math.abs(groundRoom.max[1] - 0.08) < 1e-4, 'the 1F slab closes the gap above the basement');
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.deepEqual(await floorNames(), ['B1F', '1F']);
+  console.log('PASS: basements below 1F, unlimited floors, renumbering on delete, 3D height and reload');
+
+  // Ghost floors are drawn once at a uniform opacity (crossing walls are no darker), and the floor and tint can be chosen.
+  await importPlan({ floors: [
+    { id: 'g1', name: '', entities: [{ id: 'wa', type: 'wall', x1: 0, y1: 200, x2: 600, y2: 200 }, { id: 'wb', type: 'wall', x1: 300, y1: 0, x2: 300, y2: 400 }] },
+    { id: 'g2', name: '', entities: [] },
+    { id: 'g3', name: '', entities: [] },
+  ], activeFloor: 1, selectedId: null, roofs: [] });
+  await page.locator('button[data-view-mode="plan"]').click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  if (await page.locator('#ghostToggle').getAttribute('aria-pressed') !== 'true') await page.locator('#ghostToggle').click();
+  const pixelAt = async (x, y) => {
+    const screen = await planPoint(x, y);
+    return page.locator('#planCanvas').evaluate((canvas, [px, py]) => {
+      const rect = canvas.getBoundingClientRect(), ratio = canvas.width / rect.width;
+      return [...canvas.getContext('2d').getImageData(Math.round((px - rect.left) * ratio), Math.round((py - rect.top) * ratio), 1, 1).data];
+    }, [screen.x, screen.y]);
+  };
+  const close = (a, b, tolerance = 2) => a.every((value, i) => Math.abs(value - b[i]) <= tolerance);
+  const crossing = await pixelAt(300, 200), single = await pixelAt(450, 200);
+  assert.ok(close(crossing, single), `ghost walls are uniform: ${crossing} vs ${single}`);
+  await page.locator('#ghostToggle').click();
+  const noGhost = await pixelAt(450, 200);
+  assert.ok(!close(noGhost, single), 'the ghost of 1F is visible on 2F');
+  await page.locator('#ghostToggle').click();
+  await page.locator('#ghostMenuButton').click();
+  await page.locator('#ghostFloorSelect').selectOption('above');
+  assert.ok(close(await pixelAt(450, 200), noGhost), 'nothing is shown when the floor above is empty');
+  await page.locator('#ghostFloorSelect').selectOption('g1');
+  assert.ok(close(await pixelAt(450, 200), single), 'a floor can be picked by name');
+  await page.locator('#ghostColorInput').fill('#ff000099');
+  await page.locator('#ghostColorInput').press('Enter');
+  const tinted = await pixelAt(450, 200);
+  assert.ok(tinted[0] > tinted[1] + 40 && tinted[0] > tinted[2] + 40, `the ghost uses the color code tint: ${tinted}`);
+  assert.equal(await page.locator('#ghostOpacityValue').textContent(), '60%');
+  await page.locator('#ghostColorInput').fill('#12');
+  await page.locator('#ghostColorInput').press('Enter');
+  assert.equal(await page.locator('#ghostColorInput').evaluate(input => input.classList.contains('is-invalid')), true);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+  assert.equal(await page.locator('#ghostFloorSelect').inputValue(), 'g1');
+  assert.equal(await page.locator('#ghostColorInput').inputValue(), '#ff000099');
+  assert.equal(await page.locator('#ghostOpacityValue').textContent(), '60%');
+  // The menu closes on reload and when clicking elsewhere.
+  assert.equal(await page.locator('#ghostMenu').isVisible(), false);
+  await page.locator('#ghostMenuButton').click();
+  assert.equal(await page.locator('#ghostMenu').isVisible(), true);
+  await page.locator('.topbar h1').click({ position: { x: 10, y: 8 } });
+  assert.equal(await page.locator('#ghostMenu').isVisible(), false);
+  await page.locator('#ghostMenuButton').click();
+  await page.locator('#ghostColorInput').fill('');
+  await page.locator('#ghostColorInput').press('Enter');
+  await page.locator('#ghostFloorSelect').selectOption('below');
+  console.log('PASS: ghost floors: uniform opacity, choose below/above/any floor, color code tint with opacity, reload');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();

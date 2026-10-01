@@ -257,10 +257,25 @@
               <span id="planStats"></span>
             </div>
             <div class="pane-actions">
-              <button class="toggle-button is-active" id="ghostToggle" type="button" title="下の階を透かして表示" aria-pressed="true">
-                <i data-lucide="layers"></i>
-                <span>下階</span>
-              </button>
+              <div class="ghost-options">
+                <button class="toggle-button is-active" id="ghostToggle" type="button" title="ほかの階を透かして表示" aria-pressed="true">
+                  <i data-lucide="layers"></i>
+                  <span>透過</span>
+                </button>
+                <button class="icon-button ghost-menu-button" id="ghostMenuButton" type="button" title="透かす階と色を選ぶ" aria-label="透かす階と色を選ぶ" aria-expanded="false">
+                  <i data-lucide="chevron-down"></i>
+                </button>
+                <div class="ghost-menu" id="ghostMenu" hidden>
+                  <label>透かす階<select id="ghostFloorSelect"></select></label>
+                  <label>透かす色（カラーコード。空欄なら元の色）
+                    <span class="color-code-row">
+                      <input id="ghostColorPicker" type="color" value="#2775d1" aria-label="透かす色を選ぶ" />
+                      <input id="ghostColorInput" type="text" placeholder="例 #2775d1 や #2775d160" spellcheck="false" autocomplete="off" />
+                    </span>
+                  </label>
+                  <label>濃さ <span id="ghostOpacityValue"></span><input id="ghostOpacityInput" type="range" min="3" max="90" step="1" /></label>
+                </div>
+              </div>
               <button class="toggle-button is-active" id="roofToggle2d" type="button" title="間取り上の屋根を一時的に隠す" aria-pressed="true" hidden>
                 <i data-lucide="house"></i>
                 <span>屋根</span>

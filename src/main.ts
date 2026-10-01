@@ -6,6 +6,7 @@ import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomS
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
+import { parseColorCode, withAlpha } from "./colors";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
@@ -129,10 +130,12 @@ interface Floor {
 }
 
 interface PlanState {
+  // 下の階から順。先頭の basements 個が地下の階（B1F, B2F …）で、その次が1F
   floors: Floor[];
   activeFloor: number;
   selectedId: string | null;
   roofs: Roof[];
+  basements?: number;
 }
 
 interface PointerState {
@@ -221,7 +224,6 @@ const WALL_THICKNESS_2D = 10;
 const WALL_HEIGHT = 2.6;
 const FLOOR_SLAB = 0.15;
 const FLOOR_SPACING = WALL_HEIGHT + FLOOR_SLAB;
-const MAX_FLOORS = 4;
 // 開口の高さ範囲（壁がドア・窓と重なった部分だけを切り抜くために使う）
 const DOOR_HEAD_Y = 2.1;
 const WINDOW_SILL_Y = 0.84;
@@ -420,6 +422,17 @@ let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
 let showGhostFloor = loadGhostFloor();
+// 透かす階（"below" すぐ下 / "above" すぐ上 / "all" ほかの階すべて / 階のID）、透かす色（空なら元の色）、濃さ
+const DEFAULT_GHOST_OPACITY = 0.13;
+const ghostSettings: { target: string; color: string; opacity: number } = { target: "below", color: "", opacity: DEFAULT_GHOST_OPACITY };
+// 透かす階をいったん描く作業用のキャンバス（起動直後の描画でも使うので、ここで宣言しておく）
+let ghostCanvas: HTMLCanvasElement | null = null;
+
+// 透かす色のカラーコードに透明度があればそれを、なければ「濃さ」を使う
+function ghostOpacity(): number {
+  const tint = parseColorCode(ghostSettings.color);
+  return tint && tint.alpha < 1 ? tint.alpha : ghostSettings.opacity;
+}
 let storageRecovery: Recovery | null = null;
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
@@ -516,6 +529,7 @@ interface SavedViewState {
   // 左の一覧の開閉。見出しの文字ごとに持つ
   panels?: Record<string, boolean>;
   symbols?: Partial<Record<FurnitureKind, number>>;
+  ghost?: { target?: string; color?: string; opacity?: number };
 }
 
 const viewState: SavedViewState = loadViewState();
@@ -591,6 +605,8 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
         entities: normalizeEntities(floor.entities),
       }));
     if (floors.length === 0) return null;
+    const basements = clamp(Math.round(Number(data.basements ?? 0)) || 0, 0, floors.length - 1);
+    floors.forEach((floor, index) => (floor.name = floorLabel(index, basements)));
     const roofs = Array.isArray(data.roofs)
       ? data.roofs.flatMap((item) => {
         const normalized = normalizeRoof(item);
@@ -606,6 +622,7 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
       activeFloor: clamp(Math.round(Number(data.activeFloor ?? 0)) || 0, 0, floors.length - 1),
       selectedId: data.selectedId ?? null,
       roofs,
+      ...(basements ? { basements } : {}),
     };
   }
   if (data && Array.isArray(data.entities)) {
@@ -819,6 +836,7 @@ function setupUi(): void {
     rebuildThree();
   });
 
+  setupGhostMenu();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -939,6 +957,7 @@ function setupUi(): void {
 
   bindSplitDivider();
   appResizeObserver = new ResizeObserver(() => {
+    fitPlanBar();
     resizeCanvases();
     render2d();
     render3dOnce();
@@ -1117,6 +1136,16 @@ function applyPaletteSearch(): void {
 
 function renderFloorTabs(): void {
   floorTabs.innerHTML = "";
+  const basement = document.createElement("button");
+  basement.type = "button";
+  basement.className = "floor-tab floor-tab-ghost";
+  basement.textContent = "＋B";
+  basement.title = "地下の階を追加（いちばん下に増えます）";
+  basement.addEventListener("click", addBasement);
+  floorTabs.appendChild(basement);
+  // 階のタブだけを横に並べる。階が多くて入りきらないときはここだけ横にスクロールし、追加・削除のボタンは隠れない
+  const list = document.createElement("div");
+  list.className = "floor-tab-list";
   state.floors.forEach((floor, index) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -1124,17 +1153,22 @@ function renderFloorTabs(): void {
     button.textContent = floor.name;
     button.title = `${floor.name}を編集`;
     button.addEventListener("click", () => setActiveFloorIndex(index));
-    floorTabs.appendChild(button);
+    list.appendChild(button);
   });
-  if (state.floors.length < MAX_FLOORS) {
-    const add = document.createElement("button");
-    add.type = "button";
-    add.className = "floor-tab floor-tab-ghost";
-    add.textContent = "＋";
-    add.title = "上の階を追加";
-    add.addEventListener("click", addFloorAbove);
-    floorTabs.appendChild(add);
-  }
+  // 縦のホイールでも横にスクロールできるようにする
+  list.addEventListener("wheel", (event) => {
+    if (list.scrollWidth <= list.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+    event.preventDefault();
+    list.scrollLeft += event.deltaY;
+  }, { passive: false });
+  floorTabs.appendChild(list);
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "floor-tab floor-tab-ghost";
+  add.textContent = "＋";
+  add.title = "上の階を追加";
+  add.addEventListener("click", addFloorAbove);
+  floorTabs.appendChild(add);
   if (state.floors.length > 1) {
     const remove = document.createElement("button");
     remove.type = "button";
@@ -1144,6 +1178,22 @@ function renderFloorTabs(): void {
     remove.addEventListener("click", removeActiveFloor);
     floorTabs.appendChild(remove);
   }
+  fitPlanBar();
+}
+
+// 2Dの欄が狭くて階のタブが入りきらないときは、部屋や壁の数の表示をしまい、
+// 編集中の階のタブが見えるところまでスクロールする
+function fitPlanBar(): void {
+  const list = floorTabs.querySelector<HTMLElement>(".floor-tab-list");
+  if (!list) return;
+  planStats.hidden = false;
+  if (list.scrollWidth > list.clientWidth + 1) planStats.hidden = true;
+  const active = list.querySelector<HTMLElement>(".is-active");
+  if (!active || list.scrollWidth <= list.clientWidth) return;
+  const listRect = list.getBoundingClientRect();
+  const tabRect = active.getBoundingClientRect();
+  if (tabRect.left < listRect.left) list.scrollLeft -= listRect.left - tabRect.left;
+  else if (tabRect.right > listRect.right) list.scrollLeft += tabRect.right - listRect.right;
 }
 
 function renderFloorVisibility(): void {
@@ -1282,9 +1332,54 @@ function setActiveFloorIndex(index: number): void {
   redrawAll();
 }
 
+// ---- 階の高さ・名前（地下の階は1Fより下） ----
+
+function basementCount(plan: PlanState = state): number {
+  return clamp(Math.round(plan.basements ?? 0) || 0, 0, plan.floors.length - 1);
+}
+
+// 地上からの階の位置。0が1F、-1がB1F
+function floorLevel(index: number): number {
+  return index - basementCount();
+}
+
+function floorLabel(index: number, basements = basementCount()): string {
+  const level = index - basements;
+  return level >= 0 ? `${level + 1}F` : `B${-level}F`;
+}
+
+function renameFloors(): void {
+  state.floors.forEach((floor, index) => (floor.name = floorLabel(index)));
+}
+
+function isGroundFloor(index: number): boolean {
+  return floorLevel(index) === 0;
+}
+
+// その階の床の高さ（3D）。1Fが0で、地下はマイナス
+function floorBaseY(index: number): number {
+  return floorLevel(index) * FLOOR_SPACING;
+}
+
+// 1Fだけは地面の上に薄い床があるので、家具などを置く面が少し高い
+function floorTopOffset(index: number): number {
+  return isGroundFloor(index) ? 0.08 : 0;
+}
+
+function addBasement(): void {
+  state.floors.unshift({ id: newId("floor"), name: "", entities: [] });
+  state.basements = basementCount() + 1;
+  renameFloors();
+  state.activeFloor = 0;
+  state.selectedId = null;
+  commitState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
 function addFloorAbove(): void {
-  if (state.floors.length >= MAX_FLOORS) return;
-  state.floors.push({ id: newId("floor"), name: `${state.floors.length + 1}F`, entities: [] });
+  state.floors.push({ id: newId("floor"), name: "", entities: [] });
+  renameFloors();
   state.activeFloor = state.floors.length - 1;
   state.selectedId = null;
   commitState();
@@ -1301,10 +1396,13 @@ function removeActiveFloor(): void {
   }
   hiddenFloorIds.delete(floor.id);
   state.roofs = state.roofs.filter((item) => item.floorId !== floor.id);
+  const basements = basementCount();
+  const wasBasement = state.activeFloor < basements;
   state.floors.splice(state.activeFloor, 1);
-  state.floors.forEach((item, index) => {
-    item.name = `${index + 1}F`;
-  });
+  // 地下を消したとき、または地上の階がなくなったときは地下の数を1つ減らす（いちばん上の地下が1Fになる）
+  if (wasBasement || state.floors.length - basements <= 0) state.basements = Math.max(0, basements - 1);
+  if (!state.basements) delete state.basements;
+  renameFloors();
   state.activeFloor = clamp(state.activeFloor, 0, state.floors.length - 1);
   state.selectedId = null;
   commitState();
@@ -1342,6 +1440,97 @@ function updateShadowToggle(): void {
   button?.setAttribute("aria-pressed", String(shadowsEnabled));
   const lightSelect = document.querySelector<HTMLSelectElement>("#lightDirectionSelect");
   if (lightSelect) lightSelect.disabled = !shadowsEnabled;
+}
+
+// ---- 透かす階と色のメニュー ----
+
+function setupGhostMenu(): void {
+  const button = document.querySelector<HTMLButtonElement>("#ghostMenuButton");
+  const menu = document.querySelector<HTMLDivElement>("#ghostMenu");
+  const select = document.querySelector<HTMLSelectElement>("#ghostFloorSelect");
+  const picker = document.querySelector<HTMLInputElement>("#ghostColorPicker");
+  const code = document.querySelector<HTMLInputElement>("#ghostColorInput");
+  const opacity = document.querySelector<HTMLInputElement>("#ghostOpacityInput");
+  if (!button || !menu || !select || !picker || !code || !opacity) return;
+  const apply = () => {
+    syncGhostMenu();
+    render2d();
+    scheduleViewStateSave();
+  };
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  });
+  select.addEventListener("change", () => {
+    ghostSettings.target = select.value;
+    // 透かす階を選んだら、透過も表示にする
+    if (!showGhostFloor) document.querySelector<HTMLButtonElement>("#ghostToggle")?.click();
+    apply();
+  });
+  picker.addEventListener("input", () => {
+    // 色を選び直しても、カラーコードの透明度はそのまま
+    const current = parseColorCode(ghostSettings.color);
+    ghostSettings.color = withAlpha(picker.value, current ? current.alpha : 1);
+    apply();
+  });
+  code.addEventListener("change", () => {
+    const value = code.value.trim();
+    const parsed = parseColorCode(value);
+    if (value && !parsed) {
+      code.classList.add("is-invalid");
+      return;
+    }
+    code.classList.remove("is-invalid");
+    ghostSettings.color = parsed?.code ?? "";
+    apply();
+  });
+  opacity.addEventListener("input", () => {
+    const value = Number(opacity.value) / 100;
+    const current = parseColorCode(ghostSettings.color);
+    // カラーコードがあれば、その末尾の透明度を書き換える
+    if (current) ghostSettings.color = withAlpha(current.rgb, value);
+    ghostSettings.opacity = value;
+    apply();
+  });
+  syncGhostMenu();
+}
+
+function syncGhostMenu(): void {
+  const picker = document.querySelector<HTMLInputElement>("#ghostColorPicker");
+  const code = document.querySelector<HTMLInputElement>("#ghostColorInput");
+  const opacity = document.querySelector<HTMLInputElement>("#ghostOpacityInput");
+  const value = document.querySelector<HTMLSpanElement>("#ghostOpacityValue");
+  const parsed = parseColorCode(ghostSettings.color);
+  if (picker && parsed) picker.value = parsed.rgb;
+  if (code && document.activeElement !== code) code.value = parsed?.code ?? "";
+  const percent = Math.round(ghostOpacity() * 100);
+  if (opacity) opacity.value = String(percent);
+  if (value) value.textContent = `${percent}%`;
+  renderGhostFloorOptions();
+}
+
+function renderGhostFloorOptions(): void {
+  const select = document.querySelector<HTMLSelectElement>("#ghostFloorSelect");
+  if (!select) return;
+  const options = [
+    ["below", "すぐ下の階"],
+    ["above", "すぐ上の階"],
+    ["all", "ほかの階すべて"],
+    ...state.floors.map((floor) => [floor.id, floor.name]),
+  ];
+  // 選んでいた階が消えたときは、すぐ下の階に戻す
+  if (!options.some(([value]) => value === ghostSettings.target)) ghostSettings.target = "below";
+  const html = options.map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`).join("");
+  if (select.dataset.options !== html) {
+    select.innerHTML = html;
+    select.dataset.options = html;
+  }
+  select.value = ghostSettings.target;
 }
 
 // ---- 2Dと3Dの境目 ----
@@ -1493,6 +1682,12 @@ function applySavedDisplaySettings(): void {
     workspace.dataset.panel = "hidden";
     document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", "true");
   }
+  if (viewState.ghost && typeof viewState.ghost === "object") {
+    const { target, color, opacity } = viewState.ghost;
+    if (typeof target === "string" && target) ghostSettings.target = target;
+    if (typeof color === "string") ghostSettings.color = parseColorCode(color)?.code ?? "";
+    if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
+  }
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -1574,6 +1769,7 @@ function saveViewState(): void {
     toolPanelDetails().map((details) => [detailsKey(details), details.dataset.wasOpen !== undefined ? details.dataset.wasOpen === "true" : details.open]),
   );
   viewState.symbols = { ...lastSymbolByKind };
+  viewState.ghost = { ...ghostSettings };
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -1824,7 +2020,7 @@ function handleThreePointerDown(event: PointerEvent): void {
   const created = activeTool === "furniture";
   if (created) {
     if (hiddenFloorIds.has(activeFloor().id)) return;
-    const point = threeFloorPoint(event, floorIndex * FLOOR_SPACING + (floorIndex === 0 ? 0.08 : 0));
+    const point = threeFloorPoint(event, floorBaseY(floorIndex) + floorTopOffset(floorIndex));
     if (!point) return;
     const base = FURNITURE_DEFS[activeFurniture];
     furnitureItem = { id: newId("furniture"), type: "furniture", kind: activeFurniture, x: snap(point.x - base.w / 2), y: snap(point.y - base.h / 2), w: base.w, h: base.h, rotation: 0, ...rememberedSymbol(activeFurniture) };
@@ -1835,7 +2031,7 @@ function handleThreePointerDown(event: PointerEvent): void {
     return;
   }
 
-  const planeY = floorIndex * FLOOR_SPACING + (floorIndex === 0 ? 0.08 : 0);
+  const planeY = floorBaseY(floorIndex) + floorTopOffset(floorIndex);
   const point = threeFloorPoint(event, planeY);
   if (!point) return;
   event.preventDefault();
@@ -2292,7 +2488,7 @@ function render2d(): void {
     drawGrid(width, height);
     ctx.restore();
   }
-  // 現在の階の部屋の塗りの上・線画の下に、下階のゴーストを挟む
+  // 現在の階の部屋の塗りの上・線画の下に、ほかの階のゴーストを挟む
   drawFloorBelowGhost();
   entities.filter(isFurniture).filter((item) => item.kind === "rug").forEach(drawFurniture2d);
   entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
@@ -2351,22 +2547,66 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
   }
 }
 
+// 透かして見せる階。「すぐ下」「すぐ上」「ほかの階すべて」、または階を1つ選ぶ
+function ghostFloors(): Floor[] {
+  const target = ghostSettings.target;
+  const active = state.activeFloor;
+  if (target === "below") return active > 0 ? [state.floors[active - 1]] : [];
+  if (target === "above") return active < state.floors.length - 1 ? [state.floors[active + 1]] : [];
+  if (target === "all") return state.floors.filter((_, index) => index !== active);
+  return state.floors.filter((floor, index) => floor.id === target && index !== active);
+}
+
+// 透かす階を、まず別のキャンバスにふつうの濃さで描き、最後に1回だけ半透明で重ねる。
+// 要素ごとに半透明で重ねると、壁の角や重なった所だけ濃くなってしまうため
 function drawFloorBelowGhost(): void {
-  if (!showGhostFloor || state.activeFloor === 0) return;
-  const below = state.floors[state.activeFloor - 1];
-  const entities = below.entities;
+  if (!showGhostFloor) return;
+  const floors = ghostFloors();
+  if (!floors.length) return;
+  ghostCanvas ??= document.createElement("canvas");
+  const target = ghostCanvas;
+  if (target.width !== planCanvas.width || target.height !== planCanvas.height) {
+    target.width = planCanvas.width;
+    target.height = planCanvas.height;
+  }
+  const ghostContext = target.getContext("2d");
+  if (!ghostContext) return;
+  const planContext = ctx;
+  const transform = planContext.getTransform();
+  ctx = ghostContext;
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, target.width, target.height);
+    ctx.setTransform(transform);
+    // 部屋の塗りを先に全部描き、その上に線の要素を描く（ほかの階の床が線を隠さないように）
+    for (const floor of floors) floor.entities.filter(isRoom).forEach(drawRoom);
+    for (const floor of floors) {
+      const entities = floor.entities;
+      entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
+        getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
+      });
+      entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
+      entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
+      entities.filter(isFurniture).forEach(drawFurniture2d);
+      entities.filter(isShape).forEach(drawShape2d);
+      entities.filter(isTextLabel).forEach(drawTextLabel);
+    }
+    const tint = parseColorCode(ghostSettings.color);
+    if (tint) {
+      // 透かす色が決まっているときは、描いた形をその色1色に塗り替える
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-in";
+      ctx.fillStyle = tint.rgb;
+      ctx.fillRect(0, 0, target.width, target.height);
+      ctx.globalCompositeOperation = "source-over";
+    }
+  } finally {
+    ctx = planContext;
+  }
   ctx.save();
-  // 下の階のすべての要素をごく薄い半透明で描く
-  ctx.globalAlpha = 0.13;
-  entities.filter(isRoom).forEach(drawRoom);
-  entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
-    getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
-  });
-  entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
-  entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
-  entities.filter(isFurniture).forEach(drawFurniture2d);
-  entities.filter(isShape).forEach(drawShape2d);
-  entities.filter(isTextLabel).forEach(drawTextLabel);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = ghostOpacity();
+  ctx.drawImage(target, 0, 0);
   ctx.restore();
 }
 
@@ -4559,7 +4799,7 @@ function rebuildThree(): void {
 
   state.floors.forEach((floor, index) => {
     if (hiddenFloorIds.has(floor.id)) return;
-    const yBase = index * FLOOR_SPACING;
+    const yBase = floorBaseY(index);
     // 笠木（壁上端のキャップ）は最上階のみ。途中階は上階の壁と面一に continuous させる
     const withCap = index === topVisibleIndex;
     const rooms = floor.entities.filter(isRoom);
@@ -4591,19 +4831,21 @@ function rebuildThree(): void {
 }
 
 function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number, laterRooms: Room[]): void {
-  const slabInset = floorIndex === 0 ? 0 : WALL_THICKNESS_2D;
+  const ground = isGroundFloor(floorIndex);
+  const slabInset = ground ? 0 : WALL_THICKNESS_2D;
   const footprint = (item: Room): Rectangle => ({ x: item.x + slabInset / 2, y: item.y + slabInset / 2, w: Math.max(item.w - slabInset, 10), h: Math.max(item.h - slabInset, 10) });
-  const thickness = floorIndex === 0 ? 0.08 : FLOOR_SLAB;
+  // 1Fは地面の上の薄い床。下に地下があるときは、地下の天井とのすき間も床でふさぐ
+  const thickness = ground ? 0.08 + (floorIndex > 0 ? FLOOR_SLAB : 0) : FLOOR_SLAB;
   const group = new THREE.Group();
   for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
     const geometry = new THREE.BoxGeometry(rect.w * SCALE_3D, thickness, rect.h * SCALE_3D);
     const mesh = new THREE.Mesh(geometry, [slabMaterial, slabMaterial, roomMaterial(roomItem, rect), slabMaterial, slabMaterial, slabMaterial]);
     const pos = to3d(rect.x + rect.w / 2, rect.y + rect.h / 2, center);
-    mesh.position.set(pos.x, floorIndex === 0 ? thickness / 2 : yBase - thickness / 2, pos.z);
+    mesh.position.set(pos.x, ground ? 0.08 - thickness / 2 : yBase - thickness / 2, pos.z);
     mesh.receiveShadow = true;
     mesh.castShadow = floorIndex > 0;
     group.add(mesh);
-    if (roomItem.surface === "grass") addGrass3d(roomItem, rect, center, floorIndex === 0 ? thickness : yBase, state.floors[floorIndex].entities);
+    if (roomItem.surface === "grass") addGrass3d(roomItem, rect, center, ground ? 0.08 : yBase, state.floors[floorIndex].entities);
   }
   if (!group.children.length) return;
   markSelectable(group, roomItem.id);
@@ -4704,7 +4946,8 @@ function addStraightWall3d(
 ): void {
   const length = distance(wallItem) * SCALE_3D;
   // 上階の壁は床スラブの厚みぶん下へ延長し、下階の壁と外面が連続するようにする
-  const bottomExtension = yBase > 0 && yFrom === 0 ? FLOOR_SLAB : 0;
+  // いちばん下の階でなければ、下の階の壁の上端まで伸ばす（地下があるときの1Fも同じ）
+  const bottomExtension = yBase > floorBaseY(0) + 1e-6 && yFrom === 0 ? FLOOR_SLAB : 0;
   const height = yTo - yFrom + bottomExtension;
   if (length <= 0.02 || height <= 0.02) return;
   const thickness = WALL_THICKNESS_2D * SCALE_3D;
@@ -4847,7 +5090,7 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   const width = roofItem.w * SCALE_3D;
   const depth = roofItem.h * SCALE_3D;
   const pos = to3d(roofItem.x + roofItem.w / 2, roofItem.y + roofItem.h / 2, center);
-  const topY = topIndex * FLOOR_SPACING + WALL_HEIGHT + 0.06;
+  const topY = floorBaseY(topIndex) + WALL_HEIGHT + 0.06;
 
   if (roofItem.kind === "flat") {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roofMaterial);
@@ -4933,7 +5176,7 @@ function addSubtleGrid(bounds: Bounds | null, center: Point): void {
 
 function frameCamera(bounds: Bounds | null): void {
   const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 7;
-  const buildingHeight = state.floors.length * FLOOR_SPACING;
+  const buildingHeight = (state.floors.length - basementCount()) * FLOOR_SPACING;
   const rect = threeCanvas.getBoundingClientRect();
   const aspect = rect.height > 0 ? rect.width / rect.height : 1;
   const portraitScale = aspect < 1 ? 1 / Math.max(aspect, 0.45) : 1;
@@ -4973,6 +5216,7 @@ function redrawAll(rebuild = true): void {
 
 function updateUi(): void {
   scheduleViewStateSave();
+  renderGhostFloorOptions();
   updateStats();
   updatePropertiesPanel();
   renderFloorTabs();
@@ -4989,8 +5233,12 @@ function updateStats(): void {
   const walls = entities.filter((entity) => entity.type === "wall").length;
   const furnitureCount = entities.filter(isFurniture).length;
   planStats.textContent = `${rooms}室 / 壁${walls} / 家具${furnitureCount}`;
+  // ボタンが並んで欄が狭いときは省略されるので、マウスを乗せると全部読めるようにする
+  planStats.title = planStats.textContent;
   const totalParts = state.floors.reduce((sum, floor) => sum + floor.entities.length, 0);
-  threeStats.textContent = `${state.floors.length}階建て・部材${totalParts}・屋根${state.roofs.length}`;
+  const basements = basementCount();
+  const stories = basements ? `地上${state.floors.length - basements}階・地下${basements}階` : `${state.floors.length}階建て`;
+  threeStats.textContent = `${stories}・部材${totalParts}・屋根${state.roofs.length}`;
 }
 
 function updatePropertiesPanel(): void {

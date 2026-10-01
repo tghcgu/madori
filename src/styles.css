@@ -621,6 +621,106 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+}
+
+/* 階が多くて入りきらないときは、階のタブだけ横にスクロール（縦のホイールでも動く） */
+.floor-tab-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.floor-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.floor-tab {
+  flex: 0 0 auto;
+}
+
+/* 階が多いときは、階のタブより先に部屋や壁の数の表示を縮めて省略する */
+#planStats {
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 透過のボタンと、透かす階・色を選ぶメニュー */
+.ghost-options {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ghost-menu-button {
+  width: 24px;
+  min-width: 24px;
+  height: 38px;
+  padding: 0;
+}
+
+.ghost-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 250px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
+}
+
+.ghost-menu[hidden] {
+  display: none;
+}
+
+.ghost-menu label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ghost-menu select,
+.color-code-row input[type="text"] {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.color-code-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.color-code-row input[type="color"] {
+  width: 40px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.color-code-row input.is-invalid {
+  border-color: #d45d4c;
+  background: #fff6f4;
 }
 
 .floor-tab {
@@ -932,6 +1032,8 @@ select:focus-visible {
 
 .plan-pane {
   display: grid;
+  /* 上のボタンの列が長くなっても、2Dの欄の幅を超えて広がらないようにする */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 46px minmax(0, 1fr);
   container: plan-pane / inline-size;
 }
@@ -949,6 +1051,30 @@ select:focus-visible {
 
   .pane-bar .toggle-button span {
     display: none;
+  }
+
+  /* 階のタブも詰めて、2〜3階ぶんは並んで見えるようにする */
+  .pane-bar {
+    gap: 8px;
+  }
+
+  .pane-left {
+    gap: 6px;
+  }
+
+  .floor-tabs,
+  .floor-tab-list {
+    gap: 3px;
+  }
+
+  .floor-tab {
+    min-width: 30px;
+    padding: 0 6px;
+  }
+
+  .floor-tab.floor-tab-ghost {
+    min-width: 26px;
+    padding: 0 4px;
   }
 }
 
@@ -1182,8 +1308,10 @@ body[data-resizing="down"] {
 
 .floor-visibility {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  min-width: 0;
 }
 
 .floor-visibility:empty {
