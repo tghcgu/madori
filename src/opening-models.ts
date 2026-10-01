@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+// テストでは Node がそのまま読むため、値を読み込むときは拡張子まで書く
+import { parseColorCode } from "./colors.ts";
+import { applyOpacity } from "./translucency.ts";
 
 export interface OpeningModelOptions {
   type: "door" | "window";
@@ -17,7 +20,9 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
   const group = new THREE.Group();
   group.name = item.type === "window" ? "window" : item.doorStyle === "sliding" ? "sliding-door" : "closed-door";
   const w = item.length;
-  const custom = item.color3d ?? item.color;
+  // カラーコードの末尾に透明度があれば、ドア・窓をまるごと半透明にする
+  const parsed = parseColorCode(item.color3d ?? item.color);
+  const custom = parsed?.rgb ?? item.color3d ?? item.color;
   const material = (name: string, color: THREE.ColorRepresentation, roughness: number, metalness = 0) => {
     const result = new THREE.MeshStandardMaterial({ color, roughness, metalness });
     result.name = name;
@@ -93,5 +98,6 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
       for (const y of [0.2, 0.95, 1.73]) part("hinge", 0.014, 0.075, 0.018, -w / 2 + edge * 0.48, bottom + y, item.flip ? -0.032 : 0.032, metal);
     }
   }
+  applyOpacity(group, parsed?.alpha ?? 1);
   return group;
 }

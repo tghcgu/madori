@@ -165,3 +165,25 @@ test('rocks are made of flat faces between the ridges, with every outline point 
     }
   }
 });
+
+test('a 3D color code with an alpha makes every piece translucent with the same shape and tint', () => {
+  for (const kind of ['sofa', 'aquarium', 'bed', 'tree']) {
+    const { w, h } = FURNITURE_DEFS[kind];
+    const solid = buildFurnitureModel({ kind, w, h, color3d: '#c04020' });
+    const seeThrough = buildFurnitureModel({ kind, w, h, color3d: '#c0402080' });
+    try {
+      const shape = group => signature(group).replace(/#[0-9a-f]{6}/g, '');
+      assert.equal(shape(seeThrough), shape(solid), `${kind}: same pieces and positions`);
+      assert.equal(signature(seeThrough), signature(solid), `${kind}: the tint ignores the alpha digits`);
+      const opacities = new Map();
+      solid.traverse(object => { if (object.isMesh) opacities.set(object.material.name, object.material.opacity); });
+      seeThrough.traverse(object => {
+        if (!object.isMesh) return;
+        assert.equal(object.material.transparent, true, `${kind} ${object.material.name} is transparent`);
+        assert.ok(Math.abs(object.material.opacity - opacities.get(object.material.name) * 0x80 / 255) < 1e-6, `${kind} ${object.material.name} opacity`);
+        assert.equal(object.material.depthWrite, false);
+        assert.equal(object.castShadow, false, 'see-through pieces cast no shadow');
+      });
+    } finally { dispose(solid); dispose(seeThrough); }
+  }
+});

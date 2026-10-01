@@ -52,6 +52,14 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       cameraPosition() {
         return camera.position.toArray();
       },
+      materials(id) {
+        const found = [];
+        planGroup.traverse(o => {
+          if (!o.isMesh || entityIdFromObject(o) !== id) return;
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow }));
+        });
+        return found;
+      },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
@@ -562,6 +570,70 @@ try {
   await page.locator('#ghostColorInput').press('Enter');
   await page.locator('#ghostFloorSelect').selectOption('below');
   console.log('PASS: ghost floors: uniform opacity, choose below/above/any floor, color code tint with opacity, reload');
+
+  // Colors can be typed as color codes; two more digits make them see-through, evenly in 2D and as transparent materials in 3D.
+  await importPlan({ floors: [{ id: 'c1', name: '', entities: [
+    { id: 'wa', type: 'wall', x1: 0, y1: 200, x2: 600, y2: 200 }, { id: 'wb', type: 'wall', x1: 300, y1: 0, x2: 300, y2: 400 },
+    { id: 'cr', type: 'room', name: '', x: 700, y: 0, w: 300, h: 300, color: '#FFF' },
+  ] }], activeFloor: 0, selectedId: null, roofs: [] });
+  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'cr').color, '#ffffff', 'short and upper-case codes are normalized');
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator('[data-tool="select"]').click();
+  const pick = async (x, y) => {
+    const point = await planPoint(x, y);
+    await page.mouse.click(point.x, point.y);
+  };
+  await pick(150, 200);
+  assert.equal(await page.locator('#lineXInput').inputValue(), '0', 'the first wall is selected');
+  const colorOf = async id => (await saved()).floors[0].entities.find(item => item.id === id);
+  const setCode = async (selector, value) => {
+    await page.locator(selector).fill(value);
+    await page.locator(selector).press('Enter');
+  };
+  assert.equal(await page.locator('#lineColorInputCode').inputValue(), '#000000');
+  await setCode('#lineColorInputCode', '#D1272780');
+  assert.equal((await colorOf('wa')).color, '#d1272780');
+  assert.equal(await page.locator('#lineColorInputCode').inputValue(), '#d1272780');
+  assert.equal(await page.locator('#lineColorInput').inputValue(), '#d12727');
+  // The canvas is transparent where nothing is drawn, so look at the pixel as shown on the white page (and off the grid lines).
+  const shown = pixel => [0, 1, 2].map(i => Math.round(pixel[i] * pixel[3] / 255 + 255 * (1 - pixel[3] / 255)));
+  const halfRed = shown(await pixelAt(150, 203));
+  assert.ok(halfRed[0] > 200 && halfRed[1] > 110 && halfRed[1] < 190, `the wall is half see-through red: ${halfRed}`);
+  // The picker keeps the alpha digits.
+  await page.locator('#lineColorInput').evaluate(input => { input.value = '#2040c0'; input.dispatchEvent(new Event('change', { bubbles: true })); });
+  assert.equal((await colorOf('wa')).color, '#2040c080');
+  // Walls of the same see-through color are composited once, so the crossing is no darker.
+  await pick(300, 80);
+  assert.equal(await page.locator('#lineXInput').inputValue(), '300', 'the second wall is selected');
+  await setCode('#lineColorInputCode', '#2040c080');
+  const crossingWall = shown(await pixelAt(303, 203)), singleWall = shown(await pixelAt(450, 203));
+  assert.ok(close(crossingWall, singleWall, 3), `see-through walls are even where they cross: ${crossingWall} vs ${singleWall}`);
+  // Invalid codes are refused, an empty code returns to the default color.
+  await setCode('#lineColorInputCode', '#12345');
+  assert.equal(await page.locator('#lineColorInputCode').evaluate(input => input.classList.contains('is-invalid')), true);
+  assert.equal((await colorOf('wb')).color, '#2040c080');
+  await setCode('#lineColor3dInputCode', '#2775d140');
+  const wallMaterials = await page.evaluate(() => window.__editorTest.materials('wb'));
+  assert.ok(wallMaterials.length > 0 && wallMaterials.every(m => m.transparent && Math.abs(m.opacity - 0x40 / 255) < 1e-6 && m.color === '2775d1' && !m.shadow),
+    `the 3D wall is a see-through material: ${JSON.stringify(wallMaterials)}`);
+  await setCode('#lineColorInputCode', '');
+  assert.equal((await colorOf('wb')).color, undefined);
+  assert.equal((await colorOf('wb')).color3d, '#2775d140');
+  // Rooms keep their alpha when the floor material changes, and the 3D floor is see-through too.
+  await pick(850, 200);
+  assert.equal(await page.locator('#roomColorInputCode').inputValue(), '#ffffff', 'the room is selected');
+  await setCode('#roomColorInputCode', '#2775d180');
+  await page.locator('#roomSurfaceInput').selectOption('wood');
+  const tintedRoom = await colorOf('cr');
+  assert.match(tintedRoom.color, /^#[0-9a-f]{6}80$/);
+  assert.match(tintedRoom.color3d, /^#[0-9a-f]{6}80$/);
+  const roomMaterials = await page.evaluate(() => window.__editorTest.materials('cr'));
+  assert.ok(roomMaterials.every(m => m.transparent && Math.abs(m.opacity - 0x80 / 255) < 1e-6), `the 3D floor and its sides are see-through: ${JSON.stringify(roomMaterials)}`);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal((await colorOf('cr')).color, tintedRoom.color, 'color codes with alpha survive a reload');
+  console.log('PASS: color codes: typing, alpha digits, picker keeps alpha, even 2D overlap, see-through 3D, invalid and empty codes, reload');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);

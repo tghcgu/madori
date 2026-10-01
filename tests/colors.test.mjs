@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseColorCode, withAlpha } from '../src/colors.ts';
+import { colorAlpha, parseColorCode, solidColor, withAlpha } from '../src/colors.ts';
 
 test('color codes accept 3, 4, 6 and 8 digits, with or without #', () => {
   assert.deepEqual(parseColorCode('#2775D1'), { code: '#2775d1', rgb: '#2775d1', alpha: 1 });
@@ -28,4 +28,15 @@ test('withAlpha writes the opacity as the last two digits', () => {
     const code = withAlpha('#123456', value / 255);
     assert.equal(Math.round(parseColorCode(code).alpha * 255), value, code);
   }
+});
+
+test('solidColor drops the alpha digits and colorAlpha reads them', () => {
+  assert.equal(solidColor('#2775d180'), '#2775d1');
+  assert.equal(solidColor('#ABC'), '#aabbcc');
+  assert.equal(solidColor(undefined), undefined);
+  assert.equal(solidColor('rgba(0,0,0,0.5)'), 'rgba(0,0,0,0.5)', 'anything else is passed through');
+  assert.equal(colorAlpha('#2775d180'), 0x80 / 255);
+  assert.equal(colorAlpha('#2775d1'), 1);
+  assert.equal(colorAlpha(undefined), 1);
+  assert.equal(colorAlpha('#0000'), 0);
 });

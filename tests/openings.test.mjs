@@ -67,3 +67,21 @@ test('window colors affect frames without tinting the glass or hardware', () => 
   }
   dispose(group);
 });
+
+test('doors and windows with a color code alpha become translucent, opaque codes stay solid', () => {
+  for (const options of [{ type: 'door' }, { type: 'door', doorStyle: 'sliding' }, { type: 'window' }]) {
+    const solid = buildOpeningModel({ ...options, length: 0.9, color3d: '#335577' });
+    const seeThrough = buildOpeningModel({ ...options, length: 0.9, color3d: '#33557740' });
+    try {
+      const materials = group => { const found = new Map(); group.traverse(object => { if (object.isMesh) found.set(object.material.name, object.material); }); return found; };
+      const before = materials(solid), after = materials(seeThrough);
+      assert.deepEqual([...after.keys()].sort(), [...before.keys()].sort());
+      for (const [name, material] of after) {
+        assert.equal(material.color.getHexString(), before.get(name).color.getHexString(), `${name} keeps its color`);
+        assert.equal(material.transparent, true, `${name} is transparent`);
+        assert.ok(Math.abs(material.opacity - before.get(name).opacity * 0x40 / 255) < 1e-6, `${name} opacity`);
+      }
+      for (const [name, material] of before) if (name !== 'glass') assert.equal(material.transparent, false, `${name} stays solid without an alpha`);
+    } finally { dispose(solid); dispose(seeThrough); }
+  }
+});

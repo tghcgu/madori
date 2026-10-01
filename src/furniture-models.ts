@@ -11,6 +11,8 @@ import {
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
   SPIRAL_POT_SCALE, spiralLeaves,
 } from "./furniture-shapes.ts";
+import { parseColorCode } from "./colors.ts";
+import { applyOpacity } from "./translucency.ts";
 
 type Position = [number, number, number];
 type Material = THREE.MeshStandardMaterial;
@@ -34,8 +36,14 @@ class Model {
   readonly group = new THREE.Group();
   private readonly materials = new Map<string, Material>();
   private readonly tint: string | undefined;
+  // 色のカラーコードの透明度。1より小さいと、仕上げのときに全体を半透明にする
+  private readonly alpha: number;
 
-  constructor(tint?: string) { this.tint = tint; }
+  constructor(tint?: string) {
+    const parsed = parseColorCode(tint);
+    this.tint = parsed?.rgb ?? tint;
+    this.alpha = parsed?.alpha ?? 1;
+  }
 
   material(name: string, color: number, roughness = 0.7, metalness = 0, tintable = false): Material {
     let material = this.materials.get(name);
@@ -128,6 +136,7 @@ class Model {
     }
     this.group.scale.set(w / size.x, 1, d / size.z);
     if (optimize) this.mergeOpaqueParts();
+    applyOpacity(this.group, this.alpha);
     return this.group;
   }
 

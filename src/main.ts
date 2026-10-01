@@ -6,7 +6,8 @@ import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomS
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
-import { parseColorCode, withAlpha } from "./colors";
+import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
+import { makeTranslucent } from "./translucency";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
@@ -427,6 +428,8 @@ const DEFAULT_GHOST_OPACITY = 0.13;
 const ghostSettings: { target: string; color: string; opacity: number } = { target: "below", color: "", opacity: DEFAULT_GHOST_OPACITY };
 // 透かす階をいったん描く作業用のキャンバス（起動直後の描画でも使うので、ここで宣言しておく）
 let ghostCanvas: HTMLCanvasElement | null = null;
+// 透明度のある色の要素をいったん描く作業用のキャンバス（同じく起動直後から使う）
+let translucentCanvas: HTMLCanvasElement | null = null;
 
 // 透かす色のカラーコードに透明度があればそれを、なければ「濃さ」を使う
 function ghostOpacity(): number {
@@ -640,7 +643,8 @@ function normalizeEntity(value: unknown): Entity {
   if (!value || typeof value !== "object") throw new Error("Invalid plan entity");
   const entity = value as Entity;
   const finite = (...values: unknown[]) => values.every((item) => typeof item === "number" && Number.isFinite(item));
-  const color = (input: unknown) => typeof input === "string" && /^#[0-9a-f]{6}$/i.test(input) ? input : undefined;
+  // #RGB / #RRGGBB / #RRGGBBAA（末尾2桁が透明度）を受け付け、#rrggbb か #rrggbbaa にそろえる
+  const color = (input: unknown) => parseColorCode(input)?.code;
   const base = {
     id: typeof entity.id === "string" && entity.id ? entity.id : newId("room"),
     locked: entity.locked === true,
@@ -1507,6 +1511,8 @@ function syncGhostMenu(): void {
   const value = document.querySelector<HTMLSpanElement>("#ghostOpacityValue");
   const parsed = parseColorCode(ghostSettings.color);
   if (picker && parsed) picker.value = parsed.rgb;
+  // 見本の下の市松模様を透かして、透かす濃さを見せる
+  picker?.parentElement?.style.setProperty("--swatch-alpha", String(parsed ? ghostOpacity() : 1));
   if (code && document.activeElement !== code) code.value = parsed?.code ?? "";
   const percent = Math.round(ghostOpacity() * 100);
   if (opacity) opacity.value = String(percent);
@@ -2481,7 +2487,7 @@ function render2d(): void {
   drawGrid(width, height);
 
   const entities = activeEntities();
-  entities.filter(isRoom).forEach(drawRoom);
+  drawLayer(entities.filter(isRoom), drawRoom);
   if (view.zoom > GRID_OVER_ROOMS_ZOOM) {
     ctx.save();
     ctx.globalAlpha = 0.7;
@@ -2490,17 +2496,17 @@ function render2d(): void {
   }
   // 現在の階の部屋の塗りの上・線画の下に、ほかの階のゴーストを挟む
   drawFloorBelowGhost();
-  entities.filter(isFurniture).filter((item) => item.kind === "rug").forEach(drawFurniture2d);
-  entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
+  drawLayer(entities.filter(isFurniture).filter((item) => item.kind === "rug"), drawFurniture2d);
+  drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
-  entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
-  entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
-  entities.filter(isFurniture).filter((item) => item.kind !== "rug").forEach(drawFurniture2d);
-  entities.filter(isShape).forEach(drawShape2d);
+  drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "window"), drawWindow2d);
+  drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "door"), drawDoor2d);
+  drawLayer(entities.filter(isFurniture).filter((item) => item.kind !== "rug"), drawFurniture2d);
+  drawLayer(entities.filter(isShape), drawShape2d);
   revealRoofsIfSelected();
   if (roofVisible2d) state.roofs.forEach(drawRoof2d);
-  entities.filter(isTextLabel).forEach(drawTextLabel);
+  drawLayer(entities.filter(isTextLabel), drawTextLabel);
   entities.filter(isLocked).forEach(drawLockedIndicator);
   if (roofVisible2d) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
 
@@ -2579,17 +2585,17 @@ function drawFloorBelowGhost(): void {
     ctx.clearRect(0, 0, target.width, target.height);
     ctx.setTransform(transform);
     // 部屋の塗りを先に全部描き、その上に線の要素を描く（ほかの階の床が線を隠さないように）
-    for (const floor of floors) floor.entities.filter(isRoom).forEach(drawRoom);
+    drawLayer(floors.flatMap((floor) => floor.entities.filter(isRoom)), drawRoom);
     for (const floor of floors) {
       const entities = floor.entities;
-      entities.filter((entity): entity is LinearElement => entity.type === "wall").forEach((wallItem) => {
+      drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
         getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
       });
-      entities.filter((entity): entity is LinearElement => entity.type === "window").forEach(drawWindow2d);
-      entities.filter((entity): entity is LinearElement => entity.type === "door").forEach(drawDoor2d);
-      entities.filter(isFurniture).forEach(drawFurniture2d);
-      entities.filter(isShape).forEach(drawShape2d);
-      entities.filter(isTextLabel).forEach(drawTextLabel);
+      drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "window"), drawWindow2d);
+      drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "door"), drawDoor2d);
+      drawLayer(entities.filter(isFurniture), drawFurniture2d);
+      drawLayer(entities.filter(isShape), drawShape2d);
+      drawLayer(entities.filter(isTextLabel), drawTextLabel);
     }
     const tint = parseColorCode(ghostSettings.color);
     if (tint) {
@@ -2608,6 +2614,75 @@ function drawFloorBelowGhost(): void {
   ctx.globalAlpha = ghostOpacity();
   ctx.drawImage(target, 0, 0);
   ctx.restore();
+}
+
+// ---- 透明度のある色 ----
+
+// カラーコードに透明度がある要素は、同じ色どうしをまとめて別のキャンバスに不透明で描き、最後に1回だけ半透明で重ねる。
+// 1つずつ半透明で描くと、線の重なりや壁の角だけが濃くなってしまうため
+function drawLayer<T extends Entity & { color?: string }>(items: T[], draw: (item: T) => void): void {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const parsed = parseColorCode(item.color);
+    if (!parsed || parsed.alpha >= 1) {
+      draw(item);
+      continue;
+    }
+    const group = groups.get(parsed.code);
+    if (group) group.push(item);
+    else groups.set(parsed.code, [item]);
+  }
+  groups.forEach((group, code) => {
+    drawTranslucent(colorAlpha(code), () => group.forEach(draw));
+    // 選んでいる物のつまみは、透明に近い色でも見失わないよう上から描き直す
+    group.filter((item) => item.id === state.selectedId).forEach(drawSelectionMarks);
+  });
+}
+
+function drawTranslucent(alpha: number, draw: () => void): void {
+  if (alpha <= 0) return;
+  const base = ctx;
+  translucentCanvas ??= document.createElement("canvas");
+  const target = translucentCanvas;
+  if (target.width !== base.canvas.width || target.height !== base.canvas.height) {
+    target.width = base.canvas.width;
+    target.height = base.canvas.height;
+  }
+  const layer = target.getContext("2d");
+  if (!layer) return;
+  const transform = base.getTransform();
+  ctx = layer;
+  try {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, target.width, target.height);
+    ctx.setTransform(transform);
+    draw();
+  } finally {
+    ctx = base;
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha *= alpha;
+  ctx.drawImage(target, 0, 0);
+  ctx.restore();
+}
+
+// 選んでいる要素の枠やつまみ（大きさや端を動かす所）
+function drawSelectionMarks(entity: Entity): void {
+  if (entity.type === "room") {
+    drawRoomLabelGuide(entity);
+    if (!isLocked(entity)) drawResizeHandles(entity);
+  } else if (entity.type === "furniture") {
+    if (!isLocked(entity)) drawResizeHandles(entity);
+  } else if (entity.type === "wall") {
+    if (!isLocked(entity)) getVisibleWallSegments(entity, activeEntities()).forEach(drawLineHandles);
+  } else if (entity.type === "door" || entity.type === "window") {
+    if (!isLocked(entity)) drawLineHandles(entity);
+  } else if (entity.type === "shape") {
+    if (!isLocked(entity)) drawShapeHandle(entity);
+  } else if (entity.type === "text") {
+    drawTextSelection(entity);
+  }
 }
 
 function drawRoof2d(roofItem: Roof): void {
@@ -2674,9 +2749,11 @@ function drawRoof2d(roofItem: Roof): void {
 function drawRoom(room: Room): void {
   const selected = state.selectedId === room.id;
   const surface = room.surface ?? "plain";
-  const pattern = surface !== "plain" ? ctx.createPattern(surfaceCanvas(surface, room.color), "repeat") : null;
+  // 透明度は部屋ごとではなく、同じ色の部屋をまとめて重ねるときに付ける（drawLayer）
+  const fill = solidColor(room.color);
+  const pattern = surface !== "plain" ? ctx.createPattern(surfaceCanvas(surface, fill), "repeat") : null;
   pattern?.setTransform(new DOMMatrix().translate(room.x, room.y).scale(SURFACE_TILE_CM / 256));
-  ctx.fillStyle = pattern ?? room.color;
+  ctx.fillStyle = pattern ?? fill;
   ctx.strokeStyle = selected ? "#2775d1" : "#c3c9d2";
   ctx.lineWidth = selected ? 2.4 / view.zoom : 1.1 / view.zoom;
   ctx.fillRect(room.x, room.y, room.w, room.h);
@@ -2715,7 +2792,7 @@ function drawRoomLabelGuide(room: Room): void {
 }
 
 function drawWall2d(wallItem: LinearElement): void {
-  drawLineElement(wallItem, wallItem.color ?? INK, WALL_THICKNESS_2D);
+  drawLineElement(wallItem, solidColor(wallItem.color) ?? INK, WALL_THICKNESS_2D);
   if (state.selectedId === wallItem.id && !isLocked(wallItem)) drawLineHandles(wallItem);
 }
 
@@ -2755,7 +2832,7 @@ function drawWindow2d(windowEl: LinearElement): void {
   }
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(-length / 2, -t / 2, length, t);
-  ctx.strokeStyle = selected ? "#2775d1" : windowEl.color ?? INK;
+  ctx.strokeStyle = selected ? "#2775d1" : solidColor(windowEl.color) ?? INK;
   ctx.lineWidth = 1.4 / view.zoom;
   ctx.strokeRect(-length / 2, -t / 2, length, t);
   ctx.beginPath();
@@ -2789,7 +2866,7 @@ function drawDoor2d(door: LinearElement): void {
   };
 
   ctx.lineCap = "butt";
-  ctx.strokeStyle = selected ? "#2775d1" : door.color ?? INK;
+  ctx.strokeStyle = selected ? "#2775d1" : solidColor(door.color) ?? INK;
   ctx.lineWidth = (selected ? 3 : 1.8) / view.zoom;
   ctx.beginPath();
   ctx.moveTo(door.x1, door.y1);
@@ -2820,7 +2897,7 @@ function drawSlidingDoor2d(door: LinearElement): void {
   ctx.rotate(angle);
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(-length / 2, -depth / 2, length, depth);
-  ctx.strokeStyle = selected ? "#2775d1" : door.color ?? INK;
+  ctx.strokeStyle = selected ? "#2775d1" : solidColor(door.color) ?? INK;
   ctx.lineWidth = (selected ? 2.2 : 1.4) / view.zoom;
   ctx.strokeRect(-length / 2, -depth / 2, length, depth);
   const panelWidth = length * 0.56;
@@ -2964,7 +3041,7 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   ctx.rotate((furnitureItem.rotation * Math.PI) / 180);
   if (furnitureItem.flip) ctx.scale(-1, 1);
   ctx.lineWidth = 1.4 / view.zoom;
-  ctx.strokeStyle = furnitureItem.color ?? INK;
+  ctx.strokeStyle = solidColor(furnitureItem.color) ?? INK;
   ctx.fillStyle = furnitureSymbolFill(furnitureItem.kind);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -3897,7 +3974,7 @@ function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: n
     ctx.setTransform(ratio * scale, 0, 0, ratio * scale, (size / 2) * ratio, (size / 2) * ratio);
     if (item.flip) ctx.scale(-1, 1);
     ctx.lineWidth = 1 / scale;
-    ctx.strokeStyle = item.color ?? INK;
+    ctx.strokeStyle = solidColor(item.color) ?? INK;
     ctx.fillStyle = furnitureSymbolFill(item.kind);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -4607,20 +4684,24 @@ function drawShape2d(shape: Shape): void {
     traceShapePath(shape);
     ctx.stroke();
   }
-  ctx.strokeStyle = shape.color ?? INK;
+  ctx.strokeStyle = solidColor(shape.color) ?? INK;
   ctx.lineWidth = WALL_THICKNESS_2D;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   traceShapePath(shape);
   ctx.stroke();
-  if (selected && !isLocked(shape)) {
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#2775d1";
-    ctx.lineWidth = 2 / view.zoom;
-    const size = 8 / view.zoom;
-    ctx.fillRect(shape.x - size / 2, shape.y - size / 2, size, size);
-    ctx.strokeRect(shape.x - size / 2, shape.y - size / 2, size, size);
-  }
+  ctx.restore();
+  if (selected && !isLocked(shape)) drawShapeHandle(shape);
+}
+
+function drawShapeHandle(shape: Shape): void {
+  ctx.save();
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 2 / view.zoom;
+  const size = 8 / view.zoom;
+  ctx.fillRect(shape.x - size / 2, shape.y - size / 2, size, size);
+  ctx.strokeRect(shape.x - size / 2, shape.y - size / 2, size, size);
   ctx.restore();
 }
 
@@ -4715,18 +4796,24 @@ function drawTextLabel(label: TextLabel): void {
   ctx.translate(label.x, label.y);
   ctx.rotate(degreesToRadians(label.rotation));
   ctx.font = `${label.size}px ${TEXT_FONT}`;
-  ctx.fillStyle = label.color ?? INK;
+  ctx.fillStyle = solidColor(label.color) ?? INK;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * lineHeight));
-  if (state.selectedId === label.id) {
-    const { w, h } = measureTextLabel(label);
-    const pad = 4 / view.zoom;
-    ctx.strokeStyle = "#2775d1";
-    ctx.lineWidth = 1.5 / view.zoom;
-    ctx.setLineDash([4 / view.zoom, 3 / view.zoom]);
-    ctx.strokeRect(-w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2);
-  }
+  ctx.restore();
+  if (state.selectedId === label.id) drawTextSelection(label);
+}
+
+function drawTextSelection(label: TextLabel): void {
+  const { w, h } = measureTextLabel(label);
+  const pad = 4 / view.zoom;
+  ctx.save();
+  ctx.translate(label.x, label.y);
+  ctx.rotate(degreesToRadians(label.rotation));
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.setLineDash([4 / view.zoom, 3 / view.zoom]);
+  ctx.strokeRect(-w / 2 - pad, -h / 2 - pad, w + pad * 2, h + pad * 2);
   ctx.restore();
 }
 
@@ -4836,14 +4923,17 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
   const footprint = (item: Room): Rectangle => ({ x: item.x + slabInset / 2, y: item.y + slabInset / 2, w: Math.max(item.w - slabInset, 10), h: Math.max(item.h - slabInset, 10) });
   // 1Fは地面の上の薄い床。下に地下があるときは、地下の天井とのすき間も床でふさぐ
   const thickness = ground ? 0.08 + (floorIndex > 0 ? FLOOR_SLAB : 0) : FLOOR_SLAB;
+  // 床の色に透明度があれば、床の側面も同じだけ透かす
+  const alpha = colorAlpha(roomItem.color3d ?? roomItem.color);
+  const side = alpha < 1 ? translucentSlabMaterial(alpha) : slabMaterial;
   const group = new THREE.Group();
   for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
     const geometry = new THREE.BoxGeometry(rect.w * SCALE_3D, thickness, rect.h * SCALE_3D);
-    const mesh = new THREE.Mesh(geometry, [slabMaterial, slabMaterial, roomMaterial(roomItem, rect), slabMaterial, slabMaterial, slabMaterial]);
+    const mesh = new THREE.Mesh(geometry, [side, side, roomMaterial(roomItem, rect), side, side, side]);
     const pos = to3d(rect.x + rect.w / 2, rect.y + rect.h / 2, center);
     mesh.position.set(pos.x, ground ? 0.08 - thickness / 2 : yBase - thickness / 2, pos.z);
     mesh.receiveShadow = true;
-    mesh.castShadow = floorIndex > 0;
+    mesh.castShadow = floorIndex > 0 && alpha >= 1;
     group.add(mesh);
     if (roomItem.surface === "grass") addGrass3d(roomItem, rect, center, ground ? 0.08 : yBase, state.floors[floorIndex].entities);
   }
@@ -4891,10 +4981,11 @@ function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number,
     return item.kind === "pond" ? lx * lx + ly * ly <= 1 : Math.abs(lx) <= 1 && Math.abs(ly) <= 1;
   });
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, side: THREE.DoubleSide });
+  makeTranslucent(material, colorAlpha(roomItem.color3d ?? roomItem.color));
   const mesh = new THREE.InstancedMesh(createGrassTuftGeometry(), material, count);
   // 描き直すたびに草の位置が変わらないよう、部屋と範囲から決まる乱数を使う
   const random = seededRandom(`${roomItem.id}:${Math.round(rect.x)}:${Math.round(rect.y)}`);
-  const base = new THREE.Color(roomItem.color3d ?? roomItem.color);
+  const base = new THREE.Color(solidColor(roomItem.color3d ?? roomItem.color));
   const tint = new THREE.Color();
   const placement = new THREE.Object3D();
   let placed = 0;
@@ -4960,7 +5051,8 @@ function addStraightWall3d(
   const pos = to3d(mid.x, mid.y, center);
   mesh.position.set(pos.x, yBase + yFrom - bottomExtension + height / 2, pos.z);
   mesh.rotation.y = -angle;
-  mesh.castShadow = true;
+  // 透明度のある色の壁は、ガラスと同じく影を落とさない
+  mesh.castShadow = !bodyMaterial.transparent;
   mesh.receiveShadow = true;
   markSelectable(mesh, entityId);
   planGroup.add(mesh);
@@ -4972,7 +5064,7 @@ function addStraightWall3d(
     );
     cap.position.set(pos.x, yBase + WALL_HEIGHT + 0.03, pos.z);
     cap.rotation.y = -angle;
-    cap.castShadow = true;
+    cap.castShadow = !cap.material.transparent;
     markSelectable(cap, entityId);
     planGroup.add(cap);
   }
@@ -5303,10 +5395,8 @@ function updatePropertiesPanel(): void {
           <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
           <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
         </div>
-        <div class="two-col">
-          <label>色 2D<input id="roomColorInput" type="color" value="${selected.color}" /></label>
-          <label>色 3D<input id="roomColor3dInput" type="color" value="${selected.color3d ?? selected.color}" /></label>
-        </div>
+        ${colorField("roomColorInput", "色 2D", selected.color)}
+        ${colorField("roomColor3dInput", "色 3D", selected.color3d ?? selected.color)}
         <button type="button" class="prop-button" id="roomRotateButton" ${placementDisabled}>90°回転（Rキー）</button>
       </div>
     `;
@@ -5315,13 +5405,14 @@ function updatePropertiesPanel(): void {
     bindSelect("#roomSurfaceInput", (value) => {
       if (!isRoomSurface(value)) return;
       selected.surface = value;
-      selected.color = SURFACE_DEFS[value].color;
-      selected.color3d = SURFACE_DEFS[value].color;
+      // 床材を変えても、カラーコードで決めた透明度はそのまま
+      selected.color3d = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color3d ?? selected.color));
+      selected.color = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color));
     });
     bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
     bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
-    bindInput("#roomColorInput", (value) => (selected.color = value));
-    bindInput("#roomColor3dInput", (value) => (selected.color3d = value));
+    bindColor("#roomColorInput", (value) => (selected.color = value ?? SURFACE_DEFS[selected.surface ?? "plain"].color));
+    bindColor("#roomColor3dInput", (value) => (selected.color3d = value));
     bindButton("#roomRotateButton", () => rotateEntity(selected, 90));
     return;
   }
@@ -5363,10 +5454,8 @@ function updatePropertiesPanel(): void {
         <button type="button" class="prop-button" id="lineRotateButton" ${placementDisabled}>90°回転（Rキー）</button>
         ${doorFlipRow}
         ${mullionRow}
-        <div class="two-col">
-          <label>色 2D<input id="lineColorInput" type="color" value="${selected.color ?? "#000000"}" /></label>
-          <label>色 3D<input id="lineColor3dInput" type="color" value="${selected.color3d ?? selected.color ?? default3d}" /></label>
-        </div>
+        ${colorField("lineColorInput", "色 2D", selected.color ?? INK)}
+        ${colorField("lineColor3dInput", "色 3D", selected.color3d ?? selected.color ?? default3d)}
       </div>
     `;
     bindEntityLock(selected);
@@ -5391,8 +5480,8 @@ function updatePropertiesPanel(): void {
     });
     bindCheckbox("#doorFlipInput", (checked) => (selected.flip = checked));
     bindCheckbox("#windowMullionInput", (checked) => (selected.mullion = checked));
-    bindInput("#lineColorInput", (value) => (selected.color = value));
-    bindInput("#lineColor3dInput", (value) => (selected.color3d = value));
+    bindColor("#lineColorInput", (value) => (selected.color = value));
+    bindColor("#lineColor3dInput", (value) => (selected.color3d = value));
     return;
   }
 
@@ -5406,7 +5495,7 @@ function updatePropertiesPanel(): void {
           <label>大きさ cm<input id="textSizeInput" type="number" min="5" max="500" step="2" value="${label.size}" ${placementDisabled} /></label>
           <label>回転 °<input id="textRotationInput" type="number" step="5" value="${label.rotation}" ${placementDisabled} /></label>
         </div>
-        <label>色<input id="textColorInput" type="color" value="${label.color ?? "#000000"}" ${placementDisabled} /></label>
+        ${colorField("textColorInput", "色", label.color ?? INK, placementDisabled)}
       </div>
     `;
     bindEntityLock(label);
@@ -5428,7 +5517,7 @@ function updatePropertiesPanel(): void {
     });
     bindNumber("#textSizeInput", (value) => (label.size = clamp(Number.isFinite(value) ? value : DEFAULT_TEXT_SIZE, 5, 500)));
     bindNumber("#textRotationInput", (value) => (label.rotation = Number.isFinite(value) ? value % 360 : 0));
-    bindInput("#textColorInput", (value) => (label.color = value));
+    bindColor("#textColorInput", (value) => (label.color = value));
     return;
   }
 
@@ -5461,10 +5550,8 @@ function updatePropertiesPanel(): void {
         <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" ${placementDisabled} /></label>
         ${arcRows}
         ${polygonRows}
-        <div class="two-col">
-          <label>色 2D<input id="shapeColorInput" type="color" value="${selectedShape.color ?? "#000000"}" /></label>
-          <label>色 3D<input id="shapeColor3dInput" type="color" value="${selectedShape.color3d ?? selectedShape.color ?? "#f4f1ec"}" /></label>
-        </div>
+        ${colorField("shapeColorInput", "色 2D", selectedShape.color ?? INK)}
+        ${colorField("shapeColor3dInput", "色 3D", selectedShape.color3d ?? selectedShape.color ?? "#f4f1ec")}
       </div>
     `;
     bindEntityLock(selectedShape);
@@ -5484,8 +5571,8 @@ function updatePropertiesPanel(): void {
     bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
     bindNumber("#shapeSidesInput", (value) => (selectedShape.sides = clamp(Math.round(value), 3, 12)));
     bindNumber("#shapeRotationInput", (value) => (selectedShape.rotation = degreesToRadians(value)));
-    bindInput("#shapeColorInput", (value) => (selectedShape.color = value));
-    bindInput("#shapeColor3dInput", (value) => (selectedShape.color3d = value));
+    bindColor("#shapeColorInput", (value) => (selectedShape.color = value));
+    bindColor("#shapeColor3dInput", (value) => (selectedShape.color3d = value));
     return;
   }
 
@@ -5529,10 +5616,8 @@ function updatePropertiesPanel(): void {
       ${heightRow}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
-      <div class="two-col">
-        <label>色 2D<input id="furnitureColorInput" type="color" value="${selectedFurniture.color ?? "#000000"}" /></label>
-        <label>色 3D<input id="furnitureColor3dInput" type="color" value="${selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8"}" /></label>
-      </div>
+      ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? INK)}
+      ${colorField("furnitureColor3dInput", "色 3D", selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8")}
     </div>
   `;
   bindEntityLock(selectedFurniture);
@@ -5564,8 +5649,49 @@ function updatePropertiesPanel(): void {
   bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(GRID, snap(value))));
   bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
   bindCheckbox("#furnitureFlipInput", (checked) => (selectedFurniture.flip = checked));
-  bindInput("#furnitureColorInput", (value) => (selectedFurniture.color = value));
-  bindInput("#furnitureColor3dInput", (value) => (selectedFurniture.color3d = value));
+  bindColor("#furnitureColorInput", (value) => (selectedFurniture.color = value));
+  bindColor("#furnitureColor3dInput", (value) => (selectedFurniture.color3d = value));
+}
+
+// 色の欄。見本から選ぶか、カラーコードを入れる。末尾に2桁足すと透明度（00で透明〜ffで不透明。#2775d180 で半分透ける）。
+// カラーコードを空にすると標準の色に戻す
+function colorField(id: string, label: string, value: string | undefined, disabled = ""): string {
+  const parsed = parseColorCode(value);
+  return `<div class="color-field">
+      <span>${label}</span>
+      <span class="color-code-row">
+        <span class="color-swatch" style="--swatch-alpha: ${parsed?.alpha ?? 1}">
+          <input id="${id}" type="color" value="${parsed?.rgb ?? INK}" title="${label}を見本から選ぶ" aria-label="${label}を見本から選ぶ" ${disabled} />
+        </span>
+        <input id="${id}Code" type="text" value="${parsed?.code ?? ""}" placeholder="#RRGGBB（透かすなら #RRGGBB80）" maxlength="9" spellcheck="false" autocomplete="off"
+          title="カラーコード（#RRGGBB）。末尾に2桁足すと透明度になります（00で透明〜ffで不透明）。空にすると標準の色に戻ります" aria-label="${label}のカラーコード" ${disabled} />
+      </span>
+    </div>`;
+}
+
+// 見本で選び直しても、カラーコードの透明度はそのまま残す
+function bindColor(selector: string, update: (value: string | undefined) => void): void {
+  const picker = propertiesPanel.querySelector<HTMLInputElement>(selector);
+  const code = propertiesPanel.querySelector<HTMLInputElement>(`${selector}Code`);
+  if (!picker || !code) return;
+  const apply = (value: string | undefined) => {
+    update(value);
+    commitState();
+    redrawAll();
+  };
+  picker.addEventListener("change", () => apply(withAlpha(picker.value, colorAlpha(code.value))));
+  code.addEventListener("input", () => {
+    if (!code.value.trim() || parseColorCode(code.value)) code.classList.remove("is-invalid");
+  });
+  code.addEventListener("change", () => {
+    const value = code.value.trim();
+    const parsed = parseColorCode(value);
+    if (value && !parsed) {
+      code.classList.add("is-invalid");
+      return;
+    }
+    apply(parsed?.code);
+  });
 }
 
 function bindEntityLock(entity: Entity): void {
@@ -6380,22 +6506,41 @@ function getGlobalBounds(): Bounds | null {
 
 function roomMaterial(roomItem: Room, rect: Rectangle): THREE.MeshStandardMaterial {
   const surface = roomItem.surface ?? "plain";
-  const color = roomItem.color3d ?? roomItem.color;
-  if (surface === "plain") return new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
-  const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.wrapS = map.wrapT = THREE.RepeatWrapping;
-  map.repeat.set(rect.w / SURFACE_TILE_CM, rect.h / SURFACE_TILE_CM);
-  map.offset.set((rect.x - roomItem.x) / SURFACE_TILE_CM, (roomItem.y + roomItem.h - rect.y - rect.h) / SURFACE_TILE_CM);
-  map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-  return new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness });
+  const code = roomItem.color3d ?? roomItem.color;
+  const color = solidColor(code);
+  let material: THREE.MeshStandardMaterial;
+  if (surface === "plain") {
+    material = new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
+  } else {
+    const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.wrapS = map.wrapT = THREE.RepeatWrapping;
+    map.repeat.set(rect.w / SURFACE_TILE_CM, rect.h / SURFACE_TILE_CM);
+    map.offset.set((rect.x - roomItem.x) / SURFACE_TILE_CM, (roomItem.y + roomItem.h - rect.y - rect.h) / SURFACE_TILE_CM);
+    map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    material = new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness });
+  }
+  makeTranslucent(material, colorAlpha(code));
+  return material;
 }
 
+// カラーコードの末尾2桁（透明度）は、材質の透け具合にする
 function coloredMaterial(color: string, roughness = 0.75): THREE.MeshStandardMaterial {
   const key = `${color}-${roughness}`;
   const cached = coloredMaterialCache.get(key);
   if (cached) return cached;
-  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness });
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor(color)), roughness });
+  makeTranslucent(material, colorAlpha(color));
+  coloredMaterialCache.set(key, material);
+  return material;
+}
+
+function translucentSlabMaterial(alpha: number): THREE.MeshStandardMaterial {
+  const key = `slab-${alpha}`;
+  const cached = coloredMaterialCache.get(key);
+  if (cached) return cached;
+  const material = slabMaterial.clone();
+  makeTranslucent(material, alpha);
   coloredMaterialCache.set(key, material);
   return material;
 }

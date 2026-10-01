@@ -21,6 +21,18 @@ export function parseColorCode(value: unknown): ParsedColor | null {
   return { code: alpha < 1 ? `#${digits}` : rgb, rgb, alpha };
 }
 
+// 透明度を除いた色（#rrggbb）。カラーコードでなければそのまま返す
+export function solidColor(value: string): string;
+export function solidColor(value: string | undefined): string | undefined;
+export function solidColor(value: string | undefined): string | undefined {
+  return parseColorCode(value)?.rgb ?? value;
+}
+
+// 色の不透明度（0〜1）。カラーコードに透明度がなければ 1
+export function colorAlpha(value: unknown): number {
+  return parseColorCode(value)?.alpha ?? 1;
+}
+
 // 色と不透明度から、保存用のカラーコードを作る
 export function withAlpha(rgb: string, alpha: number): string {
   const base = parseColorCode(rgb)?.rgb ?? "#000000";

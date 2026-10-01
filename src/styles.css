@@ -718,6 +718,71 @@ select:focus-visible {
   background: #fff;
 }
 
+/* 選択中の色の欄（見本とカラーコード） */
+.property-grid .color-field {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.property-grid .color-code-row input[type="text"] {
+  min-height: 34px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.02em;
+}
+
+.property-grid .color-code-row input[type="color"] {
+  height: 34px;
+  min-height: 34px;
+}
+
+/* 色の見本。カラーコードに透明度があると、下の市松模様が透けて見える */
+.color-swatch {
+  display: block;
+  width: 40px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: repeating-conic-gradient(#d5dbe3 0 25%, #ffffff 0 50%) 0 0 / 10px 10px;
+}
+
+.ghost-menu .color-swatch {
+  height: 32px;
+}
+
+.color-code-row .color-swatch input[type="color"] {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  opacity: var(--swatch-alpha, 1);
+  cursor: pointer;
+}
+
+.color-swatch input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-swatch input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+
+.color-swatch input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: 0;
+}
+
+.color-swatch:has(input:disabled) {
+  opacity: 0.55;
+}
+
 .color-code-row input.is-invalid {
   border-color: #d45d4c;
   background: #fff6f4;
