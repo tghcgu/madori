@@ -9,6 +9,7 @@ import {
   steppingStoneLayout, woodGrain, type Point2, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
+  SPIRAL_POT_SCALE, spiralLeaves,
 } from "./furniture-shapes.ts";
 
 type Position = [number, number, number];
@@ -946,8 +947,8 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "plantLarge": {
       const height = clamp(Math.sqrt(w * d) * 2.7, 0.65, 2.6), potH = height * 0.24;
       const pot = m.material("planter", 0xd3cec1, 0.78, 0, true);
-      // 鉢の口は、2Dの記号の中央の丸（幅の44%）と同じ大きさ
-      const potScale = 0.55;
+      // 鉢の口は、2Dの記号の中央の丸（幅の44%）と同じ大きさ。「らせんの葉」はひとつ前の形のまま大きめの鉢
+      const potScale = variant === 3 ? SPIRAL_POT_SCALE : 0.55;
       m.vessel([[0, 0], [0.3, 0], [0.4, potH * 0.94], [0.4, potH], [0.35, potH], [0.27, 0.04], [0, 0.04]], w * potScale, d * potScale, [0, 0, 0], pot);
       const soil = m.cylinder(0.35, 0.35, 0.02, [0, potH * 0.87, 0], m.material("soil", 0x443d31, 1));
       soil.scale.set(w * potScale, 1, d * potScale);
@@ -957,6 +958,26 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       // 方向 a での、設置範囲の楕円の半径
       const reachAt = (a: number) => 1 / Math.sqrt((Math.cos(a) / radiusX) ** 2 + (Math.sin(a) / radiusZ) ** 2);
       const leafMaterial = (i: number) => m.material(`leaf-${i % 3}`, leafColors[i % 3], 0.87);
+      if (variant === 3) {
+        // らせんの葉（ひとつ前の標準の形）: 1本の茎から、らせん状に13枚の葉が斜めに出る。
+        // 葉の位置・大きさ・傾きは2Dの記号と同じ計算（spiralLeaves）から取る
+        m.rod([0, potH * 0.9, 0], [0, height * 0.94, 0], Math.min(w, d) * 0.022, stemMat);
+        spiralLeaves(w, d).forEach((spiral, i) => {
+          m.rod([0, spiral.stemY, 0], spiral.end, Math.min(w, d) * 0.008, stemMat);
+          const leaf = new THREE.Shape();
+          leaf.moveTo(0, 0); leaf.bezierCurveTo(0.22, 0.17, 0.15, 0.75, 0, 1); leaf.bezierCurveTo(-0.15, 0.75, -0.22, 0.17, 0, 0);
+          const geometry = new THREE.ShapeGeometry(leaf, 7);
+          const positions = geometry.getAttribute("position");
+          for (let q = 0; q < positions.count; q += 1) positions.setZ(q, Math.sin(positions.getY(q) * Math.PI) * 0.14);
+          geometry.computeVertexNormals();
+          const material = leafMaterial(i);
+          material.side = THREE.DoubleSide;
+          const mesh = m.mesh(geometry, spiral.end, material, "leaf");
+          mesh.scale.set(...spiral.scale);
+          mesh.rotation.set(...spiral.rotation);
+        });
+        break;
+      }
       if (variant === 1) {
         // 丸い葉: 2Dの記号と同じ位置・大きさの丸い葉の塊（外側9つ・内側5つ）を短い幹の上に重ねる
         const crownH = Math.min(height * 0.62, Math.max(w, d) * 0.95);

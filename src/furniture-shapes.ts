@@ -350,3 +350,94 @@ export function roundFlowerBedLayout(w: number, h: number): FlowerBedLayout {
   if (Math.min(innerW, innerH) > size * 3.2) flowers.push([0, 0]);
   return { edge, innerW, innerH, size, flowers };
 }
+
+// ---- 観葉植物「らせんの葉」（ひとつ前の標準の3Dの形） ----
+// 1本の茎から、らせん状に13枚の葉が斜めに出る。3Dの葉と同じ大きさ・向き・傾きをここで計算し、
+// 2Dでは3Dを真上から見た葉の形をそのまま描く
+
+// 鉢の口の大きさ（幅に対する割合）
+export const SPIRAL_POT_SCALE = 0.75;
+
+// 葉の輪郭（付け根が原点、先が (0, 1)）。3Dの ShapeGeometry と同じ2本の3次ベジェ曲線を、同じ7分割で取る
+const SPIRAL_LEAF_CURVES: [Point2, Point2, Point2, Point2][] = [
+  [[0, 0], [0.22, 0.17], [0.15, 0.75], [0, 1]],
+  [[0, 1], [-0.15, 0.75], [-0.22, 0.17], [0, 0]],
+];
+export const SPIRAL_LEAF_OUTLINE: Point2[] = SPIRAL_LEAF_CURVES.flatMap((curve) => Array.from({ length: 7 }, (_, k) => bezierPoint(curve, k / 7)));
+
+// 観葉植物の高さ（m）。設置範囲の広さから決まる
+export function plantHeight(wM: number, dM: number): number {
+  return Math.min(2.6, Math.max(0.65, Math.sqrt(wM * dM) * 2.7));
+}
+
+export interface SpiralLeaf {
+  // 茎から葉へ伸びる軸の付け根の高さ
+  stemY: number;
+  // 葉の付け根の位置（m）
+  end: [number, number, number];
+  scale: [number, number, number];
+  // three.js の XYZ 順の回転
+  rotation: [number, number, number];
+}
+
+export function spiralLeaves(wM: number, dM: number): SpiralLeaf[] {
+  const height = plantHeight(wM, dM), potH = height * 0.24;
+  return Array.from({ length: 13 }, (_, i) => {
+    const a = i * 2.4, stemY = potH + height * (0.19 + i * 0.038);
+    const length = 0.32 - i * 0.009;
+    return {
+      stemY,
+      end: [Math.cos(a) * wM * length * 0.75, stemY + height * 0.07, Math.sin(a) * dM * length * 0.75],
+      scale: [wM * 0.8, Math.max(wM, dM) * length, Math.min(wM, dM)],
+      rotation: [0.75, -a, -0.5],
+    };
+  });
+}
+
+// 葉の中の点（葉の座標と、ふくらみ z = sin(yπ)×0.14）を、3Dと同じ拡大・回転・移動で置いた位置（m）
+export function placeLeafPoint(leaf: SpiralLeaf, [px, py]: Point2): [number, number, number] {
+  let x = px * leaf.scale[0], y = py * leaf.scale[1], z = Math.sin(py * Math.PI) * 0.14 * leaf.scale[2];
+  const [ax, ay, az] = leaf.rotation;
+  // XYZ 順の回転は、z軸 → y軸 → x軸 の順に当てる
+  [x, y] = [x * Math.cos(az) - y * Math.sin(az), x * Math.sin(az) + y * Math.cos(az)];
+  [x, z] = [x * Math.cos(ay) + z * Math.sin(ay), -x * Math.sin(ay) + z * Math.cos(ay)];
+  [y, z] = [y * Math.cos(ax) - z * Math.sin(ax), y * Math.sin(ax) + z * Math.cos(ax)];
+  return [x + leaf.end[0], y + leaf.end[1], z + leaf.end[2]];
+}
+
+export interface SpiralPlantTopView {
+  pot: Ellipse;
+  soil: Ellipse;
+  // 下の葉から順に。上の葉ほど後に描いて重ねる
+  leaves: { stem: [Point2, Point2]; outline: Point2[]; midrib: [Point2, Point2] }[];
+}
+
+// 3Dを真上から見た形（cm）。3Dは全体を設置範囲いっぱいに合わせて広げるので、2Dも同じ広げ方をする
+export function spiralPlantTopView(w: number, h: number): SpiralPlantTopView {
+  const wM = w / 100, dM = h / 100;
+  const leaves = spiralLeaves(wM, dM).map((leaf) => ({ leaf, outline: SPIRAL_LEAF_OUTLINE.map((point) => placeLeafPoint(leaf, point)) }));
+  const potR = 0.4 * SPIRAL_POT_SCALE;
+  let minX = -potR * wM, maxX = potR * wM, minZ = -potR * dM, maxZ = potR * dM;
+  for (const { outline } of leaves) {
+    for (const [x, , z] of outline) {
+      minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+      minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+    }
+  }
+  const sx = w / (maxX - minX), sz = h / (maxZ - minZ), cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+  const map = (x: number, z: number): Point2 => [(x - cx) * sx, (z - cz) * sz];
+  const [ox, oy] = map(0, 0);
+  const ring = (k: number): Ellipse => ({ x: ox, y: oy, rx: k * wM * sx, ry: k * dM * sz });
+  return {
+    pot: ring(potR),
+    soil: ring(0.35 * SPIRAL_POT_SCALE),
+    leaves: leaves.map(({ leaf, outline }) => {
+      const tip = placeLeafPoint(leaf, [0, 1]);
+      return {
+        stem: [[ox, oy], map(leaf.end[0], leaf.end[2])],
+        outline: outline.map(([x, , z]) => map(x, z)),
+        midrib: [map(leaf.end[0], leaf.end[2]), map(tip[0], tip[2])],
+      };
+    }),
+  };
+}

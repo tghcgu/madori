@@ -10,7 +10,7 @@ import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
-  blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout,
+  blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -295,8 +295,8 @@ const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
   closet: [drawSlidingCloset, drawLouverCloset, drawHatchedCloset],
   wardrobe: [drawDoubleDoorWardrobe],
   shelf: [drawOpenShelf],
-  plant: [drawRoundLeafPlant, drawPalmPlant],
-  plantLarge: [drawRoundLeafPlant, drawPalmPlant],
+  plant: [drawRoundLeafPlant, drawPalmPlant, drawSpiralPlant],
+  plantLarge: [drawRoundLeafPlant, drawPalmPlant, drawSpiralPlant],
   rug: [drawBorderRug, drawDiamondRug],
   car: [drawWagonCar],
   rock: [(w, h) => drawRocks(rockShapes(w, h, 1))],
@@ -4239,6 +4239,27 @@ function drawOpenShelf(w: number, h: number): void {
     const x = -w * 0.46 + (w * 0.92 * i) / cells;
     strokeLine(x, -h * 0.38, x, h * 0.42);
   }
+}
+
+// らせんの葉（ひとつ前の標準の3Dの形）: 3Dを真上から見た形そのもの。大きめの鉢と土、
+// 茎から出る軸、下の葉から順に重ねた13枚の斜めの葉と葉脈
+function drawSpiralPlant(w: number, h: number): void {
+  const view = spiralPlantTopView(w, h);
+  const fill = ctx.fillStyle;
+  ctx.fillStyle = "#f3f1ec";
+  strokeEllipse(view.pot.x, view.pot.y, view.pot.rx, view.pot.ry, true);
+  strokeEllipse(view.soil.x, view.soil.y, view.soil.rx, view.soil.ry);
+  ctx.fillStyle = "#e8f1e7";
+  for (const leaf of view.leaves) {
+    strokeLine(leaf.stem[0][0], leaf.stem[0][1], leaf.stem[1][0], leaf.stem[1][1]);
+    ctx.beginPath();
+    leaf.outline.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    strokeLine(leaf.midrib[0][0], leaf.midrib[0][1], leaf.midrib[1][0], leaf.midrib[1][1]);
+  }
+  ctx.fillStyle = fill;
 }
 
 function drawRoundLeafPlant(w: number, h: number): void {
