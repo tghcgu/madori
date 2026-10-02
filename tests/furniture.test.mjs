@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
 import {
   PERSON_HEIGHT, PERSON_PRESETS, bloodShape, evidenceMarkerShape, footprintPathTrail, footprintTrail, glassShards, markerTextSize, normalizePersonPose,
-  personLayout, personOutline, personRefSize, presetPose, reachLimb, rockShapes, rockVertexHeights,
+  partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights,
 } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
 
@@ -208,7 +208,9 @@ test('investigation marks stay inside their frame, and the body outline goes aro
       assert.ok(outline.length > 30, `outline points ${outline.length}`);
       assert.ok(outline.every(within(w, h)), 'the outline stays inside the frame');
       assert.ok(layout.outlines.flat().every(within(w, h)), 'every part seen from above stays inside the frame');
-      for (const part of layout.parts) assert.ok(inside([(part.a[0] + part.b[0]) / 2, (part.a[2] + part.b[2]) / 2], outline), 'each part is inside the outline');
+      // Parts thinner than the outline's grid (a tiny person in a 20 cm frame) may fall between its cells.
+      const visible = part => Math.max(...part.axes.map(axis => Math.hypot(...axis))) > Math.max(0.4, Math.min(w, h) / 70);
+      for (const part of layout.parts.filter(visible)) assert.ok(inside([(part.a[0] + part.b[0]) / 2, (part.a[2] + part.b[2]) / 2], outline), 'each part is inside the outline');
     }
     for (const bare of [false, true]) {
       for (const piece of footprintTrail(w, h, bare)) {
@@ -249,7 +251,7 @@ test('footprints drawn along a path follow it, alternate sides, face the walking
 
 test('the posable person stands about 170 cm tall, poses change its shape, and dragged hands and feet reach their target', () => {
   assert.equal(PERSON_HEIGHT, 170);
-  const top = layout => Math.max(...layout.parts.map(part => Math.max(part.a[1], part.b[1]) + Math.hypot(...part.axes.map(axis => axis[1]))));
+  const top = layout => Math.max(...layout.parts.map(partTop));
   const size = personRefSize(presetPose('stand'));
   const standing = personLayout(size.w, size.h, presetPose('stand'));
   assert.ok(Math.abs(standing.scale - 1) < 1e-6);
@@ -264,15 +266,35 @@ test('the posable person stands about 170 cm tall, poses change its shape, and d
   assert.ok(standing.layers.length > 1);
   assert.equal(personLayout(100, 200, presetPose('prone')).layers.length, 1, 'a lying body is one shape from above');
   // Dragging a hand: lying bodies bend the elbow in the floor plane, standing bodies swing the arm.
-  for (const [id, limb, target] of [['prone', 0, [-60, -70]], ['prone', 3, [30, 70]], ['stand', 1, [-50, 20]], ['stand', 2, [10, 35]]]) {
-    const pose = reachLimb(presetPose(id), limb, target);
+  const handleAt = (pose, handle) => {
     const ref = personRefSize(pose);
     const layout = personLayout(ref.w, ref.h, pose);
-    const end = layout.ends[limb].map((value, i) => value / layout.scale + layout.center[i]);
-    assert.ok(Math.hypot(end[0] - target[0], end[1] - target[1]) < 1, `${id} limb ${limb} reaches ${target}: ${end}`);
+    return layout.handles[handle].map((value, i) => value / layout.scale + layout.center[i]);
+  };
+  for (const [id, handle, target] of [['prone', 0, [-60, -70]], ['prone', 3, [30, 70]], ['stand', 1, [-50, 20]], ['stand', 2, [10, 35]]]) {
+    const end = handleAt(reachHandle(presetPose(id), handle, target), handle);
+    assert.ok(Math.hypot(end[0] - target[0], end[1] - target[1]) < 1, `${id} handle ${handle} reaches ${target}: ${end}`);
   }
-  // Saved poses are checked and rounded; broken ones are dropped.
-  assert.deepEqual(normalizePersonPose({ posture: 'stand', arms: [[10.04, 0, 0, 370], [0, 0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }).arms[0], [10, 0, 0, 10]);
+  // Elbows, knees and the head: the joint moves toward the target (it cannot leave its circle around the shoulder, hip or waist).
+  for (const [id, handle, offset] of [['prone', 4, [-25, 5]], ['prone', 7, [15, -10]], ['stand', 5, [-20, 15]], ['stand', 6, [0, 25]], ['prone', 8, [25, 5]], ['stand', 8, [0, 30]]]) {
+    const pose = presetPose(id);
+    const before = handleAt(pose, handle);
+    const target = [before[0] + offset[0], before[1] + offset[1]];
+    const after = handleAt(reachHandle(pose, handle, target), handle);
+    assert.ok(Math.hypot(after[0] - target[0], after[1] - target[1]) < Math.hypot(before[0] - target[0], before[1] - target[1]) - 3, `${id} handle ${handle} moves toward ${target}: ${before} -> ${after}`);
+  }
+  // Bending the waist forward lowers the head of a standing person; turning the neck keeps the height.
+  const tall = pose => { const ref = personRefSize(pose); return top(personLayout(ref.w, ref.h, pose)); };
+  const bowing = presetPose('stand');
+  bowing.waist = [60, 0, 0];
+  assert.ok(tall(bowing) < 150, `bowing lowers the head: ${tall(bowing)}`);
+  const turning = presetPose('stand');
+  turning.neck = [0, 0, 80];
+  assert.ok(Math.abs(tall(turning) - 170) < 1.5);
+  // Saved poses are checked and rounded; old poses without wrists, ankles, waist and neck are read as straight.
+  assert.deepEqual(normalizePersonPose({ posture: 'stand', arms: [[10.04, 0, 0, 370], [0, 0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }).arms[0], [10, 0, 0, 10, 0]);
+  assert.deepEqual(normalizePersonPose({ posture: 'stand', arms: [[0, 0, 0, 0], [0, 0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }).waist, [0, 0, 0]);
+  assert.equal(normalizePersonPose({ posture: 'stand', arms: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], legs: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]], neck: [1, 2] }), undefined);
   assert.equal(normalizePersonPose({ posture: 'fly', arms: [], legs: [] }), undefined);
   assert.equal(normalizePersonPose({ posture: 'stand', arms: [[0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }), undefined);
 });
@@ -283,6 +305,7 @@ test('people and drawn footprints build 3D models that fill their frame and foll
   const standing = buildFurnitureModel({ kind: 'person', w: size.w, h: size.h });
   const lying = buildFurnitureModel({ kind: 'person', w: 100, h: 200, pose: presetPose('prone') });
   const legacy = buildFurnitureModel({ kind: 'fallenPerson', w: 100, h: 180 });
+  const paint = buildFurnitureModel({ kind: 'paint', w: 200, h: 120, color: '#1c7ed680', path: [[-0.4, 0], [0.4, 0]] });
   const path = buildFurnitureModel({ kind: 'footprints', w: 300, h: 220, path: [[-0.33, -0.27], [0.33, -0.27], [0.33, 0.27]] });
   const straight = buildFurnitureModel({ kind: 'footprints', w: 300, h: 220 });
   try {
@@ -290,5 +313,12 @@ test('people and drawn footprints build 3D models that fill their frame and foll
     assert.ok(height(lying) < 0.3, 'a lying person stays low');
     assert.ok(height(legacy) < 0.3, 'the original fallen person still lies on the floor');
     assert.notEqual(signature(path), signature(straight), 'a drawn path changes the footprints');
-  } finally { [standing, lying, legacy, path, straight].forEach(dispose); }
+    // Pen strokes are a flat, see-through decal on the floor that casts no shadow.
+    const decal = paint.children.find(child => child.material.name === 'paint-decal');
+    assert.ok(decal && decal.material.transparent && Math.abs(decal.material.opacity - 0x80 / 255) < 1e-6 && !decal.castShadow);
+    assert.ok(height(paint) < 0.01, 'the pen decal lies on the floor');
+    // The mannequin is one wood color with slightly darker ball joints.
+    const materials = new Set(standing.children.map(child => child.material.name));
+    assert.deepEqual([...materials].sort(), ['footprint', 'mannequin', 'mannequin-joint']);
+  } finally { [standing, lying, legacy, path, straight, paint].forEach(dispose); }
 });

@@ -81,7 +81,7 @@ try {
     });
   });
   // Flat marks on the floor (footprints, blood, glass, the chalk outline) have few colors, so check that they visibly mark the floor instead.
-  const flat = entry => ['footprints', 'bloodPool', 'brokenGlass'].includes(entry.kind) || (entry.kind === 'fallenPerson' && entry.symbol === 2);
+  const flat = entry => ['footprints', 'bloodPool', 'brokenGlass', 'paint'].includes(entry.kind) || (entry.kind === 'fallenPerson' && entry.symbol === 2);
   for (const entry of stats) {
     if (flat(entry)) assert.ok(entry.marked > 10, `${entry.kind} ${entry.symbol}: no visible mark (${entry.marked} pixels)`);
     else assert.ok(entry.colors > 40, `${entry.kind}: blank canvas (${entry.colors} colors)`);

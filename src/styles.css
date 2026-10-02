@@ -874,6 +874,51 @@ select:focus-visible {
   background: #fff;
 }
 
+/* ペン: よく使う色・太さ・描き方 */
+.pen-colors {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.pen-color {
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--pen-color);
+}
+
+.pen-color.is-active {
+  outline: 2px solid #2775d1;
+  outline-offset: 1px;
+}
+
+.pen-width {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 8px;
+}
+
+.property-grid .pen-width input[type="range"] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pen-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.pen-mode button.is-active {
+  background: rgba(39, 117, 209, 0.1);
+  border-color: rgba(39, 117, 209, 0.52);
+  color: #145da8;
+  font-weight: 700;
+}
+
 /* 人の模型: ポーズの見本と、手足の角度のスライダー */
 .pose-presets {
   display: grid;

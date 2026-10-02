@@ -15,8 +15,8 @@ import {
   blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
   CHALK_WIDTH, bloodShape, evidenceMarkerShape, glassShards, markerTextSize, markerTextureSpan,
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
-  PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachLimb,
-  type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab,
+  PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
+  type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -28,7 +28,7 @@ const PLAN_EDITION = document.documentElement.dataset.edition === "plan";
 const EDITION_NOTICE_KEY = "madori-quick-3d-plan-edition-notice";
 const ALPHA_NOTE_KEY = "madori-quick-3d-alpha-note";
 
-type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
+type Tool = "select" | "paint" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof" | "text";
 type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
@@ -96,6 +96,9 @@ interface Furniture {
   stride?: number;
   // 人: 姿勢と手足の角度（手足を動かすまでは持たない）
   pose?: PersonPose;
+  // ペンで描いた線: 太さ cm と、囲んで塗りつぶすか（道すじは path）
+  brush?: number;
+  filled?: boolean;
   locked?: boolean;
 }
 
@@ -490,6 +493,16 @@ const MAX_STRIDE = 200;
 let footprintRedrawId: string | null = null;
 // 手足を動かしている間の3Dの描き直し。1コマに1回だけにし、選択中のパネルは作り直さない（動かしているスライダーが外れないように）
 let threeRefreshQueued = false;
+// ペンの色・太さ・描き方（見ていた場所などと一緒にブラウザへ保存）
+const PEN_DEFAULT_COLOR = "#9b1c17";
+const DEFAULT_BRUSH = 15;
+const penSettings: { color: string; brush: number; filled: boolean } = { color: PEN_DEFAULT_COLOR, brush: DEFAULT_BRUSH, filled: false };
+const MAX_BRUSH = 300;
+// ペンのよく使う色（血の色が最初）
+const PEN_COLORS: [string, string][] = [
+  ["#9b1c17", "血の色"], ["#e03131", "赤"], ["#f08c00", "だいだい"], ["#f2c230", "黄"], ["#2f9e44", "緑"], ["#1c7ed6", "青"],
+  ["#7048e8", "紫"], ["#8b5a2b", "茶"], ["#222222", "黒"], ["#868e96", "灰"], ["#ffffff", "白"],
+];
 let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
@@ -605,21 +618,13 @@ interface SavedViewState {
   symbols?: Partial<Record<FurnitureKind, number>>;
   ghost?: { target?: string; color?: string; opacity?: number };
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
+  pen?: { color?: string; brush?: number; filled?: boolean };
 }
 
 const viewState: SavedViewState = loadViewState();
 // 起動して元に戻し終えるまでは、途中の表示で記録を上書きしない
 let viewStateReady = false;
 let viewStateTimer = 0;
-applySavedDisplaySettings();
-
-createIcons({ icons });
-setupUi();
-fitPlanToCanvas();
-render2d();
-rebuildThree();
-applyViewMode(viewMode, false, true);
-if (!PLAN_EDITION) animate3d();
 
 function isRoofKind(value: unknown): value is RoofKind {
   return value === "gable" || value === "hip" || value === "flat";
@@ -746,6 +751,11 @@ function normalizeEntity(value: unknown): Entity {
       path: entity.kind === "footprints" ? normalizeFootprintPath(entity.path) : undefined,
       stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
       pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
+      ...(entity.kind === "paint" ? {
+        path: normalizePaintPath(entity.path),
+        brush: finite(entity.brush) ? clamp(Math.round(entity.brush!), 1, MAX_BRUSH) : DEFAULT_BRUSH,
+        filled: entity.filled === true ? true : undefined,
+      } : {}),
       height: FURNITURE_DEFS[entity.kind].height !== undefined && finite(entity.height)
         ? clamp(Math.round(entity.height!), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
         : undefined,
@@ -873,6 +883,10 @@ function setupUi(): void {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
       footprintRedrawId = null;
+      // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
+      if (activeTool === "paint") state.selectedId = null;
+      updatePropertiesPanel();
+      render2d();
       if (activeTool === "room") activeRoomSurface = "plain";
       setActiveButton("[data-surface]", activeTool === "room" ? activeRoomSurface : "");
       setActiveButton("[data-tool]", activeTool);
@@ -1780,6 +1794,12 @@ function applySavedDisplaySettings(): void {
     if (typeof color === "string") ghostSettings.color = parseColorCode(color)?.code ?? "";
     if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
   }
+  if (viewState.pen && typeof viewState.pen === "object") {
+    const { color, brush, filled } = viewState.pen;
+    penSettings.color = parseColorCode(color)?.code ?? PEN_DEFAULT_COLOR;
+    if (typeof brush === "number" && Number.isFinite(brush)) penSettings.brush = clamp(Math.round(brush), 1, MAX_BRUSH);
+    penSettings.filled = filled === true;
+  }
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -1863,6 +1883,7 @@ function saveViewState(): void {
   );
   viewState.symbols = { ...lastSymbolByKind };
   viewState.ghost = { ...ghostSettings };
+  viewState.pen = { ...penSettings };
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -1956,8 +1977,8 @@ function handlePointerDown(event: PointerEvent): void {
     return;
   }
 
-  // 足跡は、なぞった道すじに付ける（クリックだけなら、まっすぐな足跡）
-  if (activeTool === "furniture" && activeFurniture === "footprints") {
+  // 足跡は、なぞった道すじに付ける（クリックだけなら、まっすぐな足跡）。ペンも、なぞった所に線を描く
+  if (activeTool === "paint" || (activeTool === "furniture" && activeFurniture === "footprints")) {
     drag.dragMode = "path";
     drag.path = [point];
     render2d();
@@ -2076,7 +2097,8 @@ function handlePointerUp(event: PointerEvent): void {
   }
 
   if (drag.dragMode === "path" && drag.path) {
-    placeFootprintPath(drag.path);
+    if (activeTool === "paint") placePaintStroke(drag.path);
+    else placeFootprintPath(drag.path);
     commitState();
   }
 
@@ -2621,13 +2643,13 @@ function drawPlan(width: number, height: number, options: { grid: boolean; ghost
   }
   // 現在の階の部屋の塗りの上・線画の下に、ほかの階のゴーストを挟む
   if (options.ghost) drawFloorBelowGhost();
-  drawLayer(entities.filter(isFurniture).filter((item) => item.kind === "rug"), drawFurniture2d);
+  drawLayer(entities.filter(isFurniture).filter((item) => item.kind === "rug" || item.kind === "paint"), drawFurniture2d);
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
   });
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "window"), drawWindow2d);
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "door"), drawDoor2d);
-  drawLayer(entities.filter(isFurniture).filter((item) => item.kind !== "rug"), drawFurniture2d);
+  drawLayer(entities.filter(isFurniture).filter((item) => item.kind !== "rug" && item.kind !== "paint"), drawFurniture2d);
   drawLayer(entities.filter(isShape), drawShape2d);
   if (options.editing) {
     revealRoofsIfSelected();
@@ -2637,7 +2659,10 @@ function drawPlan(width: number, height: number, options: { grid: boolean; ghost
   if (options.editing) {
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
-    if (drag.dragMode === "path" && drag.path) drawFootprintPreview(drag.path);
+    if (drag.dragMode === "path" && drag.path) {
+      if (activeTool === "paint") drawPaintPreview(drag.path);
+      else drawFootprintPreview(drag.path);
+    }
     if (drag.dragMode === "draw" && activeTool !== "furniture") {
       drawPreview(drag.startWorld, drag.currentWorld);
     }
@@ -4031,6 +4056,9 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
     case "person":
       drawPersonSymbol(w, h, item, kind, 0);
       break;
+    case "paint":
+      drawPaint(w, h, item);
+      break;
     case "bloodPool":
       drawBlood(w, h, 0);
       break;
@@ -4198,12 +4226,11 @@ function editingPose(item: Furniture): PersonPose {
   return editablePersonPose(item.kind, item.symbol ?? 0, item.pose);
 }
 
-// 手首・足首のつまみ（0 左手、1 右手、2 左足、3 右足）。pointer の近くにあればその番号
+// 体のつまみ（0〜3 手首・足首、4〜7 ひじ・ひざ、8 頭）。pointer の近くにあればその番号（いちばん近いもの）
 function personHandleAt(item: Furniture, point: Point): number {
-  const ends = personLayoutOf(item).ends;
   let best = -1, bestDistance = 9 / view.zoom;
-  ends.forEach((end, index) => {
-    const at = furnitureLocalToWorld(item, end);
+  personLayoutOf(item).handles.forEach((handle, index) => {
+    const at = furnitureLocalToWorld(item, handle);
     const distance = Math.hypot(at.x - point.x, at.y - point.y);
     if (distance <= bestDistance) {
       best = index;
@@ -4213,41 +4240,65 @@ function personHandleAt(item: Furniture, point: Point): number {
   return best;
 }
 
+// 手首・足首は白い丸、ひじ・ひざは小さな水色の丸、頭は中に点のある丸
 function drawPersonHandles(item: Furniture): void {
   ctx.save();
-  ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
   ctx.lineWidth = 2 / view.zoom;
-  for (const end of personLayoutOf(item).ends) {
-    const at = furnitureLocalToWorld(item, end);
+  personLayoutOf(item).handles.forEach((handle, index) => {
+    const at = furnitureLocalToWorld(item, handle);
+    const middle = index >= 4 && index < 8;
+    ctx.fillStyle = middle ? "#d6e7fb" : "#ffffff";
     ctx.beginPath();
-    ctx.arc(at.x, at.y, 5 / view.zoom, 0, Math.PI * 2);
+    ctx.arc(at.x, at.y, (middle ? 4 : index === 8 ? 6 : 5) / view.zoom, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-  }
+    if (index === 8) {
+      ctx.fillStyle = "#2775d1";
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, 1.8 / view.zoom, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
   ctx.restore();
 }
 
-// 手首・足首をつかんだとき。前からある形のままなら、近いポーズの見本に置き換えてから動かす
-function beginPersonPose(item: Furniture, limb: number, point: Point): number {
-  if (item.pose || item.kind === "person") return limb;
+// 体のつまみをつかんだとき。前からある形のままなら、近いポーズの見本に置き換えてから、いちばん近いつまみを動かす
+function beginPersonPose(item: Furniture, handle: number, point: Point): number {
+  if (item.pose || item.kind === "person") return handle;
   setPersonPose(item, editingPose(item));
-  return Math.max(0, personHandleAt(item, point));
+  const picked = personHandleAt(item, point);
+  return picked >= 0 ? picked : handle;
 }
 
-function movePersonLimb(item: Furniture, limb: number, point: Point): void {
+function movePersonLimb(item: Furniture, handle: number, point: Point): void {
   const layout = personLayoutOf(item);
   const local = worldToFurnitureLocal(item, point);
   const target: Point2 = [local[0] / layout.scale + layout.center[0], local[1] / layout.scale + layout.center[1]];
-  setPersonPose(item, reachLimb(editingPose(item), limb, target), layout.scale);
+  setPersonPose(item, reachHandle(editingPose(item), handle, target), layout.scale);
+}
+
+// 関節の角度のスライダー。名前・いちばん小さい角度・いちばん大きい角度
+const TRUNK_SLIDERS: Record<"waist" | "neck", [string, number, number][]> = {
+  waist: [["前へ倒す", -90, 120], ["横へ倒す", -90, 90], ["ねじる", -120, 120]],
+  neck: [["うなずく", -70, 90], ["かしげる", -60, 60], ["振り向く", -100, 100]],
+};
+
+function limbSliders(arm: boolean): [string, number, number][] {
+  return [["開く", -180, 180], ["前後", -180, 180], [arm ? "ひじを曲げる" : "ひざを曲げる", 0, 180], ["曲げる向き", -180, 180], [arm ? "手首" : "足首", -90, 90]];
+}
+
+function jointSliderHtml(part: string, label: string, sliders: [string, number, number][], angles: number[], disabled: string): string {
+  return `<fieldset class="pose-limb" data-part="${part}">
+      <legend>${label}</legend>
+      ${sliders.map(([name, min, max], index) => `<label><span>${name}</span><input type="range" min="${min}" max="${max}" step="1" value="${Math.round(angles[index])}" data-angle="${index}" aria-label="${label}を${name}" ${disabled} /><output>${Math.round(angles[index])}°</output></label>`).join("")}
+    </fieldset>`;
 }
 
 function personEditorHtml(item: Furniture, disabled: string): string {
   const pose = editingPose(item);
   const height = Math.round(PERSON_HEIGHT * personLayoutOf(item).scale);
   const postures: [Posture, string][] = [["stand", "立っている"], ["prone", "うつぶせ"], ["supine", "あおむけ"]];
-  const limbs: [string, string, LimbAngles][] = [["左腕", "ひじ", pose.arms[0]], ["右腕", "ひじ", pose.arms[1]], ["左脚", "ひざ", pose.legs[0]], ["右脚", "ひざ", pose.legs[1]]];
-  const sliders = (joint: string): [string, number, number][] => [["開く", -180, 180], ["前後", -180, 180], [`${joint}を曲げる`, 0, 180], ["曲げる向き", -180, 180]];
   return `
     <div class="two-col">
       <label>姿勢<select id="personPostureInput" ${disabled}>${postures.map(([value, label]) => `<option value="${value}" ${value === pose.posture ? "selected" : ""}>${label}</option>`).join("")}</select></label>
@@ -4257,13 +4308,15 @@ function personEditorHtml(item: Furniture, disabled: string): string {
       <span>ポーズの見本</span>
       <div>${PERSON_PRESETS.map((preset) => `<button type="button" class="prop-button" data-pose-preset="${preset.id}" ${disabled}>${preset.label}</button>`).join("")}</div>
     </div>
-    <p class="pose-hint">2Dで選ぶと、手首と足首に丸いつまみが出ます。ドラッグすると手足が動きます。</p>
+    <p class="pose-hint">2Dで選ぶと、手首・足首（白）、ひじ・ひざ（水色）、頭に丸いつまみが出ます。ドラッグするとその所が動きます（頭は腰から曲がります）。</p>
     <details class="pose-limbs" open>
-      <summary>手足の角度</summary>
-      ${limbs.map(([label, joint, angles], limb) => `<fieldset class="pose-limb" data-limb="${limb}">
-        <legend>${label}</legend>
-        ${sliders(joint).map(([name, min, max], index) => `<label><span>${name}</span><input type="range" min="${min}" max="${max}" step="1" value="${Math.round(angles[index])}" data-angle="${index}" aria-label="${label}を${name}" ${disabled} /><output>${Math.round(angles[index])}°</output></label>`).join("")}
-      </fieldset>`).join("")}
+      <summary>関節の角度</summary>
+      ${jointSliderHtml("waist", "胴（腰）", TRUNK_SLIDERS.waist, pose.waist, disabled)}
+      ${jointSliderHtml("neck", "首", TRUNK_SLIDERS.neck, pose.neck, disabled)}
+      ${jointSliderHtml("arm0", "左腕", limbSliders(true), pose.arms[0], disabled)}
+      ${jointSliderHtml("arm1", "右腕", limbSliders(true), pose.arms[1], disabled)}
+      ${jointSliderHtml("leg0", "左脚", limbSliders(false), pose.legs[0], disabled)}
+      ${jointSliderHtml("leg1", "右脚", limbSliders(false), pose.legs[1], disabled)}
     </details>`;
 }
 
@@ -4284,11 +4337,14 @@ function bindPersonEditor(item: Furniture): void {
     });
   });
   propertiesPanel.querySelectorAll<HTMLFieldSetElement>(".pose-limb").forEach((fieldset) => {
-    const limb = Number(fieldset.dataset.limb);
+    const part = fieldset.dataset.part ?? "";
     const inputs = [...fieldset.querySelectorAll<HTMLInputElement>("input[data-angle]")];
     const apply = () => {
       const pose = editingPose(item);
-      (limb >= 2 ? pose.legs : pose.arms)[limb % 2] = inputs.map((input) => Number(input.value)) as LimbAngles;
+      const angles = inputs.map((input) => Number(input.value));
+      if (part === "waist") pose.waist = angles as TrunkAngles;
+      else if (part === "neck") pose.neck = angles as TrunkAngles;
+      else (part.startsWith("leg") ? pose.legs : pose.arms)[Number(part.slice(3))] = angles as LimbAngles;
       setPersonPose(item, pose);
     };
     inputs.forEach((input) => {
@@ -4307,6 +4363,261 @@ function bindPersonEditor(item: Furniture): void {
       });
     });
   });
+}
+
+// ---- ペンで描く線・塗り ----
+
+function normalizePaintPath(value: unknown): number[][] | undefined {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 4000) return undefined;
+  const ok = value.every((point) => Array.isArray(point) && point.length === 2 && point.every((part) => typeof part === "number" && Number.isFinite(part) && Math.abs(part) <= 1));
+  return ok ? value.map(([u, v]: number[]) => [Math.round(u * 10000) / 10000, Math.round(v * 10000) / 10000]) : undefined;
+}
+
+// ペンの線の点（家具の中心が原点の cm）。道すじがなければ真ん中の点
+function paintPoints(w: number, h: number, item?: Furniture): Point2[] {
+  return item?.path?.length ? item.path.map(([u, v]): Point2 => [u * w, v * h]) : [[0, 0]];
+}
+
+// ペンの線・塗りを描く。3Dの床に貼る画像も、この描き方で白く描いて色を付ける
+function drawPaint(w: number, h: number, item?: Furniture, color?: string): void {
+  const points = paintPoints(w, h, item);
+  const brush = item?.brush ?? DEFAULT_BRUSH;
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle = color ?? solidColor(item?.color) ?? PEN_DEFAULT_COLOR;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (item?.filled && points.length >= 3) {
+    traceLoop(points);
+    ctx.fill();
+  } else if (points.length === 1) {
+    ctx.beginPath();
+    ctx.arc(points[0][0], points[0][1], brush / 2, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.lineWidth = brush;
+    traceOpenPath(points);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 描いた線の上か、塗った所の中か
+function isPointOnPaint(item: Furniture, point: Point): boolean {
+  const [x, y] = worldToFurnitureLocal(item, point);
+  const points = paintPoints(item.w, item.h, item);
+  const reach = (item.filled ? 0 : (item.brush ?? DEFAULT_BRUSH) / 2) + 4 / view.zoom;
+  if (item.filled && points.length >= 3) {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const [xi, yi] = points[i], [xj, yj] = points[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  if (points.length === 1) return Math.hypot(x - points[0][0], y - points[0][1]) <= reach;
+  for (let i = 1; i < points.length; i += 1) {
+    if (distanceToSegment({ x, y }, { x: points[i - 1][0], y: points[i - 1][1] }, { x: points[i][0], y: points[i][1] }) <= reach) return true;
+  }
+  return item.filled === true && points.length >= 3 && distanceToSegment({ x, y }, { x: points[points.length - 1][0], y: points[points.length - 1][1] }, { x: points[0][0], y: points[0][1] }) <= reach;
+}
+
+// 描いた点（間取りの cm）から、範囲と道すじを決める。線の太さの分だけ範囲を広げる
+function paintFrame(path: Point2[], brush: number, filled: boolean): { x: number; y: number; w: number; h: number; path: number[][] } {
+  const margin = filled ? 1 : brush / 2 + 1;
+  const xs = path.map((point) => point[0]), ys = path.map((point) => point[1]);
+  const w = roundTenth(Math.max(2, Math.max(...xs) - Math.min(...xs) + margin * 2));
+  const h = roundTenth(Math.max(2, Math.max(...ys) - Math.min(...ys) + margin * 2));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  return {
+    x: roundTenth(cx - w / 2), y: roundTenth(cy - h / 2), w, h,
+    path: path.map(([x, y]) => [Math.round(((x - cx) / w) * 10000) / 10000, Math.round(((y - cy) / h) * 10000) / 10000]),
+  };
+}
+
+// 線の手ぶれを少しだけならす（細かい形は残す）
+function tidyPaintPath(points: Point[]): Point2[] {
+  const spaced: Point2[] = [];
+  for (const point of points) {
+    const last = spaced[spaced.length - 1];
+    if (!last || Math.hypot(point.x - last[0], point.y - last[1]) >= 1) spaced.push([point.x, point.y]);
+  }
+  if (spaced.length < 3) return spaced;
+  const smooth = spaced.map((point, index): Point2 => {
+    if (index === 0 || index === spaced.length - 1) return point;
+    const [ax, ay] = spaced[index - 1], [bx, by] = spaced[index + 1];
+    return [(ax + point[0] * 2 + bx) / 4, (ay + point[1] * 2 + by) / 4];
+  });
+  return simplifyPath(smooth, 0.5);
+}
+
+function placePaintStroke(points: Point[]): void {
+  const path = tidyPaintPath(points);
+  if (!path.length) return;
+  const brush = penSettings.brush;
+  const filled = penSettings.filled && path.length >= 3 && pathLength(path) > brush;
+  const frame = paintFrame(path.length === 2 && pathLength(path) < 1 ? [path[0]] : path, brush, filled);
+  const item: Furniture = {
+    id: newId("furniture"), type: "furniture", kind: "paint", rotation: 0, color: penSettings.color, brush, ...(filled ? { filled: true } : {}), ...frame,
+  };
+  activeEntities().push(item);
+}
+
+// 太さや描き方を変えたとき、線が収まるように範囲を合わせ直す（線の場所はそのまま）
+function refitPaint(item: Furniture): void {
+  const points = paintPoints(item.w, item.h, item);
+  const frame = paintFrame(points, item.brush ?? DEFAULT_BRUSH, item.filled === true);
+  const center = furnitureLocalToWorld(item, [frame.x + frame.w / 2, frame.y + frame.h / 2]);
+  item.w = frame.w;
+  item.h = frame.h;
+  item.path = frame.path;
+  item.x = roundTenth(center.x - frame.w / 2);
+  item.y = roundTenth(center.y - frame.h / 2);
+}
+
+// なぞっている間の見本: いまのペンの色・太さで描く
+function drawPaintPreview(points: Point[]): void {
+  const path = tidyPaintPath(points);
+  if (!path.length) return;
+  const parsed = parseColorCode(penSettings.color);
+  const filled = penSettings.filled && path.length >= 3;
+  ctx.save();
+  ctx.globalAlpha = parsed?.alpha ?? 1;
+  ctx.translate(0, 0);
+  drawPaint(1, 1, { id: "preview", type: "furniture", kind: "paint", x: 0, y: 0, w: 1, h: 1, rotation: 0, brush: penSettings.brush, filled, path: path.map(([x, y]) => [x, y]) }, parsed?.rgb ?? PEN_DEFAULT_COLOR);
+  ctx.restore();
+}
+
+// 3Dの床に貼る画像。2Dと同じ描き方で白く描き、色は材質で付ける（透明度も材質で）
+function applyPaintTexture(group: THREE.Group, item: Furniture): void {
+  let decal: THREE.Mesh | undefined;
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    // 3Dでは選ばない（範囲の透明な所でも、下の床や家具を選べるように）
+    mesh.raycast = () => {};
+    if ((mesh.material as THREE.Material).name === "paint-decal") decal = mesh;
+  });
+  if (!decal) return;
+  const pixelsPerCm = Math.min(2, 1024 / Math.max(item.w, item.h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(2, Math.ceil(item.w * pixelsPerCm));
+  canvas.height = Math.max(2, Math.ceil(item.h * pixelsPerCm));
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  const planContext = ctx;
+  ctx = context;
+  try {
+    ctx.setTransform(canvas.width / item.w, 0, 0, canvas.height / item.h, canvas.width / 2, canvas.height / 2);
+    drawPaint(item.w, item.h, item, "#ffffff");
+  } finally {
+    ctx = planContext;
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = decal.material as THREE.MeshStandardMaterial;
+  material.map = texture;
+  material.needsUpdate = true;
+}
+
+function penControlsHtml(prefix: string, color: string, brush: number, filled: boolean, disabled = ""): string {
+  const current = parseColorCode(color)?.rgb;
+  return `
+    ${colorField(`${prefix}ColorInput`, "色", color, disabled)}
+    <div class="pen-colors" role="group" aria-label="よく使う色">${PEN_COLORS.map(([value, label]) => `<button type="button" class="pen-color${current === value ? " is-active" : ""}" data-pen-color="${value}" title="${label}" aria-label="${label}" style="--pen-color: ${value}" ${disabled}></button>`).join("")}</div>
+    <label>太さ cm
+      <span class="pen-width">
+        <input id="${prefix}WidthRange" type="range" min="1" max="100" step="1" value="${Math.min(100, brush)}" aria-label="太さ" ${disabled} />
+        <input id="${prefix}WidthInput" type="number" min="1" max="${MAX_BRUSH}" step="1" value="${brush}" ${disabled} />
+      </span>
+    </label>
+    <div class="segmented pen-mode" role="radiogroup" aria-label="描き方">
+      <button type="button" data-pen-mode="line" class="${filled ? "" : "is-active"}" aria-checked="${!filled}" role="radio" ${disabled}>線で描く</button>
+      <button type="button" data-pen-mode="fill" class="${filled ? "is-active" : ""}" aria-checked="${filled}" role="radio" ${disabled}>囲んで塗る</button>
+    </div>`;
+}
+
+// ペンの設定（まだ描いていない線の色・太さ）。履歴には積まない
+function bindPenControls(): void {
+  const panel = propertiesPanel;
+  const picker = panel.querySelector<HTMLInputElement>("#penColorInput");
+  const code = panel.querySelector<HTMLInputElement>("#penColorInputCode");
+  const remember = () => {
+    scheduleViewStateSave();
+    updatePropertiesPanel();
+  };
+  picker?.addEventListener("change", () => {
+    penSettings.color = withAlpha(picker.value, colorAlpha(penSettings.color));
+    remember();
+  });
+  code?.addEventListener("change", () => {
+    const parsed = parseColorCode(code.value.trim());
+    if (code.value.trim() && !parsed) {
+      code.classList.add("is-invalid");
+      return;
+    }
+    penSettings.color = parsed?.code ?? PEN_DEFAULT_COLOR;
+    remember();
+  });
+  panel.querySelectorAll<HTMLButtonElement>("[data-pen-color]").forEach((button) => button.addEventListener("click", () => {
+    penSettings.color = withAlpha(button.dataset.penColor ?? PEN_DEFAULT_COLOR, colorAlpha(penSettings.color));
+    remember();
+  }));
+  const range = panel.querySelector<HTMLInputElement>("#penWidthRange"), number = panel.querySelector<HTMLInputElement>("#penWidthInput");
+  range?.addEventListener("input", () => {
+    penSettings.brush = clamp(Math.round(Number(range.value)), 1, MAX_BRUSH);
+    if (number) number.value = String(penSettings.brush);
+    scheduleViewStateSave();
+  });
+  number?.addEventListener("change", () => {
+    if (!Number.isFinite(Number(number.value))) return;
+    penSettings.brush = clamp(Math.round(Number(number.value)), 1, MAX_BRUSH);
+    remember();
+  });
+  panel.querySelectorAll<HTMLButtonElement>("[data-pen-mode]").forEach((button) => button.addEventListener("click", () => {
+    penSettings.filled = button.dataset.penMode === "fill";
+    remember();
+  }));
+}
+
+// 選んだ線の色・太さ・描き方を変える（履歴に積む）
+function bindPaintControls(item: Furniture): void {
+  const panel = propertiesPanel;
+  bindColor("#paintColorInput", (value) => {
+    item.color = value ?? PEN_DEFAULT_COLOR;
+    delete item.color3d;
+  });
+  panel.querySelectorAll<HTMLButtonElement>("[data-pen-color]").forEach((button) => button.addEventListener("click", () => {
+    item.color = withAlpha(button.dataset.penColor ?? PEN_DEFAULT_COLOR, colorAlpha(item.color));
+    delete item.color3d;
+    commitState();
+    redrawAll();
+  }));
+  const range = panel.querySelector<HTMLInputElement>("#paintWidthRange"), number = panel.querySelector<HTMLInputElement>("#paintWidthInput");
+  const setBrush = (value: number) => {
+    item.brush = clamp(Math.round(value), 1, MAX_BRUSH);
+    refitPaint(item);
+  };
+  range?.addEventListener("input", () => {
+    setBrush(Number(range.value));
+    if (number) number.value = String(item.brush);
+    render2d();
+    scheduleThreeRefresh();
+  });
+  range?.addEventListener("change", () => {
+    setBrush(Number(range.value));
+    commitState();
+    redrawAll();
+  });
+  bindNumber("#paintWidthInput", (value) => setBrush(value));
+  panel.querySelectorAll<HTMLButtonElement>("[data-pen-mode]").forEach((button) => button.addEventListener("click", () => {
+    const filled = button.dataset.penMode === "fill";
+    if (filled === (item.filled === true)) return;
+    if (filled) item.filled = true;
+    else delete item.filled;
+    refitPaint(item);
+    commitState();
+    redrawAll();
+  }));
 }
 
 // ---- 足跡の道すじ ----
@@ -5816,6 +6127,7 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
   const floorTop = yBase === 0 ? 0.08 : 0;
   const group = buildFurnitureModel({ ...furnitureItem, rise: FLOOR_SPACING - floorTop });
   if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
+  if (furnitureItem.kind === "paint") applyPaintTexture(group, furnitureItem);
   const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
   group.position.set(pos.x, yBase + floorTop, pos.z);
   group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
@@ -6014,6 +6326,14 @@ function updateStats(): void {
 
 function updatePropertiesPanel(): void {
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
+  if (!selected && activeTool === "paint") {
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        <p class="empty-state">ペン: 2Dの上をドラッグすると、この色で描けます。クリックで点、「囲んで塗る」なら囲んだ所を塗りつぶします。</p>
+        ${penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled)}
+      </div>`;
+    bindPenControls();
+    return;
+  }
   if (!selected) {
     propertiesPanel.innerHTML = `<p class="empty-state">選択ツールで部屋・壁・家具を選ぶと、名前や寸法を調整できます。家具は R キーで回転、F キーで反転します。</p>`;
     return;
@@ -6256,6 +6576,16 @@ function updatePropertiesPanel(): void {
   }
 
   const selectedFurniture = selected as Furniture;
+  if (selectedFurniture.kind === "paint") {
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        ${lockRow}
+        <p class="empty-state">ペンで描いた${selectedFurniture.filled ? "塗り" : "線"}</p>
+        ${penControlsHtml("paint", selectedFurniture.color ?? PEN_DEFAULT_COLOR, selectedFurniture.brush ?? DEFAULT_BRUSH, selectedFurniture.filled === true, placementDisabled)}
+      </div>`;
+    bindEntityLock(selectedFurniture);
+    bindPaintControls(selectedFurniture);
+    return;
+  }
   const kindOptions = [...FURNITURE_CATEGORIES, { label: "階段", kinds: STAIR_KINDS }].map(
     (category) =>
       `<optgroup label="${category.label}">` +
@@ -6812,7 +7142,7 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
   // Match visual stacking even when a floor or rug was placed after the furniture.
-  const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
+  const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && (entity.kind === "rug" || entity.kind === "paint") ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedPerson = entities.find((entity) => entity.id === state.selectedId);
   if (isPerson(selectedPerson) && !isLocked(selectedPerson)) {
@@ -6840,6 +7170,10 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
         return { entity, corner: null };
       }
+    } else if (entity.type === "furniture" && entity.kind === "paint") {
+      const corner = entity.id === state.selectedId ? getCornerHit(entity, point) : null;
+      if (corner) return { entity, corner };
+      if (isPointOnPaint(entity, point)) return { entity, corner: null };
     } else if (entity.type === "furniture") {
       const corner = isPerson(entity) ? null : getCornerHit(entity, point);
       if (corner) return { entity, corner };
@@ -7553,3 +7887,16 @@ function escapeHtml(value: string): string {
 function newId(prefix: EntityType | "floor"): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
+
+// ---- 起動 ----
+// ファイルのいちばん最後で起動する。ここまでに、ファイルの中のすべての値（const・let）が用意されているので、
+// 起動中の描画やパネルが、まだ用意されていない値を読んで止まることがない
+applySavedDisplaySettings();
+
+createIcons({ icons });
+setupUi();
+fitPlanToCanvas();
+render2d();
+rebuildThree();
+applyViewMode(viewMode, false, true);
+if (!PLAN_EDITION) animate3d();

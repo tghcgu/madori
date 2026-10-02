@@ -62,7 +62,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       },
       personEnds(id) {
         const item = findEntity(id);
-        return personLayoutOf(item).ends.map(end => furnitureLocalToWorld(item, end));
+        return personLayoutOf(item).handles.map(handle => furnitureLocalToWorld(item, handle));
       },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
@@ -751,7 +751,7 @@ try {
   // Slider: raise the right arm straight to the side.
   await page.locator('[data-pose-preset="stand"]').click();
   const before = await personOf();
-  await page.locator('.pose-limb[data-limb="1"] input[data-angle="0"]').evaluate(input => {
+  await page.locator('.pose-limb[data-part="arm1"] input[data-angle="0"]').evaluate(input => {
     input.value = '90';
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -759,6 +759,23 @@ try {
   person = await personOf();
   assert.equal(person.pose.arms[1][0], 90);
   assert.ok(person.w > before.w + 40, `the outstretched arm widens the frame: ${before.w} -> ${person.w}`);
+  // The waist and neck have their own joints: bowing forward lowers the head.
+  await page.locator('[data-pose-preset="stand"]').click();
+  await page.locator('.pose-limb[data-part="waist"] input[data-angle="0"]').evaluate(input => {
+    input.value = '60';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  person = await personOf();
+  assert.deepEqual(person.pose.waist, [60, 0, 0]);
+  assert.ok(await height3d() < 1.5, `bowing lowers the head: ${await height3d()}`);
+  await page.locator('.pose-limb[data-part="arm0"] input[data-angle="4"]').evaluate(input => {
+    input.value = '45';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  assert.equal((await personOf()).pose.arms[0][4], 45, 'the wrist bends');
+  await page.locator('[data-pose-preset="armsOut"]').click();
   // 身長 scales the whole body.
   await page.locator('#personHeightInput').fill('85');
   await page.locator('#personHeightInput').press('Enter');
@@ -778,6 +795,17 @@ try {
   await page.mouse.up();
   ends = await page.evaluate(id => window.__editorTest.personEnds(id), person.id);
   assert.ok(Math.hypot(ends[0].x - target.x, ends[0].y - target.y) < 2, `the wrist follows the drag: ${JSON.stringify(ends[0])} vs ${JSON.stringify(target)}`);
+  // The elbow handle swings the upper arm; the knee handle the thigh.
+  ends = await page.evaluate(id => window.__editorTest.personEnds(id), person.id);
+  const elbow = ends[4], elbowTarget = { x: ends[4].x - 12, y: ends[4].y + 10 };
+  const elbowFrom = await planPoint(elbow.x, elbow.y), elbowTo = await planPoint(elbowTarget.x, elbowTarget.y);
+  await page.mouse.move(elbowFrom.x, elbowFrom.y);
+  await page.mouse.down();
+  await page.mouse.move(elbowTo.x, elbowTo.y, { steps: 8 });
+  await page.mouse.up();
+  const movedElbow = (await page.evaluate(id => window.__editorTest.personEnds(id), person.id))[4];
+  assert.ok(Math.hypot(movedElbow.x - elbowTarget.x, movedElbow.y - elbowTarget.y) < Math.hypot(elbow.x - elbowTarget.x, elbow.y - elbowTarget.y) - 3, 'the elbow follows the drag');
+  await page.keyboard.press('Control+z');
   const dragged = await personOf();
   assert.notDeepEqual(dragged.pose.arms[0], person.pose.arms[0]);
   await page.keyboard.press('Control+z');
@@ -801,7 +829,63 @@ try {
   // Choosing the original design again brings the original shape back.
   await page.locator('.symbol-option[data-symbol="0"]').click();
   assert.equal((await saved()).floors[0].entities[0].pose, undefined);
-  console.log('PASS: people: 170 cm standing, postures, presets, sliders, height, dragging wrists, undo, reload and the original fallen body');
+  console.log('PASS: people: 170 cm standing, postures, presets, sliders for waist, wrist and limbs, height, dragging wrists and elbows, undo, reload and the original fallen body');
+
+  // The pen draws with a color: drag for a line, a click for a dot, or "囲んで塗る" to fill the area drawn around.
+  await importPlan({ floors: [{ id: 'w1', name: '', entities: [{ id: 'floor', type: 'room', name: '', x: 0, y: 0, w: 900, h: 600, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator('[data-tool="paint"]').click();
+  assert.equal(await page.locator('#penColorInputCode').inputValue(), '#9b1c17', 'the pen starts with the color of blood');
+  await page.locator('[data-pen-color="#1c7ed6"]').click();
+  await page.locator('#penWidthInput').fill('20');
+  await page.locator('#penWidthInput').press('Enter');
+  await dragAlong([[100, 100], [300, 300], [500, 100]]);
+  const strokes = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'paint');
+  let stroke = (await strokes())[0];
+  assert.equal(stroke.color, '#1c7ed6');
+  assert.equal(stroke.brush, 20);
+  assert.ok(stroke.path.length >= 3 && stroke.w > 400 && stroke.h > 200, `the stroke covers the drawn line: ${stroke.w} x ${stroke.h}`);
+  const strokePixel = shown(await pixelAt(200, 200));
+  assert.ok(strokePixel[2] > 150 && strokePixel[0] < 100, `the line is drawn in blue: ${strokePixel}`);
+  const strokeMaterials = await page.evaluate(id => window.__editorTest.materials(id), stroke.id);
+  assert.ok(strokeMaterials.some(m => m.name === 'paint-decal' && m.map && m.color === '1c7ed6'), `the same line is painted on the 3D floor: ${JSON.stringify(strokeMaterials)}`);
+  // A click makes a dot; fill mode fills a loop.
+  const dotAt = await planPoint(700, 500);
+  await page.mouse.click(dotAt.x, dotAt.y);
+  assert.equal((await strokes()).length, 2);
+  assert.equal((await strokes())[1].path.length, 1, 'a click is a dot');
+  await page.locator('[data-pen-mode="fill"]').click();
+  await page.locator('[data-pen-color="#9b1c17"]').click();
+  await dragAlong([[600, 150], [800, 150], [800, 350], [600, 350], [600, 160]]);
+  const pool = (await strokes())[2];
+  assert.equal(pool.filled, true);
+  const poolPixel = shown(await pixelAt(700, 250));
+  assert.ok(poolPixel[0] > 120 && poolPixel[1] < 60, `the inside of the loop is filled: ${poolPixel}`);
+  // Select a stroke on its line (not in the empty part of its frame) and make it thicker.
+  await page.locator('[data-tool="select"]').click();
+  await pick(400, 150);
+  assert.equal(await page.locator('#paintWidthInput').count(), 0, 'the empty part of the frame does not select the line');
+  await pick(200, 200);
+  assert.equal(await page.locator('#paintWidthInput').inputValue(), '20');
+  await page.locator('#paintWidthInput').fill('60');
+  await page.locator('#paintWidthInput').press('Enter');
+  stroke = (await strokes())[0];
+  assert.equal(stroke.brush, 60);
+  assert.ok(stroke.w > 440, 'the frame grows with the line');
+  await page.keyboard.press('Control+z');
+  assert.equal((await strokes())[0].brush, 20, 'undo');
+  // The eraser removes a stroke, and the pen settings are kept after a reload.
+  await page.locator('[data-tool="erase"]').click();
+  await pick(700, 500);
+  assert.equal((await strokes()).length, 2);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  await page.locator('[data-tool="paint"]').click();
+  assert.equal(await page.locator('#penColorInputCode').inputValue(), '#9b1c17');
+  assert.equal(await page.locator('[data-pen-mode="fill"]').getAttribute('aria-checked'), 'true');
+  await page.locator('[data-pen-mode="line"]').click();
+  await page.locator('[data-tool="select"]').click();
+  console.log('PASS: pen: color swatches, width, lines, dots, filled loops, 2D and 3D paint, selection on the line, undo, eraser and kept settings');
 
   // Images: the 2D plan (the current floor, or all floors in one image) and the 3D view are saved as PNG.
   await importPlan({ floors: [{ id: 's1', name: '', entities: [
@@ -1021,6 +1105,8 @@ try {
   const symbols = [];
   const variants = await page.evaluate(() => window.__editorTest.variants);
   for (const [kind, defaults] of Object.entries(catalog)) {
+    // Pen strokes are drawn with the pen tool, not chosen as a kind of furniture.
+    if (kind === 'paint') continue;
     await page.locator('#furnitureKindInput').selectOption(kind);
     const designs = variants[kind]?.length ?? 0;
     assert.equal(await page.locator('.symbol-option').count(), designs ? designs + 1 : 0, `${kind}: design picker`);

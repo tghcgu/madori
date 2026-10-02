@@ -288,20 +288,38 @@ function ribbonGeometry(loop: Point2[], widthCm: number, y: number): THREE.Buffe
   return facesGeometry(triangles, () => new THREE.Vector3(0, 1, 0));
 }
 
-// 人の体の部品: 骨（a→b）に、楕円体の太さを付けた丸い棒。2Dで真上から見た形と同じになる
+// 人の体の部品: 両端の楕円体（b の端は a の端の taper 倍）を包む、なめらかな丸い棒。2Dで真上から見た形と同じになる
 function bodyPart(m: Model, part: PersonPart, material: Material): void {
   const a = new THREE.Vector3(...part.a).divideScalar(100), b = new THREE.Vector3(...part.b).divideScalar(100);
   const [x, y, z] = part.axes.map((axis) => new THREE.Vector3(...axis).divideScalar(100));
   // 単位の球を楕円体へ写す行列。裏返し（向きの逆転）にならないよう、必要なら1本を逆向きにする
   const shape = new THREE.Matrix4().makeBasis(x, y, z);
   if (shape.determinant() < 0) shape.makeBasis(x.clone().negate(), y, z);
+  // 行列で戻した空間では、半径1と taper の2つの球を包む形（円すい台の両端に球）になる
   const span = b.clone().sub(a).applyMatrix4(shape.clone().invert());
-  const length = span.length();
-  const geometry = length > 1e-6 ? new THREE.CapsuleGeometry(1, length, 6, 14) : new THREE.SphereGeometry(1, 16, 12);
-  if (length > 1e-6) geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.normalize()));
+  const length = span.length(), r1 = 1, r2 = part.taper;
+  let geometry: THREE.BufferGeometry;
+  if (length <= Math.abs(r1 - r2) + 1e-6) {
+    geometry = new THREE.SphereGeometry(Math.max(r1, r2), 16, 12);
+    if (r2 > r1) geometry.translate(0, length, 0);
+  } else {
+    const phi = Math.asin((r1 - r2) / length);
+    const profile: THREE.Vector2[] = [];
+    for (let i = 0; i <= 6; i += 1) {
+      const t = -Math.PI / 2 + ((phi + Math.PI / 2) * i) / 6;
+      profile.push(new THREE.Vector2(r1 * Math.cos(t), r1 * Math.sin(t)));
+    }
+    for (let i = 0; i <= 6; i += 1) {
+      const t = phi + ((Math.PI / 2 - phi) * i) / 6;
+      profile.push(new THREE.Vector2(r2 * Math.cos(t), length + r2 * Math.sin(t)));
+    }
+    profile[0].x = 0;
+    profile[profile.length - 1].x = 0;
+    geometry = new THREE.LatheGeometry(profile, 16);
+  }
+  if (length > 1e-6) geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.clone().normalize()));
   geometry.applyMatrix4(shape);
-  const center = a.add(b).multiplyScalar(0.5);
-  geometry.translate(center.x, center.y, center.z);
+  geometry.translate(a.x, a.y, a.z);
   m.mesh(geometry, [0, 0, 0], material);
 }
 
@@ -2100,10 +2118,22 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         m.reserveFootprint(w, d);
         break;
       }
-      // 2Dと同じ位置・太さの丸い棒でできた人の形。服と、肌（頭・手・足）
-      const clothes = m.material("clothes", 0x5b6d80, 0.85, 0, true);
-      const skin = m.material("skin", 0xd8b39a, 0.7);
-      for (const part of layout.parts) bodyPart(m, part, part.skin ? skin : clothes);
+      // 2Dと同じ位置・太さの部品でできた、デッサン人形のような人の形。関節の玉は少し濃い色
+      const wood = m.material("mannequin", 0xd9c19b, 0.72, 0, true);
+      const joint = m.material("mannequin-joint", 0xc4a57b, 0.72, 0, true);
+      for (const part of layout.parts) bodyPart(m, part, part.joint ? joint : wood);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "paint": {
+      // ペンで描いた線・塗り: 床に貼った薄い板。形は main.ts で、2Dと同じ描き方の画像を貼る
+      const paint = m.material("paint-decal", 0x9b1c17, 0.6, 0, true);
+      paint.transparent = true;
+      paint.depthWrite = false;
+      paint.polygonOffset = true;
+      paint.polygonOffsetFactor = -1;
+      const plane = m.mesh(new THREE.PlaneGeometry(w, d), [0, 0.003, 0], paint);
+      plane.rotation.x = -Math.PI / 2;
       m.reserveFootprint(w, d);
       break;
     }
