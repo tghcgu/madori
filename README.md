@@ -140,7 +140,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 2Dの画面だけで、3Dの欄・表示の切り替え・3Dの色・高さ・屋根・3Dの画像の書き出しは出しません
 - 間取りのデータは本体と共通です。間取り専用版で描いた間取りを、上部の「3Dでも見る」から本体で開いて3Dで確かめられます（同じブラウザのとき）
 - 本体の表示の切り替えや3Dで見ていた向きは、間取り専用版を開いても変わりません
-- 本体の上に、間取り専用版のお知らせを出しています（閉じると次からは出ません）
+- 本体の上のバーの文字の所に、間取り専用版のお知らせを出しています。×で消せて、消すと開発中の注意書きに戻ります（注意書きも×で消せます。消した文は次からも出ません）。画面の高さは使いません
 
 ### 画像の書き出し
 
@@ -148,7 +148,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 書き出す階: 表示中の階 / 全部の階を1枚に（階の名前付きで並べる） / 階ごとに1枚ずつ。複数の階は同じ範囲・同じ倍率にそろえるので、重ねて見比べられます
 - 方眼と部屋の名前は入れるかどうかを選べます。寸法は2Dの「寸法」の表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
-- 1cmが2ピクセルの細かさで書き出します（大きすぎる間取りは、どの端末でも作れる大きさまで細かさを下げます）
+- 線の太さや文字の大きさの割合は、2Dで間取り全体を表示したときと同じにします（大きな間取りでも、縮めて見たときに線が細く薄くならないように）。細かさは画面の2倍以上・1cmが1.5ピクセル以上で、大きすぎる間取りはどの端末でも作れる大きさまで下げます
 - 「3Dの画像（いまの見え方）」は、3Dで見ている向きのまま画面の2倍の細かさで書き出します
 - ファイル名は`madori-YYYY-MM-DD-1F.png`、`madori-YYYY-MM-DD-all.png`、`madori-YYYY-MM-DD-3d.png`のようになります
 
@@ -658,7 +658,7 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 - It shows only the 2D editor: no 3D pane, view switch, 3D colors, heights, roofs, or 3D image export.
 - It shares the saved plan with the full app, so "3Dでも見る" opens the same plan in 3D (in the same browser).
 - It leaves the full app's view mode and 3D camera untouched.
-- The full app shows a notice about the plan-only edition until it is closed.
+- The full app shows a notice about the plan-only edition in the text area of the top bar, where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
 
 ### Image export
 
@@ -666,7 +666,7 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 - Floors: the current floor, all floors in one image (each with its name), or one image per floor. Several floors share the same area and scale so they line up.
 - Grid and room names can be left out. Dimensions follow the 2D dimension toggle. Selection frames, roofs, ghost floors, and lock icons are never included.
-- Images use 2 pixels per centimeter, reduced for very large plans so every device can create them.
+- Line widths and text keep the same proportions as the whole plan shown in the 2D view, so large plans do not look faint when the image is scaled down. Resolution is at least twice the screen and 1.5 pixels per centimeter, reduced for very large plans so every device can create the image.
 - "3Dの画像" saves the current 3D view at twice the screen resolution.
 
 ### Multiple editable roofs

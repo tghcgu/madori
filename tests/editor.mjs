@@ -698,21 +698,24 @@ try {
       canvas.width = image.width; canvas.height = image.height;
       const context = canvas.getContext('2d');
       context.drawImage(image, 0, 0);
-      // The image starts 60 cm before the plan and has 2 pixels per cm.
-      const at = (x, y) => [...context.getImageData((x + 60) * 2, (y + 60) * 2, 1, 1).data].slice(0, 3);
-      return { width: image.width, height: image.height, blood: at(260, 200), wall: at(600, 195), corner: at(-50, -50) };
+      // The image starts 60 cm before the plan; its scale comes from the 720 cm wide area.
+      const scale = image.width / 720;
+      const at = (x, y) => [...context.getImageData(Math.round((x + 60) * scale), Math.round((y + 60) * scale), 1, 1).data].slice(0, 3);
+      return { width: image.width, height: image.height, scale, blood: at(260, 200), wall: at(600, 195), corner: at(-50, -50) };
     }, data)) };
   };
   const image = await exportImage('#imageExportPlan', 'current');
   assert.match(image.name, /^madori-\d{4}-\d{2}-\d{2}-1F\.png$/);
-  assert.equal(image.width, (600 + 120) * 2);
-  assert.equal(image.height, (400 + 120) * 2);
+  assert.ok(Math.abs(image.height - 520 * image.scale) <= 1, `the image keeps the plan's proportions: ${image.width}x${image.height}`);
+  // Line widths and text keep the same proportions as the whole plan shown on a 1600 x 1000 screen, at twice the resolution.
+  assert.ok(Math.abs(image.scale - 2 * Math.min(1600 / 720, 1000 / 520)) < 0.01, `scale ${image.scale}`);
   assert.ok(isRed(image.blood), `the plan contents are in the image: ${image.blood}`);
   assert.ok(image.wall.every(value => value < 80), `walls are drawn: ${image.wall}`);
   assert.ok(image.corner.every(value => value > 230), `the background is white: ${image.corner}`);
   const all = await exportImage('#imageExportPlan', 'all');
   assert.match(all.name, /-all\.png$/);
-  assert.ok(all.height > image.height, 'all floors are laid out in one image');
+  // Two floors side by side (or stacked) change the proportions of the image a lot.
+  assert.ok(Math.abs(Math.log((all.width / all.height) / (image.width / image.height))) > Math.log(1.4), `all floors are laid out in one image: ${all.width}x${all.height}`);
   await page.locator('#imageExportButton').click();
   const threeDownload = page.waitForEvent('download');
   await page.locator('#imageExport3d').click();
@@ -720,15 +723,16 @@ try {
   console.log('PASS: image export: the current floor and all floors as PNG with the plan contents, and the 3D view');
 
   // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
-  assert.equal(await page.locator('#editionNotice').isVisible(), true, 'the full app announces the plan-only edition');
-  assert.match(await page.locator('#editionNotice a').getAttribute('href'), /\/plan\/$/);
+  assert.equal(await page.locator('#editionNote').isVisible(), true, 'the full app announces the plan-only edition in the top bar');
+  assert.equal(await page.locator('#alphaNote').isVisible(), false, 'in place of the alpha note');
+  assert.match(await page.locator('#editionNote a').getAttribute('href'), /\/plan\/$/);
   const fullModeBefore = await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode);
   const planBefore = await saved();
   await page.goto(new URL('plan/', server.resolvedUrls.local[0]).href);
   await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal(await page.evaluate(() => document.documentElement.dataset.edition), 'plan');
   assert.equal(await page.title(), '間取りクイック 間取り専用版');
-  for (const selector of ['.three-pane', '.view-switch', '#roofCategory', '#imageExport3d', '#editionNotice']) {
+  for (const selector of ['.three-pane', '.view-switch', '#roofCategory', '#imageExport3d', '#editionNote']) {
     assert.equal(await page.locator(selector).isVisible(), false, `${selector} is not in the plan-only edition`);
   }
   assert.equal(await page.locator('#fullEditionLink').isVisible(), true, 'a link back to the full app');
@@ -744,10 +748,19 @@ try {
   await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal((await saved()).floors[0].entities.find(item => item.id === 'clue').color, '#4a2a8a', 'edits in the plan-only edition show up in the full app');
   assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode), fullModeBefore, 'the plan-only edition keeps the view mode of the full app');
-  await page.locator('#editionNoticeClose').click();
+  // The notice does not take any height: the 2D pane starts right below the top bar.
+  assert.ok(Math.abs((await page.locator('.workspace').boundingBox()).y - (await page.locator('.topbar').boundingBox()).height) < 2);
+  await page.locator('#topNoteClose').click();
+  assert.equal(await page.locator('#editionNote').isVisible(), false);
+  assert.equal(await page.locator('#alphaNote').isVisible(), true, 'the alpha note comes back after the notice is closed');
   await page.reload();
   await page.waitForFunction(() => Boolean(window.__editorTest));
-  assert.equal(await page.locator('#editionNotice').isVisible(), false, 'a closed notice stays closed');
+  assert.equal(await page.locator('#editionNote').isVisible(), false, 'a closed notice stays closed');
+  await page.locator('#topNoteClose').click();
+  assert.equal(await page.locator('#topNote').isVisible(), false, 'the alpha note can be closed too');
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.locator('#topNote').isVisible(), false, 'closed texts stay closed');
   console.log('PASS: plan-only edition: no 3D pane or 3D settings, same plan both ways, keeps the full view mode, and the notice with its link');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);

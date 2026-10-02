@@ -61,7 +61,11 @@
             <h1>間取りクイック3D<span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。">α版</span></h1>
             <span id="saveStatus">保存済み</span>
           </div>
-          <span class="alpha-note">開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。</span>
+          <div class="alpha-note top-note" id="topNote">
+            <span class="top-note-text edition-note" id="editionNote" hidden>お知らせ：3Dを使わない「間取り専用版」もできました。<a href="%BASE_URL%plan/">間取り専用版を開く</a></span>
+            <span class="top-note-text" id="alphaNote">開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。</span>
+            <button class="top-note-close" id="topNoteClose" type="button" title="この文を消す" aria-label="この文を消す">×</button>
+          </div>
         </div>
         <div class="top-actions">
           <div class="view-switch" aria-label="表示切替">
@@ -131,12 +135,6 @@
       <div class="mobile-notice" id="mobileNotice" role="note">
         <span>本ツールはPCでの利用を前提としています。スマートフォンやタブレットでは正しく表示されなかったり、操作が難しかったりするため、PCのブラウザからのご利用をおすすめします。</span>
         <button class="mobile-notice-close" id="mobileNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
-      </div>
-
-      <div class="edition-notice" id="editionNotice" role="note" hidden>
-        <span>お知らせ：3Dを使わない「間取り専用版」もできました。2Dの間取りだけを軽く編集できます（間取りはこちらと共通です）。</span>
-        <a class="edition-notice-link" href="%BASE_URL%plan/">間取り専用版を開く</a>
-        <button class="edition-notice-close" id="editionNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
       </div>
 
       <main class="workspace">

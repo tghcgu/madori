@@ -291,53 +291,48 @@ select:focus-visible {
   vertical-align: 2px;
 }
 
-/* 本体の上に出す、間取り専用版のお知らせ（閉じたら次からは出さない） */
-.edition-notice {
-  flex: 0 0 auto;
+/* 上のバーの文（間取り専用版のお知らせ・開発中の注意書き）。×で消せる */
+.top-note {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 7px 10px 7px 16px;
-  border-bottom: 1px solid rgba(39, 117, 209, 0.25);
-  background: #eaf3fc;
-  color: #1d4f86;
-  font-size: 13px;
+  align-items: flex-start;
+  gap: 6px;
 }
 
-.edition-notice[hidden] {
+.top-note[hidden],
+.top-note-text[hidden] {
   display: none;
 }
 
-.edition-notice span {
-  flex: 1 1 auto;
+.top-note-text {
   min-width: 0;
 }
 
-.edition-notice-link {
-  flex: 0 0 auto;
-  padding: 4px 10px;
-  border: 1px solid rgba(39, 117, 209, 0.45);
-  border-radius: 7px;
-  background: #fff;
+.edition-note {
+  color: #1d4f86;
+}
+
+.edition-note a {
+  margin-left: 4px;
   color: #145da8;
   font-weight: 700;
-  text-decoration: none;
   white-space: nowrap;
 }
 
-.edition-notice-close {
+.top-note-close {
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
   background: transparent;
-  color: #1d4f86;
-  font-size: 18px;
+  color: var(--muted);
+  font-size: 15px;
   line-height: 1;
 }
 
-.edition-notice-close:hover {
-  background: rgba(39, 117, 209, 0.12);
+.top-note-close:hover {
+  background: rgba(20, 30, 45, 0.08);
+  color: var(--ink);
 }
 
 .mobile-notice {

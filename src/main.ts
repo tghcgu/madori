@@ -22,8 +22,9 @@ import { buildOpeningModel } from "./opening-models";
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
 const PLAN_EDITION = document.documentElement.dataset.edition === "plan";
-// 本体に出す「間取り専用版もできました」のお知らせを閉じたか
+// 上のバーの「間取り専用版もできました」のお知らせと、開発中の注意書きを消したか
 const EDITION_NOTICE_KEY = "madori-quick-3d-plan-edition-notice";
+const ALPHA_NOTE_KEY = "madori-quick-3d-alpha-note";
 
 type Tool = "select" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof" | "text";
@@ -426,9 +427,13 @@ const ROOF_LABELS: Record<RoofKind, string> = {
 // ---- 画像の書き出しの設定（起動時のメニューの組み立てでも使うので、ここで決める） ----
 
 const EXPORT_MARGIN = 60;
-// 書き出す画像の1cmあたりの大きさ（画面の1倍の表示と同じ線の太さ・文字の大きさで、2倍の細かさ）
-const EXPORT_ZOOM = 1;
+// 書き出す画像の線の太さや文字の大きさの割合は、この大きさの2Dの画面で全体を表示したときと同じにする。
+// 1cmあたりの大きさを決めて大きな間取りを書き出すと、線や文字が画像に比べて細く小さくなり、縮めて見ると薄く見えるため
+const EXPORT_VIEW_WIDTH = 1600;
+const EXPORT_VIEW_HEIGHT = 1000;
+// 細かさは画面の2倍以上で、1cmが1.5ピクセル以上
 const EXPORT_PIXEL_RATIO = 2;
+const EXPORT_MIN_PIXELS_PER_CM = 1.5;
 // どの端末でも作れる大きさに抑える
 const EXPORT_MAX_SIDE = 8192;
 const EXPORT_MAX_PIXELS = 16_000_000;
@@ -891,6 +896,7 @@ function setupUi(): void {
   setupGhostMenu();
   setupImageExport();
   setupEdition();
+  setupTopNote();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -6111,17 +6117,27 @@ function setupEdition(): void {
     if (state.roofs.some((item) => item.id === state.selectedId)) state.selectedId = null;
     return;
   }
-  const notice = document.querySelector<HTMLDivElement>("#editionNotice");
-  if (!notice) return;
-  notice.hidden = localStorage.getItem(EDITION_NOTICE_KEY) === "closed";
-  document.querySelector<HTMLButtonElement>("#editionNoticeClose")?.addEventListener("click", () => {
-    notice.hidden = true;
-    localStorage.setItem(EDITION_NOTICE_KEY, "closed");
-    // お知らせの分だけ広がった2Dと3Dの欄に合わせ直す
-    resizeCanvases();
-    render2d();
-    render3dOnce();
+}
+
+// 上のバーの文。本体では間取り専用版のお知らせを、それを消したあと（と間取り専用版）は開発中の注意書きを出す。
+// どちらも×で消せて、消した文は次からも出さない。画面の高さは使わない
+function setupTopNote(): void {
+  const note = document.querySelector<HTMLDivElement>("#topNote");
+  const edition = document.querySelector<HTMLSpanElement>("#editionNote");
+  const alpha = document.querySelector<HTMLSpanElement>("#alphaNote");
+  const close = document.querySelector<HTMLButtonElement>("#topNoteClose");
+  if (!note || !edition || !alpha || !close) return;
+  const closed = (key: string) => localStorage.getItem(key) === "closed";
+  const show = () => {
+    edition.hidden = PLAN_EDITION || closed(EDITION_NOTICE_KEY);
+    alpha.hidden = !edition.hidden || closed(ALPHA_NOTE_KEY);
+    note.hidden = edition.hidden && alpha.hidden;
+  };
+  close.addEventListener("click", () => {
+    localStorage.setItem(edition.hidden ? ALPHA_NOTE_KEY : EDITION_NOTICE_KEY, "closed");
+    show();
   });
+  show();
 }
 
 // ---- 画像の書き出し（2Dの間取り・3D） ----
@@ -6206,14 +6222,18 @@ function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number
   }
 }
 
-// 書き出す画像の倍率。大きすぎる間取りは、作れる大きさまで細かさを下げる
-function exportScale(widthCss: number, heightCss: number): { ratio: number; zoom: number } {
-  let ratio = Math.min(EXPORT_PIXEL_RATIO, EXPORT_MAX_SIDE / widthCss, EXPORT_MAX_SIDE / heightCss, Math.sqrt(EXPORT_MAX_PIXELS / (widthCss * heightCss)));
-  let zoom = EXPORT_ZOOM;
-  if (ratio < 0.5) {
-    zoom *= ratio / 0.5;
-    ratio = 0.5;
-  }
+// 書き出す画像の倍率。zoom（1cmあたりの画面の大きさ）は、間取り全体を EXPORT_VIEW の大きさの画面に収めたときの値で、
+// 線の太さや文字の大きさの割合を決める。ratio は細かさ。大きすぎる間取りは、作れる大きさまで細かさを下げる
+function exportScale(layoutW: number, layoutH: number, headings: number): { ratio: number; zoom: number } {
+  const zoom = clamp(Math.min(EXPORT_VIEW_WIDTH / layoutW, Math.max(1, EXPORT_VIEW_HEIGHT - headings) / layoutH), MIN_PLAN_ZOOM, 2.2);
+  const widthCss = layoutW * zoom;
+  const heightCss = layoutH * zoom + headings;
+  const ratio = Math.min(
+    Math.max(EXPORT_PIXEL_RATIO, EXPORT_MIN_PIXELS_PER_CM / zoom),
+    EXPORT_MAX_SIDE / widthCss,
+    EXPORT_MAX_SIDE / heightCss,
+    Math.sqrt(EXPORT_MAX_PIXELS / (widthCss * heightCss)),
+  );
   return { ratio, zoom };
 }
 
@@ -6221,33 +6241,34 @@ function exportScale(widthCss: number, heightCss: number): { ratio: number; zoom
 function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElement {
   const labelled = floorIndexes.length > 1;
   const heading = labelled ? 44 : 0;
-  const cellW = (bounds.w + EXPORT_MARGIN * 2) * EXPORT_ZOOM;
-  const cellH = (bounds.h + EXPORT_MARGIN * 2) * EXPORT_ZOOM + heading;
+  const cellWcm = bounds.w + EXPORT_MARGIN * 2;
+  const cellHcm = bounds.h + EXPORT_MARGIN * 2;
   // 横に長くなりすぎるときは、何段かに折り返す
-  const columns = labelled ? Math.max(1, Math.min(floorIndexes.length, Math.round(Math.sqrt((floorIndexes.length * cellH * 1.6) / cellW)) || 1)) : 1;
+  const columns = labelled ? Math.max(1, Math.min(floorIndexes.length, Math.round(Math.sqrt((floorIndexes.length * cellHcm * 1.6) / cellWcm)) || 1)) : 1;
   const rows = Math.ceil(floorIndexes.length / columns);
-  const { ratio, zoom } = exportScale(cellW * columns, cellH * rows);
-  const scale = zoom / EXPORT_ZOOM;
+  const { ratio, zoom } = exportScale(cellWcm * columns, cellHcm * rows, heading * rows);
+  const cellW = cellWcm * zoom;
+  const cellH = cellHcm * zoom + heading;
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(cellW * columns * scale * ratio));
-  canvas.height = Math.max(1, Math.round(cellH * rows * scale * ratio));
+  canvas.width = Math.max(1, Math.round(cellW * columns * ratio));
+  canvas.height = Math.max(1, Math.round(cellH * rows * ratio));
   const target = canvas.getContext("2d");
   if (!target) return canvas;
   target.fillStyle = "#ffffff";
   target.fillRect(0, 0, canvas.width, canvas.height);
   floorIndexes.forEach((floorIndex, i) => {
-    const left = (i % columns) * cellW * scale;
-    const top = Math.floor(i / columns) * cellH * scale;
+    const left = (i % columns) * cellW;
+    const top = Math.floor(i / columns) * cellH;
     if (labelled) {
       target.save();
       target.setTransform(ratio, 0, 0, ratio, 0, 0);
       target.fillStyle = INK;
-      target.font = `700 ${22 * scale}px ${TEXT_FONT}`;
+      target.font = `700 22px ${TEXT_FONT}`;
       target.textBaseline = "middle";
-      target.fillText(state.floors[floorIndex].name, left + 16 * scale, top + (heading / 2) * scale);
+      target.fillText(state.floors[floorIndex].name, left + 16, top + heading / 2);
       target.restore();
     }
-    drawFloorForExport(target, floorIndex, bounds, left, top + heading * scale, ratio, zoom);
+    drawFloorForExport(target, floorIndex, bounds, left, top + heading, ratio, zoom);
   });
   return canvas;
 }
