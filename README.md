@@ -183,7 +183,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー |
 | 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、フェンス、外灯、石灯籠、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ |
 | 乗り物 | 車、バイク、自転車 |
-| 事件・調査 | 番号の印、足跡、倒れた人、血だまり、割れたガラス |
+| 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、割れたガラス |
 | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
 | 階段 | 直階段、折り返し階段、らせん階段 |
 | 図形の壁 | 円、円弧、三角形〜八角形 |
@@ -193,10 +193,12 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 各家具は2D用の平面記号と3Dモデルを持ちます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
-- 家具・設備80種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備81種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
 - 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯・キャットタワーは「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
 - 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています（番号の印に書く番号だけは別です）。
-- 「事件・調査」の印は、TRPGの探索や事件現場の図に使えます。番号の印は置くたびに次の番号（どの階も含めていちばん大きい番号の次）になり、「選択中」の「番号」で4文字まで書き換えられます。3Dでも札の上の面に同じ番号が出ます。足跡（靴・素足）、倒れた人（うつぶせ・手足を広げて・チョークの線）、血（血だまり・飛び散った血・引きずった跡）、割れたガラスは、2Dの形と3Dを真上から見た形が同じです。足跡と血は「色 2D」が跡の色になります
+- 「人」と「倒れた人」は、手足を自由に動かせる人の模型です。「選択中」の「姿勢」で立っている・うつぶせ・あおむけを切り替え、「ポーズの見本」（気をつけ・歩く・手を上げる・両手を広げる・指さす・座る・ひざをつく・うつぶせ・手足を広げて・あおむけ）から始めて、「手足の角度」で腕・脚ごとに開く・前後・ひじやひざの曲げ・曲げる向きを変えられます。2Dで選ぶと手首と足首に丸いつまみが出て、ドラッグするとその所まで手足が動きます（寝ているときは床の上で、立っているときは腕や脚の向きを変えて届かせます）。「身長」で大きさを変えられ、立つと約170cm。座る・ひざをつくでは、いちばん低い所が床に着くように体が下がります。体は太さのある丸い棒の集まりで、3Dはその棒を立体に、2Dは同じ棒を真上から見た形（立った人は頭や肩の輪郭を重ねて）を描くので、どのポーズでも2Dと3Dが同じ形です。倒れた人は、手足を動かすまでは前からある形のままで、デザインの「標準」「手足を広げて」を選ぶといつでもその形に戻せます。「チョークの線」は今のポーズの輪郭になります
+- 足跡は、パーツの「足跡」を選んで2Dをドラッグすると、なぞった道すじに沿って、歩く向きにつま先を向けた足跡が左右交互に付きます（クリックだけなら、まっすぐな足跡）。「選択中」で歩幅を変えたり、「道すじを描き直す」でなぞり直したり、「まっすぐにする」で戻したりできます
+- 「人・事件・調査」の印は、TRPGの探索や事件現場の図に使えます。番号の印は置くたびに次の番号（どの階も含めていちばん大きい番号の次）になり、「選択中」の「番号」で4文字まで書き換えられます。3Dでも札の上の面に同じ番号が出ます。足跡（靴・素足）、倒れた人（うつぶせ・手足を広げて・チョークの線）、血（血だまり・飛び散った血・引きずった跡）、割れたガラスは、2Dの形と3Dを真上から見た形が同じです。足跡と血は「色 2D」が跡の色になります
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
 - 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
 - 開き戸は3Dでは閉じた状態です。引き戸は別々のレールに配置した2枚の扉、窓は枠・サッシ・ガラス・取っ手で表現します。
@@ -346,7 +348,7 @@ npm.cmd run dev
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
-家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全80種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
+家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全81種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
 
 本番ビルド:
 
@@ -398,7 +400,7 @@ madori/
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
-│  ├─ furniture-models.ts    # 家具80種類の3D形状と材質
+│  ├─ furniture-models.ts    # 家具81種類の3D形状と材質
 │  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
@@ -700,7 +702,7 @@ The furniture and equipment palette lists frequently used openings and furniture
 | Decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower |
 | Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, fence, garden light, stone lantern, mailbox, shed, dog house, parasol, clothes drying stand, swing |
 | Vehicles | Car, motorcycle, bicycle |
-| Investigation | Numbered evidence marker, footprints, fallen person, blood, broken glass |
+| People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, broken glass |
 | Floors and ground | Plain, wood planks, tile, stone paving, grass |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
 | Shape walls | Circle, arc, triangle to octagon |
@@ -712,8 +714,10 @@ Each item has a dedicated 2D plan symbol and a generated 3D representation. Item
 
 - Trees, conifers, palm trees, shrubs, rocks, fences, garden lights, and cat towers have a height setting (10 cm to 30 m) under Selection. The top of the 3D model matches that height.
 - 2D symbols never use text. They are drawn with shapes, lines, and shading only (except the number on a numbered marker).
+- "人" (person) and "倒れた人" (fallen person) are posable mannequins. Under Selection, choose a posture (standing, face down, face up), start from a pose preset (attention, walking, hands up, arms out, pointing, sitting, kneeling, face down, spread out, face up), and adjust each arm and leg (spread, forward/back, elbow or knee bend, bend direction). In 2D the selected person shows round handles on the wrists and ankles; drag them to move the arm or leg there (in the floor plane when lying, by turning the limb when standing). "身長" sets the size; standing height is about 170 cm. Sitting and kneeling lower the body until its lowest point touches the floor. The body is a set of rounded rods: 3D builds them and 2D draws the same rods seen from above (with the head and shoulders outlined on top for a standing person), so 2D and 3D match in every pose. The fallen person keeps its original shape until a limb is moved, and choosing the "標準" or "手足を広げて" design brings that shape back; the chalk outline follows the current pose.
+- Choose 足跡 (footprints) and drag on the 2D plan to lay footprints along the drawn path, alternating left and right with the toes facing the walking direction (a click places a straight trail). The stride can be changed, and the path can be redrawn or straightened from Selection.
 - The investigation marks are meant for TRPG and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and broken glass look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
-- All 80 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- All 81 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
 - Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
@@ -860,7 +864,7 @@ npm.cmd run dev
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
-Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 80 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
+Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 81 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
 
 Production build:
 
@@ -907,7 +911,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
-│  ├─ furniture-models.ts    # Geometry and materials for 80 furniture types
+│  ├─ furniture-models.ts    # Geometry and materials for 81 furniture types
 │  ├─ opening-models.ts      # Door, sliding door, and window geometry
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection

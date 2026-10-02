@@ -77,6 +77,7 @@ export type FurnitureKind =
   | "evidenceMarker"
   | "footprints"
   | "fallenPerson"
+  | "person"
   | "bloodPool"
   | "brokenGlass";
 export interface FurnitureDef {
@@ -166,6 +167,8 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   evidenceMarker: { label: "番号の印", w: 24, h: 24 },
   footprints: { label: "足跡", w: 60, h: 200 },
   fallenPerson: { label: "倒れた人", w: 100, h: 180 },
+  // 人の模型。手足の角度と姿勢（立つ・うつぶせ・あおむけ）を変えられる。大きさは「気をつけ」で立ったときの真上から見た形
+  person: { label: "人", w: 56.9, h: 27.2 },
   bloodPool: { label: "血だまり", w: 90, h: 70 },
   brokenGlass: { label: "割れたガラス", w: 80, h: 60 },
 };

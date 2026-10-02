@@ -874,6 +874,82 @@ select:focus-visible {
   background: #fff;
 }
 
+/* 人の模型: ポーズの見本と、手足の角度のスライダー */
+.pose-presets {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pose-presets > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pose-presets .prop-button {
+  min-height: 28px;
+  padding: 0 4px;
+  font-size: 11px;
+}
+
+.pose-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pose-limbs {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pose-limbs summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.pose-limb {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 6px 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pose-limb legend {
+  padding: 0 4px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.property-grid .pose-limb label {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.property-grid .pose-limb input[type="range"] {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pose-limb output {
+  text-align: right;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 /* 選択中の色の欄（見本とカラーコード） */
 .property-grid .color-field {
   display: grid;

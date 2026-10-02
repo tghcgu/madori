@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
-import { bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextSize, rockShapes, rockVertexHeights } from '../src/furniture-shapes.ts';
+import {
+  PERSON_HEIGHT, PERSON_PRESETS, bloodShape, evidenceMarkerShape, footprintPathTrail, footprintTrail, glassShards, markerTextSize, normalizePersonPose,
+  personLayout, personOutline, personRefSize, presetPose, reachLimb, rockShapes, rockVertexHeights,
+} from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
 
 function dispose(group) {
@@ -199,11 +202,13 @@ test('investigation marks stay inside their frame, and the body outline goes aro
   };
   const within = (w, h) => ([x, y]) => Math.abs(x) <= w / 2 + 1e-6 && Math.abs(y) <= h / 2 + 1e-6;
   for (const [w, h] of [[100, 180], [60, 120], [200, 90], [20, 20]]) {
-    for (const pose of [0, 1]) {
-      const outline = fallenPersonOutline(w, h, pose);
+    // The two original fallen bodies and every pose preset of the posable person.
+    for (const layout of [personLayout(w, h, null, 0), personLayout(w, h, null, 1), ...PERSON_PRESETS.map(preset => personLayout(w, h, preset.pose))]) {
+      const outline = personOutline(layout);
       assert.ok(outline.length > 30, `outline points ${outline.length}`);
       assert.ok(outline.every(within(w, h)), 'the outline stays inside the frame');
-      for (const part of fallenPersonParts(w, h, pose)) assert.ok(inside([(part.a[0] + part.b[0]) / 2, (part.a[1] + part.b[1]) / 2], outline), 'each part is inside the outline');
+      assert.ok(layout.outlines.flat().every(within(w, h)), 'every part seen from above stays inside the frame');
+      for (const part of layout.parts) assert.ok(inside([(part.a[0] + part.b[0]) / 2, (part.a[2] + part.b[2]) / 2], outline), 'each part is inside the outline');
     }
     for (const bare of [false, true]) {
       for (const piece of footprintTrail(w, h, bare)) {
@@ -218,4 +223,72 @@ test('investigation marks stay inside their frame, and the body outline goes aro
   const marker = evidenceMarkerShape(24, 24);
   assert.ok(markerTextSize(marker, '1234') < markerTextSize(marker, '12'), 'long numbers are written smaller');
   assert.equal(markerTextSize(marker, '7'), markerTextSize(marker, '12'));
+});
+
+test('footprints drawn along a path follow it, alternate sides, face the walking direction and stay inside the frame', () => {
+  // An L-shaped path: 200 cm to the right, then 120 cm down.
+  const path = [[-100, -60], [100, -60], [100, 60]];
+  const pieces = footprintPathTrail(path, 300, 220, false, 42);
+  const prints = [];
+  for (let i = 0; i < pieces.length; i += 2) prints.push(pieces[i]);
+  assert.equal(prints.length, Math.floor(320 / 42) + 1, 'one print every stride');
+  // Toes point along the path: right on the first leg, down on the second.
+  const heading = piece => Math.atan2(Math.sin(piece.angle), Math.cos(piece.angle));
+  assert.ok(Math.abs(heading(prints[0])) < 0.3, `first print walks right: ${heading(prints[0])}`);
+  assert.ok(Math.abs(heading(prints.at(-1)) - Math.PI / 2) < 0.3, `last print walks down: ${heading(prints.at(-1))}`);
+  // Left and right prints sit on alternate sides of the first leg of the path (y = -60).
+  assert.ok(prints[0].y < -60 && prints[1].y > -60 && prints[2].y < -60, 'prints alternate left and right');
+  const within = piece => Math.abs(piece.x) <= 150 && Math.abs(piece.y) <= 110;
+  assert.ok(pieces.every(within));
+  // A longer stride gives fewer prints; bare feet have toes.
+  assert.ok(footprintPathTrail(path, 300, 220, false, 80).length < pieces.length);
+  assert.equal(footprintPathTrail(path, 300, 220, true, 42).length, prints.length * 7);
+  // The straight trail is unchanged with the standard stride.
+  assert.deepEqual(footprintTrail(60, 200, false, 42), footprintTrail(60, 200, false));
+});
+
+test('the posable person stands about 170 cm tall, poses change its shape, and dragged hands and feet reach their target', () => {
+  assert.equal(PERSON_HEIGHT, 170);
+  const top = layout => Math.max(...layout.parts.map(part => Math.max(part.a[1], part.b[1]) + Math.hypot(...part.axes.map(axis => axis[1]))));
+  const size = personRefSize(presetPose('stand'));
+  const standing = personLayout(size.w, size.h, presetPose('stand'));
+  assert.ok(Math.abs(standing.scale - 1) < 1e-6);
+  assert.ok(Math.abs(top(standing) - 170) < 1, `standing height ${top(standing)}`);
+  for (const id of ['prone', 'supine', 'spread']) {
+    const pose = presetPose(id), lying = personRefSize(pose);
+    assert.ok(top(personLayout(lying.w, lying.h, pose)) < 30, `${id} lies on the floor`);
+  }
+  const sitting = personRefSize(presetPose('sit'));
+  assert.ok(Math.abs(top(personLayout(sitting.w, sitting.h, presetPose('sit'))) - 135) < 15, 'sitting lowers the body');
+  // The standing person is drawn in separate layers so the head shows on top of the shoulders.
+  assert.ok(standing.layers.length > 1);
+  assert.equal(personLayout(100, 200, presetPose('prone')).layers.length, 1, 'a lying body is one shape from above');
+  // Dragging a hand: lying bodies bend the elbow in the floor plane, standing bodies swing the arm.
+  for (const [id, limb, target] of [['prone', 0, [-60, -70]], ['prone', 3, [30, 70]], ['stand', 1, [-50, 20]], ['stand', 2, [10, 35]]]) {
+    const pose = reachLimb(presetPose(id), limb, target);
+    const ref = personRefSize(pose);
+    const layout = personLayout(ref.w, ref.h, pose);
+    const end = layout.ends[limb].map((value, i) => value / layout.scale + layout.center[i]);
+    assert.ok(Math.hypot(end[0] - target[0], end[1] - target[1]) < 1, `${id} limb ${limb} reaches ${target}: ${end}`);
+  }
+  // Saved poses are checked and rounded; broken ones are dropped.
+  assert.deepEqual(normalizePersonPose({ posture: 'stand', arms: [[10.04, 0, 0, 370], [0, 0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }).arms[0], [10, 0, 0, 10]);
+  assert.equal(normalizePersonPose({ posture: 'fly', arms: [], legs: [] }), undefined);
+  assert.equal(normalizePersonPose({ posture: 'stand', arms: [[0, 0, 0]], legs: [[0, 0, 0, 0], [0, 0, 0, 0]] }), undefined);
+});
+
+test('people and drawn footprints build 3D models that fill their frame and follow the pose', () => {
+  const height = group => new THREE.Box3().setFromObject(group, true).getSize(new THREE.Vector3()).y;
+  const size = personRefSize(presetPose('stand'));
+  const standing = buildFurnitureModel({ kind: 'person', w: size.w, h: size.h });
+  const lying = buildFurnitureModel({ kind: 'person', w: 100, h: 200, pose: presetPose('prone') });
+  const legacy = buildFurnitureModel({ kind: 'fallenPerson', w: 100, h: 180 });
+  const path = buildFurnitureModel({ kind: 'footprints', w: 300, h: 220, path: [[-0.33, -0.27], [0.33, -0.27], [0.33, 0.27]] });
+  const straight = buildFurnitureModel({ kind: 'footprints', w: 300, h: 220 });
+  try {
+    assert.ok(Math.abs(height(standing) - 1.7) < 0.02, `standing person is 1.7 m: ${height(standing)}`);
+    assert.ok(height(lying) < 0.3, 'a lying person stays low');
+    assert.ok(height(legacy) < 0.3, 'the original fallen person still lies on the floor');
+    assert.notEqual(signature(path), signature(straight), 'a drawn path changes the footprints');
+  } finally { [standing, lying, legacy, path, straight].forEach(dispose); }
 });

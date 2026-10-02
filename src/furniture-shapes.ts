@@ -462,36 +462,85 @@ function fitEllipse(piece: StoneSlab, w: number, h: number): StoneSlab {
   return k >= 1 ? piece : { ...piece, rx: piece.rx * Math.max(0.05, k), ry: piece.ry * Math.max(0.05, k) };
 }
 
-// 足跡: 奥（-y）へ向かって左右交互に続く。靴は前と踵の2つの楕円、素足は足の裏・踵・5本の指
-export function footprintTrail(w: number, h: number, bare = false): StoneSlab[] {
-  const steps = Math.max(2, Math.round(h / 42));
+// 足跡1歩の歩幅（cm）の標準
+export const FOOTPRINT_STRIDE = 42;
+
+// 足1つ分の楕円。(cx, cy) が足の中心、heading がつま先の向き（ラジアン、2Dの右が0・手前が正）、side は左 -1・右 1。
+// 靴は前と踵の2つの楕円、素足は足の裏・踵・5本の指
+function addFootprint(pieces: StoneSlab[], cx: number, cy: number, heading: number, side: number, length: number, bare: boolean, w: number, h: number): void {
+  const width = length * 0.4;
+  // つま先が少し外を向く
+  const angle = heading + side * 0.12;
+  const ax = Math.cos(angle), ay = Math.sin(angle);
+  // along: つま先の向き、across: 足の外側の向き
+  const bx = -ay * side, by = ax * side;
+  const put = (along: number, across: number, rx: number, ry: number) =>
+    pieces.push(fitEllipse({ x: cx + ax * along + bx * across, y: cy + ay * along + by * across, rx, ry, angle: Math.atan2(ay, ax) }, w, h));
+  if (bare) {
+    put(length * 0.06, width * 0.04, length * 0.28, width * 0.44);
+    put(-length * 0.31, 0, length * 0.18, width * 0.34);
+    const toes: [number, number, number][] = [[-0.3, 0.44, 0.22], [-0.04, 0.45, 0.15], [0.16, 0.42, 0.14], [0.33, 0.38, 0.12], [0.47, 0.32, 0.11]];
+    for (const [across, along, size] of toes) put(length * along, width * across, width * size, width * size);
+  } else {
+    put(length * 0.16, 0, length * 0.33, width * 0.5);
+    put(-length * 0.34, 0, length * 0.15, width * 0.42);
+  }
+}
+
+// 足跡: 奥（-y）へ向かって左右交互に続く
+export function footprintTrail(w: number, h: number, bare = false, stride = FOOTPRINT_STRIDE): StoneSlab[] {
+  const steps = Math.max(2, Math.round(h / stride));
   const pitch = h / steps;
   const length = Math.min(pitch * 0.82, 28, w * 0.7);
   const width = length * 0.4;
   const offset = Math.min(Math.max(0, w / 2 - width * 0.7), Math.max(width * 0.75, w * 0.18));
   const pieces: StoneSlab[] = [];
   for (let i = 0; i < steps; i += 1) {
-    const left = i % 2 === 0;
-    const side = left ? -1 : 1;
-    const cx = side * offset, cy = h / 2 - pitch * (i + 0.5);
-    // つま先が少し外を向く
-    const turn = side * 0.12;
-    const ax = Math.sin(turn), ay = -Math.cos(turn);
-    const bx = -ay * side, by = ax * side;
-    // along: つま先の向き、across: 足の外側の向き
-    const put = (along: number, across: number, rx: number, ry: number) =>
-      pieces.push(fitEllipse({ x: cx + ax * along + bx * across, y: cy + ay * along + by * across, rx, ry, angle: Math.atan2(ay, ax) }, w, h));
-    if (bare) {
-      put(length * 0.06, width * 0.04, length * 0.28, width * 0.44);
-      put(-length * 0.31, 0, length * 0.18, width * 0.34);
-      const toes: [number, number, number][] = [[-0.3, 0.44, 0.22], [-0.04, 0.45, 0.15], [0.16, 0.42, 0.14], [0.33, 0.38, 0.12], [0.47, 0.32, 0.11]];
-      for (const [across, along, size] of toes) put(length * along, width * across, width * size, width * size);
-    } else {
-      put(length * 0.16, 0, length * 0.33, width * 0.5);
-      put(-length * 0.34, 0, length * 0.15, width * 0.42);
-    }
+    const side = i % 2 === 0 ? -1 : 1;
+    addFootprint(pieces, side * offset, h / 2 - pitch * (i + 0.5), -Math.PI / 2, side, length, bare, w, h);
   }
   return pieces;
+}
+
+// なぞった道すじ（cm、家具の中心が原点）に沿って、歩く向きへつま先を向けた足跡を左右交互に置く。
+// 道すじの始まりから終わりへ歩いた跡になる
+export function footprintPathTrail(path: Point2[], w: number, h: number, bare = false, stride = FOOTPRINT_STRIDE): StoneSlab[] {
+  const lengths = [0];
+  for (let i = 1; i < path.length; i += 1) lengths.push(lengths[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const total = lengths[lengths.length - 1] ?? 0;
+  if (path.length < 2 || total < 1) return [];
+  // 道すじの始まりから s cm 進んだ所
+  const at = (s: number): Point2 => {
+    const t = Math.min(total, Math.max(0, s));
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < t) i += 1;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const k = (t - lengths[i - 1]) / span;
+    return [path[i - 1][0] + (path[i][0] - path[i - 1][0]) * k, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * k];
+  };
+  const length = Math.min(stride * 0.82, 28);
+  const offset = length * 0.34;
+  const steps = Math.max(1, Math.floor(total / stride) + 1);
+  const start = (total - (steps - 1) * stride) / 2;
+  const pieces: StoneSlab[] = [];
+  let heading = Math.atan2(path[1][1] - path[0][1], path[1][0] - path[0][0]);
+  for (let i = 0; i < steps; i += 1) {
+    const s = start + i * stride;
+    // 向きは前後の少し離れた2点から決める（なぞった線の細かい揺れを拾わないように）
+    const back = at(s - length * 0.5), ahead = at(s + length * 0.5);
+    if (Math.hypot(ahead[0] - back[0], ahead[1] - back[1]) > 1e-6) heading = Math.atan2(ahead[1] - back[1], ahead[0] - back[0]);
+    const [px, py] = at(s);
+    const side = i % 2 === 0 ? -1 : 1;
+    // 歩く向きの右は (-sin, cos)
+    addFootprint(pieces, px - Math.sin(heading) * offset * side, py + Math.cos(heading) * offset * side, heading, side, length, bare, w, h);
+  }
+  return pieces;
+}
+
+// 足跡の家具1つ分。道すじ（幅・奥行に対する割合）があればそれに沿って、なければまっすぐに並べる
+export function footprintPieces(w: number, h: number, bare: boolean, path?: readonly (readonly number[])[], stride = FOOTPRINT_STRIDE): StoneSlab[] {
+  if (path && path.length >= 2) return footprintPathTrail(path.map(([u, v]): Point2 => [u * w, v * h]), w, h, bare, stride);
+  return footprintTrail(w, h, bare, stride);
 }
 
 // 番号の印: 三角の札（外の三角が床、内の三角が上の面）か、丸い札。番号は上の面の中央に書く
@@ -528,16 +577,35 @@ export function markerTextureSpan(shape: MarkerShape): number {
   return shape.label.size * 2.6;
 }
 
-// 倒れた人: 体を、太さのある線（両端が丸い棒）の集まりで表す。頭が奥（-y）
-export interface BodyPart {
-  a: Point2;
-  b: Point2;
-  r: number;
-  // 3Dで肌（頭・手・足先）と服を分ける
+// ---- 人の模型（関節で手足を動かせる。立つ・うつぶせ・あおむけ） ----
+// 体を、太さのある丸い棒（骨の両端と太さ）の集まりで表す。3Dはその棒をそのまま立体にし、
+// 2Dは同じ棒を真上から見た形を描くので、2Dと3Dが同じ形になる
+
+export type Vec3 = [number, number, number];
+export type Posture = "stand" | "prone" | "supine";
+// 腕・脚1本の角度（度）: [開く（体の横へ）, 前後（前が正）, 曲げ（ひじ・ひざ）, 曲げる向き（0がいつもの向き）]
+export type LimbAngles = [number, number, number, number];
+export interface PersonPose {
+  posture: Posture;
+  // 0: 左、1: 右（その人から見て）
+  arms: [LimbAngles, LimbAngles];
+  legs: [LimbAngles, LimbAngles];
+}
+
+export interface PersonPart {
+  // 骨の両端（cm）。x は右、y は上、z は手前（2Dの y）。家具の中心の床が原点
+  a: Vec3;
+  b: Vec3;
+  // 太さ。楕円体の3本の半径（向きと長さ, cm）
+  axes: [Vec3, Vec3, Vec3];
+  // 3Dで肌（頭・手・足）と服を分ける
   skin: boolean;
 }
 
-// 幅100cm × 奥行180cm のときの形。0: うつぶせに倒れた形、1: 手足を広げてあおむけ
+export const POSTURES: Posture[] = ["stand", "prone", "supine"];
+
+// 前からある倒れた人の形（幅100cm × 奥行180cm のとき）。0: うつぶせに倒れた形、1: 手足を広げてあおむけ。
+// 手足を動かすまでは、このままの形で描く（並びは 頭・胴・腰・左上腕・左前腕・左手・右上腕…、左は -x 側）
 const FALLEN_POSES: [Point2, Point2, number, boolean][][] = [
   [
     [[6, -73], [6, -73], 11, true],
@@ -575,40 +643,452 @@ const FALLEN_POSES: [Point2, Point2, number, boolean][][] = [
   ],
 ];
 
-// 人の形は縦横の比を変えずに、範囲に収まる大きさで中央に置く（引き伸ばすと腕や脚が体から離れてしまうため）
-export function fallenPersonParts(w: number, h: number, pose = 0): BodyPart[] {
-  const scale = Math.min(w / 100, h / 180);
-  return (FALLEN_POSES[pose] ?? FALLEN_POSES[0]).map(([a, b, r, skin]) => ({ a: [a[0] * scale, a[1] * scale], b: [b[0] * scale, b[1] * scale], r: r * scale, skin }));
+// ポーズの見本。座る・ひざをつくは、いちばん低い所が床に着くように体が下がる
+export const PERSON_PRESETS: { id: string; label: string; pose: PersonPose }[] = [
+  { id: "stand", label: "気をつけ", pose: { posture: "stand", arms: [[6, 0, 8, 0], [6, 0, 8, 0]], legs: [[3, 0, 0, 0], [3, 0, 0, 0]] } },
+  { id: "walk", label: "歩く", pose: { posture: "stand", arms: [[5, -22, 18, 0], [5, 22, 28, 0]], legs: [[2, 24, 6, 0], [2, -18, 24, 0]] } },
+  { id: "handsUp", label: "手を上げる", pose: { posture: "stand", arms: [[165, 0, 4, 0], [165, 0, 4, 0]], legs: [[3, 0, 0, 0], [3, 0, 0, 0]] } },
+  { id: "armsOut", label: "両手を広げる", pose: { posture: "stand", arms: [[88, 0, 0, 0], [88, 0, 0, 0]], legs: [[7, 0, 0, 0], [7, 0, 0, 0]] } },
+  { id: "point", label: "指さす", pose: { posture: "stand", arms: [[6, 0, 8, 0], [10, 85, 0, 0]], legs: [[3, 0, 0, 0], [3, 0, 0, 0]] } },
+  { id: "sit", label: "座る", pose: { posture: "stand", arms: [[8, 32, 58, 0], [8, 32, 58, 0]], legs: [[5, 88, 88, 0], [5, 88, 88, 0]] } },
+  { id: "kneel", label: "ひざをつく", pose: { posture: "stand", arms: [[6, 12, 20, 0], [6, 12, 20, 0]], legs: [[4, 0, 92, 0], [4, 0, 92, 0]] } },
+  { id: "prone", label: "うつぶせ", pose: { posture: "prone", arms: [[135, 0, 65, 90], [32, 0, 44, -90]], legs: [[6, 0, 0, 0], [40, 0, 52, 90]] } },
+  { id: "spread", label: "手足を広げて", pose: { posture: "supine", arms: [[61, 0, 30, -90], [61, 0, 30, -90]], legs: [[19, 0, 6, 90], [19, 0, 6, 90]] } },
+  { id: "supine", label: "あおむけ", pose: { posture: "supine", arms: [[10, 0, 0, 0], [10, 0, 0, 0]], legs: [[4, 0, 0, 0], [4, 0, 0, 0]] } },
+];
+
+export function presetPose(id: string): PersonPose {
+  const preset = PERSON_PRESETS.find((item) => item.id === id) ?? PERSON_PRESETS[0];
+  return clonePose(preset.pose);
 }
 
-// チョークの線の太さ（cm）
-export const CHALK_WIDTH = 2.4;
+export function clonePose(pose: PersonPose): PersonPose {
+  return {
+    posture: pose.posture,
+    arms: [[...pose.arms[0]], [...pose.arms[1]]],
+    legs: [[...pose.legs[0]], [...pose.legs[1]]],
+  };
+}
 
-const outlineCache = new Map<string, Point2[]>();
+// 保存データの姿勢を確かめる。形が違えば undefined
+export function normalizePersonPose(value: unknown): PersonPose | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const data = value as { posture?: unknown; arms?: unknown; legs?: unknown };
+  if (!POSTURES.includes(data.posture as Posture)) return undefined;
+  const limb = (item: unknown): LimbAngles | null =>
+    Array.isArray(item) && item.length === 4 && item.every((angle) => typeof angle === "number" && Number.isFinite(angle))
+      ? (item.map((angle: number) => Math.round(wrapDegrees(angle) * 10) / 10) as LimbAngles)
+      : null;
+  const pair = (items: unknown): [LimbAngles, LimbAngles] | null => {
+    if (!Array.isArray(items) || items.length !== 2) return null;
+    const first = limb(items[0]), second = limb(items[1]);
+    return first && second ? [first, second] : null;
+  };
+  const arms = pair(data.arms), legs = pair(data.legs);
+  return arms && legs ? { posture: data.posture as Posture, arms, legs } : undefined;
+}
 
-// 体の部品を合わせた形の外側の輪郭（cm）。2Dの線と3Dのチョークの線の両方がこの点を通る
-export function fallenPersonOutline(w: number, h: number, pose = 0): Point2[] {
-  const key = `${w}x${h}:${pose}`;
-  const cached = outlineCache.get(key);
+export function wrapDegrees(value: number): number {
+  return ((((value + 180) % 360) + 360) % 360) - 180;
+}
+
+// 人の種類・デザインと、保存した姿勢から決まる描き方。倒れた人は、手足を動かすまでは前からある形のまま
+export function personDesign(kind: string, symbol: number, pose?: PersonPose): { pose: PersonPose | null; legacy: number; chalk: boolean } {
+  if (kind === "fallenPerson") return { pose: pose ?? null, legacy: symbol === 1 ? 1 : 0, chalk: symbol === 2 };
+  return { pose: pose ?? presetPose("stand"), legacy: 0, chalk: false };
+}
+
+// 手足を動かし始めるときの姿勢。前からある形に近いポーズの見本から始める
+export function editablePersonPose(kind: string, symbol: number, pose?: PersonPose): PersonPose {
+  if (pose) return clonePose(pose);
+  if (kind === "fallenPerson") return presetPose(symbol === 1 ? "spread" : "prone");
+  return presetPose("stand");
+}
+
+const DEG = Math.PI / 180;
+const v3add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const v3scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
+const v3dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const v3unit = (a: Vec3): Vec3 => v3scale(a, 1 / (Math.hypot(a[0], a[1], a[2]) || 1));
+
+// 体の寸法（cm）。腰の中心を原点に、体の右・上・前の向きで表す。まっすぐ立つと約170cm
+const SHOULDER_JOINT: Point2 = [18, 44];
+const HIP_JOINT: Point2 = [9, -4];
+const LIMB_LENGTHS = { arm: [28, 24], leg: [43, 42] } as const;
+const HAND_LENGTH = 7;
+const FOOT_FRONT = 11;
+const FOOT_BACK = 3;
+// 真上から見て重なり方を分けるときの、高さの差（cm）。寝た人の体はひとまとまりの形、立った人の頭や肩は輪郭を分ける
+const LAYER_GAP = 20;
+
+// 姿勢ごとの体の右・上・前の向き（x 右、y 上、z 手前）。どれも 右 = 前 × 上 になる
+const POSTURE_AXES: Record<Posture, [Vec3, Vec3, Vec3]> = {
+  // 立つ: 手前を向く
+  stand: [[-1, 0, 0], [0, 1, 0], [0, 0, 1]],
+  // うつぶせ: 頭が奥、顔が下
+  prone: [[1, 0, 0], [0, 0, -1], [0, -1, 0]],
+  // あおむけ: 頭が奥、顔が上
+  supine: [[-1, 0, 0], [0, 0, -1], [0, 1, 0]],
+};
+
+interface LimbBones {
+  joint: Vec3;
+  middle: Vec3;
+  end: Vec3;
+  tipDir: Vec3;
+}
+
+// 腕・脚1本の関節の位置（体の右・上・前の座標）。side は左 -1・右 1
+function limbBones(angles: LimbAngles, side: number, leg: boolean, posture: Posture): LimbBones {
+  const [spread, swing, bend, twist] = angles.map((value) => value * DEG);
+  // 開く: 体の面の中で、下向きから外へ回す（90°で真横、180°で真上）
+  const d1: Vec3 = [side * Math.sin(spread), -Math.cos(spread), 0];
+  // 前後: 前へ倒す
+  const dir: Vec3 = [d1[0] * Math.cos(swing), d1[1] * Math.cos(swing), Math.sin(swing)];
+  const front: Vec3 = [-d1[0] * Math.sin(swing), -d1[1] * Math.sin(swing), Math.cos(swing)];
+  const outward: Vec3 = [side * Math.cos(spread), Math.sin(spread), 0];
+  // 曲げる向き: ひじはふだん前へ、ひざは後ろへ曲がる。±90°で体の面の中で曲がる
+  const delta = twist + (leg ? Math.PI : 0);
+  const towards = v3add(v3scale(front, Math.cos(delta)), v3scale(outward, Math.sin(delta)));
+  const lower = v3add(v3scale(dir, Math.cos(bend)), v3scale(towards, Math.sin(bend)));
+  // 曲げたあとの、先の骨の前の向き（足先の向きに使う）
+  const k = v3dot(front, towards);
+  const front2 = v3add(front, v3scale(v3add(v3scale(towards, Math.cos(bend) - 1), v3scale(dir, -Math.sin(bend))), k));
+  const [upperLength, lowerLength] = leg ? LIMB_LENGTHS.leg : LIMB_LENGTHS.arm;
+  const base = leg ? HIP_JOINT : SHOULDER_JOINT;
+  const joint: Vec3 = [side * base[0], base[1], 0];
+  const middle = v3add(joint, v3scale(dir, upperLength));
+  const end = v3add(middle, v3scale(lower, lowerLength));
+  // 手は前腕の先へ。足先は、立っていれば前へ（ひざをついたときのように下を向くなら、すねの向きへ寝かせる）、
+  // 寝ていれば脚の先へ少し前寄りに
+  const sink = Math.max(0, -front2[1]);
+  const tipDir = !leg ? lower
+    : posture === "stand" ? v3unit(v3add(front2, v3scale(lower, 2.5 * sink)))
+    : v3unit(v3add(v3scale(lower, 0.85), v3scale(front2, 0.45)));
+  return { joint, middle, end, tipDir };
+}
+
+const limbSide = (index: number) => (index === 0 ? -1 : 1);
+
+function toLocal(posture: Posture, point: Vec3): Vec3 {
+  const [right, up, front] = POSTURE_AXES[posture];
+  return v3add(v3add(v3scale(right, point[0]), v3scale(up, point[1])), v3scale(front, point[2]));
+}
+
+// 体の部品（体の座標）と、太さ（半径と、右・上・前の向きの縮め方）
+function riggedParts(pose: PersonPose): { parts: PersonPart[]; ends: Point2[] } {
+  const [right, up, front] = POSTURE_AXES[pose.posture];
+  const parts: PersonPart[] = [];
+  const add = (a: Vec3, b: Vec3, r: number, flat: Vec3, skin: boolean) =>
+    parts.push({ a: toLocal(pose.posture, a), b: toLocal(pose.posture, b), axes: [v3scale(right, r * flat[0]), v3scale(up, r * flat[1]), v3scale(front, r * flat[2])], skin });
+  // 腰・胸・肩・首・頭と、顔の向きが分かる鼻
+  add([0, -3, 0], [0, 8, 0], 14, [1, 1, 0.66], false);
+  add([0, 14, 0], [0, 34, 0], 15, [1, 1, 0.6], false);
+  add([-16, 43, 0], [16, 43, 0], 7, [1, 1, 0.85], false);
+  add([0, 45, 0], [0, 55, 0], 5, [1, 1, 1], true);
+  add([0, 65, 0], [0, 65, 0], 11, [1, 1, 1], true);
+  add([0, 65, 10.5], [0, 65, 10.5], 2.6, [1, 1, 1], true);
+  const ends: Point2[] = [];
+  pose.arms.forEach((angles, index) => {
+    const bones = limbBones(angles, limbSide(index), false, pose.posture);
+    add(bones.joint, bones.middle, 5, [1, 1, 0.78], false);
+    add(bones.middle, bones.end, 4.2, [1, 1, 0.78], false);
+    add(bones.end, v3add(bones.end, v3scale(bones.tipDir, HAND_LENGTH)), 3.8, [1, 1, 0.7], true);
+    const end = toLocal(pose.posture, bones.end);
+    ends[index] = [end[0], end[2]];
+  });
+  pose.legs.forEach((angles, index) => {
+    const bones = limbBones(angles, limbSide(index), true, pose.posture);
+    add(bones.joint, bones.middle, 7.4, [1, 1, 0.82], false);
+    add(bones.middle, bones.end, 5.6, [1, 1, 0.82], false);
+    add(v3add(bones.end, v3scale(bones.tipDir, -FOOT_BACK)), v3add(bones.end, v3scale(bones.tipDir, FOOT_FRONT)), 4.2, [1, 0.6, 1], true);
+    const end = toLocal(pose.posture, bones.end);
+    ends[2 + index] = [end[0], end[2]];
+  });
+  return { parts: settle(parts, pose.posture), ends };
+}
+
+const verticalExtent = (part: PersonPart) => Math.hypot(part.axes[0][1], part.axes[1][1], part.axes[2][1]);
+const partBottom = (part: PersonPart) => Math.min(part.a[1], part.b[1]) - verticalExtent(part);
+export const partTop = (part: PersonPart) => Math.max(part.a[1], part.b[1]) + verticalExtent(part);
+const raise = (part: PersonPart, dy: number): PersonPart => ({ ...part, a: [part.a[0], part.a[1] + dy, part.a[2]], b: [part.b[0], part.b[1] + dy, part.b[2]] });
+
+// 床に置く。立っていればいちばん低い所（ふつうは足の裏）を床に。
+// 寝ていれば胴を床に置き、床の近くの頭や手足もそれぞれ床に下ろす（持ち上げた手足はそのまま）
+function settle(parts: PersonPart[], posture: Posture): PersonPart[] {
+  if (posture === "stand") {
+    const lowest = Math.min(...parts.map(partBottom));
+    return parts.map((part) => raise(part, -lowest));
+  }
+  const torso = Math.min(partBottom(parts[0]), partBottom(parts[1]));
+  return parts.map((part) => {
+    const lifted = raise(part, -torso);
+    const bottom = partBottom(lifted);
+    return bottom < 15 ? raise(lifted, -bottom) : lifted;
+  });
+}
+
+function convexHull(points: Point2[]): Point2[] {
+  const sorted = [...points].sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  const cross = (o: Point2, a: Point2, b: Point2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: Point2[] = [], upper: Point2[] = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+// 部品を真上から見た形（棒の両端の楕円をつないだ凸の形）
+function partOutline(part: PersonPart, samples = 20): Point2[] {
+  // 楕円体を床へ映した楕円: Q = Σ a aᵀ（x, z）。Q = L Lᵀ の L で円を写す
+  let q11 = 0, q12 = 0, q22 = 0;
+  for (const axis of part.axes) {
+    q11 += axis[0] * axis[0];
+    q12 += axis[0] * axis[2];
+    q22 += axis[2] * axis[2];
+  }
+  const l11 = Math.sqrt(Math.max(q11, 1e-9));
+  const l21 = q12 / l11;
+  const l22 = Math.sqrt(Math.max(q22 - l21 * l21, 1e-9));
+  const points: Point2[] = [];
+  for (let i = 0; i < samples; i += 1) {
+    const t = (i / samples) * Math.PI * 2;
+    const ex = l11 * Math.cos(t), ez = l21 * Math.cos(t) + l22 * Math.sin(t);
+    points.push([part.a[0] + ex, part.a[2] + ez], [part.b[0] + ex, part.b[2] + ez]);
+  }
+  return convexHull(points);
+}
+
+// 高さの近い部品をひとまとまりにする（低い順）。2Dでは、まとまりごとに外側の輪郭を描き、上のまとまりを後から重ねる
+function partLayers(parts: PersonPart[]): number[][] {
+  const order = parts.map((part, index): [number, number] => [partTop(part), index]).sort((p, q) => p[0] - q[0]);
+  const layers: number[][] = [];
+  let start = -Infinity;
+  for (const [top, index] of order) {
+    if (!layers.length || top - start > LAYER_GAP) {
+      layers.push([]);
+      start = top;
+    }
+    layers[layers.length - 1].push(index);
+  }
+  return layers;
+}
+
+interface RefPerson {
+  parts: PersonPart[];
+  outlines: Point2[][];
+  bounds: [number, number, number, number];
+  ends: Point2[];
+}
+
+const refCache = new Map<string, RefPerson>();
+
+// 実物大（1倍）の人。骨盤の真下が原点
+function refPerson(pose: PersonPose): RefPerson {
+  const key = JSON.stringify(pose);
+  const cached = refCache.get(key);
   if (cached) return cached;
-  const parts = fallenPersonParts(w, h, pose);
-  // 体からの距離（中で負）。部品ごとの距離のうち最小
+  const { parts, ends } = riggedParts(pose);
+  const outlines = parts.map((part) => partOutline(part));
+  // 3Dの立体の角が2Dの点より少し外へ出ても範囲に収まるよう、0.5cm広げる
+  const xs = outlines.flat().map((point) => point[0]), zs = outlines.flat().map((point) => point[1]);
+  const bounds: [number, number, number, number] = [Math.min(...xs) - 0.5, Math.min(...zs) - 0.5, Math.max(...xs) + 0.5, Math.max(...zs) + 0.5];
+  const result = { parts, outlines, bounds, ends };
+  if (refCache.size > 400) refCache.clear();
+  refCache.set(key, result);
+  return result;
+}
+
+// 姿勢を実物大で真上から見た大きさと、その中の腰の位置（範囲の中心から）
+export function personRefSize(pose: PersonPose): { w: number; h: number; pelvis: Point2 } {
+  const [x0, z0, x1, z1] = refPerson(pose).bounds;
+  return { w: x1 - x0, h: z1 - z0, pelvis: [-(x0 + x1) / 2, -(z0 + z1) / 2] };
+}
+
+export interface PersonLayout {
+  // 家具の中心の床が原点（cm）
+  parts: PersonPart[];
+  outlines: Point2[][];
+  layers: number[][];
+  // 実物大に対する大きさ。実物大の点 p は (p - center) × scale に置く
+  scale: number;
+  center: Point2;
+  pelvis: Point2;
+  // 手首（左・右）と足首（左・右）。2Dでつかんで動かす所
+  ends: Point2[];
+  w: number;
+  h: number;
+  legacy: boolean;
+  chalkOutline?: Point2[];
+}
+
+const layoutCache = new Map<string, PersonLayout>();
+
+// 人を家具の範囲（幅 w × 奥行 h）に置いた形。縦横の比は変えずに、範囲に収まる大きさで中央に置く
+export function personLayout(w: number, h: number, pose: PersonPose | null, legacy = 0): PersonLayout {
+  const key = `${w}x${h}:${pose ? JSON.stringify(pose) : `legacy${legacy}`}`;
+  const cached = layoutCache.get(key);
+  if (cached) return cached;
+  let layout: PersonLayout;
+  if (!pose) {
+    // 前からある倒れた人の形: 幅100 × 奥行180 の形をそのまま縮める
+    const scale = Math.min(w / 100, h / 180);
+    const parts = (FALLEN_POSES[legacy] ?? FALLEN_POSES[0]).map(([a, b, r, skin]): PersonPart => {
+      const flat = a[0] === b[0] && a[1] === b[1] ? 0.85 : 0.68;
+      const radius = r * scale, height = radius * flat;
+      return { a: [a[0] * scale, height, a[1] * scale], b: [b[0] * scale, height, b[1] * scale], axes: [[radius, 0, 0], [0, height, 0], [0, 0, radius]], skin };
+    });
+    const at = (index: number): Point2 => [parts[index].b[0], parts[index].b[2]];
+    layout = {
+      parts, outlines: parts.map((part) => partOutline(part)), layers: [parts.map((_, index) => index)], scale, center: [0, 0],
+      pelvis: [(parts[2].a[0] + parts[2].b[0]) / 2, (parts[2].a[2] + parts[2].b[2]) / 2],
+      ends: [at(4), at(7), at(10), at(13)], w, h, legacy: true,
+    };
+  } else {
+    const ref = refPerson(pose);
+    const [x0, z0, x1, z1] = ref.bounds;
+    const scale = Math.min(w / (x1 - x0), h / (z1 - z0));
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const place = ([x, z]: Point2): Point2 => [(x - cx) * scale, (z - cz) * scale];
+    const placeVec = (p: Vec3): Vec3 => [(p[0] - cx) * scale, p[1] * scale, (p[2] - cz) * scale];
+    const parts = ref.parts.map((part): PersonPart => ({
+      a: placeVec(part.a), b: placeVec(part.b), axes: part.axes.map((axis) => v3scale(axis, scale)) as [Vec3, Vec3, Vec3], skin: part.skin,
+    }));
+    layout = {
+      parts, outlines: ref.outlines.map((outline) => outline.map(place)), layers: partLayers(parts), scale, center: [cx, cz],
+      pelvis: place([0, 0]), ends: ref.ends.map(place), w, h, legacy: false,
+    };
+  }
+  if (layoutCache.size > 400) layoutCache.clear();
+  layoutCache.set(key, layout);
+  return layout;
+}
+
+// まっすぐ立ったときの背の高さ（実物大, cm）
+export const PERSON_HEIGHT = (() => {
+  const parts = refPerson(presetPose("stand")).parts;
+  return Math.round(Math.max(...parts.map(partTop)) - Math.min(...parts.map(partBottom)));
+})();
+
+// 手首・足首（limb: 0 左手、1 右手、2 左足、3 右足）を、真上から見た target（実物大の座標）へ動かした姿勢。
+// 寝ているときは体の面（床）の中で、ひじ・ひざの曲げ方を変えて届かせる。立っているときは、腕・脚の向きを変えて届かせる
+export function reachLimb(pose: PersonPose, limb: number, target: Point2): PersonPose {
+  const leg = limb >= 2, index = limb % 2, side = limbSide(index);
+  const angles = (leg ? pose.legs : pose.arms)[index];
+  const next = pose.posture === "stand" ? reachStanding(pose, angles, side, leg, target) : reachLying(pose, angles, side, leg, target);
+  const result = clonePose(pose);
+  (leg ? result.legs : result.arms)[index] = next.map((value) => Math.round(wrapDegrees(value) * 10) / 10) as LimbAngles;
+  return result;
+}
+
+function reachLying(pose: PersonPose, angles: LimbAngles, side: number, leg: boolean, target: Point2): LimbAngles {
+  const [right, up] = POSTURE_AXES[pose.posture];
+  const [upperLength, lowerLength] = leg ? LIMB_LENGTHS.leg : LIMB_LENGTHS.arm;
+  const bones = limbBones(angles, side, leg, pose.posture);
+  const joint = toLocal(pose.posture, bones.joint);
+  // 体の面（右・上）の座標
+  const vx = target[0] - joint[0], vz = target[1] - joint[2];
+  const vr = vx * right[0] + vz * right[2], vu = vx * up[0] + vz * up[2];
+  const reach = Math.hypot(vr, vu);
+  if (reach < 1e-6) return angles;
+  const distance = Math.min(Math.max(reach, Math.abs(upperLength - lowerLength) + 0.5), upperLength + lowerLength - 0.01);
+  const phi = Math.atan2(vu, vr);
+  const theta = Math.acos(Math.min(1, Math.max(-1, (upperLength ** 2 + distance ** 2 - lowerLength ** 2) / (2 * upperLength * distance))));
+  // いま曲がっている側へ曲げる（まっすぐなら外側へ）
+  const mr = bones.middle[0] - bones.joint[0], mu = bones.middle[1] - bones.joint[1];
+  const er = bones.end[0] - bones.joint[0], eu = bones.end[1] - bones.joint[1];
+  const turn = mr * eu - mu * er;
+  const sigma = Math.abs(turn) > 1e-3 ? -Math.sign(turn) : -side;
+  const psi = phi + sigma * theta;
+  const d: Point2 = [Math.cos(psi), Math.sin(psi)];
+  const spread = Math.atan2(side * d[0], -d[1]);
+  const elbow: Point2 = [d[0] * upperLength, d[1] * upperLength];
+  const wrist: Point2 = [Math.cos(phi) * distance, Math.sin(phi) * distance];
+  const lowerLen = Math.hypot(wrist[0] - elbow[0], wrist[1] - elbow[1]) || 1;
+  const d2: Point2 = [(wrist[0] - elbow[0]) / lowerLen, (wrist[1] - elbow[1]) / lowerLen];
+  const cosine = Math.min(1, Math.max(-1, d[0] * d2[0] + d[1] * d2[1]));
+  const bend = Math.acos(cosine);
+  const b: Point2 = [d2[0] - cosine * d[0], d2[1] - cosine * d[1]];
+  const outward: Point2 = [side * Math.cos(spread), Math.sin(spread)];
+  const delta = b[0] * outward[0] + b[1] * outward[1] >= 0 ? 90 : -90;
+  return [spread / DEG, 0, bend / DEG, delta - (leg ? 180 : 0)];
+}
+
+function reachStanding(pose: PersonPose, angles: LimbAngles, side: number, leg: boolean, target: Point2): LimbAngles {
+  const project = (spread: number, swing: number): Point2 => {
+    const end = toLocal(pose.posture, limbBones([spread / DEG, swing / DEG, angles[2], angles[3]], side, leg, pose.posture).end);
+    return [end[0], end[2]];
+  };
+  let spread = angles[0] * DEG, swing = angles[1] * DEG;
+  for (let i = 0; i < 60; i += 1) {
+    const point = project(spread, swing);
+    const rx = point[0] - target[0], rz = point[1] - target[1];
+    if (Math.hypot(rx, rz) < 0.05) break;
+    const e = 1e-4;
+    const pa = project(spread + e, swing), ps = project(spread, swing + e);
+    const j11 = (pa[0] - point[0]) / e, j12 = (ps[0] - point[0]) / e, j21 = (pa[1] - point[1]) / e, j22 = (ps[1] - point[1]) / e;
+    // (JᵀJ + λI) Δ = -Jᵀ r（届かない所では、いちばん近い向きで止まる）
+    const lambda = 25;
+    const a11 = j11 * j11 + j21 * j21 + lambda, a12 = j11 * j12 + j21 * j22, a22 = j12 * j12 + j22 * j22 + lambda;
+    const g1 = -(j11 * rx + j21 * rz), g2 = -(j12 * rx + j22 * rz);
+    const det = a11 * a22 - a12 * a12;
+    if (Math.abs(det) < 1e-12) break;
+    let da = (g1 * a22 - g2 * a12) / det, ds = (a11 * g2 - a12 * g1) / det;
+    const step = Math.hypot(da, ds);
+    if (step > 0.25) {
+      da *= 0.25 / step;
+      ds *= 0.25 / step;
+    }
+    spread += da;
+    swing += ds;
+  }
+  return [spread / DEG, swing / DEG, angles[2], angles[3]];
+}
+
+// 体の外側の輪郭（チョークの線）。2Dの線と3Dの床の白い線の両方がこの点を通る
+export function personOutline(layout: PersonLayout): Point2[] {
+  if (layout.chalkOutline) return layout.chalkOutline;
+  // 部品の形（凸）ごとに、辺の外向きの距離のいちばん大きいもの（中で負）。全体はその最小
+  const shapes = layout.outlines.map((outline) => {
+    const cx = outline.reduce((sum, p) => sum + p[0], 0) / outline.length, cy = outline.reduce((sum, p) => sum + p[1], 0) / outline.length;
+    return outline.map((p, i) => {
+      const q = outline[(i + 1) % outline.length];
+      const ex = q[0] - p[0], ey = q[1] - p[1], length = Math.hypot(ex, ey) || 1;
+      let nx = ey / length, ny = -ex / length;
+      if (nx * (cx - p[0]) + ny * (cy - p[1]) > 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      return [p[0], p[1], nx, ny];
+    });
+  });
   const field = (x: number, y: number) => {
     let best = Infinity;
-    for (const { a, b, r } of parts) {
-      const dx = b[0] - a[0], dy = b[1] - a[1];
-      const t = dx || dy ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy))) : 0;
-      best = Math.min(best, Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t) - r);
+    for (const edges of shapes) {
+      let inside = -Infinity;
+      for (const [px, py, nx, ny] of edges) inside = Math.max(inside, nx * (x - px) + ny * (y - py));
+      best = Math.min(best, inside);
     }
     return best;
   };
-  const cell = Math.max(0.6, Math.min(w, h) / 70);
+  layout.chalkOutline = contourLoop(field, layout.w, layout.h);
+  return layout.chalkOutline;
+}
+
+// 範囲（幅 w × 奥行 h）の中で、field が0になるいちばん長い輪郭
+function contourLoop(field: (x: number, y: number) => number, w: number, h: number): Point2[] {
+  const cell = Math.max(0.4, Math.min(w, h) / 70);
   const cols = Math.ceil(w / cell) + 2, rows = Math.ceil(h / cell) + 2;
   const x0 = -w / 2 - cell, y0 = -h / 2 - cell;
   const values: number[] = [];
   for (let j = 0; j <= rows; j += 1) for (let i = 0; i <= cols; i += 1) values.push(field(x0 + i * cell, y0 + j * cell));
   const at = (i: number, j: number) => values[j * (cols + 1) + i];
-  // マス目の辺の上で、距離が0になる所。辺は「横: h,i,j」「縦: v,i,j」の名前で呼ぶ
+  // マス目の辺の上で、値が0になる所。辺は「横: h,i,j」「縦: v,i,j」の名前で呼ぶ
   const cross = (edge: string): Point2 => {
     const [kind, si, sj] = edge.split(",");
     const i = Number(si), j = Number(sj);
@@ -616,7 +1096,6 @@ export function fallenPersonOutline(w: number, h: number, pose = 0): Point2[] {
     const v1 = at(i, j), v2 = at(i2, j2), t = v1 / (v1 - v2);
     return [x0 + (i + (i2 - i) * t) * cell, y0 + (j + (j2 - j) * t) * cell];
   };
-  // 輪郭の線分（辺から辺へ）。外側を左に見て一周する向きにつなぐ
   const next = new Map<string, string>();
   for (let j = 0; j < rows; j += 1) {
     for (let i = 0; i < cols; i += 1) {
@@ -631,7 +1110,6 @@ export function fallenPersonOutline(w: number, h: number, pose = 0): Point2[] {
       for (const [from, to] of segments) next.set(from, to);
     }
   }
-  // いちばん長くつながった輪（体の外側の輪郭）を取る
   let longest: string[] = [];
   const used = new Set<string>();
   for (const start of next.keys()) {
@@ -643,10 +1121,11 @@ export function fallenPersonOutline(w: number, h: number, pose = 0): Point2[] {
     }
     if (loop.length > longest.length) longest = loop;
   }
-  const outline = longest.map(cross);
-  outlineCache.set(key, outline);
-  return outline;
+  return longest.map(cross);
 }
+
+// チョークの線の太さ（cm）
+export const CHALK_WIDTH = 2.4;
 
 // 血: なめらかな形（池と同じく、隣り合う点の中点を通る2次曲線でつなぐ）と、小さな滴（楕円）
 export interface BloodShape {

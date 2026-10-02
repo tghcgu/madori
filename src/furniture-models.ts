@@ -10,8 +10,8 @@ import {
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
   SPIRAL_POT_SCALE, spiralLeaves,
-  CHALK_WIDTH, bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextureSpan,
-  type StoneSlab,
+  CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, glassShards, markerTextureSpan, personDesign, personLayout, personOutline,
+  type PersonPart, type PersonPose, type StoneSlab,
 } from "./furniture-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
@@ -29,6 +29,11 @@ export interface FurnitureModelOptions {
   height?: number;
   // 別デザインの番号（1から）。2Dの記号と同じ番号で、3Dも同じデザインになる
   symbol?: number;
+  // 足跡: なぞった道すじ（幅・奥行に対する割合）と歩幅 cm
+  path?: number[][];
+  stride?: number;
+  // 人: 姿勢と手足の角度
+  pose?: PersonPose;
 }
 
 const clamp = THREE.MathUtils.clamp;
@@ -283,16 +288,20 @@ function ribbonGeometry(loop: Point2[], widthCm: number, y: number): THREE.Buffe
   return facesGeometry(triangles, () => new THREE.Vector3(0, 1, 0));
 }
 
-// 両端が丸い棒（体の部品）を床に寝かせて置く。高さは flatten 倍につぶす
-function lyingCapsule(m: Model, a: Point2, b: Point2, radiusCm: number, flatten: number, material: Material): void {
-  const r = radiusCm / 100;
-  const start = new THREE.Vector3(a[0] / 100, 0, a[1] / 100), end = new THREE.Vector3(b[0] / 100, 0, b[1] / 100);
-  const length = start.distanceTo(end);
-  const geometry = length > 1e-4 ? new THREE.CapsuleGeometry(r, length, 6, 14) : new THREE.SphereGeometry(r, 16, 12);
-  if (length > 1e-4) geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize()));
-  geometry.scale(1, flatten, 1);
-  const center = start.add(end).multiplyScalar(0.5);
-  geometry.translate(center.x, r * flatten, center.z);
+// 人の体の部品: 骨（a→b）に、楕円体の太さを付けた丸い棒。2Dで真上から見た形と同じになる
+function bodyPart(m: Model, part: PersonPart, material: Material): void {
+  const a = new THREE.Vector3(...part.a).divideScalar(100), b = new THREE.Vector3(...part.b).divideScalar(100);
+  const [x, y, z] = part.axes.map((axis) => new THREE.Vector3(...axis).divideScalar(100));
+  // 単位の球を楕円体へ写す行列。裏返し（向きの逆転）にならないよう、必要なら1本を逆向きにする
+  const shape = new THREE.Matrix4().makeBasis(x, y, z);
+  if (shape.determinant() < 0) shape.makeBasis(x.clone().negate(), y, z);
+  const span = b.clone().sub(a).applyMatrix4(shape.clone().invert());
+  const length = span.length();
+  const geometry = length > 1e-6 ? new THREE.CapsuleGeometry(1, length, 6, 14) : new THREE.SphereGeometry(1, 16, 12);
+  if (length > 1e-6) geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), span.normalize()));
+  geometry.applyMatrix4(shape);
+  const center = a.add(b).multiplyScalar(0.5);
+  geometry.translate(center.x, center.y, center.z);
   m.mesh(geometry, [0, 0, 0], material);
 }
 
@@ -2072,26 +2081,29 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
     case "footprints": {
       // 2Dと同じ位置・大きさ・向きの、床に付いた薄い跡
       const ink = m.material("footprint-mark", 0x5d544b, 0.92, 0, true);
-      for (const piece of footprintTrail(item.w, item.h, variant === 1)) flatEllipse(m, piece, 0.002, ink);
+      for (const piece of footprintPieces(item.w, item.h, variant === 1, item.path, item.stride)) flatEllipse(m, piece, 0.002, ink);
       m.reserveFootprint(w, d);
       break;
     }
-    case "fallenPerson": {
-      if (variant === 2) {
-        // チョークの線: 標準の倒れた形の外側の輪郭を、床の上の細い白い帯にする
+    case "fallenPerson":
+    case "person": {
+      const design = personDesign(item.kind, variant, item.pose);
+      const layout = personLayout(item.w, item.h, design.pose, design.legacy);
+      if (design.chalk) {
+        // チョークの線: 人の形の外側の輪郭を、床の上の細い白い帯にする
         // 白い床でも見えるよう、白い線の両側に細い灰色のふちを付ける
         const chalk = m.material("chalk", 0xf3f1ea, 0.95, 0, true);
         const edge = m.material("chalk-edge", 0x6f6b63, 0.95);
-        const outline = fallenPersonOutline(item.w, item.h, 0);
+        const outline = personOutline(layout);
         m.mesh(ribbonGeometry(outline, CHALK_WIDTH + 1, 0.0015), [0, 0, 0], edge);
         m.mesh(ribbonGeometry(outline, CHALK_WIDTH, 0.0025), [0, 0, 0], chalk);
         m.reserveFootprint(w, d);
         break;
       }
-      // 2Dと同じ位置・太さの棒を寝かせた人の形。服と、肌（頭・手・足先）
+      // 2Dと同じ位置・太さの丸い棒でできた人の形。服と、肌（頭・手・足）
       const clothes = m.material("clothes", 0x5b6d80, 0.85, 0, true);
       const skin = m.material("skin", 0xd8b39a, 0.7);
-      for (const part of fallenPersonParts(item.w, item.h, variant)) lyingCapsule(m, part.a, part.b, part.r, part.a[0] === part.b[0] && part.a[1] === part.b[1] ? 0.85 : 0.68, part.skin ? skin : clothes);
+      for (const part of layout.parts) bodyPart(m, part, part.skin ? skin : clothes);
       m.reserveFootprint(w, d);
       break;
     }

@@ -60,6 +60,10 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         });
         return found;
       },
+      personEnds(id) {
+        const item = findEntity(id);
+        return personLayoutOf(item).ends.map(end => furnitureLocalToWorld(item, end));
+      },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
@@ -671,6 +675,133 @@ try {
   assert.deepEqual((await markers()).map(item => item.markerLabel), ['8', 'A123']);
   await page.locator('[data-tool="select"]').click();
   console.log('PASS: investigation marks: numbered markers count up, editable number, number on the 3D marker, footprints, body, blood, glass and reload');
+
+  // Footprints follow a path drawn by dragging; a click still places a straight trail. The stride and the path can be changed later.
+  await importPlan({ floors: [{ id: 'p1', name: '', entities: [{ id: 'floor', type: 'room', name: '', x: 0, y: 0, w: 900, h: 600, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const footprints = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'footprints');
+  const dragAlong = async points => {
+    const first = await planPoint(...points[0]);
+    await page.mouse.move(first.x, first.y);
+    await page.mouse.down();
+    for (const [x, y] of points.slice(1)) {
+      const next = await planPoint(x, y);
+      await page.mouse.move(next.x, next.y, { steps: 6 });
+    }
+    await page.mouse.up();
+  };
+  await choose('[data-furniture="footprints"]');
+  await dragAlong([[100, 450], [400, 450], [400, 150]]);
+  let trail = (await footprints())[0];
+  assert.ok(trail?.path?.length >= 2, 'the drawn path is saved');
+  assert.ok(trail.w > 300 && trail.h > 300, `the frame covers the path: ${trail.w} x ${trail.h}`);
+  const pathAt = ([u, v]) => [trail.x + trail.w / 2 + u * trail.w, trail.y + trail.h / 2 + v * trail.h];
+  const [startX, startY] = pathAt(trail.path[0]), [endX, endY] = pathAt(trail.path.at(-1));
+  assert.ok(Math.hypot(startX - 100, startY - 450) < 6 && Math.hypot(endX - 400, endY - 150) < 6, 'the path starts and ends where it was drawn');
+  const trailBox = await page.evaluate(id => window.__editorTest.bounds(id), trail.id);
+  assert.ok(trailBox && trailBox.max[1] < 0.1, 'the footprints lie on the floor in 3D');
+  const clickAt = await planPoint(700, 300);
+  await page.mouse.click(clickAt.x, clickAt.y);
+  assert.equal((await footprints()).length, 2);
+  assert.equal((await footprints())[1].path, undefined, 'a click places a straight trail');
+  // Stride and redrawing the path of the selected footprints.
+  await page.locator('[data-tool="select"]').click();
+  await pick(trail.x + 30, trail.y + trail.h - 50);
+  assert.equal(await page.locator('#footprintStrideInput').count(), 1, 'the drawn footprints are selected');
+  await page.locator('#footprintStrideInput').fill('80');
+  await page.locator('#footprintStrideInput').press('Enter');
+  assert.equal((await footprints())[0].stride, 80);
+  await page.locator('#footprintRedrawButton').click();
+  await dragAlong([[150, 100], [500, 100]]);
+  trail = (await footprints())[0];
+  assert.equal((await footprints()).length, 2, 'redrawing does not add another trail');
+  assert.equal(trail.stride, 80, 'redrawing keeps the stride');
+  assert.ok(trail.h < 120 && trail.w > 380, `the redrawn path is the new straight line: ${trail.w} x ${trail.h}`);
+  await page.locator('#footprintStraightButton').click();
+  assert.equal((await footprints())[0].path, undefined, 'the trail can be made straight again');
+  console.log('PASS: footprints: drawn along a dragged path, straight on click, stride, redraw and straighten, flat in 3D');
+
+  // People: stand about 170 cm tall, change posture and poses, move each arm and leg with sliders or by dragging the wrist/ankle handles.
+  await importPlan({ floors: [{ id: 'q1', name: '', entities: [{ id: 'floor', type: 'room', name: '', x: 0, y: 0, w: 900, h: 600, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await choose('[data-furniture="person"]');
+  const spot = await planPoint(300, 300);
+  await page.mouse.click(spot.x, spot.y);
+  await page.locator('[data-tool="select"]').click();
+  const personOf = async () => (await saved()).floors[0].entities.find(item => item.kind === 'person');
+  let person = await personOf();
+  const height3d = async () => {
+    const box = await page.evaluate(id => window.__editorTest.bounds(id), person.id);
+    return box.max[1] - box.min[1];
+  };
+  assert.ok(Math.abs(await height3d() - 1.7) < 0.03, `a standing person is 1.7 m tall: ${await height3d()}`);
+  await pick(person.x + person.w / 2, person.y + person.h / 2);
+  assert.equal(await page.locator('#personHeightInput').inputValue(), '170');
+  // Posture: lying down, then a preset.
+  await page.locator('#personPostureInput').selectOption('prone');
+  person = await personOf();
+  assert.equal(person.pose.posture, 'prone');
+  assert.ok(await height3d() < 0.4, 'lying on the floor');
+  assert.ok(person.h > 150, 'lying down makes the frame long');
+  await page.locator('[data-pose-preset="sit"]').click();
+  person = await personOf();
+  assert.equal(person.pose.posture, 'stand');
+  assert.ok(Math.abs(await height3d() - 1.35) < 0.15, `sitting lowers the body: ${await height3d()}`);
+  // Slider: raise the right arm straight to the side.
+  await page.locator('[data-pose-preset="stand"]').click();
+  const before = await personOf();
+  await page.locator('.pose-limb[data-limb="1"] input[data-angle="0"]').evaluate(input => {
+    input.value = '90';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  person = await personOf();
+  assert.equal(person.pose.arms[1][0], 90);
+  assert.ok(person.w > before.w + 40, `the outstretched arm widens the frame: ${before.w} -> ${person.w}`);
+  // 身長 scales the whole body.
+  await page.locator('#personHeightInput').fill('85');
+  await page.locator('#personHeightInput').press('Enter');
+  person = await personOf();
+  assert.ok(Math.abs(await height3d() - 0.85) < 0.03, `half the height: ${await height3d()}`);
+  await page.locator('#personHeightInput').fill('170');
+  await page.locator('#personHeightInput').press('Enter');
+  // Drag the left wrist of a lying body to a new place on the floor.
+  await page.locator('#personPostureInput').selectOption('supine');
+  person = await personOf();
+  let ends = await page.evaluate(id => window.__editorTest.personEnds(id), person.id);
+  const target = { x: ends[0].x + 30, y: ends[0].y - 25 };
+  const handle = await planPoint(ends[0].x, ends[0].y), goal = await planPoint(target.x, target.y);
+  await page.mouse.move(handle.x, handle.y);
+  await page.mouse.down();
+  await page.mouse.move(goal.x, goal.y, { steps: 8 });
+  await page.mouse.up();
+  ends = await page.evaluate(id => window.__editorTest.personEnds(id), person.id);
+  assert.ok(Math.hypot(ends[0].x - target.x, ends[0].y - target.y) < 2, `the wrist follows the drag: ${JSON.stringify(ends[0])} vs ${JSON.stringify(target)}`);
+  const dragged = await personOf();
+  assert.notDeepEqual(dragged.pose.arms[0], person.pose.arms[0]);
+  await page.keyboard.press('Control+z');
+  assert.deepEqual((await personOf()).pose, person.pose, 'undo puts the arm back');
+  await page.keyboard.press('Control+y');
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.deepEqual((await personOf()).pose, dragged.pose, 'the pose is kept after a reload');
+  // The fallen person keeps its original shape until a hand is moved, then becomes posable.
+  await importPlan({ floors: [{ id: 'q2', name: '', entities: [{ id: 'body', type: 'furniture', kind: 'fallenPerson', x: 200, y: 100, w: 100, h: 180, rotation: 0 }] }], activeFloor: 0, selectedId: 'body', roofs: [] });
+  await page.locator('[data-tool="select"]').click();
+  await pick(250, 190);
+  ends = await page.evaluate(() => window.__editorTest.personEnds('body'));
+  const wrist = await planPoint(ends[1].x, ends[1].y), away = await planPoint(ends[1].x + 40, ends[1].y);
+  await page.mouse.move(wrist.x, wrist.y);
+  await page.mouse.down();
+  await page.mouse.move(away.x, away.y, { steps: 6 });
+  await page.mouse.up();
+  const body = (await saved()).floors[0].entities[0];
+  assert.equal(body.pose?.posture, 'prone', 'moving a hand turns the original fallen body into a posable one');
+  // Choosing the original design again brings the original shape back.
+  await page.locator('.symbol-option[data-symbol="0"]').click();
+  assert.equal((await saved()).floors[0].entities[0].pose, undefined);
+  console.log('PASS: people: 170 cm standing, postures, presets, sliders, height, dragging wrists, undo, reload and the original fallen body');
 
   // Images: the 2D plan (the current floor, or all floors in one image) and the 3D view are saved as PNG.
   await importPlan({ floors: [{ id: 's1', name: '', entities: [

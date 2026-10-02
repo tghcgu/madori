@@ -13,8 +13,10 @@ import {
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
-  CHALK_WIDTH, bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextSize, markerTextureSpan,
-  type Point2, type StoneSlab,
+  CHALK_WIDTH, bloodShape, evidenceMarkerShape, glassShards, markerTextSize, markerTextureSpan,
+  FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
+  PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachLimb,
+  type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -32,7 +34,7 @@ type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
 type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
-type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "none";
+type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "none";
 type ViewMode = "split" | "plan" | "three";
 
 interface Point {
@@ -89,6 +91,11 @@ interface Furniture {
   height?: number;
   // 番号の印に書く文字（番号）。番号の印だけが持つ
   markerLabel?: string;
+  // 足跡: なぞった道すじ（家具の中心が原点、幅・奥行に対する割合）と歩幅 cm（標準のときは持たない）
+  path?: number[][];
+  stride?: number;
+  // 人: 姿勢と手足の角度（手足を動かすまでは持たない）
+  pose?: PersonPose;
   locked?: boolean;
 }
 
@@ -159,6 +166,10 @@ interface PointerState {
   currentWorld: Point;
   originEntity: Entity | null;
   resizeCorner: string | null;
+  // 足跡をなぞっている点
+  path?: Point[];
+  // 動かしている手首・足首（0 左手、1 右手、2 左足、3 右足）
+  limb?: number;
 }
 
 interface ThreeDrag {
@@ -278,7 +289,7 @@ const GRASS_FREE_KINDS: FurnitureKind[] = ["pond", "steppingStones", "rug"];
 
 // 家具の別デザインの2Dの描き方。名前と数は FURNITURE_VARIANTS（3Dと共通）に合わせ、同じ順に並べる。
 // 0番（標準）は drawFurnitureSymbol の本体で描き、ここには1番以降を並べる
-type SymbolDraw = (w: number, h: number) => void;
+type SymbolDraw = (w: number, h: number, item?: Furniture) => void;
 
 interface SymbolVariant {
   label: string;
@@ -326,8 +337,8 @@ const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
   fence: [drawBlockWall],
   flowerBed: [drawRoundFlowerBed],
   evidenceMarker: [(w, h) => drawEvidenceMarker(w, h, 1)],
-  footprints: [(w, h) => drawFootprints(w, h, true)],
-  fallenPerson: [(w, h) => drawFallenPerson(w, h, 1), drawChalkOutline],
+  footprints: [(w, h, item) => drawFootprints(w, h, true, item)],
+  fallenPerson: [(w, h, item) => drawPersonSymbol(w, h, item, "fallenPerson", 1), (w, h, item) => drawPersonSymbol(w, h, item, "fallenPerson", 2)],
   bloodPool: [(w, h) => drawBlood(w, h, 1), (w, h) => drawBlood(w, h, 2)],
 };
 
@@ -357,7 +368,7 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"] },
   { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
   { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
-  { label: "事件・調査", kinds: ["evidenceMarker", "footprints", "fallenPerson", "bloodPool", "brokenGlass"] },
+  { label: "人・事件・調査", kinds: ["person", "fallenPerson", "footprints", "evidenceMarker", "bloodPool", "brokenGlass"] },
 ];
 
 // 床に付いた跡（足跡・血）は、2Dの色をそのまま跡の塗りにする。色を決めていないときの塗り
@@ -371,7 +382,8 @@ const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
 const SEARCH_KEYWORDS: Record<string, string> = {
   evidenceMarker: "ばんごう 番号 数字 すうじ 印 しるし マーカー 証拠 しょうこ 札 ふだ 事件 じけん 調査 ちょうさ 探索 TRPG",
   footprints: "あしあと 足 あし 靴 くつ 素足 はだし 跡 あと 痕跡 こんせき 事件 じけん TRPG",
-  fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG",
+  fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG 模型 もけい マネキン ポーズ",
+  person: "ひと 人 人間 にんげん 人物 じんぶつ 人型 ひとがた 模型 もけい マネキン ポーズ 立つ たつ 立っている 座る すわる 歩く あるく TRPG",
   bloodPool: "ち 血 血痕 けっこん 血だまり ちだまり しぶき 跡 あと 事件 じけん TRPG",
   brokenGlass: "がらす ガラス 破片 はへん 割れ われ 窓 まど 事件 じけん TRPG",
   sofa: "ソファー", sofaCorner: "ソファー コーナー", armchair: "椅子 いす イス チェア ソファー ひとりがけ",
@@ -470,6 +482,14 @@ let viewMode: ViewMode = PLAN_EDITION ? "plan" : loadViewMode();
 let showDimensions = loadDimensionLabels();
 // 画像を書き出している間だけ、部屋の名前を省く
 let hideRoomNames = false;
+// デザインの見本を描いている間だけ true（起動直後の選択中パネルでも使うので、ここで宣言しておく）
+let symbolPreview = false;
+// 足跡の歩幅 cm の範囲と、「道すじを描き直す」を押した足跡（次になぞった道すじで描き直す）
+const MIN_STRIDE = 20;
+const MAX_STRIDE = 200;
+let footprintRedrawId: string | null = null;
+// 手足を動かしている間の3Dの描き直し。1コマに1回だけにし、選択中のパネルは作り直さない（動かしているスライダーが外れないように）
+let threeRefreshQueued = false;
 let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
@@ -723,6 +743,9 @@ function normalizeEntity(value: unknown): Entity {
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
+      path: entity.kind === "footprints" ? normalizeFootprintPath(entity.path) : undefined,
+      stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
+      pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
       height: FURNITURE_DEFS[entity.kind].height !== undefined && finite(entity.height)
         ? clamp(Math.round(entity.height!), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
         : undefined,
@@ -849,6 +872,7 @@ function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
+      footprintRedrawId = null;
       if (activeTool === "room") activeRoomSurface = "plain";
       setActiveButton("[data-surface]", activeTool === "room" ? activeRoomSurface : "");
       setActiveButton("[data-tool]", activeTool);
@@ -1144,6 +1168,7 @@ function createPaletteButton(label: string, keywords: string, onClick: () => voi
 function createFurnitureButton(kind: FurnitureKind): HTMLButtonElement {
   const button = createPaletteButton(FURNITURE_DEFS[kind].label, SEARCH_KEYWORDS[kind] ?? "", () => {
     activeFurniture = kind;
+    footprintRedrawId = null;
     setActiveButton("[data-furniture]", activeFurniture);
     activeTool = "furniture";
     setActiveButton("[data-tool]", activeTool);
@@ -1897,6 +1922,10 @@ function handlePointerDown(event: PointerEvent): void {
     } else if (hit.entity?.type === "room" && hit.corner === "label") {
       drag.dragMode = "label";
       planCanvas.style.cursor = "grabbing";
+    } else if (isPerson(hit.entity) && hit.corner?.startsWith("limb:")) {
+      drag.dragMode = "pose";
+      drag.limb = beginPersonPose(hit.entity, Number(hit.corner.slice(5)), point);
+      planCanvas.style.cursor = "grabbing";
     } else if (hit.entity && hit.corner && (isResizable(hit.entity) || isLinear(hit.entity))) {
       drag.dragMode = "resize";
     } else if (hit.entity) {
@@ -1924,6 +1953,14 @@ function handlePointerDown(event: PointerEvent): void {
     drag.dragMode = "none";
     redrawAll();
     pendingTextFocus = true;
+    return;
+  }
+
+  // 足跡は、なぞった道すじに付ける（クリックだけなら、まっすぐな足跡）
+  if (activeTool === "furniture" && activeFurniture === "footprints") {
+    drag.dragMode = "path";
+    drag.path = [point];
+    render2d();
     return;
   }
 
@@ -1966,7 +2003,7 @@ function handlePointerMove(event: PointerEvent): void {
   const point = screenToWorld(event);
   const hover = hitTest(point);
   if (activeTool === "select" && drag.dragMode === "none") {
-    planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed" : hover.corner === "label" ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
+    planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed" : hover.corner === "label" || hover.corner?.startsWith("limb:") ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
   }
 
   if (drag.pointerId !== event.pointerId || drag.dragMode === "none") {
@@ -1974,6 +2011,21 @@ function handlePointerMove(event: PointerEvent): void {
   }
 
   drag.currentWorld = point;
+
+  if (drag.dragMode === "path") {
+    const last = drag.path?.[drag.path.length - 1];
+    if (drag.path && (!last || Math.hypot(point.x - last.x, point.y - last.y) >= Math.max(1, 2 / view.zoom))) drag.path.push(point);
+    render2d();
+    return;
+  }
+
+  if (drag.dragMode === "pose" && drag.originEntity) {
+    const entity = findEntity(drag.originEntity.id);
+    if (isPerson(entity) && drag.limb !== undefined) movePersonLimb(entity, drag.limb, point);
+    redrawAll(false);
+    scheduleThreeRefresh();
+    return;
+  }
 
   if (activeTool === "select" && drag.originEntity) {
     const entity = findEntity(drag.originEntity.id);
@@ -2023,7 +2075,12 @@ function handlePointerUp(event: PointerEvent): void {
     commitState();
   }
 
-  if ((drag.dragMode === "move" || drag.dragMode === "resize" || drag.dragMode === "label") && drag.originEntity) {
+  if (drag.dragMode === "path" && drag.path) {
+    placeFootprintPath(drag.path);
+    commitState();
+  }
+
+  if ((drag.dragMode === "move" || drag.dragMode === "resize" || drag.dragMode === "label" || drag.dragMode === "pose") && drag.originEntity) {
     const current = findEntity(drag.originEntity.id);
     if (current && JSON.stringify(current) !== JSON.stringify(drag.originEntity)) {
       commitState();
@@ -2580,6 +2637,7 @@ function drawPlan(width: number, height: number, options: { grid: boolean; ghost
   if (options.editing) {
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
+    if (drag.dragMode === "path" && drag.path) drawFootprintPreview(drag.path);
     if (drag.dragMode === "draw" && activeTool !== "furniture") {
       drawPreview(drag.startWorld, drag.currentWorld);
     }
@@ -2743,7 +2801,8 @@ function drawSelectionMarks(entity: Entity): void {
     drawRoomLabelGuide(entity);
     if (!isLocked(entity)) drawResizeHandles(entity);
   } else if (entity.type === "furniture") {
-    if (!isLocked(entity)) drawResizeHandles(entity);
+    if (!isLocked(entity) && !isPersonKind(entity.kind)) drawResizeHandles(entity);
+    if (!isLocked(entity) && isPersonKind(entity.kind)) drawPersonHandles(entity);
   } else if (entity.type === "wall") {
     if (!isLocked(entity)) getVisibleWallSegments(entity, activeEntities()).forEach(drawLineHandles);
   } else if (entity.type === "door" || entity.type === "window") {
@@ -3115,7 +3174,7 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   ctx.fillStyle = furnitureFill(furnitureItem);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h, furnitureItem.symbol ?? 0);
+  drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h, furnitureItem.symbol ?? 0, furnitureItem);
   if (furnitureItem.kind === "evidenceMarker") drawMarkerLabel(furnitureItem);
   if (selected) {
     ctx.strokeStyle = "#2775d1";
@@ -3123,24 +3182,26 @@ function drawFurniture2d(furnitureItem: Furniture): void {
     strokeRoundedRect(-furnitureItem.w / 2, -furnitureItem.h / 2, furnitureItem.w, furnitureItem.h, 4);
   }
   ctx.restore();
-  if (selected && !isLocked(furnitureItem)) drawResizeHandles(furnitureItem);
+  // 人は四隅のつまみの代わりに手首・足首のつまみを出す（大きさは「身長」で変える）
+  if (selected && !isLocked(furnitureItem) && !isPersonKind(furnitureItem.kind)) drawResizeHandles(furnitureItem);
+  if (selected && !isLocked(furnitureItem) && isPersonKind(furnitureItem.kind)) drawPersonHandles(furnitureItem);
 }
 
 function furnitureSymbolFill(kind: FurnitureKind): string {
   const mark = MARK_FILLS[kind];
   if (mark) return mark;
   if (kind === "evidenceMarker") return "#f4c430";
-  if (kind === "fallenPerson") return "#e4e0da";
+  if (kind === "fallenPerson" || kind === "person") return "#e4e0da";
   if (kind === "brokenGlass") return "#dcedf4";
   if (["sofa", "sofa2", "sofaCorner", "armchair", "officeChair", "zaisu", "stool", "bed", "bedSemiDouble", "bedDouble", "bunkBed"].includes(kind)) return "#edf3f2";
   if (["table", "sideTable", "roundTable", "longTable", "desk", "deskL", "bench", "shelf", "closet", "wardrobe", "cupboard", "shoeCabinet"].includes(kind)) return "#f7f5f0";
   return "#ffffff";
 }
 
-function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0): void {
+function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture): void {
   const variant = symbol > 0 ? SYMBOL_VARIANTS[kind]?.[symbol - 1] : undefined;
   if (variant) {
-    variant.draw(w, h);
+    variant.draw(w, h, item);
     return;
   }
   const hw = w / 2;
@@ -3964,10 +4025,11 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       drawEvidenceMarker(w, h, 0);
       break;
     case "footprints":
-      drawFootprints(w, h, false);
+      drawFootprints(w, h, false, item);
       break;
     case "fallenPerson":
-      drawFallenPerson(w, h, 0);
+    case "person":
+      drawPersonSymbol(w, h, item, kind, 0);
       break;
     case "bloodPool":
       drawBlood(w, h, 0);
@@ -4038,8 +4100,8 @@ function drawMarkerLabel(item: Furniture): void {
   ctx.restore();
 }
 
-function drawFootprints(w: number, h: number, bare: boolean): void {
-  footprintTrail(w, h, bare).forEach(fillPiece);
+function drawFootprints(w: number, h: number, bare: boolean, item?: Furniture): void {
+  footprintPieces(w, h, bare, item?.path, item?.stride).forEach(fillPiece);
 }
 
 function drawBlood(w: number, h: number, variant: number): void {
@@ -4051,27 +4113,366 @@ function drawBlood(w: number, h: number, variant: number): void {
   shape.drops.forEach(fillPiece);
 }
 
-// 体の部品（両端が丸い棒）を同じ色で塗って1つの形にし、外側の輪郭だけを線で描く
-function drawFallenPerson(w: number, h: number, pose: number): void {
-  for (const { a, b, r } of fallenPersonParts(w, h, pose)) {
-    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    ctx.beginPath();
-    ctx.arc(a[0], a[1], r, angle + Math.PI / 2, angle + Math.PI * 1.5);
-    ctx.arc(b[0], b[1], r, angle - Math.PI / 2, angle + Math.PI / 2);
-    ctx.closePath();
-    ctx.fill();
+// 人: 体の部品を真上から見た形。高さの近い部品（寝た人ならぜんぶ）は同じ色で塗ってひとまとまりにし、外側の輪郭だけを線で描く。
+// 立った人の頭や肩のように高い所は、低い所の上に重ねて輪郭を描く（3Dを真上から見たときの重なりと同じ）
+function drawPersonSymbol(w: number, h: number, item: Furniture | undefined, kind: FurnitureKind, symbol: number): void {
+  // デザインの見本では、倒れた人の形は前からある形のまま見せる（選ぶとその形に戻る）
+  const pose = symbolPreview && kind === "fallenPerson" && symbol !== 2 ? undefined : item?.pose;
+  const design = personDesign(kind, symbol, pose);
+  const layout = personLayout(w, h, design.pose, design.legacy);
+  if (design.chalk) {
+    // 人の形の外側をなぞったチョークの線（3Dでは床の白い線）
+    ctx.save();
+    ctx.lineWidth = Math.max(ctx.lineWidth, CHALK_WIDTH);
+    traceLoop(personOutline(layout));
+    ctx.stroke();
+    ctx.restore();
+    return;
   }
-  traceLoop(fallenPersonOutline(w, h, pose));
-  ctx.stroke();
+  const lineWidth = ctx.lineWidth;
+  for (const layer of layout.layers) {
+    // 線を太めに描いてから中を塗ると、まとまりの外側の輪郭だけが残る
+    ctx.save();
+    ctx.lineWidth = lineWidth * 2;
+    for (const index of layer) {
+      traceLoop(layout.outlines[index]);
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (const index of layer) {
+      traceLoop(layout.outlines[index]);
+      ctx.fill();
+    }
+  }
 }
 
-// 倒れた人の形の外側をなぞったチョークの線（3Dでは床の白い線）
-function drawChalkOutline(w: number, h: number): void {
+// ---- 人の模型（手足を動かす・立たせる） ----
+
+function isPersonKind(kind: FurnitureKind): boolean {
+  return kind === "fallenPerson" || kind === "person";
+}
+
+function isPerson(entity: Entity | null | undefined): entity is Furniture {
+  return entity?.type === "furniture" && isPersonKind(entity.kind);
+}
+
+// 2Dの記号と3Dで同じ置き方
+function personLayoutOf(item: Furniture): PersonLayout {
+  const design = personDesign(item.kind, item.symbol ?? 0, item.pose);
+  return personLayout(item.w, item.h, design.pose, design.legacy);
+}
+
+// 家具の中の点（中心が原点、回転・反転の前）と、間取りの点を行き来する
+function furnitureLocalToWorld(item: Furniture, [x, y]: Point2): Point {
+  const lx = item.flip ? -x : x;
+  const angle = degreesToRadians(item.rotation);
+  return {
+    x: item.x + item.w / 2 + lx * Math.cos(angle) - y * Math.sin(angle),
+    y: item.y + item.h / 2 + lx * Math.sin(angle) + y * Math.cos(angle),
+  };
+}
+
+function worldToFurnitureLocal(item: Furniture, point: Point): Point2 {
+  const angle = degreesToRadians(-item.rotation);
+  const dx = point.x - item.x - item.w / 2, dy = point.y - item.y - item.h / 2;
+  const x = dx * Math.cos(angle) - dy * Math.sin(angle), y = dx * Math.sin(angle) + dy * Math.cos(angle);
+  return [item.flip ? -x : x, y];
+}
+
+const roundTenth = (value: number) => Math.round(value * 10) / 10;
+
+// 人の姿勢を変える。範囲（幅・奥行）を新しい形にぴったり合わせ、腰の位置は動かさない。scale は実物大に対する大きさ
+function setPersonPose(item: Furniture, pose: PersonPose, scale = personLayoutOf(item).scale): void {
+  const pelvis = furnitureLocalToWorld(item, personLayoutOf(item).pelvis);
+  const size = personRefSize(pose);
+  item.pose = pose;
+  item.w = Math.max(1, roundTenth(size.w * scale));
+  item.h = Math.max(1, roundTenth(size.h * scale));
+  const local = personLayoutOf(item).pelvis;
+  const offset = furnitureLocalToWorld({ ...item, x: -item.w / 2, y: -item.h / 2 }, local);
+  item.x = roundTenth(pelvis.x - offset.x - item.w / 2);
+  item.y = roundTenth(pelvis.y - offset.y - item.h / 2);
+}
+
+function editingPose(item: Furniture): PersonPose {
+  return editablePersonPose(item.kind, item.symbol ?? 0, item.pose);
+}
+
+// 手首・足首のつまみ（0 左手、1 右手、2 左足、3 右足）。pointer の近くにあればその番号
+function personHandleAt(item: Furniture, point: Point): number {
+  const ends = personLayoutOf(item).ends;
+  let best = -1, bestDistance = 9 / view.zoom;
+  ends.forEach((end, index) => {
+    const at = furnitureLocalToWorld(item, end);
+    const distance = Math.hypot(at.x - point.x, at.y - point.y);
+    if (distance <= bestDistance) {
+      best = index;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
+function drawPersonHandles(item: Furniture): void {
   ctx.save();
-  ctx.lineWidth = Math.max(ctx.lineWidth, CHALK_WIDTH);
-  traceLoop(fallenPersonOutline(w, h, 0));
-  ctx.stroke();
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 2 / view.zoom;
+  for (const end of personLayoutOf(item).ends) {
+    const at = furnitureLocalToWorld(item, end);
+    ctx.beginPath();
+    ctx.arc(at.x, at.y, 5 / view.zoom, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
+}
+
+// 手首・足首をつかんだとき。前からある形のままなら、近いポーズの見本に置き換えてから動かす
+function beginPersonPose(item: Furniture, limb: number, point: Point): number {
+  if (item.pose || item.kind === "person") return limb;
+  setPersonPose(item, editingPose(item));
+  return Math.max(0, personHandleAt(item, point));
+}
+
+function movePersonLimb(item: Furniture, limb: number, point: Point): void {
+  const layout = personLayoutOf(item);
+  const local = worldToFurnitureLocal(item, point);
+  const target: Point2 = [local[0] / layout.scale + layout.center[0], local[1] / layout.scale + layout.center[1]];
+  setPersonPose(item, reachLimb(editingPose(item), limb, target), layout.scale);
+}
+
+function personEditorHtml(item: Furniture, disabled: string): string {
+  const pose = editingPose(item);
+  const height = Math.round(PERSON_HEIGHT * personLayoutOf(item).scale);
+  const postures: [Posture, string][] = [["stand", "立っている"], ["prone", "うつぶせ"], ["supine", "あおむけ"]];
+  const limbs: [string, string, LimbAngles][] = [["左腕", "ひじ", pose.arms[0]], ["右腕", "ひじ", pose.arms[1]], ["左脚", "ひざ", pose.legs[0]], ["右脚", "ひざ", pose.legs[1]]];
+  const sliders = (joint: string): [string, number, number][] => [["開く", -180, 180], ["前後", -180, 180], [`${joint}を曲げる`, 0, 180], ["曲げる向き", -180, 180]];
+  return `
+    <div class="two-col">
+      <label>姿勢<select id="personPostureInput" ${disabled}>${postures.map(([value, label]) => `<option value="${value}" ${value === pose.posture ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+      <label>身長 cm<input id="personHeightInput" type="number" min="10" max="1000" step="1" value="${height}" ${disabled} /></label>
+    </div>
+    <div class="pose-presets">
+      <span>ポーズの見本</span>
+      <div>${PERSON_PRESETS.map((preset) => `<button type="button" class="prop-button" data-pose-preset="${preset.id}" ${disabled}>${preset.label}</button>`).join("")}</div>
+    </div>
+    <p class="pose-hint">2Dで選ぶと、手首と足首に丸いつまみが出ます。ドラッグすると手足が動きます。</p>
+    <details class="pose-limbs" open>
+      <summary>手足の角度</summary>
+      ${limbs.map(([label, joint, angles], limb) => `<fieldset class="pose-limb" data-limb="${limb}">
+        <legend>${label}</legend>
+        ${sliders(joint).map(([name, min, max], index) => `<label><span>${name}</span><input type="range" min="${min}" max="${max}" step="1" value="${Math.round(angles[index])}" data-angle="${index}" aria-label="${label}を${name}" ${disabled} /><output>${Math.round(angles[index])}°</output></label>`).join("")}
+      </fieldset>`).join("")}
+    </details>`;
+}
+
+function bindPersonEditor(item: Furniture): void {
+  bindNumber("#personHeightInput", (value) => setPersonPose(item, editingPose(item), clamp(value, 10, 1000) / PERSON_HEIGHT));
+  bindSelect("#personPostureInput", (value) => {
+    if (!POSTURES.includes(value as Posture)) return;
+    const pose = editingPose(item);
+    // 寝ている姿勢どうし（うつぶせ・あおむけ）は手足の角度をそのままに、立つ・寝るを変えたときはその姿勢の見本から始める
+    const lying = (posture: Posture) => posture !== "stand";
+    setPersonPose(item, lying(pose.posture) && lying(value as Posture) ? { ...pose, posture: value as Posture } : presetPose(value));
+  });
+  propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-pose-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPersonPose(item, presetPose(button.dataset.posePreset ?? "stand"));
+      commitState();
+      redrawAll();
+    });
+  });
+  propertiesPanel.querySelectorAll<HTMLFieldSetElement>(".pose-limb").forEach((fieldset) => {
+    const limb = Number(fieldset.dataset.limb);
+    const inputs = [...fieldset.querySelectorAll<HTMLInputElement>("input[data-angle]")];
+    const apply = () => {
+      const pose = editingPose(item);
+      (limb >= 2 ? pose.legs : pose.arms)[limb % 2] = inputs.map((input) => Number(input.value)) as LimbAngles;
+      setPersonPose(item, pose);
+    };
+    inputs.forEach((input) => {
+      // 動かしている間は2Dと3Dだけを描き直し、離したときに履歴に積む
+      input.addEventListener("input", () => {
+        apply();
+        const output = input.parentElement?.querySelector("output");
+        if (output) output.textContent = `${input.value}°`;
+        render2d();
+        scheduleThreeRefresh();
+      });
+      input.addEventListener("change", () => {
+        apply();
+        commitState();
+        redrawAll();
+      });
+    });
+  });
+}
+
+// ---- 足跡の道すじ ----
+
+function normalizeFootprintPath(value: unknown): number[][] | undefined {
+  if (!Array.isArray(value) || value.length < 2 || value.length > 2000) return undefined;
+  const ok = value.every((point) => Array.isArray(point) && point.length === 2 && point.every((part) => typeof part === "number" && Number.isFinite(part) && Math.abs(part) <= 1));
+  return ok ? value.map(([u, v]: number[]) => [Math.round(u * 10000) / 10000, Math.round(v * 10000) / 10000]) : undefined;
+}
+
+// なぞった点を、間引いて手ぶれをならした道すじにする（cm）
+function tidyPath(points: Point[]): Point2[] {
+  const spaced: Point2[] = [];
+  for (const point of points) {
+    const last = spaced[spaced.length - 1];
+    if (!last || Math.hypot(point.x - last[0], point.y - last[1]) >= 2) spaced.push([point.x, point.y]);
+  }
+  if (spaced.length < 3) return spaced;
+  const smooth = spaced.map((point, index): Point2 => {
+    if (index === 0 || index === spaced.length - 1) return point;
+    const from = Math.max(0, index - 2), to = Math.min(spaced.length - 1, index + 2);
+    let sx = 0, sy = 0;
+    for (let k = from; k <= to; k += 1) {
+      sx += spaced[k][0];
+      sy += spaced[k][1];
+    }
+    return [sx / (to - from + 1), sy / (to - from + 1)];
+  });
+  return simplifyPath(smooth, 1.2);
+}
+
+// 形をほとんど変えずに点を減らす（ダグラス・ポーカー法）
+function simplifyPath(points: Point2[], tolerance: number): Point2[] {
+  if (points.length < 3) return points;
+  const keep = new Array<boolean>(points.length).fill(false);
+  keep[0] = keep[points.length - 1] = true;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length) {
+    const [first, last] = stack.pop()!;
+    const [ax, ay] = points[first], [bx, by] = points[last];
+    const length = Math.hypot(bx - ax, by - ay) || 1;
+    let farthest = -1, distance = tolerance;
+    for (let i = first + 1; i < last; i += 1) {
+      const d = Math.abs((bx - ax) * (ay - points[i][1]) - (ax - points[i][0]) * (by - ay)) / length;
+      if (d > distance) {
+        farthest = i;
+        distance = d;
+      }
+    }
+    if (farthest >= 0) {
+      keep[farthest] = true;
+      stack.push([first, farthest], [farthest, last]);
+    }
+  }
+  return points.filter((_, index) => keep[index]);
+}
+
+function pathLength(points: Point2[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i += 1) total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  return total;
+}
+
+function footprintRedrawTarget(): Furniture | null {
+  const target = footprintRedrawId ? findEntity(footprintRedrawId) : null;
+  return target?.type === "furniture" && target.kind === "footprints" && !isLocked(target) ? target : null;
+}
+
+// なぞり終えたとき。短ければ（クリック）まっすぐな足跡を置き、長ければその道すじに沿った足跡を作る（または描き直す）
+function placeFootprintPath(points: Point[]): void {
+  const redraw = footprintRedrawTarget();
+  footprintRedrawId = null;
+  const path = tidyPath(points);
+  if (path.length < 2 || pathLength(path) < 30) {
+    if (redraw) return;
+    const base = FURNITURE_DEFS.footprints;
+    const item: Furniture = {
+      id: newId("furniture"), type: "furniture", kind: "footprints",
+      x: snap(points[0].x - base.w / 2), y: snap(points[0].y - base.h / 2), w: base.w, h: base.h, rotation: 0, ...rememberedSymbol("footprints"),
+    };
+    activeEntities().push(item);
+    state.selectedId = item.id;
+    return;
+  }
+  const stride = redraw?.stride ?? FOOTPRINT_STRIDE;
+  // 足の大きさと、道すじからのずれの分だけ、範囲を広げる
+  const margin = Math.ceil(Math.min(stride * 0.82, 28) + 4);
+  const xs = path.map((point) => point[0]), ys = path.map((point) => point[1]);
+  const w = roundTenth(Math.max(20, Math.max(...xs) - Math.min(...xs) + margin * 2));
+  const h = roundTenth(Math.max(20, Math.max(...ys) - Math.min(...ys) + margin * 2));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const item: Furniture = redraw ?? { id: newId("furniture"), type: "furniture", kind: "footprints", x: 0, y: 0, w, h, rotation: 0, ...rememberedSymbol("footprints") };
+  item.x = roundTenth(cx - w / 2);
+  item.y = roundTenth(cy - h / 2);
+  item.w = w;
+  item.h = h;
+  item.rotation = 0;
+  delete item.flip;
+  item.path = path.map(([x, y]) => [Math.round(((x - cx) / w) * 10000) / 10000, Math.round(((y - cy) / h) * 10000) / 10000]);
+  if (!redraw) activeEntities().push(item);
+  state.selectedId = item.id;
+  if (redraw) {
+    activeTool = "select";
+    setActiveButton("[data-tool]", activeTool);
+    setActiveButton("[data-furniture]", "");
+  }
+}
+
+// なぞっている間の見本: 道すじと、そこに付く足跡
+function drawFootprintPreview(points: Point[]): void {
+  const path = tidyPath(points);
+  if (path.length < 2) return;
+  const redraw = footprintRedrawTarget();
+  const bare = (redraw ? redraw.symbol ?? 0 : rememberedSymbol("footprints").symbol ?? 0) === 1;
+  ctx.save();
+  ctx.strokeStyle = "rgba(39, 117, 209, 0.55)";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+  traceOpenPath(path);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(107, 98, 90, 0.75)";
+  footprintPathTrail(path, Infinity, Infinity, bare, redraw?.stride ?? FOOTPRINT_STRIDE).forEach(fillPiece);
+  ctx.restore();
+}
+
+function traceOpenPath(points: Point2[]): void {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+}
+
+function footprintEditorHtml(item: Furniture, disabled: string): string {
+  return `
+    <label>歩幅 cm<input id="footprintStrideInput" type="number" min="${MIN_STRIDE}" max="${MAX_STRIDE}" step="2" value="${item.stride ?? FOOTPRINT_STRIDE}" ${disabled} /></label>
+    <div class="two-col">
+      <button type="button" class="prop-button" id="footprintRedrawButton" ${disabled}>道すじを描き直す</button>
+      <button type="button" class="prop-button" id="footprintStraightButton" ${disabled || (item.path ? "" : "disabled")}>まっすぐにする</button>
+    </div>
+    <p class="pose-hint">パーツの「足跡」を選んで2Dをドラッグすると、なぞった道すじに足跡が付きます（クリックだけなら、まっすぐな足跡）。</p>`;
+}
+
+function bindFootprintEditor(item: Furniture): void {
+  bindNumber("#footprintStrideInput", (value) => {
+    const stride = clamp(Math.round(value), MIN_STRIDE, MAX_STRIDE);
+    if (stride === FOOTPRINT_STRIDE) delete item.stride;
+    else item.stride = stride;
+  });
+  propertiesPanel.querySelector<HTMLButtonElement>("#footprintRedrawButton")?.addEventListener("click", () => {
+    footprintRedrawId = item.id;
+    activeFurniture = "footprints";
+    activeTool = "furniture";
+    setActiveButton("[data-furniture]", activeFurniture);
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    const hint = propertiesPanel.querySelector<HTMLParagraphElement>(".pose-hint");
+    if (hint) hint.textContent = "2Dの上をドラッグして、新しい道すじをなぞってください。";
+  });
+  bindButton("#footprintStraightButton", () => {
+    const base = FURNITURE_DEFS.footprints;
+    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+    delete item.path;
+    item.w = base.w;
+    item.h = base.h;
+    item.x = snap(cx - base.w / 2);
+    item.y = snap(cy - base.h / 2);
+  });
 }
 
 function drawBrokenGlass(w: number, h: number): void {
@@ -4194,6 +4595,16 @@ function validSymbol(kind: FurnitureKind, symbol: unknown): number {
 
 function setFurnitureSymbol(item: Furniture, symbol: number): void {
   const next = validSymbol(item.kind, symbol);
+  // 倒れた人で前からある形（うつぶせ・手足を広げて）を選んだら、動かした手足を戻してその形にする。チョークの線は今の形のまま
+  if (item.kind === "fallenPerson" && item.pose && next !== 2) {
+    const scale = personLayoutOf(item).scale;
+    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+    delete item.pose;
+    item.w = roundTenth(FURNITURE_DEFS.fallenPerson.w * scale);
+    item.h = roundTenth(FURNITURE_DEFS.fallenPerson.h * scale);
+    item.x = roundTenth(cx - item.w / 2);
+    item.y = roundTenth(cy - item.h / 2);
+  }
   if (next) item.symbol = next;
   else delete item.symbol;
   lastSymbolByKind[item.kind] = next;
@@ -4212,9 +4623,13 @@ function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: n
   const size = SYMBOL_PREVIEW_SIZE;
   canvas.width = Math.round(size * ratio);
   canvas.height = Math.round(size * ratio);
-  const scale = Math.min((size - 8) / item.w, (size - 8) / item.h);
+  // 倒れた人の前からある形の見本は、その形の標準の大きさで見せる（手足を動かした後の範囲だと小さくなるため）
+  const legacyPreview = item.kind === "fallenPerson" && symbol !== 2 && Boolean(item.pose);
+  const w = legacyPreview ? FURNITURE_DEFS.fallenPerson.w : item.w, h = legacyPreview ? FURNITURE_DEFS.fallenPerson.h : item.h;
+  const scale = Math.min((size - 8) / w, (size - 8) / h);
   const planContext = ctx;
   ctx = target;
+  symbolPreview = true;
   try {
     ctx.setTransform(ratio * scale, 0, 0, ratio * scale, (size / 2) * ratio, (size / 2) * ratio);
     if (item.flip) ctx.scale(-1, 1);
@@ -4223,10 +4638,11 @@ function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: n
     ctx.fillStyle = furnitureFill(item);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    drawFurnitureSymbol(item.kind, item.w, item.h, symbol);
+    drawFurnitureSymbol(item.kind, w, h, symbol, item);
     if (item.kind === "evidenceMarker") drawMarkerLabel({ ...item, symbol });
   } finally {
     ctx = planContext;
+    symbolPreview = false;
   }
 }
 
@@ -5113,11 +5529,22 @@ function drawLockedIndicator(entity: Entity): void {
 // ---- 3D ----
 
 function rebuildThree(): void {
+  rebuildThreeScene();
+  updateUi();
+}
+
+function scheduleThreeRefresh(): void {
+  if (threeRefreshQueued || PLAN_EDITION) return;
+  threeRefreshQueued = true;
+  requestAnimationFrame(() => {
+    threeRefreshQueued = false;
+    rebuildThreeScene();
+  });
+}
+
+function rebuildThreeScene(): void {
   // 間取り専用版では3Dを作らない
-  if (PLAN_EDITION) {
-    updateUi();
-    return;
-  }
+  if (PLAN_EDITION) return;
   threeNeedsRender = true;
   disposeGroup(planGroup);
   const bounds = getGlobalBounds();
@@ -5166,7 +5593,6 @@ function rebuildThree(): void {
     frameCamera(bounds);
     pendingCameraFrame = false;
   }
-  updateUi();
 }
 
 function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: number, laterRooms: Room[]): void {
@@ -5871,6 +6297,8 @@ function updatePropertiesPanel(): void {
       </div>
       ${heightRow}
       ${markerRow}
+      ${isPersonKind(selectedFurniture.kind) ? personEditorHtml(selectedFurniture, placementDisabled) : ""}
+      ${selectedFurniture.kind === "footprints" ? footprintEditorHtml(selectedFurniture, placementDisabled) : ""}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
       ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
@@ -5884,12 +6312,17 @@ function updatePropertiesPanel(): void {
     selectedFurniture.kind = kind;
     selectedFurniture.w = def.w;
     selectedFurniture.h = def.h;
+    delete selectedFurniture.path;
+    delete selectedFurniture.stride;
+    delete selectedFurniture.pose;
     setFurnitureSymbol(selectedFurniture, lastSymbolByKind[kind] ?? 0);
     delete selectedFurniture.height;
     if (kind !== "evidenceMarker") delete selectedFurniture.markerLabel;
     else selectedFurniture.markerLabel ??= nextMarkerLabel();
   });
   bindInput("#markerLabelInput", (value) => (selectedFurniture.markerLabel = value.trim().slice(0, MAX_MARKER_LABEL)));
+  if (isPersonKind(selectedFurniture.kind)) bindPersonEditor(selectedFurniture);
+  if (selectedFurniture.kind === "footprints") bindFootprintEditor(selectedFurniture);
   bindNumber("#furnitureHeightInput", (value) => {
     const height = clamp(Math.round(value), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT);
     if (height === defaultHeight) delete selectedFurniture.height;
@@ -6381,6 +6814,11 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
   // Match visual stacking even when a floor or rug was placed after the furniture.
   const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
+  const selectedPerson = entities.find((entity) => entity.id === state.selectedId);
+  if (isPerson(selectedPerson) && !isLocked(selectedPerson)) {
+    const limb = personHandleAt(selectedPerson, point);
+    if (limb >= 0) return { entity: selectedPerson, corner: `limb:${limb}` };
+  }
   const selectedRoof = roofsOn2d() ? state.roofs.find((item) => item.id === state.selectedId) : undefined;
   if (selectedRoof) {
     const corner = getCornerHit(selectedRoof, point);
@@ -6403,7 +6841,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
         return { entity, corner: null };
       }
     } else if (entity.type === "furniture") {
-      const corner = getCornerHit(entity, point);
+      const corner = isPerson(entity) ? null : getCornerHit(entity, point);
       if (corner) return { entity, corner };
       const angle = degreesToRadians(entity.rotation);
       const dx = point.x - entity.x - entity.w / 2;
