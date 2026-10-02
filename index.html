@@ -34,6 +34,10 @@
     <link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%apple-touch-icon.png" />
     <link rel="manifest" href="%BASE_URL%site.webmanifest" />
     <title>間取りクイック3D</title>
+    <script>
+      // 間取り専用版（/plan/）は、画面を描く前に3Dの欄や3Dだけのボタンを隠す
+      if (/\/plan\/?(index\.html)?$/.test(location.pathname)) document.documentElement.dataset.edition = "plan";
+    </script>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -80,12 +84,16 @@
           <button class="icon-button" id="redoButton" type="button" title="やり直す" aria-label="やり直す">
             <i data-lucide="redo-2"></i>
           </button>
+          <a class="text-button edition-link" id="fullEditionLink" href="%BASE_URL%" title="3Dも使える版で、同じ間取りを開く">
+            <i data-lucide="box"></i>
+            <span>3Dでも見る</span>
+          </a>
           <button class="text-button" id="exportButton" type="button">
             <i data-lucide="download"></i>
             <span>書き出し</span>
           </button>
           <div class="image-export">
-            <button class="text-button" id="imageExportButton" type="button" title="間取りや3Dを画像にする（PL用・GM用）" aria-expanded="false">
+            <button class="text-button" id="imageExportButton" type="button" title="間取りや3Dを画像にする" aria-expanded="false">
               <i data-lucide="image-down"></i>
               <span>画像</span>
             </button>
@@ -99,12 +107,8 @@
               </label>
               <label class="check"><input id="imageExportGrid" type="checkbox" checked /> 方眼を入れる</label>
               <label class="check"><input id="imageExportNames" type="checkbox" checked /> 部屋の名前を入れる</label>
-              <div class="image-export-actions">
-                <button class="text-button" id="imageExportPl" type="button" title="GMだけに見せる物を隠し、隠し扉は壁にした画像">PL用の画像</button>
-                <button class="text-button" id="imageExportGm" type="button" title="GMだけに見せる物もすべて入れた画像">GM用の画像</button>
-              </div>
-              <button class="text-button" id="imageExport3d" type="button" title="いまの3Dの見え方を画像にする">3Dの画像（いまの見え方）</button>
-              <p class="image-export-note">PL用ではGMだけに見せる物を隠し、隠し扉は壁にします。3DはPL表示にしてから書き出すと、GMだけの物は写りません。</p>
+              <button class="text-button primary-export" id="imageExportPlan" type="button" title="2Dの間取りをPNG画像にする">間取りの画像を書き出す</button>
+              <button class="text-button" id="imageExport3d" type="button" title="いまの3Dの見え方をPNG画像にする">3Dの画像（いまの見え方）</button>
             </div>
           </div>
           <button class="text-button" id="importButton" type="button">
@@ -127,6 +131,12 @@
       <div class="mobile-notice" id="mobileNotice" role="note">
         <span>本ツールはPCでの利用を前提としています。スマートフォンやタブレットでは正しく表示されなかったり、操作が難しかったりするため、PCのブラウザからのご利用をおすすめします。</span>
         <button class="mobile-notice-close" id="mobileNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
+      </div>
+
+      <div class="edition-notice" id="editionNotice" role="note" hidden>
+        <span>お知らせ：3Dを使わない「間取り専用版」もできました。2Dの間取りだけを軽く編集できます（間取りはこちらと共通です）。</span>
+        <a class="edition-notice-link" href="%BASE_URL%plan/">間取り専用版を開く</a>
+        <button class="edition-notice-close" id="editionNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
       </div>
 
       <main class="workspace">
@@ -222,6 +232,11 @@
             </details>
           </section>
 
+          <section class="tool-section edition-section">
+            <a class="feedback-link plan-edition-link" href="%BASE_URL%plan/">間取り専用版（3Dなし）を開く</a>
+            <a class="feedback-link full-edition-link" href="%BASE_URL%">3Dも使える版を開く</a>
+          </section>
+
           <section class="tool-section">
             <details class="template-details">
               <summary>ご意見・ご要望</summary>
@@ -280,10 +295,6 @@
               <span id="planStats"></span>
             </div>
             <div class="pane-actions">
-              <button class="toggle-button player-view-toggle" id="playerViewToggle" type="button" title="PLに見せる表示にする（GMだけに見せる物を隠し、隠し扉は壁に見せる）" aria-pressed="false">
-                <i data-lucide="eye-off"></i>
-                <span>PL表示</span>
-              </button>
               <div class="ghost-options">
                 <button class="toggle-button is-active" id="ghostToggle" type="button" title="ほかの階を透かして表示" aria-pressed="true">
                   <i data-lucide="layers"></i>

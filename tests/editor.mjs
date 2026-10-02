@@ -60,11 +60,6 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         });
         return found;
       },
-      meshCount(id) {
-        let count = 0;
-        planGroup.traverse(o => { if (o.isMesh && entityIdFromObject(o) === id) count += 1; });
-        return count;
-      },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
@@ -612,8 +607,14 @@ try {
   await pick(300, 80);
   assert.equal(await page.locator('#lineXInput').inputValue(), '300', 'the second wall is selected');
   await setCode('#lineColorInputCode', '#2040c080');
-  const crossingWall = shown(await pixelAt(303, 203)), singleWall = shown(await pixelAt(450, 203));
+  // Zoom in on the crossing so that the samples sit well inside both walls and off the grid lines.
+  const crossingPoint = await planPoint(300, 200);
+  await page.mouse.move(crossingPoint.x, crossingPoint.y);
+  for (let i = 0; i < 6; i += 1) await page.mouse.wheel(0, -200);
+  await page.waitForTimeout(300);
+  const crossingWall = shown(await pixelAt(302, 202)), singleWall = shown(await pixelAt(346, 202));
   assert.ok(close(crossingWall, singleWall, 3), `see-through walls are even where they cross: ${crossingWall} vs ${singleWall}`);
+  await page.locator('#fitButton').click();
   // Invalid codes are refused, an empty code returns to the default color.
   await setCode('#lineColorInputCode', '#12345');
   assert.equal(await page.locator('#lineColorInputCode').evaluate(input => input.classList.contains('is-invalid')), true);
@@ -671,47 +672,15 @@ try {
   await page.locator('[data-tool="select"]').click();
   console.log('PASS: investigation marks: numbered markers count up, editable number, number on the 3D marker, footprints, body, blood, glass and reload');
 
-  // GM-only items: hidden in the player view (2D, 3D and clicks), secret doors turn into wall, the setting is kept, and PL/GM images differ.
+  // Images: the 2D plan (the current floor, or all floors in one image) and the 3D view are saved as PNG.
   await importPlan({ floors: [{ id: 's1', name: '', entities: [
     { id: 'hall', type: 'room', name: '', x: 0, y: 0, w: 600, h: 400, color: '#ffffff' },
     { id: 'east', type: 'wall', x1: 600, y1: 0, x2: 600, y2: 400 },
-    { id: 'secret-door', type: 'door', x1: 600, y1: 150, x2: 600, y2: 240, gmOnly: true },
-    { id: 'clue', type: 'furniture', kind: 'bloodPool', x: 200, y: 150, w: 120, h: 100, rotation: 0, gmOnly: true },
-    { id: 'desk', type: 'furniture', kind: 'desk', x: 40, y: 40, w: 120, h: 60, rotation: 0 },
+    { id: 'clue', type: 'furniture', kind: 'bloodPool', x: 200, y: 150, w: 120, h: 100, rotation: 0 },
   ] }, { id: 's2', name: '', entities: [{ id: 'up', type: 'room', name: '', x: 0, y: 0, w: 300, h: 200, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
   await page.locator('button[data-view-mode="split"]').click();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const isRed = ([r, g, b]) => r > 120 && r > g + 60 && r > b + 60;
-  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'false');
-  assert.ok(isRed(shown(await pixelAt(260, 200))), 'the GM sees the GM-only blood');
-  const doorPieces = await page.evaluate(() => window.__editorTest.meshCount('secret-door'));
-  const wallPiecesWithDoor = await page.evaluate(() => window.__editorTest.meshCount('east'));
-  assert.ok(doorPieces > 0, 'the secret door is built in 3D for the GM');
-  await page.locator('#playerViewToggle').click();
-  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'true');
-  assert.ok(!isRed(shown(await pixelAt(260, 200))), 'players do not see it');
-  const wallAtDoor = shown(await pixelAt(600, 195));
-  assert.ok(wallAtDoor.every(value => value < 80), `the secret door looks like wall to players: ${wallAtDoor}`);
-  assert.equal(await page.evaluate(() => window.__editorTest.meshCount('secret-door')), 0, 'no 3D door for players');
-  assert.equal(await page.evaluate(() => window.__editorTest.meshCount('clue')), 0, 'no 3D blood for players');
-  assert.ok(await page.evaluate(() => window.__editorTest.meshCount('east')) < wallPiecesWithDoor, 'the 3D wall is closed where the secret door is');
-  // A click on the hidden blood selects what is under it instead.
-  await page.locator('[data-tool="select"]').click();
-  let spot = await planPoint(260, 200);
-  await page.mouse.click(spot.x, spot.y);
-  assert.equal(await page.locator('#roomColorInputCode').count(), 1, 'the room under the hidden blood is picked');
-  await page.reload();
-  await page.waitForFunction(() => Boolean(window.__editorTest));
-  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'true', 'the player view is kept after a reload');
-  await page.locator('#playerViewToggle').click();
-  // The checkbox marks items as GM-only, and turning on the player view hides the selection.
-  spot = await planPoint(100, 70);
-  await page.mouse.click(spot.x, spot.y);
-  await page.locator('#entityGmOnlyInput').check();
-  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'desk').gmOnly, true);
-  await page.locator('#entityGmOnlyInput').uncheck();
-  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'desk').gmOnly, undefined);
-  // Images: the PL image leaves the GM-only blood out and closes the secret door, the GM image has both.
   const exportImage = async (button, floors) => {
     if (await page.locator('#imageExportMenu').isHidden()) await page.locator('#imageExportButton').click();
     await page.locator('#imageExportFloors').selectOption(floors);
@@ -731,25 +700,55 @@ try {
       context.drawImage(image, 0, 0);
       // The image starts 60 cm before the plan and has 2 pixels per cm.
       const at = (x, y) => [...context.getImageData((x + 60) * 2, (y + 60) * 2, 1, 1).data].slice(0, 3);
-      return { width: image.width, height: image.height, blood: at(260, 200), door: at(600, 195), desk: at(100, 41) };
+      return { width: image.width, height: image.height, blood: at(260, 200), wall: at(600, 195), corner: at(-50, -50) };
     }, data)) };
   };
-  const pl = await exportImage('#imageExportPl', 'current');
-  const gm = await exportImage('#imageExportGm', 'current');
-  assert.match(pl.name, /^madori-\d{4}-\d{2}-\d{2}-1F-PL\.png$/);
-  assert.match(gm.name, /-1F-GM\.png$/);
-  assert.equal(pl.width, (600 + 120) * 2);
-  assert.equal(pl.height, (400 + 120) * 2);
-  assert.ok(!isRed(pl.blood) && isRed(gm.blood), `PL image without the blood, GM image with it: ${pl.blood} / ${gm.blood}`);
-  assert.ok(pl.door.every(value => value < 80) && !gm.door.every(value => value < 80), `the secret door is wall only in the PL image: ${pl.door} / ${gm.door}`);
-  const all = await exportImage('#imageExportGm', 'all');
-  assert.match(all.name, /-all-GM\.png$/);
-  assert.ok(all.height > gm.height, 'all floors are laid out in one image');
+  const image = await exportImage('#imageExportPlan', 'current');
+  assert.match(image.name, /^madori-\d{4}-\d{2}-\d{2}-1F\.png$/);
+  assert.equal(image.width, (600 + 120) * 2);
+  assert.equal(image.height, (400 + 120) * 2);
+  assert.ok(isRed(image.blood), `the plan contents are in the image: ${image.blood}`);
+  assert.ok(image.wall.every(value => value < 80), `walls are drawn: ${image.wall}`);
+  assert.ok(image.corner.every(value => value > 230), `the background is white: ${image.corner}`);
+  const all = await exportImage('#imageExportPlan', 'all');
+  assert.match(all.name, /-all\.png$/);
+  assert.ok(all.height > image.height, 'all floors are laid out in one image');
   await page.locator('#imageExportButton').click();
   const threeDownload = page.waitForEvent('download');
   await page.locator('#imageExport3d').click();
   assert.match((await threeDownload).suggestedFilename(), /-3d\.png$/);
-  console.log('PASS: GM-only items and secret doors: player view in 2D/3D/clicks, kept on reload, checkbox, PL/GM/all-floor and 3D images');
+  console.log('PASS: image export: the current floor and all floors as PNG with the plan contents, and the 3D view');
+
+  // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
+  assert.equal(await page.locator('#editionNotice').isVisible(), true, 'the full app announces the plan-only edition');
+  assert.match(await page.locator('#editionNotice a').getAttribute('href'), /\/plan\/$/);
+  const fullModeBefore = await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode);
+  const planBefore = await saved();
+  await page.goto(new URL('plan/', server.resolvedUrls.local[0]).href);
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.edition), 'plan');
+  assert.equal(await page.title(), '間取りクイック 間取り専用版');
+  for (const selector of ['.three-pane', '.view-switch', '#roofCategory', '#imageExport3d', '#editionNotice']) {
+    assert.equal(await page.locator(selector).isVisible(), false, `${selector} is not in the plan-only edition`);
+  }
+  assert.equal(await page.locator('#fullEditionLink').isVisible(), true, 'a link back to the full app');
+  assert.deepEqual((await saved()).floors, planBefore.floors, 'the same plan opens in both editions');
+  await page.locator('[data-tool="select"]').click();
+  const clue = await planPoint(260, 200);
+  await page.mouse.click(clue.x, clue.y);
+  assert.equal(await page.locator('#furnitureColorInputCode').count(), 1);
+  assert.equal(await page.locator('#furnitureColor3dInput').count(), 0, 'no 3D color');
+  await page.locator('#furnitureColorInputCode').fill('#4a2a8a');
+  await page.locator('#furnitureColorInputCode').press('Enter');
+  await page.goto(server.resolvedUrls.local[0]);
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'clue').color, '#4a2a8a', 'edits in the plan-only edition show up in the full app');
+  assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode), fullModeBefore, 'the plan-only edition keeps the view mode of the full app');
+  await page.locator('#editionNoticeClose').click();
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.locator('#editionNotice').isVisible(), false, 'a closed notice stays closed');
+  console.log('PASS: plan-only edition: no 3D pane or 3D settings, same plan both ways, keeps the full view mode, and the notice with its link');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);

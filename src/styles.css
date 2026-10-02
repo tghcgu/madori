@@ -249,6 +249,97 @@ select:focus-visible {
   }
 }
 
+/* ---- 間取り専用版（/plan/）。3Dの欄と、3Dだけで使うボタンや設定を出さない ---- */
+[data-edition="plan"] .view-switch,
+[data-edition="plan"] .three-pane,
+[data-edition="plan"] .split-divider,
+[data-edition="plan"] #roofCategory,
+[data-edition="plan"] #roofToggle2d,
+[data-edition="plan"] #imageExport3d,
+[data-edition="plan"] .plan-edition-link {
+  display: none !important;
+}
+
+.edition-link,
+.full-edition-link {
+  display: none !important;
+}
+
+[data-edition="plan"] .edition-link {
+  display: inline-flex !important;
+  text-decoration: none;
+}
+
+[data-edition="plan"] .full-edition-link {
+  display: block !important;
+}
+
+.edition-section {
+  display: grid;
+  gap: 6px;
+}
+
+.edition-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(39, 117, 209, 0.12);
+  color: #145da8;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+
+/* 本体の上に出す、間取り専用版のお知らせ（閉じたら次からは出さない） */
+.edition-notice {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px 7px 16px;
+  border-bottom: 1px solid rgba(39, 117, 209, 0.25);
+  background: #eaf3fc;
+  color: #1d4f86;
+  font-size: 13px;
+}
+
+.edition-notice[hidden] {
+  display: none;
+}
+
+.edition-notice span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.edition-notice-link {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(39, 117, 209, 0.45);
+  border-radius: 7px;
+  background: #fff;
+  color: #145da8;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.edition-notice-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: transparent;
+  color: #1d4f86;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.edition-notice-close:hover {
+  background: rgba(39, 117, 209, 0.12);
+}
+
 .mobile-notice {
   display: none;
   flex: 0 0 auto;
@@ -659,17 +750,6 @@ select:focus-visible {
   text-overflow: ellipsis;
 }
 
-/* GMだけに見せる物の設定（紫）と、PL表示のボタン */
-.property-grid label.secret-toggle {
-  color: #6b3fb5;
-}
-
-.player-view-toggle.is-active {
-  background: rgba(138, 79, 216, 0.12);
-  border-color: rgba(138, 79, 216, 0.55);
-  color: #6b3fb5;
-}
-
 /* 画像の書き出しのメニュー。上のバーに合わせて置き、狭い画面で横に流れるボタンの列に切り取られないようにする */
 .image-export {
   position: static;
@@ -719,28 +799,17 @@ select:focus-visible {
   font-size: 13px;
 }
 
-.image-export-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
 .image-export-menu .text-button {
   justify-content: center;
   width: 100%;
   min-width: 0;
 }
 
-#imageExportGm {
-  border-color: rgba(138, 79, 216, 0.45);
-  color: #6b3fb5;
-}
-
-.image-export-note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.5;
+.image-export-menu .primary-export {
+  border-color: rgba(39, 117, 209, 0.52);
+  background: rgba(39, 117, 209, 0.1);
+  color: #145da8;
+  font-weight: 700;
 }
 
 /* 透過のボタンと、透かす階・色を選ぶメニュー */
@@ -1193,18 +1262,6 @@ select:focus-visible {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 46px minmax(0, 1fr);
   container: plan-pane / inline-size;
-}
-
-/* 2Dの欄がやや狭いときは、透過と寸法のボタンを絵だけにして、階のタブの場所を空ける（PL表示の文字は残す） */
-@container plan-pane (max-width: 720px) {
-  .pane-bar .toggle-button:not(.player-view-toggle) {
-    min-width: 38px;
-    padding: 0 9px;
-  }
-
-  .pane-bar .toggle-button:not(.player-view-toggle) span {
-    display: none;
-  }
 }
 
 /* スマホの幅では「2D」の見出しを省いて、階のタブを2つ以上見せる */
