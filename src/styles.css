@@ -54,6 +54,9 @@ select:focus-visible {
 }
 
 .topbar {
+  /* 画像の書き出しのメニューが、下の2D・3Dの欄より手前に出るように */
+  position: relative;
+  z-index: 40;
   height: 64px;
   display: flex;
   align-items: center;
@@ -175,6 +178,11 @@ select:focus-visible {
 
 .text-button.danger {
   color: #93362e;
+}
+
+/* 上のボタンは文字の幅だけにして、1行に収める */
+.top-actions .text-button {
+  min-width: 0;
 }
 
 .icon-button svg,
@@ -651,6 +659,90 @@ select:focus-visible {
   text-overflow: ellipsis;
 }
 
+/* GMだけに見せる物の設定（紫）と、PL表示のボタン */
+.property-grid label.secret-toggle {
+  color: #6b3fb5;
+}
+
+.player-view-toggle.is-active {
+  background: rgba(138, 79, 216, 0.12);
+  border-color: rgba(138, 79, 216, 0.55);
+  color: #6b3fb5;
+}
+
+/* 画像の書き出しのメニュー。上のバーに合わせて置き、狭い画面で横に流れるボタンの列に切り取られないようにする */
+.image-export {
+  position: static;
+}
+
+.image-export-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 16px;
+  width: 270px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
+}
+
+.image-export-menu[hidden] {
+  display: none;
+}
+
+.image-export-menu > label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.image-export-menu > label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.image-export-menu select {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.image-export-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.image-export-menu .text-button {
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+#imageExportGm {
+  border-color: rgba(138, 79, 216, 0.45);
+  color: #6b3fb5;
+}
+
+.image-export-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* 透過のボタンと、透かす階・色を選ぶメニュー */
 .ghost-options {
   position: relative;
@@ -1101,6 +1193,25 @@ select:focus-visible {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 46px minmax(0, 1fr);
   container: plan-pane / inline-size;
+}
+
+/* 2Dの欄がやや狭いときは、透過と寸法のボタンを絵だけにして、階のタブの場所を空ける（PL表示の文字は残す） */
+@container plan-pane (max-width: 720px) {
+  .pane-bar .toggle-button:not(.player-view-toggle) {
+    min-width: 38px;
+    padding: 0 9px;
+  }
+
+  .pane-bar .toggle-button:not(.player-view-toggle) span {
+    display: none;
+  }
+}
+
+/* スマホの幅では「2D」の見出しを省いて、階のタブを2つ以上見せる */
+@container plan-pane (max-width: 420px) {
+  .pane-left > strong {
+    display: none;
+  }
 }
 
 /* 境目を動かして2Dが細くなったら、ボタンを絵だけにして1行に収める */

@@ -132,6 +132,23 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 3Dでは階ごとに表示・非表示を切り替え
 - 階高、床スラブ、最上階の壁上端を考慮して積層。地下の階は地面より下に積み、1Fの床が地下の天井をふさぎます
 
+### GMだけに見せる物とPL表示（TRPG向け）
+
+- 「選択中」の「GMだけに見せる」で、部屋・壁・家具・図形・文字をGMだけのものにできます。ドアと窓は「隠し扉・隠し窓にする」になり、PLにはそこが壁に見えます
+- 2Dの上の「PL表示」をONにすると、PLが見る状態（GMだけの物を隠し、隠し扉は壁）を2Dと3Dで確かめられます。隠した物はクリックでも選ばれません。ONかOFFかはブラウザに記憶されます
+- GMの表示では、GMだけの物を紫の点線で囲んで見分けられるようにします（書き出す画像には入りません）
+
+### 画像の書き出し
+
+上部の「画像」から、間取りをPNG画像にできます。
+
+- 「PL用の画像」はGMだけの物を隠し、隠し扉を壁にします。「GM用の画像」はすべて入り、右上に「GM用」と入ります
+- 書き出す階: 表示中の階 / 全部の階を1枚に（階の名前付きで並べる） / 階ごとに1枚ずつ。複数の階は同じ範囲・同じ倍率にそろえるので、重ねて見比べられます
+- 方眼と部屋の名前は入れるかどうかを選べます。寸法は2Dの「寸法」の表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
+- 1cmが2ピクセルの細かさで書き出します（大きすぎる間取りは、どの端末でも作れる大きさまで細かさを下げます）
+- 「3Dの画像（いまの見え方）」は、3Dで見ている向きのまま画面の2倍の細かさで書き出します。PL表示にしてから書き出すと、GMだけの物は写りません
+- ファイル名は`madori-YYYY-MM-DD-1F-PL.png`、`madori-YYYY-MM-DD-all-GM.png`、`madori-YYYY-MM-DD-3d.png`のようになります
+
 ### 複数屋根
 
 - 切妻、寄棟、陸屋根を何枚でも追加
@@ -204,9 +221,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 | エリア | 役割 |
 | --- | --- |
-| 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、新規作成 |
+| 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（PL用・GM用・3D）、新規作成 |
 | 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、雛形 |
-| 2Dペイン | 間取りの作成、選択、移動、リサイズ、寸法・透過・屋根の表示切替 |
+| 2Dペイン | 間取りの作成、選択、移動、リサイズ、PL表示・透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
 左上のパネル切替ボタンで、編集パネルを一時的に隠せます。作業内容に応じて、上部の表示切替から2Dまたは3Dを広く表示できます。
@@ -253,7 +270,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 「新規」は作成済みの要素がある場合に確認を表示します。確定した後もUndoで戻せます。名前などの入力中は、Ctrl / Cmd + Zは入力欄の文字だけを取り消します。
 
 - 保存キー: `madori-quick-3d-plan`
-- 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）もブラウザへ保存
+- 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）、PL表示、画像の書き出しの設定もブラウザへ保存
 - 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
@@ -261,7 +278,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### JSON書き出し
 
-上部の「書き出し」で、プラン全体を`madori-YYYY-MM-DD.json`として保存します。階、部屋、壁、建具、家具、図形、複数屋根、色、位置、固定状態が含まれます。
+上部の「書き出し」で、プラン全体を`madori-YYYY-MM-DD.json`として保存します。階、部屋、壁、建具、家具、図形、複数屋根、色、位置、固定状態、GMだけに見せる設定（`gmOnly`）、番号の印の番号（`markerLabel`）が含まれます。
 
 ### JSON読み込み
 
@@ -626,6 +643,22 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Per-floor visibility in 3D
 - Stacked floor heights, slabs, and top-floor wall caps
 
+### GM-only items and the player view (for TRPG)
+
+- Under Selection, "GMだけに見せる" marks rooms, walls, furniture, shapes, and text as GM-only. For doors and windows the option makes a secret door or window, which players see as wall.
+- The "PL表示" toggle above the 2D plan shows what players see (GM-only items hidden, secret doors as wall) in both 2D and 3D. Hidden items cannot be clicked. The setting is remembered in the browser.
+- In the GM view, GM-only items are outlined with a purple dashed line (never in exported images).
+
+### Image export
+
+"画像" in the top bar saves the plan as PNG images.
+
+- The player image hides GM-only items and turns secret doors into wall; the GM image contains everything and is labeled "GM用" in the top-right corner.
+- Floors: the current floor, all floors in one image (each with its name), or one image per floor. Several floors share the same area and scale so they line up.
+- Grid and room names can be left out. Dimensions follow the 2D dimension toggle. Selection frames, roofs, ghost floors, and lock icons are never included.
+- Images use 2 pixels per centimeter, reduced for very large plans so every device can create them.
+- "3Dの画像" saves the current 3D view at twice the screen resolution. Turn on the player view first to leave GM-only items out.
+
 ### Multiple editable roofs
 
 - Add any number of gable, hip, and flat roofs
@@ -698,9 +731,9 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 
 | Area | Purpose |
 | --- | --- |
-| Top bar | View mode, undo/redo, JSON export/import, and new plan |
+| Top bar | View mode, undo/redo, JSON export/import, image export (player, GM, 3D), and new plan |
 | Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
-| 2D pane | Drawing, selection, movement, resizing, and toggles for dimensions, the floor below, and roofs |
+| 2D pane | Drawing, selection, movement, resizing, and toggles for the player view, ghost floors, dimensions, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
 The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let you dedicate more space to the current task.
@@ -755,7 +788,7 @@ If some saved items are invalid, the original data is backed up before valid ite
 
 ### JSON export and import
 
-Export creates a file named `madori-YYYY-MM-DD.json`. It contains floors, rooms, walls, openings, furniture, shapes, roofs, colors, positions, and lock states.
+Export creates a file named `madori-YYYY-MM-DD.json`. It contains floors, rooms, walls, openings, furniture, shapes, roofs, colors, positions, lock states, GM-only flags (`gmOnly`), and marker numbers (`markerLabel`).
 
 Import restores a previously exported file. The loader also migrates older single-floor and single-roof formats where possible.
 

@@ -47,6 +47,8 @@ interface Room {
   labelOffsetX?: number;
   labelOffsetY?: number;
   locked?: boolean;
+  // GMだけに見せる（PL表示とPL用の画像では隠す。ドア・窓は隠し扉になり、壁がつながって見える）
+  gmOnly?: boolean;
 }
 
 interface LinearElement {
@@ -62,6 +64,8 @@ interface LinearElement {
   mullion?: boolean;
   doorStyle?: "swing" | "sliding";
   locked?: boolean;
+  // GMだけに見せる（PL表示とPL用の画像では隠す。ドア・窓は隠し扉になり、壁がつながって見える）
+  gmOnly?: boolean;
 }
 
 interface Furniture {
@@ -83,6 +87,8 @@ interface Furniture {
   // 番号の印に書く文字（番号）。番号の印だけが持つ
   markerLabel?: string;
   locked?: boolean;
+  // GMだけに見せる（PL表示とPL用の画像では隠す。ドア・窓は隠し扉になり、壁がつながって見える）
+  gmOnly?: boolean;
 }
 
 interface Shape {
@@ -99,6 +105,8 @@ interface Shape {
   color?: string;
   color3d?: string;
   locked?: boolean;
+  // GMだけに見せる（PL表示とPL用の画像では隠す。ドア・窓は隠し扉になり、壁がつながって見える）
+  gmOnly?: boolean;
 }
 
 interface Roof {
@@ -124,6 +132,8 @@ interface TextLabel {
   rotation: number;
   color?: string;
   locked?: boolean;
+  // GMだけに見せる（PL表示とPL用の画像では隠す。ドア・窓は隠し扉になり、壁がつながって見える）
+  gmOnly?: boolean;
 }
 
 type Entity = Room | LinearElement | Furniture | Shape | Roof | TextLabel;
@@ -417,6 +427,27 @@ const ROOF_LABELS: Record<RoofKind, string> = {
   flat: "陸屋根",
 };
 
+// GMだけに見せる物の印の色
+const SECRET_COLOR = "#8a4fd8";
+
+// ---- 画像の書き出しの設定（起動時のメニューの組み立てでも使うので、ここで決める） ----
+
+const EXPORT_MARGIN = 60;
+// 書き出す画像の1cmあたりの大きさ（画面の1倍の表示と同じ線の太さ・文字の大きさで、2倍の細かさ）
+const EXPORT_ZOOM = 1;
+const EXPORT_PIXEL_RATIO = 2;
+// どの端末でも作れる大きさに抑える
+const EXPORT_MAX_SIDE = 8192;
+const EXPORT_MAX_PIXELS = 16_000_000;
+
+interface ImageExportSettings {
+  floors: "current" | "all" | "each";
+  grid: boolean;
+  names: boolean;
+}
+
+const imageExportSettings: ImageExportSettings = { floors: "current", grid: true, names: true };
+
 // 2D画面の上が北（3Dの-z）。値は「光が差す方角」に太陽を置く位置。
 const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
   n: [0, 12, -14],
@@ -438,6 +469,12 @@ let activeRoomSurface: RoomSurface = "plain";
 let activePolygonSides = 6;
 let viewMode: ViewMode = loadViewMode();
 let showDimensions = loadDimensionLabels();
+// PL表示（GMだけに見せる物を隠す）。見ていた場所などと一緒にブラウザへ保存
+let playerView = false;
+// 画像を書き出している間だけ、誰に見せる絵かを決める（editor: いつもの画面）
+let renderAudience: "editor" | "pl" | "gm" = "editor";
+// 画像を書き出している間だけ、部屋の名前を省く
+let hideRoomNames = false;
 let shadowsEnabled = loadShadowsEnabled();
 let lightDirection: LightDirection = loadLightDirection();
 let lightLevel = loadLightLevel();
@@ -552,6 +589,8 @@ interface SavedViewState {
   panels?: Record<string, boolean>;
   symbols?: Partial<Record<FurnitureKind, number>>;
   ghost?: { target?: string; color?: string; opacity?: number };
+  playerView?: boolean;
+  imageExport?: { floors?: string; grid?: boolean; names?: boolean };
 }
 
 const viewState: SavedViewState = loadViewState();
@@ -667,6 +706,7 @@ function normalizeEntity(value: unknown): Entity {
   const base = {
     id: typeof entity.id === "string" && entity.id ? entity.id : newId("room"),
     locked: entity.locked === true,
+    gmOnly: (entity as { gmOnly?: unknown }).gmOnly === true ? true : undefined,
   };
   if (entity.type === "roof") {
     const normalized = normalizeRoof(entity);
@@ -712,7 +752,7 @@ function normalizeEntity(value: unknown): Entity {
   if (entity.type === "text") {
     if (!finite(entity.x, entity.y)) throw new Error("Invalid text position");
     return {
-      id: base.id, type: "text", locked: base.locked,
+      id: base.id, type: "text", locked: base.locked, gmOnly: base.gmOnly,
       text: typeof entity.text === "string" ? entity.text.slice(0, MAX_TEXT_LENGTH) : "",
       x: entity.x, y: entity.y,
       size: finite(entity.size) ? clamp(entity.size, 5, 500) : DEFAULT_TEXT_SIZE,
@@ -861,6 +901,9 @@ function setupUi(): void {
   });
 
   setupGhostMenu();
+  setupImageExport();
+  document.querySelector<HTMLButtonElement>("#playerViewToggle")?.addEventListener("click", () => setPlayerView(!playerView));
+  updatePlayerViewToggle();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -1714,6 +1757,7 @@ function applySavedDisplaySettings(): void {
     if (typeof color === "string") ghostSettings.color = parseColorCode(color)?.code ?? "";
     if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
   }
+  if (typeof viewState.playerView === "boolean") playerView = viewState.playerView;
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -1796,6 +1840,7 @@ function saveViewState(): void {
   );
   viewState.symbols = { ...lastSymbolByKind };
   viewState.ghost = { ...ghostSettings };
+  viewState.playerView = playerView;
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -2500,22 +2545,28 @@ function render2d(): void {
   const ratio = getCanvasPixelRatio();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
+  drawPlan(width, height, { grid: true, ghost: true, editing: true });
+  scheduleViewStateSave();
+}
+
+// 間取りを描く。editing は画面だけの物（屋根の破線・固定の印・作図中の線・GMだけの物の印）も描くとき
+function drawPlan(width: number, height: number, options: { grid: boolean; ghost: boolean; editing: boolean }): void {
   ctx.save();
   ctx.translate(view.x, view.y);
   ctx.scale(view.zoom, view.zoom);
 
-  drawGrid(width, height);
+  if (options.grid) drawGrid(width, height);
 
-  const entities = activeEntities();
+  const entities = shownEntities();
   drawLayer(entities.filter(isRoom), drawRoom);
-  if (view.zoom > GRID_OVER_ROOMS_ZOOM) {
+  if (options.grid && view.zoom > GRID_OVER_ROOMS_ZOOM) {
     ctx.save();
     ctx.globalAlpha = 0.7;
     drawGrid(width, height);
     ctx.restore();
   }
   // 現在の階の部屋の塗りの上・線画の下に、ほかの階のゴーストを挟む
-  drawFloorBelowGhost();
+  if (options.ghost) drawFloorBelowGhost();
   drawLayer(entities.filter(isFurniture).filter((item) => item.kind === "rug"), drawFurniture2d);
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
@@ -2524,18 +2575,91 @@ function render2d(): void {
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "door"), drawDoor2d);
   drawLayer(entities.filter(isFurniture).filter((item) => item.kind !== "rug"), drawFurniture2d);
   drawLayer(entities.filter(isShape), drawShape2d);
-  revealRoofsIfSelected();
-  if (roofVisible2d) state.roofs.forEach(drawRoof2d);
+  if (options.editing) {
+    revealRoofsIfSelected();
+    if (roofVisible2d) state.roofs.forEach(drawRoof2d);
+  }
   drawLayer(entities.filter(isTextLabel), drawTextLabel);
-  entities.filter(isLocked).forEach(drawLockedIndicator);
-  if (roofVisible2d) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
-
-  if (drag.dragMode === "draw" && activeTool !== "furniture") {
-    drawPreview(drag.startWorld, drag.currentWorld);
+  if (options.editing) {
+    if (renderAudience === "editor" && !playerView) entities.filter(isSecret).forEach(drawSecretMark);
+    entities.filter(isLocked).forEach(drawLockedIndicator);
+    if (roofVisible2d) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
+    if (drag.dragMode === "draw" && activeTool !== "furniture") {
+      drawPreview(drag.startWorld, drag.currentWorld);
+    }
   }
 
   ctx.restore();
+}
+
+// ---- GMだけに見せる物とPL表示 ----
+
+function isSecret(entity: Entity): boolean {
+  return entity.type !== "roof" && entity.gmOnly === true;
+}
+
+// PL表示とPL用の画像では、GMだけに見せる物を隠す
+function hidesSecrets(): boolean {
+  return renderAudience === "editor" ? playerView : renderAudience === "pl";
+}
+
+function isShown(entity: Entity): boolean {
+  return !(hidesSecrets() && isSecret(entity));
+}
+
+// 見えている要素（隠し扉は除くので、そこの壁はつながって見える）
+function shownEntities(entities: Entity[] = activeEntities()): Entity[] {
+  return hidesSecrets() ? entities.filter(isShown) : entities;
+}
+
+function setPlayerView(next: boolean): void {
+  playerView = next;
+  const selected = state.selectedId ? findEntity(state.selectedId) : null;
+  if (playerView && selected && !isShown(selected)) state.selectedId = null;
+  updatePlayerViewToggle();
   scheduleViewStateSave();
+  redrawAll();
+}
+
+function updatePlayerViewToggle(): void {
+  const button = document.querySelector<HTMLButtonElement>("#playerViewToggle");
+  button?.classList.toggle("is-active", playerView);
+  button?.setAttribute("aria-pressed", String(playerView));
+  workspace.dataset.audience = playerView ? "player" : "gm";
+}
+
+
+// GMの表示で、GMだけに見せる物を紫の点線で囲む（画像には描かない）
+function drawSecretMark(entity: Entity): void {
+  const pad = 5 / view.zoom;
+  ctx.save();
+  ctx.strokeStyle = SECRET_COLOR;
+  ctx.lineWidth = 1.6 / view.zoom;
+  ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+  if (entity.type === "room") {
+    ctx.strokeRect(entity.x + pad, entity.y + pad, Math.max(0, entity.w - pad * 2), Math.max(0, entity.h - pad * 2));
+  } else if (entity.type === "furniture") {
+    ctx.translate(entity.x + entity.w / 2, entity.y + entity.h / 2);
+    ctx.rotate(degreesToRadians(entity.rotation));
+    ctx.strokeRect(-entity.w / 2 - pad, -entity.h / 2 - pad, entity.w + pad * 2, entity.h + pad * 2);
+  } else if (isLinear(entity)) {
+    const length = distance(entity);
+    const mid = midpoint(entity);
+    const half = WALL_THICKNESS_2D / 2 + pad;
+    ctx.translate(mid.x, mid.y);
+    ctx.rotate(lineAngle(entity));
+    ctx.strokeRect(-length / 2 - pad, -half, length + pad * 2, half * 2);
+  } else if (entity.type === "shape") {
+    ctx.beginPath();
+    ctx.arc(entity.x, entity.y, entity.r + WALL_THICKNESS_2D / 2 + pad, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (entity.type === "text") {
+    const { w, h } = measureTextLabel(entity);
+    ctx.translate(entity.x, entity.y);
+    ctx.rotate(degreesToRadians(entity.rotation));
+    ctx.strokeRect(-w / 2 - pad * 1.6, -h / 2 - pad * 1.6, w + pad * 3.2, h + pad * 3.2);
+  }
+  ctx.restore();
 }
 
 // 方眼の間隔。20cmを基準に、画面上で狭すぎれば5倍ずつ広げ、広すぎれば1/5ずつ細かくする
@@ -2605,9 +2729,9 @@ function drawFloorBelowGhost(): void {
     ctx.clearRect(0, 0, target.width, target.height);
     ctx.setTransform(transform);
     // 部屋の塗りを先に全部描き、その上に線の要素を描く（ほかの階の床が線を隠さないように）
-    drawLayer(floors.flatMap((floor) => floor.entities.filter(isRoom)), drawRoom);
+    drawLayer(floors.flatMap((floor) => shownEntities(floor.entities).filter(isRoom)), drawRoom);
     for (const floor of floors) {
-      const entities = floor.entities;
+      const entities = shownEntities(floor.entities);
       drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
         getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
       });
@@ -2695,7 +2819,7 @@ function drawSelectionMarks(entity: Entity): void {
   } else if (entity.type === "furniture") {
     if (!isLocked(entity)) drawResizeHandles(entity);
   } else if (entity.type === "wall") {
-    if (!isLocked(entity)) getVisibleWallSegments(entity, activeEntities()).forEach(drawLineHandles);
+    if (!isLocked(entity)) getVisibleWallSegments(entity, shownEntities()).forEach(drawLineHandles);
   } else if (entity.type === "door" || entity.type === "window") {
     if (!isLocked(entity)) drawLineHandles(entity);
   } else if (entity.type === "shape") {
@@ -2788,7 +2912,7 @@ function drawRoom(room: Room): void {
   ctx.textAlign = "left";
   ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
   ctx.textBaseline = "top";
-  const named = room.name.trim() !== "";
+  const named = room.name.trim() !== "" && !hideRoomNames;
   if (named) ctx.fillText(room.name, label.x, label.y);
   if (showDimensions) {
     // 名前がないときは、寸法を名前の位置へ詰める
@@ -5085,19 +5209,21 @@ function rebuildThree(): void {
     const yBase = floorBaseY(index);
     // 笠木（壁上端のキャップ）は最上階のみ。途中階は上階の壁と面一に continuous させる
     const withCap = index === topVisibleIndex;
-    const rooms = floor.entities.filter(isRoom);
+    // PL表示では、GMだけに見せる物を作らない。隠し扉の所は壁でふさぐ
+    const entities = shownEntities(floor.entities);
+    const rooms = entities.filter(isRoom);
     rooms.forEach((roomItem, roomIndex) => addRoom3d(roomItem, center, yBase, index, rooms.slice(roomIndex + 1)));
-    floor.entities
+    entities
       .filter((entity): entity is LinearElement => entity.type === "wall")
-      .forEach((wallItem) => addWall3d(wallItem, floor.entities, center, yBase, withCap));
-    floor.entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase, withCap));
-    floor.entities
+      .forEach((wallItem) => addWall3d(wallItem, entities, center, yBase, withCap));
+    entities.filter(isShape).forEach((shape) => addShapeWall3d(shape, center, yBase, withCap));
+    entities
       .filter((entity): entity is LinearElement => entity.type === "door")
       .forEach((door) => addDoor3d(door, center, yBase));
-    floor.entities
+    entities
       .filter((entity): entity is LinearElement => entity.type === "window")
       .forEach((windowEl) => addWindow3d(windowEl, center, yBase));
-    floor.entities.filter(isFurniture).forEach((furnitureItem) => addFurniture3d(furnitureItem, center, yBase));
+    entities.filter(isFurniture).forEach((furnitureItem) => addFurniture3d(furnitureItem, center, yBase));
   });
 
   if (state.floors.every((floor) => floor.entities.length === 0)) {
@@ -5538,12 +5664,19 @@ function updatePropertiesPanel(): void {
   }
   const placementDisabled = isLocked(selected) ? "disabled" : "";
   const lockRow = `<label class="check placement-lock"><input id="entityLockedInput" type="checkbox" ${isLocked(selected) ? "checked" : ""} /> 配置を固定（Lキー）</label>`;
+  // 屋根以外は、GMだけに見せる（PLには隠す）ことができる。ドア・窓は隠し扉・隠し窓になる
+  const secretText = selected.type === "door" || selected.type === "window"
+    ? "隠し扉・隠し窓にする（PL表示とPL用の画像では壁に見せる）"
+    : "GMだけに見せる（PL表示とPL用の画像では隠す）";
+  const secretRow = selected.type === "roof"
+    ? ""
+    : `<label class="check secret-toggle"><input id="entityGmOnlyInput" type="checkbox" ${isSecret(selected) ? "checked" : ""} /> ${secretText}</label>`;
 
   if (selected.type === "roof") {
     const roofIndex = state.roofs.findIndex((item) => item.id === selected.id);
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        ${lockRow}
+        ${lockRow}${secretRow}
         <p class="empty-state">屋根 ${roofIndex + 1}</p>
         <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${floor.name}</option>`).join("")}</select></label>
         <label>種類
@@ -5585,7 +5718,7 @@ function updatePropertiesPanel(): void {
   if (selected.type === "room") {
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        ${lockRow}
+        ${lockRow}${secretRow}
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし（2Dに文字を出さない）" /></label>
         <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
         <div class="two-col">
@@ -5637,7 +5770,7 @@ function updatePropertiesPanel(): void {
         : "";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        ${lockRow}
+        ${lockRow}${secretRow}
         <p class="empty-state">${typeLabel}</p>
         ${doorStyleRow}
         <div class="two-col">
@@ -5686,7 +5819,7 @@ function updatePropertiesPanel(): void {
     const label = selected;
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        ${lockRow}
+        ${lockRow}${secretRow}
         <label>文字（改行もできます）<textarea id="textContentInput" rows="3" maxlength="${MAX_TEXT_LENGTH}" ${placementDisabled}>${escapeHtml(label.text)}</textarea></label>
         <div class="two-col">
           <label>大きさ cm<input id="textSizeInput" type="number" min="5" max="500" step="2" value="${label.size}" ${placementDisabled} /></label>
@@ -5736,7 +5869,7 @@ function updatePropertiesPanel(): void {
         : "";
     propertiesPanel.innerHTML = `
       <div class="property-grid">
-        ${lockRow}
+        ${lockRow}${secretRow}
         <label>種類
           <select id="shapeKindInput" ${placementDisabled}>
             <option value="circle" ${selectedShape.kind === "circle" ? "selected" : ""}>円</option>
@@ -5804,7 +5937,7 @@ function updatePropertiesPanel(): void {
     : "";
   propertiesPanel.innerHTML = `
     <div class="property-grid">
-      ${lockRow}
+      ${lockRow}${secretRow}
       <label>種類
         <select id="furnitureKindInput" ${placementDisabled}>${kindOptions}</select>
       </label>
@@ -5901,6 +6034,13 @@ function bindColor(selector: string, update: (value: string | undefined) => void
 function bindEntityLock(entity: Entity): void {
   bindCheckbox("#entityLockedInput", (checked) => {
     entity.locked = checked;
+  });
+  bindCheckbox("#entityGmOnlyInput", (checked) => {
+    if (entity.type === "roof") return;
+    if (checked) entity.gmOnly = true;
+    else delete entity.gmOnly;
+    // PL表示のまま隠したときは、選んだままにしない
+    if (checked && playerView) state.selectedId = null;
   });
 }
 
@@ -6049,6 +6189,209 @@ function persistState(): void {
   }, 320);
 }
 
+// ---- 画像の書き出し（PL用・GM用・3D） ----
+
+
+function setupImageExport(): void {
+  const button = document.querySelector<HTMLButtonElement>("#imageExportButton");
+  const menu = document.querySelector<HTMLDivElement>("#imageExportMenu");
+  const floors = document.querySelector<HTMLSelectElement>("#imageExportFloors");
+  const grid = document.querySelector<HTMLInputElement>("#imageExportGrid");
+  const names = document.querySelector<HTMLInputElement>("#imageExportNames");
+  if (!button || !menu || !floors || !grid || !names) return;
+  const saved = viewState.imageExport;
+  if (saved && typeof saved === "object") {
+    if (saved.floors === "current" || saved.floors === "all" || saved.floors === "each") imageExportSettings.floors = saved.floors;
+    if (typeof saved.grid === "boolean") imageExportSettings.grid = saved.grid;
+    if (typeof saved.names === "boolean") imageExportSettings.names = saved.names;
+  }
+  floors.value = imageExportSettings.floors;
+  grid.checked = imageExportSettings.grid;
+  names.checked = imageExportSettings.names;
+  const remember = () => {
+    imageExportSettings.floors = floors.value as ImageExportSettings["floors"];
+    imageExportSettings.grid = grid.checked;
+    imageExportSettings.names = names.checked;
+    viewState.imageExport = { ...imageExportSettings };
+    scheduleViewStateSave();
+  };
+  [floors, grid, names].forEach((input) => input.addEventListener("change", remember));
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+    close();
+  });
+  const run = (audience: "pl" | "gm") => {
+    remember();
+    close();
+    exportPlanImages(audience);
+  };
+  document.querySelector<HTMLButtonElement>("#imageExportPl")?.addEventListener("click", () => run("pl"));
+  document.querySelector<HTMLButtonElement>("#imageExportGm")?.addEventListener("click", () => run("gm"));
+  document.querySelector<HTMLButtonElement>("#imageExport3d")?.addEventListener("click", () => {
+    close();
+    exportThreeImage();
+  });
+}
+
+// 書き出す階の、見せる物が入る範囲（屋根は含めない）
+function exportBounds(floorIndexes: number[], audience: "pl" | "gm"): Bounds | null {
+  const previous = renderAudience;
+  renderAudience = audience;
+  try {
+    const entities = floorIndexes.flatMap((index) => shownEntities(state.floors[index].entities));
+    return getEntitiesBounds(entities);
+  } finally {
+    renderAudience = previous;
+  }
+}
+
+// 1つの階を、書き出し用のキャンバスの (left, top) から描く。選択の枠・ほかの階の透過・屋根・固定の印は描かない
+function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number, audience: "pl" | "gm", bounds: Bounds, left: number, top: number, ratio: number, zoom: number): void {
+  const saved = { ctx, view: { ...view }, activeFloor: state.activeFloor, selectedId: state.selectedId, audience: renderAudience, hideRoomNames };
+  const width = (bounds.w + EXPORT_MARGIN * 2) * zoom;
+  const height = (bounds.h + EXPORT_MARGIN * 2) * zoom;
+  ctx = target;
+  view = { zoom, x: (EXPORT_MARGIN - bounds.x) * zoom, y: (EXPORT_MARGIN - bounds.y) * zoom };
+  state.activeFloor = floorIndex;
+  state.selectedId = null;
+  renderAudience = audience;
+  hideRoomNames = !imageExportSettings.names;
+  try {
+    ctx.save();
+    ctx.setTransform(ratio, 0, 0, ratio, left * ratio, top * ratio);
+    ctx.beginPath();
+    ctx.rect(0, 0, width, height);
+    ctx.clip();
+    drawPlan(width, height, { grid: imageExportSettings.grid, ghost: false, editing: false });
+    ctx.restore();
+  } finally {
+    ctx = saved.ctx;
+    view = saved.view;
+    state.activeFloor = saved.activeFloor;
+    state.selectedId = saved.selectedId;
+    renderAudience = saved.audience;
+    hideRoomNames = saved.hideRoomNames;
+  }
+}
+
+// 書き出す画像の倍率。大きすぎる間取りは、作れる大きさまで細かさを下げる
+function exportScale(widthCss: number, heightCss: number): { ratio: number; zoom: number } {
+  let ratio = Math.min(EXPORT_PIXEL_RATIO, EXPORT_MAX_SIDE / widthCss, EXPORT_MAX_SIDE / heightCss, Math.sqrt(EXPORT_MAX_PIXELS / (widthCss * heightCss)));
+  let zoom = EXPORT_ZOOM;
+  if (ratio < 0.5) {
+    zoom *= ratio / 0.5;
+    ratio = 0.5;
+  }
+  return { ratio, zoom };
+}
+
+// 階の画像を並べた1枚（階が1つなら、その階だけ）。階の名前を上に書き、GM用には右上に「GM用」と入れる
+function renderPlanImage(floorIndexes: number[], audience: "pl" | "gm", bounds: Bounds): HTMLCanvasElement {
+  const labelled = floorIndexes.length > 1;
+  const heading = labelled ? 44 : 0;
+  const cellW = (bounds.w + EXPORT_MARGIN * 2) * EXPORT_ZOOM;
+  const cellH = (bounds.h + EXPORT_MARGIN * 2) * EXPORT_ZOOM + heading;
+  // 横に長くなりすぎるときは、何段かに折り返す
+  const columns = labelled ? Math.max(1, Math.min(floorIndexes.length, Math.round(Math.sqrt((floorIndexes.length * cellH * 1.6) / cellW)) || 1)) : 1;
+  const rows = Math.ceil(floorIndexes.length / columns);
+  const { ratio, zoom } = exportScale(cellW * columns, cellH * rows);
+  const scale = zoom / EXPORT_ZOOM;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(cellW * columns * scale * ratio));
+  canvas.height = Math.max(1, Math.round(cellH * rows * scale * ratio));
+  const target = canvas.getContext("2d");
+  if (!target) return canvas;
+  target.fillStyle = "#ffffff";
+  target.fillRect(0, 0, canvas.width, canvas.height);
+  floorIndexes.forEach((floorIndex, i) => {
+    const left = (i % columns) * cellW * scale;
+    const top = Math.floor(i / columns) * cellH * scale;
+    if (labelled) {
+      target.save();
+      target.setTransform(ratio, 0, 0, ratio, 0, 0);
+      target.fillStyle = INK;
+      target.font = `700 ${22 * scale}px ${TEXT_FONT}`;
+      target.textBaseline = "middle";
+      target.fillText(state.floors[floorIndex].name, left + 16 * scale, top + (heading / 2) * scale);
+      target.restore();
+    }
+    drawFloorForExport(target, floorIndex, audience, bounds, left, top + heading * scale, ratio, zoom);
+  });
+  if (audience === "gm") {
+    target.save();
+    target.setTransform(ratio, 0, 0, ratio, 0, 0);
+    target.font = `700 ${16 * scale}px ${TEXT_FONT}`;
+    target.textAlign = "right";
+    target.textBaseline = "top";
+    target.fillStyle = SECRET_COLOR;
+    target.fillText("GM用", canvas.width / ratio - 12 * scale, 10 * scale);
+    target.restore();
+  }
+  return canvas;
+}
+
+function exportPlanImages(audience: "pl" | "gm"): void {
+  const suffix = audience === "pl" ? "PL" : "GM";
+  const stamp = localDateStamp();
+  const choice = imageExportSettings.floors;
+  const floorIndexes = choice === "current" ? [state.activeFloor] : state.floors.map((_, index) => index).filter((index) => exportBounds([index], audience));
+  const bounds = exportBounds(floorIndexes, audience);
+  if (!bounds || !floorIndexes.length) {
+    saveStatus.textContent = "書き出す物がありません";
+    window.setTimeout(() => (saveStatus.textContent = "保存済み"), 1600);
+    return;
+  }
+  if (choice === "each") {
+    // 階ごとの画像も、同じ範囲・同じ倍率にそろえる（重ねて見比べやすいように）
+    floorIndexes.forEach((floorIndex, i) => {
+      window.setTimeout(() => downloadCanvas(renderPlanImage([floorIndex], audience, bounds), `madori-${stamp}-${state.floors[floorIndex].name}-${suffix}.png`), i * 350);
+    });
+    return;
+  }
+  const name = choice === "current" ? state.floors[state.activeFloor].name : "all";
+  downloadCanvas(renderPlanImage(floorIndexes, audience, bounds), `madori-${stamp}-${name}-${suffix}.png`);
+}
+
+// いまの3Dの見え方を、画面の2倍の細かさで画像にする
+function exportThreeImage(): void {
+  const size = renderer.getSize(new THREE.Vector2());
+  if (size.x < 2 || size.y < 2) {
+    saveStatus.textContent = "3Dを表示してから書き出してください";
+    window.setTimeout(() => (saveStatus.textContent = "保存済み"), 2000);
+    return;
+  }
+  const pixelRatio = renderer.getPixelRatio();
+  const ratio = Math.min(pixelRatio * 2, EXPORT_MAX_SIDE / size.x, EXPORT_MAX_SIDE / size.y, renderer.capabilities.maxTextureSize / Math.max(size.x, size.y));
+  renderer.setPixelRatio(ratio);
+  renderer.setSize(size.x, size.y, false);
+  renderer.render(scene, camera);
+  const stamp = localDateStamp();
+  downloadCanvas(renderer.domElement, `madori-${stamp}-3d.png`);
+  renderer.setPixelRatio(pixelRatio);
+  renderer.setSize(size.x, size.y, false);
+  render3dOnce();
+}
+
+function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, "image/png");
+}
+
 function exportPlan(): void {
   downloadJson(JSON.stringify(state, null, 2), `madori-${localDateStamp()}.json`);
 }
@@ -6103,7 +6446,7 @@ function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
 function hitTest(point: Point): { entity: Entity | null; corner: string | null } {
   // Match visual stacking even when a floor or rug was placed after the furniture.
   const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && entity.kind === "rug" ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
-  const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
+  const entities = [...shownEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedRoof = roofVisible2d ? state.roofs.find((item) => item.id === state.selectedId) : undefined;
   if (selectedRoof) {
     const corner = getCornerHit(selectedRoof, point);

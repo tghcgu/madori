@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 
@@ -59,6 +59,11 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
           (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow, map: Boolean(m.map) }));
         });
         return found;
+      },
+      meshCount(id) {
+        let count = 0;
+        planGroup.traverse(o => { if (o.isMesh && entityIdFromObject(o) === id) count += 1; });
+        return count;
       },
       grassTufts() {
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
@@ -665,6 +670,86 @@ try {
   assert.deepEqual((await markers()).map(item => item.markerLabel), ['8', 'A123']);
   await page.locator('[data-tool="select"]').click();
   console.log('PASS: investigation marks: numbered markers count up, editable number, number on the 3D marker, footprints, body, blood, glass and reload');
+
+  // GM-only items: hidden in the player view (2D, 3D and clicks), secret doors turn into wall, the setting is kept, and PL/GM images differ.
+  await importPlan({ floors: [{ id: 's1', name: '', entities: [
+    { id: 'hall', type: 'room', name: '', x: 0, y: 0, w: 600, h: 400, color: '#ffffff' },
+    { id: 'east', type: 'wall', x1: 600, y1: 0, x2: 600, y2: 400 },
+    { id: 'secret-door', type: 'door', x1: 600, y1: 150, x2: 600, y2: 240, gmOnly: true },
+    { id: 'clue', type: 'furniture', kind: 'bloodPool', x: 200, y: 150, w: 120, h: 100, rotation: 0, gmOnly: true },
+    { id: 'desk', type: 'furniture', kind: 'desk', x: 40, y: 40, w: 120, h: 60, rotation: 0 },
+  ] }, { id: 's2', name: '', entities: [{ id: 'up', type: 'room', name: '', x: 0, y: 0, w: 300, h: 200, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
+  await page.locator('button[data-view-mode="split"]').click();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const isRed = ([r, g, b]) => r > 120 && r > g + 60 && r > b + 60;
+  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'false');
+  assert.ok(isRed(shown(await pixelAt(260, 200))), 'the GM sees the GM-only blood');
+  const doorPieces = await page.evaluate(() => window.__editorTest.meshCount('secret-door'));
+  const wallPiecesWithDoor = await page.evaluate(() => window.__editorTest.meshCount('east'));
+  assert.ok(doorPieces > 0, 'the secret door is built in 3D for the GM');
+  await page.locator('#playerViewToggle').click();
+  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'true');
+  assert.ok(!isRed(shown(await pixelAt(260, 200))), 'players do not see it');
+  const wallAtDoor = shown(await pixelAt(600, 195));
+  assert.ok(wallAtDoor.every(value => value < 80), `the secret door looks like wall to players: ${wallAtDoor}`);
+  assert.equal(await page.evaluate(() => window.__editorTest.meshCount('secret-door')), 0, 'no 3D door for players');
+  assert.equal(await page.evaluate(() => window.__editorTest.meshCount('clue')), 0, 'no 3D blood for players');
+  assert.ok(await page.evaluate(() => window.__editorTest.meshCount('east')) < wallPiecesWithDoor, 'the 3D wall is closed where the secret door is');
+  // A click on the hidden blood selects what is under it instead.
+  await page.locator('[data-tool="select"]').click();
+  let spot = await planPoint(260, 200);
+  await page.mouse.click(spot.x, spot.y);
+  assert.equal(await page.locator('#roomColorInputCode').count(), 1, 'the room under the hidden blood is picked');
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.locator('#playerViewToggle').getAttribute('aria-pressed'), 'true', 'the player view is kept after a reload');
+  await page.locator('#playerViewToggle').click();
+  // The checkbox marks items as GM-only, and turning on the player view hides the selection.
+  spot = await planPoint(100, 70);
+  await page.mouse.click(spot.x, spot.y);
+  await page.locator('#entityGmOnlyInput').check();
+  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'desk').gmOnly, true);
+  await page.locator('#entityGmOnlyInput').uncheck();
+  assert.equal((await saved()).floors[0].entities.find(item => item.id === 'desk').gmOnly, undefined);
+  // Images: the PL image leaves the GM-only blood out and closes the secret door, the GM image has both.
+  const exportImage = async (button, floors) => {
+    if (await page.locator('#imageExportMenu').isHidden()) await page.locator('#imageExportButton').click();
+    await page.locator('#imageExportFloors').selectOption(floors);
+    const download = page.waitForEvent('download');
+    await page.locator(button).click();
+    const file = await download;
+    const path = `${output}/${file.suggestedFilename()}`;
+    await file.saveAs(path);
+    const data = (await readFile(path)).toString('base64');
+    return { name: file.suggestedFilename(), ...(await page.evaluate(async data => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${data}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.width; canvas.height = image.height;
+      const context = canvas.getContext('2d');
+      context.drawImage(image, 0, 0);
+      // The image starts 60 cm before the plan and has 2 pixels per cm.
+      const at = (x, y) => [...context.getImageData((x + 60) * 2, (y + 60) * 2, 1, 1).data].slice(0, 3);
+      return { width: image.width, height: image.height, blood: at(260, 200), door: at(600, 195), desk: at(100, 41) };
+    }, data)) };
+  };
+  const pl = await exportImage('#imageExportPl', 'current');
+  const gm = await exportImage('#imageExportGm', 'current');
+  assert.match(pl.name, /^madori-\d{4}-\d{2}-\d{2}-1F-PL\.png$/);
+  assert.match(gm.name, /-1F-GM\.png$/);
+  assert.equal(pl.width, (600 + 120) * 2);
+  assert.equal(pl.height, (400 + 120) * 2);
+  assert.ok(!isRed(pl.blood) && isRed(gm.blood), `PL image without the blood, GM image with it: ${pl.blood} / ${gm.blood}`);
+  assert.ok(pl.door.every(value => value < 80) && !gm.door.every(value => value < 80), `the secret door is wall only in the PL image: ${pl.door} / ${gm.door}`);
+  const all = await exportImage('#imageExportGm', 'all');
+  assert.match(all.name, /-all-GM\.png$/);
+  assert.ok(all.height > gm.height, 'all floors are laid out in one image');
+  await page.locator('#imageExportButton').click();
+  const threeDownload = page.waitForEvent('download');
+  await page.locator('#imageExport3d').click();
+  assert.match((await threeDownload).suggestedFilename(), /-3d\.png$/);
+  console.log('PASS: GM-only items and secret doors: player view in 2D/3D/clicks, kept on reload, checkbox, PL/GM/all-floor and 3D images');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);

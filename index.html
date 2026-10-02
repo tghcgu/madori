@@ -84,6 +84,29 @@
             <i data-lucide="download"></i>
             <span>書き出し</span>
           </button>
+          <div class="image-export">
+            <button class="text-button" id="imageExportButton" type="button" title="間取りや3Dを画像にする（PL用・GM用）" aria-expanded="false">
+              <i data-lucide="image-down"></i>
+              <span>画像</span>
+            </button>
+            <div class="image-export-menu" id="imageExportMenu" hidden>
+              <label>書き出す階
+                <select id="imageExportFloors">
+                  <option value="current">表示中の階</option>
+                  <option value="all">全部の階を1枚に</option>
+                  <option value="each">階ごとに1枚ずつ</option>
+                </select>
+              </label>
+              <label class="check"><input id="imageExportGrid" type="checkbox" checked /> 方眼を入れる</label>
+              <label class="check"><input id="imageExportNames" type="checkbox" checked /> 部屋の名前を入れる</label>
+              <div class="image-export-actions">
+                <button class="text-button" id="imageExportPl" type="button" title="GMだけに見せる物を隠し、隠し扉は壁にした画像">PL用の画像</button>
+                <button class="text-button" id="imageExportGm" type="button" title="GMだけに見せる物もすべて入れた画像">GM用の画像</button>
+              </div>
+              <button class="text-button" id="imageExport3d" type="button" title="いまの3Dの見え方を画像にする">3Dの画像（いまの見え方）</button>
+              <p class="image-export-note">PL用ではGMだけに見せる物を隠し、隠し扉は壁にします。3DはPL表示にしてから書き出すと、GMだけの物は写りません。</p>
+            </div>
+          </div>
           <button class="text-button" id="importButton" type="button">
             <i data-lucide="upload"></i>
             <span>読み込み</span>
@@ -257,6 +280,10 @@
               <span id="planStats"></span>
             </div>
             <div class="pane-actions">
+              <button class="toggle-button player-view-toggle" id="playerViewToggle" type="button" title="PLに見せる表示にする（GMだけに見せる物を隠し、隠し扉は壁に見せる）" aria-pressed="false">
+                <i data-lucide="eye-off"></i>
+                <span>PL表示</span>
+              </button>
               <div class="ghost-options">
                 <button class="toggle-button is-active" id="ghostToggle" type="button" title="ほかの階を透かして表示" aria-pressed="true">
                   <i data-lucide="layers"></i>
