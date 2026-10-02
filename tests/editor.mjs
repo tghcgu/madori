@@ -56,7 +56,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
         const found = [];
         planGroup.traverse(o => {
           if (!o.isMesh || entityIdFromObject(o) !== id) return;
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow }));
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow, map: Boolean(m.map) }));
         });
         return found;
       },
@@ -635,6 +635,37 @@ try {
   assert.equal((await colorOf('cr')).color, tintedRoom.color, 'color codes with alpha survive a reload');
   console.log('PASS: color codes: typing, alpha digits, picker keeps alpha, even 2D overlap, see-through 3D, invalid and empty codes, reload');
 
+  // Investigation marks: numbered markers count up across floors, the number can be edited, and the 3D marker shows it on top.
+  await importPlan({ floors: [{ id: 'm1', name: '', entities: [room()] }, { id: 'm2', name: '', entities: [
+    { id: 'old-marker', type: 'furniture', kind: 'evidenceMarker', x: 0, y: 0, w: 24, h: 24, rotation: 0, markerLabel: '7' },
+  ] }], activeFloor: 0, selectedId: null, roofs: [] });
+  await choose('[data-furniture="evidenceMarker"]');
+  for (const [x, y] of [[150, 150], [300, 150]]) {
+    const point = await planPoint(x, y);
+    await page.mouse.click(point.x, point.y);
+  }
+  const markers = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'evidenceMarker');
+  assert.deepEqual((await markers()).map(item => item.markerLabel), ['8', '9'], 'numbers continue from the highest one on any floor');
+  assert.equal(await page.locator('#markerLabelInput').inputValue(), '9');
+  await page.locator('#markerLabelInput').fill('A12345');
+  await page.locator('#markerLabelInput').press('Enter');
+  assert.equal((await markers())[1].markerLabel, 'A123', 'up to four characters');
+  const markerId = (await markers())[1].id;
+  const markerMaterials = await page.evaluate(id => window.__editorTest.materials(id), markerId);
+  assert.ok(markerMaterials.some(m => m.name === 'marker-label' && m.map), `the number is drawn on the 3D marker: ${JSON.stringify(markerMaterials)}`);
+  // The other marks can be placed from the same group.
+  for (const kind of ['footprints', 'fallenPerson', 'bloodPool', 'brokenGlass']) {
+    await choose(`[data-furniture="${kind}"]`);
+    const point = await planPoint(400, 250);
+    await page.mouse.click(point.x, point.y);
+    assert.equal((await saved()).floors[0].entities.at(-1).kind, kind);
+  }
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.deepEqual((await markers()).map(item => item.markerLabel), ['8', 'A123']);
+  await page.locator('[data-tool="select"]').click();
+  console.log('PASS: investigation marks: numbered markers count up, editable number, number on the 3D marker, footprints, body, blood, glass and reload');
+
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
   await importPlan(surfaces);
   await page.locator('button[data-view-mode="three"]').click();
@@ -784,6 +815,8 @@ try {
     assert.ok(Math.abs(box.max[2]-box.min[2]-w/100)<1e-5, `${kind}: rotated width`);
     assert.ok(box.min[1] >= 0.08-1e-5, `${kind}: below floor`);
   }
+  // End on a piece with volume (the catalog now ends with flat marks on the floor) for the 3D check below.
+  await page.locator('#furnitureKindInput').selectOption('catTower');
   const lastFurniture = (await saved()).floors[0].entities[0];
   await page.reload();
   assert.deepEqual((await saved()).floors[0].entities[0], lastFurniture);

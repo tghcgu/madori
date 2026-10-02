@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
-import { rockShapes, rockVertexHeights } from '../src/furniture-shapes.ts';
+import { bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextSize, rockShapes, rockVertexHeights } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
 
 function dispose(group) {
@@ -186,4 +186,36 @@ test('a 3D color code with an alpha makes every piece translucent with the same 
       });
     } finally { dispose(solid); dispose(seeThrough); }
   }
+});
+
+test('investigation marks stay inside their frame, and the body outline goes around every part', () => {
+  const inside = ([x, y], polygon) => {
+    let hit = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const [xi, yi] = polygon[i], [xj, yj] = polygon[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+    }
+    return hit;
+  };
+  const within = (w, h) => ([x, y]) => Math.abs(x) <= w / 2 + 1e-6 && Math.abs(y) <= h / 2 + 1e-6;
+  for (const [w, h] of [[100, 180], [60, 120], [200, 90], [20, 20]]) {
+    for (const pose of [0, 1]) {
+      const outline = fallenPersonOutline(w, h, pose);
+      assert.ok(outline.length > 30, `outline points ${outline.length}`);
+      assert.ok(outline.every(within(w, h)), 'the outline stays inside the frame');
+      for (const part of fallenPersonParts(w, h, pose)) assert.ok(inside([(part.a[0] + part.b[0]) / 2, (part.a[1] + part.b[1]) / 2], outline), 'each part is inside the outline');
+    }
+    for (const bare of [false, true]) {
+      for (const piece of footprintTrail(w, h, bare)) {
+        const reachX = Math.hypot(piece.rx * Math.cos(piece.angle), piece.ry * Math.sin(piece.angle));
+        const reachY = Math.hypot(piece.rx * Math.sin(piece.angle), piece.ry * Math.cos(piece.angle));
+        assert.ok(Math.abs(piece.x) + reachX <= w / 2 + 1e-6 && Math.abs(piece.y) + reachY <= h / 2 + 1e-6, 'footprints stay inside');
+      }
+    }
+    for (const variant of [0, 1, 2]) assert.ok(bloodShape(w, h, variant).blobs.flat().every(within(w, h)), 'blood stays inside');
+    assert.ok(glassShards(w, h).flat().every(within(w, h)), 'glass stays inside');
+  }
+  const marker = evidenceMarkerShape(24, 24);
+  assert.ok(markerTextSize(marker, '1234') < markerTextSize(marker, '12'), 'long numbers are written smaller');
+  assert.equal(markerTextSize(marker, '7'), markerTextSize(marker, '12'));
 });

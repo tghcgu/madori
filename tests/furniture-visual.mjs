@@ -45,7 +45,7 @@ for(const [index,[kind,def]] of entries.entries()) {
   const row=Math.floor(index/columns),col=index%columns,y=canvas.height-(row+1)*height;
   renderer.setViewport(col*width,y,width,height);renderer.setScissor(col*width,y,width,height);renderer.render(scene,camera);
   const label=document.createElement('label');label.textContent=def.label;label.style.left=col*width+'px';label.style.top=row*height+'px';document.querySelector('#labels').append(label);
-  stats.push({kind,draws:model.children.length,triangles:renderer.info.render.triangles});
+  stats.push({kind,symbol:def.symbol??0,draws:model.children.length,triangles:renderer.info.render.triangles});
   scene.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
 }
 window.galleryStats=stats;
@@ -71,12 +71,21 @@ try {
     const canvas = document.querySelector('canvas'), copy=document.createElement('canvas');copy.width=canvas.width;copy.height=canvas.height;
     const ctx=copy.getContext('2d');ctx.drawImage(canvas,0,0);
     return window.galleryStats.map((entry,index)=>{
-      const {data}=ctx.getImageData(index%4*320,Math.floor(index/4)*290,320,290),colors=new Set();
-      for(let i=0;i<data.length;i+=64)colors.add(data[i]+','+data[i+1]+','+data[i+2]);
-      return {...entry,colors:colors.size};
+      const {data}=ctx.getImageData(index%4*320,Math.floor(index/4)*290,320,290),colors=new Set(),counts=new Map();
+      for(let i=0;i<data.length;i+=64){const key=data[i]+','+data[i+1]+','+data[i+2];colors.add(key);counts.set(key,(counts.get(key)??0)+1);}
+      // Pixels that clearly differ from the most common color (the floor), for flat marks on the floor.
+      const floor=[...counts.entries()].sort((a,b)=>b[1]-a[1])[0][0].split(',').map(Number);
+      let marked=0;
+      for(let i=0;i<data.length;i+=8)if(Math.max(Math.abs(data[i]-floor[0]),Math.abs(data[i+1]-floor[1]),Math.abs(data[i+2]-floor[2]))>40)marked+=1;
+      return {...entry,colors:colors.size,marked};
     });
   });
-  for (const entry of stats) assert.ok(entry.colors > 40, `${entry.kind}: blank canvas (${entry.colors} colors)`);
+  // Flat marks on the floor (footprints, blood, glass, the chalk outline) have few colors, so check that they visibly mark the floor instead.
+  const flat = entry => ['footprints', 'bloodPool', 'brokenGlass'].includes(entry.kind) || (entry.kind === 'fallenPerson' && entry.symbol === 2);
+  for (const entry of stats) {
+    if (flat(entry)) assert.ok(entry.marked > 10, `${entry.kind} ${entry.symbol}: no visible mark (${entry.marked} pixels)`);
+    else assert.ok(entry.colors > 40, `${entry.kind}: blank canvas (${entry.colors} colors)`);
+  }
   for (let part = 0; part * 870 < galleryHeight; part += 1) await page.screenshot({ path: `${output}/catalog-${part + 1}.png`, clip: { x: 0, y: part * 870, width: 1280, height: Math.min(870, galleryHeight - part * 870) } });
   console.log(JSON.stringify(stats));
 } finally {

@@ -441,3 +441,282 @@ export function spiralPlantTopView(w: number, h: number): SpiralPlantTopView {
     }),
   };
 }
+
+// ---- 事件・調査の印（足跡・番号の印・倒れた人・血・割れたガラス） ----
+// どれも床に置く平らな物か低い物なので、上から見た形をここで決め、2Dはそのまま描き、3Dはその形で薄い板や立体を作る
+
+// 決まった並びの乱数（描き直しても形が変わらないように）
+function seeded(seed: number): () => number {
+  let value = seed >>> 0;
+  return () => {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+}
+
+// 範囲（幅 w × 奥行 h の内側）からはみ出さないように楕円を縮める
+function fitEllipse(piece: StoneSlab, w: number, h: number): StoneSlab {
+  const c = Math.cos(piece.angle), s = Math.sin(piece.angle);
+  const reachX = Math.hypot(piece.rx * c, piece.ry * s), reachY = Math.hypot(piece.rx * s, piece.ry * c);
+  const k = Math.min(1, (w / 2 - Math.abs(piece.x)) / reachX, (h / 2 - Math.abs(piece.y)) / reachY);
+  return k >= 1 ? piece : { ...piece, rx: piece.rx * Math.max(0.05, k), ry: piece.ry * Math.max(0.05, k) };
+}
+
+// 足跡: 奥（-y）へ向かって左右交互に続く。靴は前と踵の2つの楕円、素足は足の裏・踵・5本の指
+export function footprintTrail(w: number, h: number, bare = false): StoneSlab[] {
+  const steps = Math.max(2, Math.round(h / 42));
+  const pitch = h / steps;
+  const length = Math.min(pitch * 0.82, 28, w * 0.7);
+  const width = length * 0.4;
+  const offset = Math.min(Math.max(0, w / 2 - width * 0.7), Math.max(width * 0.75, w * 0.18));
+  const pieces: StoneSlab[] = [];
+  for (let i = 0; i < steps; i += 1) {
+    const left = i % 2 === 0;
+    const side = left ? -1 : 1;
+    const cx = side * offset, cy = h / 2 - pitch * (i + 0.5);
+    // つま先が少し外を向く
+    const turn = side * 0.12;
+    const ax = Math.sin(turn), ay = -Math.cos(turn);
+    const bx = -ay * side, by = ax * side;
+    // along: つま先の向き、across: 足の外側の向き
+    const put = (along: number, across: number, rx: number, ry: number) =>
+      pieces.push(fitEllipse({ x: cx + ax * along + bx * across, y: cy + ay * along + by * across, rx, ry, angle: Math.atan2(ay, ax) }, w, h));
+    if (bare) {
+      put(length * 0.06, width * 0.04, length * 0.28, width * 0.44);
+      put(-length * 0.31, 0, length * 0.18, width * 0.34);
+      const toes: [number, number, number][] = [[-0.3, 0.44, 0.22], [-0.04, 0.45, 0.15], [0.16, 0.42, 0.14], [0.33, 0.38, 0.12], [0.47, 0.32, 0.11]];
+      for (const [across, along, size] of toes) put(length * along, width * across, width * size, width * size);
+    } else {
+      put(length * 0.16, 0, length * 0.33, width * 0.5);
+      put(-length * 0.34, 0, length * 0.15, width * 0.42);
+    }
+  }
+  return pieces;
+}
+
+// 番号の印: 三角の札（外の三角が床、内の三角が上の面）か、丸い札。番号は上の面の中央に書く
+export interface MarkerShape {
+  outer: Point2[];
+  inner: Point2[];
+  // 番号の中心と、1〜2文字のときの文字の大きさ（cm）
+  label: { x: number; y: number; size: number };
+}
+
+export function evidenceMarkerShape(w: number, h: number, variant = 0): MarkerShape {
+  if (variant === 1) {
+    const ring = (k: number) => Array.from({ length: 32 }, (_, i): Point2 => {
+      const a = (i / 32) * Math.PI * 2;
+      return [Math.cos(a) * (w / 2) * k, Math.sin(a) * (h / 2) * k];
+    });
+    return { outer: ring(1), inner: ring(0.82), label: { x: 0, y: 0, size: Math.min(w, h) * 0.46 } };
+  }
+  const outer: Point2[] = [[0, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
+  // 三角の重心へ向かってすぼめた上の面
+  const cy = h / 6;
+  const inner = outer.map(([x, y]): Point2 => [x * 0.46, cy + (y - cy) * 0.46]);
+  return { outer, inner, label: { x: 0, y: cy, size: Math.min(w, h) * 0.26 } };
+}
+
+// 番号の文字の大きさ（cm）。文字が多いときは上の面に収まるよう小さくする
+export function markerTextSize(shape: MarkerShape, text: string): number {
+  const chars = Math.max(1, [...text].length);
+  return chars <= 2 ? shape.label.size : shape.label.size * (2 / chars) * 1.15;
+}
+
+// 3Dの上の面の模様（番号の画像）が覆う正方形の一辺（cm）。番号の画像の中央が上の面の中央に来る
+export function markerTextureSpan(shape: MarkerShape): number {
+  return shape.label.size * 2.6;
+}
+
+// 倒れた人: 体を、太さのある線（両端が丸い棒）の集まりで表す。頭が奥（-y）
+export interface BodyPart {
+  a: Point2;
+  b: Point2;
+  r: number;
+  // 3Dで肌（頭・手・足先）と服を分ける
+  skin: boolean;
+}
+
+// 幅100cm × 奥行180cm のときの形。0: うつぶせに倒れた形、1: 手足を広げてあおむけ
+const FALLEN_POSES: [Point2, Point2, number, boolean][][] = [
+  [
+    [[6, -73], [6, -73], 11, true],
+    [[3, -54], [-1, 2], 17, false],
+    [[-1, 2], [0, 12], 15, false],
+    [[-14, -48], [-30, -64], 6.5, false],
+    [[-30, -64], [-24, -80], 5.5, false],
+    [[-23, -83], [-23, -83], 5, true],
+    [[19, -46], [33, -24], 6.5, false],
+    [[33, -24], [28, 1], 5.5, false],
+    [[27, 6], [27, 6], 5, true],
+    [[-8, 14], [-12, 50], 8.5, false],
+    [[-12, 50], [-14, 78], 6.5, false],
+    [[-14, 79], [-18, 84], 4.5, true],
+    [[8, 14], [30, 40], 8.5, false],
+    [[30, 40], [24, 70], 6.5, false],
+    [[25, 72], [31, 77], 4.5, true],
+  ],
+  [
+    [[0, -73], [0, -73], 11, true],
+    [[0, -54], [0, 0], 17, false],
+    [[0, 0], [0, 10], 15, false],
+    [[-15, -48], [-33, -38], 6.5, false],
+    [[-33, -38], [-42, -23], 5.5, false],
+    [[-43, -19], [-43, -19], 5, true],
+    [[15, -48], [33, -38], 6.5, false],
+    [[33, -38], [42, -23], 5.5, false],
+    [[43, -19], [43, -19], 5, true],
+    [[-8, 12], [-20, 46], 8.5, false],
+    [[-20, 46], [-27, 76], 6.5, false],
+    [[-28, 79], [-31, 84], 4.5, true],
+    [[8, 12], [20, 46], 8.5, false],
+    [[20, 46], [27, 76], 6.5, false],
+    [[28, 79], [31, 84], 4.5, true],
+  ],
+];
+
+// 人の形は縦横の比を変えずに、範囲に収まる大きさで中央に置く（引き伸ばすと腕や脚が体から離れてしまうため）
+export function fallenPersonParts(w: number, h: number, pose = 0): BodyPart[] {
+  const scale = Math.min(w / 100, h / 180);
+  return (FALLEN_POSES[pose] ?? FALLEN_POSES[0]).map(([a, b, r, skin]) => ({ a: [a[0] * scale, a[1] * scale], b: [b[0] * scale, b[1] * scale], r: r * scale, skin }));
+}
+
+// チョークの線の太さ（cm）
+export const CHALK_WIDTH = 2.4;
+
+const outlineCache = new Map<string, Point2[]>();
+
+// 体の部品を合わせた形の外側の輪郭（cm）。2Dの線と3Dのチョークの線の両方がこの点を通る
+export function fallenPersonOutline(w: number, h: number, pose = 0): Point2[] {
+  const key = `${w}x${h}:${pose}`;
+  const cached = outlineCache.get(key);
+  if (cached) return cached;
+  const parts = fallenPersonParts(w, h, pose);
+  // 体からの距離（中で負）。部品ごとの距離のうち最小
+  const field = (x: number, y: number) => {
+    let best = Infinity;
+    for (const { a, b, r } of parts) {
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const t = dx || dy ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy))) : 0;
+      best = Math.min(best, Math.hypot(x - a[0] - dx * t, y - a[1] - dy * t) - r);
+    }
+    return best;
+  };
+  const cell = Math.max(0.6, Math.min(w, h) / 70);
+  const cols = Math.ceil(w / cell) + 2, rows = Math.ceil(h / cell) + 2;
+  const x0 = -w / 2 - cell, y0 = -h / 2 - cell;
+  const values: number[] = [];
+  for (let j = 0; j <= rows; j += 1) for (let i = 0; i <= cols; i += 1) values.push(field(x0 + i * cell, y0 + j * cell));
+  const at = (i: number, j: number) => values[j * (cols + 1) + i];
+  // マス目の辺の上で、距離が0になる所。辺は「横: h,i,j」「縦: v,i,j」の名前で呼ぶ
+  const cross = (edge: string): Point2 => {
+    const [kind, si, sj] = edge.split(",");
+    const i = Number(si), j = Number(sj);
+    const [i2, j2] = kind === "h" ? [i + 1, j] : [i, j + 1];
+    const v1 = at(i, j), v2 = at(i2, j2), t = v1 / (v1 - v2);
+    return [x0 + (i + (i2 - i) * t) * cell, y0 + (j + (j2 - j) * t) * cell];
+  };
+  // 輪郭の線分（辺から辺へ）。外側を左に見て一周する向きにつなぐ
+  const next = new Map<string, string>();
+  for (let j = 0; j < rows; j += 1) {
+    for (let i = 0; i < cols; i += 1) {
+      const top = `h,${i},${j}`, right = `v,${i + 1},${j}`, bottom = `h,${i},${j + 1}`, left = `v,${i},${j}`;
+      const code = (at(i, j) < 0 ? 1 : 0) | (at(i + 1, j) < 0 ? 2 : 0) | (at(i + 1, j + 1) < 0 ? 4 : 0) | (at(i, j + 1) < 0 ? 8 : 0);
+      const segments: [string, string][] = ({
+        1: [[left, top]], 2: [[top, right]], 3: [[left, right]], 4: [[right, bottom]],
+        5: [[left, top], [right, bottom]], 6: [[top, bottom]], 7: [[left, bottom]], 8: [[bottom, left]],
+        9: [[bottom, top]], 10: [[top, right], [bottom, left]], 11: [[bottom, right]], 12: [[right, left]],
+        13: [[right, top]], 14: [[top, left]],
+      } as Record<number, [string, string][]>)[code] ?? [];
+      for (const [from, to] of segments) next.set(from, to);
+    }
+  }
+  // いちばん長くつながった輪（体の外側の輪郭）を取る
+  let longest: string[] = [];
+  const used = new Set<string>();
+  for (const start of next.keys()) {
+    if (used.has(start)) continue;
+    const loop: string[] = [];
+    for (let edge: string | undefined = start; edge && !used.has(edge); edge = next.get(edge)) {
+      used.add(edge);
+      loop.push(edge);
+    }
+    if (loop.length > longest.length) longest = loop;
+  }
+  const outline = longest.map(cross);
+  outlineCache.set(key, outline);
+  return outline;
+}
+
+// 血: なめらかな形（池と同じく、隣り合う点の中点を通る2次曲線でつなぐ）と、小さな滴（楕円）
+export interface BloodShape {
+  blobs: Point2[][];
+  drops: StoneSlab[];
+}
+
+function blob(cx: number, cy: number, rx: number, ry: number, radii: number[], turn = 0): Point2[] {
+  return radii.map((k, i): Point2 => {
+    const a = (i / radii.length) * Math.PI * 2 + turn;
+    return [cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k];
+  });
+}
+
+// 0: 血だまり、1: 飛び散った血、2: 引きずった跡（手前のたまりから奥へ伸びる）
+export function bloodShape(w: number, h: number, variant = 0): BloodShape {
+  const random = seeded(variant === 1 ? 4021 : variant === 2 ? 977 : 1318);
+  const drops: StoneSlab[] = [];
+  const drop = (x: number, y: number, rx: number, ry: number, angle = 0) => drops.push(fitEllipse({ x, y, rx, ry, angle }, w, h));
+  if (variant === 1) {
+    const core = blob(0, 0, w * 0.17, h * 0.17, [1, 0.8, 0.95, 0.72, 1, 0.84, 0.9, 0.76, 0.98, 0.82]);
+    for (let i = 0; i < 18; i += 1) {
+      const a = (i / 18) * Math.PI * 2 + random() * 0.3;
+      const reach = 0.24 + random() * 0.22;
+      const size = Math.min(w, h) * (0.05 - reach * 0.06 + random() * 0.012);
+      // 外へ飛んだ向きに細長い滴
+      drop(Math.cos(a) * w * reach, Math.sin(a) * h * reach, size * 1.7, size * 0.8, a);
+    }
+    return { blobs: [core], drops };
+  }
+  if (variant === 2) {
+    // 手前のたまりから、奥へ向かって細くなりながら左右に揺れて伸びる跡
+    const points: Point2[] = [];
+    const steps = 9;
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps, y = h * (0.28 - t * 0.74), half = w * (0.2 - t * 0.12) * (0.85 + random() * 0.3);
+      points.push([Math.sin(t * 5) * w * 0.06 + half, y]);
+    }
+    for (let i = steps; i >= 0; i -= 1) {
+      const t = i / steps, y = h * (0.28 - t * 0.74) + h * 0.02, half = w * (0.2 - t * 0.12) * (0.85 + random() * 0.3);
+      points.push([Math.sin(t * 5) * w * 0.06 - half, y]);
+    }
+    const pool = blob(w * 0.02, h * 0.3, w * 0.3, h * 0.15, [1, 0.86, 0.96, 0.8, 1, 0.9, 0.84, 0.97]);
+    for (let i = 0; i < 6; i += 1) drop((random() - 0.5) * w * 0.6, h * (0.2 - random() * 0.6), Math.min(w, h) * 0.025, Math.min(w, h) * 0.02, random() * Math.PI);
+    return { blobs: [pool, points], drops };
+  }
+  const main = blob(-w * 0.04, -h * 0.02, w * 0.38, h * 0.38, [1, 0.86, 0.95, 0.78, 0.92, 1.02, 0.84, 0.97, 0.8, 0.93, 1, 0.82, 0.9, 0.96], 0.3);
+  const small = blob(w * 0.33, h * 0.31, w * 0.1, h * 0.09, [1, 0.8, 0.95, 0.85, 1, 0.78]);
+  drop(-w * 0.4, h * 0.3, Math.min(w, h) * 0.035, Math.min(w, h) * 0.03);
+  drop(w * 0.4, -h * 0.34, Math.min(w, h) * 0.03, Math.min(w, h) * 0.026);
+  drop(-w * 0.18, -h * 0.44, Math.min(w, h) * 0.028, Math.min(w, h) * 0.022, 0.6);
+  drop(w * 0.12, h * 0.44, Math.min(w, h) * 0.022, Math.min(w, h) * 0.02);
+  return { blobs: [main, small], drops };
+}
+
+// 割れたガラス: 中央に大きめ、外ほど小さい破片（幅・奥行に対する割合の座標）
+const GLASS_SHARDS: Point2[][] = [
+  [[-0.08, -0.06], [0.12, -0.13], [0.05, 0.09]],
+  [[0.13, -0.02], [0.31, 0.04], [0.17, 0.15]],
+  [[-0.29, -0.1], [-0.12, -0.21], [-0.16, 0.01]],
+  [[-0.31, 0.12], [-0.14, 0.06], [-0.2, 0.27]],
+  [[0.02, 0.17], [0.19, 0.23], [0.07, 0.35], [-0.05, 0.27]],
+  [[0.28, -0.31], [0.39, -0.23], [0.31, -0.16]],
+  [[-0.41, -0.35], [-0.3, -0.37], [-0.34, -0.26]],
+  [[0.36, 0.26], [0.45, 0.31], [0.38, 0.4]],
+  [[-0.07, -0.37], [0.04, -0.42], [0.01, -0.3]],
+  [[-0.45, 0.36], [-0.38, 0.29], [-0.36, 0.41]],
+  [[0.2, -0.45], [0.27, -0.41], [0.18, -0.38]],
+];
+
+export function glassShards(w: number, h: number): Point2[][] {
+  return GLASS_SHARDS.map((shard) => shard.map(([x, y]): Point2 => [x * w, y * h]));
+}

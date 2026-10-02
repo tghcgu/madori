@@ -73,7 +73,12 @@ export type FurnitureKind =
   | "trashCan"
   | "coatStand"
   | "crib"
-  | "catTower";
+  | "catTower"
+  | "evidenceMarker"
+  | "footprints"
+  | "fallenPerson"
+  | "bloodPool"
+  | "brokenGlass";
 export interface FurnitureDef {
   label: string;
   w: number;
@@ -158,6 +163,11 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   coatStand: { label: "コートハンガー", w: 50, h: 50 },
   crib: { label: "ベビーベッド", w: 70, h: 120 },
   catTower: { label: "キャットタワー", w: 60, h: 60, height: 170 },
+  evidenceMarker: { label: "番号の印", w: 24, h: 24 },
+  footprints: { label: "足跡", w: 60, h: 200 },
+  fallenPerson: { label: "倒れた人", w: 100, h: 180 },
+  bloodPool: { label: "血だまり", w: 90, h: 70 },
+  brokenGlass: { label: "割れたガラス", w: 80, h: 60 },
 };
 
 // 家具ごとの別デザインの名前（1番以降。0番は標準）。2Dの記号と3Dのモデルが、この番号で同じデザインになる
@@ -201,6 +211,10 @@ export const FURNITURE_VARIANTS: Partial<Record<FurnitureKind, string[]>> = {
   shrub: ["生垣"],
   fence: ["ブロック塀"],
   flowerBed: ["丸い花壇"],
+  evidenceMarker: ["丸い札"],
+  footprints: ["素足"],
+  fallenPerson: ["手足を広げて", "チョークの線"],
+  bloodPool: ["飛び散った血", "引きずった跡"],
 };
 
 // 2Dの記号だけのデザイン（番号）。3Dは標準の形のまま

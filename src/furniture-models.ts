@@ -10,6 +10,8 @@ import {
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
   SPIRAL_POT_SCALE, spiralLeaves,
+  CHALK_WIDTH, bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextureSpan,
+  type StoneSlab,
 } from "./furniture-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
@@ -197,6 +199,101 @@ function shapeSlab(shape: THREE.Shape, thickness: number, top: number, m: Model,
   const mesh = m.mesh(new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: segments }), [0, top, 0], material);
   mesh.rotation.x = Math.PI / 2;
   return mesh;
+}
+
+// ---- 床に置く平らな印のための形 ----
+
+// 床に貼った薄い楕円（足跡・血の滴）。2Dと同じ位置・大きさ・向き
+function flatEllipse(m: Model, piece: StoneSlab, thickness: number, material: Material): void {
+  const disc = m.cylinder(1, 1, thickness, [piece.x / 100, thickness / 2, piece.y / 100], material, 20);
+  disc.scale.set(piece.rx / 100, 1, piece.ry / 100);
+  disc.rotation.y = -piece.angle;
+}
+
+// 2Dと同じく、隣り合う点の中点を通る2次曲線でつないだ、なめらかな輪郭（m）
+function smoothClosedShape(points: Point2[]): THREE.Shape {
+  const shape = new THREE.Shape();
+  const at = (i: number) => points[(i + points.length) % points.length];
+  const mid = (i: number) => new THREE.Vector2((at(i)[0] + at(i + 1)[0]) / 200, (at(i)[1] + at(i + 1)[1]) / 200);
+  const start = mid(-1);
+  shape.moveTo(start.x, start.y);
+  points.forEach((point, i) => {
+    const end = mid(i);
+    shape.quadraticCurveTo(point[0] / 100, point[1] / 100, end.x, end.y);
+  });
+  return shape;
+}
+
+// 三角形の並びを、上から見た2Dの点（cm）と高さ（m）から作る。表の面が外（または上）を向くようにそろえる
+function facesGeometry(triangles: [number, number, number][][], outward: (center: THREE.Vector3) => THREE.Vector3, uv?: (point: [number, number, number]) => [number, number]): THREE.BufferGeometry {
+  const positions: number[] = [], uvs: number[] = [];
+  for (const triangle of triangles) {
+    const [a, b, c] = triangle.map(([x, y, z]) => new THREE.Vector3(x, y, z));
+    const normal = b.clone().sub(a).cross(c.clone().sub(a));
+    const center = a.clone().add(b).add(c).divideScalar(3);
+    const ordered = normal.dot(outward(center)) >= 0 ? triangle : [triangle[0], triangle[2], triangle[1]];
+    for (const point of ordered) {
+      positions.push(...point);
+      if (uv) uvs.push(...uv(point));
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  if (uv) geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+// 床の輪郭（outer）から上の面の輪郭（inner）へすぼまる台の側面。2つの輪郭は同じ数の点を同じ順に並べる
+function frustumSides(outer: Point2[], inner: Point2[], top: number, bottom = 0): THREE.BufferGeometry {
+  const triangles: [number, number, number][][] = [];
+  const low = ([x, y]: Point2): [number, number, number] => [x / 100, bottom, y / 100];
+  const high = ([x, y]: Point2): [number, number, number] => [x / 100, top, y / 100];
+  outer.forEach((point, i) => {
+    const next = (i + 1) % outer.length;
+    triangles.push([low(point), low(outer[next]), high(inner[next])], [low(point), high(inner[next]), high(inner[i])]);
+  });
+  const cx = outer.reduce((sum, [x]) => sum + x, 0) / outer.length / 100, cz = outer.reduce((sum, [, y]) => sum + y, 0) / outer.length / 100;
+  return facesGeometry(triangles, (center) => new THREE.Vector3(center.x - cx, 0, center.z - cz));
+}
+
+// 上向きの平らな面（凸の輪郭を扇形に分ける）
+function flatTopFace(points: Point2[], y: number, uv?: (point: [number, number, number]) => [number, number]): THREE.BufferGeometry {
+  const vertex = ([x, z]: Point2): [number, number, number] => [x / 100, y, z / 100];
+  const triangles: [number, number, number][][] = [];
+  for (let i = 1; i < points.length - 1; i += 1) triangles.push([vertex(points[0]), vertex(points[i]), vertex(points[i + 1])]);
+  return facesGeometry(triangles, () => new THREE.Vector3(0, 1, 0), uv);
+}
+
+// 輪郭に沿った細い帯（チョークの線）。床の少し上に、上向きで置く
+function ribbonGeometry(loop: Point2[], widthCm: number, y: number): THREE.BufferGeometry {
+  const half = widthCm / 2;
+  const at = (i: number) => loop[(i + loop.length) % loop.length];
+  const sides = loop.map((point, i) => {
+    const [px, py] = at(i - 1), [nx, ny] = at(i + 1);
+    const dx = nx - px, dy = ny - py, length = Math.hypot(dx, dy) || 1;
+    const ox = (-dy / length) * half, oy = (dx / length) * half;
+    return [[(point[0] + ox) / 100, y, (point[1] + oy) / 100], [(point[0] - ox) / 100, y, (point[1] - oy) / 100]] as [number, number, number][];
+  });
+  const triangles: [number, number, number][][] = [];
+  sides.forEach(([a, b], i) => {
+    const [c, d] = sides[(i + 1) % sides.length];
+    triangles.push([a, b, d], [a, d, c]);
+  });
+  return facesGeometry(triangles, () => new THREE.Vector3(0, 1, 0));
+}
+
+// 両端が丸い棒（体の部品）を床に寝かせて置く。高さは flatten 倍につぶす
+function lyingCapsule(m: Model, a: Point2, b: Point2, radiusCm: number, flatten: number, material: Material): void {
+  const r = radiusCm / 100;
+  const start = new THREE.Vector3(a[0] / 100, 0, a[1] / 100), end = new THREE.Vector3(b[0] / 100, 0, b[1] / 100);
+  const length = start.distanceTo(end);
+  const geometry = length > 1e-4 ? new THREE.CapsuleGeometry(r, length, 6, 14) : new THREE.SphereGeometry(r, 16, 12);
+  if (length > 1e-4) geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize()));
+  geometry.scale(1, flatten, 1);
+  const center = start.add(end).multiplyScalar(0.5);
+  geometry.translate(center.x, r * flatten, center.z);
+  m.mesh(geometry, [0, 0, 0], material);
 }
 
 // 2Dの記号と同じ木目の曲線と節を、天板の上に細い溝として付ける（丸い天板では縁の内側だけ）
@@ -1952,6 +2049,72 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
           m.box(deck.w * w, 0.03, deck.h * d, x, y - 0.015, z, decks[i % 2], 0.01);
         }
       });
+      break;
+    }
+    case "evidenceMarker": {
+      // 2Dと同じ三角（または丸）の札。床の輪郭から上の面へすぼまり、上の面に番号を書く（番号の画像は main.ts で貼る）
+      const body = m.material("marker", 0xf2c230, 0.55, 0, true);
+      // 上の面も札と同じ色。main.ts で番号の画像を貼るときは、画像の色をそのまま見せる
+      const face = m.material("marker-label", 0xf2c230, 0.55, 0, true);
+      const shape = evidenceMarkerShape(item.w, item.h, variant);
+      const top = Math.min(w, d) * (variant === 1 ? 0.22 : 0.55);
+      // 床ぎわは黒い帯（上から見ると、2Dの外側の線と同じ所）
+      const base = m.material("marker-base", 0x2c2c2a, 0.6);
+      const band = 0.14;
+      const middle = shape.outer.map(([x, y], i): Point2 => [x + (shape.inner[i][0] - x) * band, y + (shape.inner[i][1] - y) * band]);
+      m.mesh(frustumSides(shape.outer, middle, top * band, 0), [0, 0, 0], base);
+      m.mesh(frustumSides(middle, shape.inner, top, top * band), [0, 0, 0], body);
+      const span = markerTextureSpan(shape);
+      m.mesh(flatTopFace(shape.inner, top, ([x, , z]) => [0.5 + (x * 100 - shape.label.x) / span, 0.5 - (z * 100 - shape.label.y) / span]), [0, 0, 0], face);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "footprints": {
+      // 2Dと同じ位置・大きさ・向きの、床に付いた薄い跡
+      const ink = m.material("footprint-mark", 0x5d544b, 0.92, 0, true);
+      for (const piece of footprintTrail(item.w, item.h, variant === 1)) flatEllipse(m, piece, 0.002, ink);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "fallenPerson": {
+      if (variant === 2) {
+        // チョークの線: 標準の倒れた形の外側の輪郭を、床の上の細い白い帯にする
+        // 白い床でも見えるよう、白い線の両側に細い灰色のふちを付ける
+        const chalk = m.material("chalk", 0xf3f1ea, 0.95, 0, true);
+        const edge = m.material("chalk-edge", 0x6f6b63, 0.95);
+        const outline = fallenPersonOutline(item.w, item.h, 0);
+        m.mesh(ribbonGeometry(outline, CHALK_WIDTH + 1, 0.0015), [0, 0, 0], edge);
+        m.mesh(ribbonGeometry(outline, CHALK_WIDTH, 0.0025), [0, 0, 0], chalk);
+        m.reserveFootprint(w, d);
+        break;
+      }
+      // 2Dと同じ位置・太さの棒を寝かせた人の形。服と、肌（頭・手・足先）
+      const clothes = m.material("clothes", 0x5b6d80, 0.85, 0, true);
+      const skin = m.material("skin", 0xd8b39a, 0.7);
+      for (const part of fallenPersonParts(item.w, item.h, variant)) lyingCapsule(m, part.a, part.b, part.r, part.a[0] === part.b[0] && part.a[1] === part.b[1] ? 0.85 : 0.68, part.skin ? skin : clothes);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "bloodPool": {
+      // 2Dと同じ輪郭の、つやのある薄い血の跡と滴
+      const blood = m.material("blood", 0x7a1010, 0.2, 0.05, true);
+      const shape = bloodShape(item.w, item.h, variant);
+      for (const blob of shape.blobs) shapeSlab(smoothClosedShape(blob), 0.003, 0.003, m, blood, 8);
+      for (const drop of shape.drops) flatEllipse(m, drop, 0.002, blood);
+      m.reserveFootprint(w, d);
+      break;
+    }
+    case "brokenGlass": {
+      // 2Dと同じ形の、床に散らばった薄いガラスの破片
+      const shard = m.glass("glass-shard", 0xa6d2e2, 0.6);
+      const edge = m.material("glass-edge", 0x5d8fa4, 0.2, 0.1);
+      for (const piece of glassShards(item.w, item.h)) {
+        const outline = new THREE.Shape(piece.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
+        shapeSlab(outline, 0.004, 0.004, m, shard, 1);
+        // 破片の縁（上から見ると2Dの線と同じ所）
+        m.mesh(ribbonGeometry(piece, 0.8, 0.0045), [0, 0, 0], edge);
+      }
+      m.reserveFootprint(w, d);
       break;
     }
     default: {

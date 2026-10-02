@@ -13,6 +13,8 @@ import {
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
+  CHALK_WIDTH, bloodShape, evidenceMarkerShape, fallenPersonOutline, fallenPersonParts, footprintTrail, glassShards, markerTextSize, markerTextureSpan,
+  type Point2, type StoneSlab,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -78,6 +80,8 @@ interface Furniture {
   symbol?: number;
   // 木やフェンスなど、高さを変えられる家具の高さ cm。標準の高さのときは持たない
   height?: number;
+  // 番号の印に書く文字（番号）。番号の印だけが持つ
+  markerLabel?: string;
   locked?: boolean;
 }
 
@@ -314,6 +318,10 @@ const SYMBOL_DRAWS: Partial<Record<FurnitureKind, SymbolDraw[]>> = {
   shrub: [drawHedge],
   fence: [drawBlockWall],
   flowerBed: [drawRoundFlowerBed],
+  evidenceMarker: [(w, h) => drawEvidenceMarker(w, h, 1)],
+  footprints: [(w, h) => drawFootprints(w, h, true)],
+  fallenPerson: [(w, h) => drawFallenPerson(w, h, 1), drawChalkOutline],
+  bloodPool: [(w, h) => drawBlood(w, h, 1), (w, h) => drawBlood(w, h, 2)],
 };
 
 const SYMBOL_VARIANTS: Partial<Record<FurnitureKind, SymbolVariant[]>> = Object.fromEntries(
@@ -342,12 +350,23 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"] },
   { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
   { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
+  { label: "事件・調査", kinds: ["evidenceMarker", "footprints", "fallenPerson", "bloodPool", "brokenGlass"] },
 ];
+
+// 床に付いた跡（足跡・血）は、2Dの色をそのまま跡の塗りにする。色を決めていないときの塗り
+const MARK_FILLS: Partial<Record<FurnitureKind, string>> = { footprints: "#6b625a", bloodPool: "#a3201c" };
+// 番号の印に書ける文字数
+const MAX_MARKER_LABEL = 4;
 // 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
 const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
 
 // 検索で表記ゆれ（ひらがな・別名）を拾うための語。表示名と分類名は自動で検索対象になる
 const SEARCH_KEYWORDS: Record<string, string> = {
+  evidenceMarker: "ばんごう 番号 数字 すうじ 印 しるし マーカー 証拠 しょうこ 札 ふだ 事件 じけん 調査 ちょうさ 探索 TRPG",
+  footprints: "あしあと 足 あし 靴 くつ 素足 はだし 跡 あと 痕跡 こんせき 事件 じけん TRPG",
+  fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG",
+  bloodPool: "ち 血 血痕 けっこん 血だまり ちだまり しぶき 跡 あと 事件 じけん TRPG",
+  brokenGlass: "がらす ガラス 破片 はへん 割れ われ 窓 まど 事件 じけん TRPG",
   sofa: "ソファー", sofaCorner: "ソファー コーナー", armchair: "椅子 いす イス チェア ソファー ひとりがけ",
   chair: "いす イス チェア", stool: "椅子 いす イス", bench: "椅子 いす イス 屋外",
   diningTable: "テーブル 食卓 しょくたく 椅子 いす", roundTable: "まるテーブル", table: "座卓 ちゃぶ台",
@@ -670,6 +689,7 @@ function normalizeEntity(value: unknown): Entity {
       ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d),
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
+      markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
       height: FURNITURE_DEFS[entity.kind].height !== undefined && finite(entity.height)
         ? clamp(Math.round(entity.height!), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
         : undefined,
@@ -1879,7 +1899,7 @@ function handlePointerDown(event: PointerEvent): void {
       w: base.w,
       h: base.h,
       rotation: 0,
-      ...rememberedSymbol(activeFurniture),
+      ...newFurnitureDetails(activeFurniture),
     };
     activeEntities().push(entity);
     state.selectedId = entity.id;
@@ -2029,7 +2049,7 @@ function handleThreePointerDown(event: PointerEvent): void {
     const point = threeFloorPoint(event, floorBaseY(floorIndex) + floorTopOffset(floorIndex));
     if (!point) return;
     const base = FURNITURE_DEFS[activeFurniture];
-    furnitureItem = { id: newId("furniture"), type: "furniture", kind: activeFurniture, x: snap(point.x - base.w / 2), y: snap(point.y - base.h / 2), w: base.w, h: base.h, rotation: 0, ...rememberedSymbol(activeFurniture) };
+    furnitureItem = { id: newId("furniture"), type: "furniture", kind: activeFurniture, x: snap(point.x - base.w / 2), y: snap(point.y - base.h / 2), w: base.w, h: base.h, rotation: 0, ...newFurnitureDetails(activeFurniture) };
   } else if (activeTool === "select" && selected?.type === "furniture" && !isLocked(selected)) {
     furnitureItem = selected;
     floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === selected.id));
@@ -3042,10 +3062,11 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   if (furnitureItem.flip) ctx.scale(-1, 1);
   ctx.lineWidth = 1.4 / view.zoom;
   ctx.strokeStyle = solidColor(furnitureItem.color) ?? INK;
-  ctx.fillStyle = furnitureSymbolFill(furnitureItem.kind);
+  ctx.fillStyle = furnitureFill(furnitureItem);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h, furnitureItem.symbol ?? 0);
+  if (furnitureItem.kind === "evidenceMarker") drawMarkerLabel(furnitureItem);
   if (selected) {
     ctx.strokeStyle = "#2775d1";
     ctx.lineWidth = 2.2 / view.zoom;
@@ -3056,6 +3077,11 @@ function drawFurniture2d(furnitureItem: Furniture): void {
 }
 
 function furnitureSymbolFill(kind: FurnitureKind): string {
+  const mark = MARK_FILLS[kind];
+  if (mark) return mark;
+  if (kind === "evidenceMarker") return "#f4c430";
+  if (kind === "fallenPerson") return "#e4e0da";
+  if (kind === "brokenGlass") return "#dcedf4";
   if (["sofa", "sofa2", "sofaCorner", "armchair", "officeChair", "zaisu", "stool", "bed", "bedSemiDouble", "bedDouble", "bunkBed"].includes(kind)) return "#edf3f2";
   if (["table", "sideTable", "roundTable", "longTable", "desk", "deskL", "bench", "shelf", "closet", "wardrobe", "cupboard", "shoeCabinet"].includes(kind)) return "#f7f5f0";
   return "#ffffff";
@@ -3884,10 +3910,179 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       ctx.fill();
       break;
     }
+    case "evidenceMarker":
+      drawEvidenceMarker(w, h, 0);
+      break;
+    case "footprints":
+      drawFootprints(w, h, false);
+      break;
+    case "fallenPerson":
+      drawFallenPerson(w, h, 0);
+      break;
+    case "bloodPool":
+      drawBlood(w, h, 0);
+      break;
+    case "brokenGlass":
+      drawBrokenGlass(w, h);
+      break;
     default: {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
     }
   }
+}
+
+// ---- 事件・調査の印（形は furniture-shapes.ts の共通のデータ。3Dを真上から見た形と同じ） ----
+
+// 家具の記号の塗り。床に付いた跡は2Dの色で塗る
+function furnitureFill(item: Furniture): string {
+  return MARK_FILLS[item.kind] ? solidColor(item.color) ?? furnitureSymbolFill(item.kind) : furnitureSymbolFill(item.kind);
+}
+
+function traceLoop(points: Point2[]): void {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.closePath();
+}
+
+// 隣り合う点の中点を通る2次曲線でつないだ、なめらかな輪郭（3Dの形と同じつなぎ方）
+function traceSmoothLoop(points: Point2[]): void {
+  const at = (i: number) => points[(i + points.length) % points.length];
+  const mid = (i: number): Point2 => [(at(i)[0] + at(i + 1)[0]) / 2, (at(i)[1] + at(i + 1)[1]) / 2];
+  const start = mid(-1);
+  ctx.beginPath();
+  ctx.moveTo(start[0], start[1]);
+  points.forEach((point, i) => {
+    const end = mid(i);
+    ctx.quadraticCurveTo(point[0], point[1], end[0], end[1]);
+  });
+  ctx.closePath();
+}
+
+function fillPiece(piece: StoneSlab): void {
+  ctx.beginPath();
+  ctx.ellipse(piece.x, piece.y, piece.rx, piece.ry, piece.angle, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawEvidenceMarker(w: number, h: number, variant: number): void {
+  const shape = evidenceMarkerShape(w, h, variant);
+  traceLoop(shape.outer);
+  ctx.fill();
+  ctx.stroke();
+  traceLoop(shape.inner);
+  ctx.stroke();
+}
+
+// 番号の印の番号。印を反転しても、文字は裏返さない
+function drawMarkerLabel(item: Furniture): void {
+  const text = item.markerLabel ?? "";
+  if (!text) return;
+  const shape = evidenceMarkerShape(item.w, item.h, item.symbol ?? 0);
+  ctx.save();
+  if (item.flip) ctx.scale(-1, 1);
+  ctx.fillStyle = String(ctx.strokeStyle);
+  ctx.font = `700 ${markerTextSize(shape, text)}px ${TEXT_FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, shape.label.x, shape.label.y);
+  ctx.restore();
+}
+
+function drawFootprints(w: number, h: number, bare: boolean): void {
+  footprintTrail(w, h, bare).forEach(fillPiece);
+}
+
+function drawBlood(w: number, h: number, variant: number): void {
+  const shape = bloodShape(w, h, variant);
+  for (const blob of shape.blobs) {
+    traceSmoothLoop(blob);
+    ctx.fill();
+  }
+  shape.drops.forEach(fillPiece);
+}
+
+// 体の部品（両端が丸い棒）を同じ色で塗って1つの形にし、外側の輪郭だけを線で描く
+function drawFallenPerson(w: number, h: number, pose: number): void {
+  for (const { a, b, r } of fallenPersonParts(w, h, pose)) {
+    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    ctx.beginPath();
+    ctx.arc(a[0], a[1], r, angle + Math.PI / 2, angle + Math.PI * 1.5);
+    ctx.arc(b[0], b[1], r, angle - Math.PI / 2, angle + Math.PI / 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  traceLoop(fallenPersonOutline(w, h, pose));
+  ctx.stroke();
+}
+
+// 倒れた人の形の外側をなぞったチョークの線（3Dでは床の白い線）
+function drawChalkOutline(w: number, h: number): void {
+  ctx.save();
+  ctx.lineWidth = Math.max(ctx.lineWidth, CHALK_WIDTH);
+  traceLoop(fallenPersonOutline(w, h, 0));
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBrokenGlass(w: number, h: number): void {
+  for (const shard of glassShards(w, h)) {
+    traceLoop(shard);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+// 番号の印を置くときの番号。どの階にもある番号の印の、いちばん大きい番号の次
+function nextMarkerLabel(): string {
+  const numbers = state.floors
+    .flatMap((floor) => floor.entities)
+    .filter((entity): entity is Furniture => entity.type === "furniture" && entity.kind === "evidenceMarker")
+    .map((entity) => Number(entity.markerLabel))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  return String(Math.max(0, ...numbers) + 1);
+}
+
+// 新しく置く家具の、種類ごとの初めの設定（前に選んだデザイン。番号の印なら次の番号）
+function newFurnitureDetails(kind: FurnitureKind): { symbol?: number; markerLabel?: string } {
+  return { ...rememberedSymbol(kind), ...(kind === "evidenceMarker" ? { markerLabel: nextMarkerLabel() } : {}) };
+}
+
+// 番号の印の上の面（3D）に、2Dと同じ番号を書いた画像を貼る。札の色の上に、2Dの線の色で書く
+function applyMarkerLabel(group: THREE.Group, item: Furniture): void {
+  let body: THREE.MeshStandardMaterial | undefined;
+  let face: THREE.MeshStandardMaterial | undefined;
+  group.traverse((object) => {
+    const material = (object as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+    if (material?.name === "marker") body = material;
+    if (material?.name === "marker-label") face = material;
+  });
+  if (!face) return;
+  const shape = evidenceMarkerShape(item.w, item.h, item.symbol ?? 0);
+  const text = item.markerLabel ?? "";
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.fillStyle = `#${(body?.color ?? new THREE.Color(0xf2c230)).getHexString()}`;
+  context.fillRect(0, 0, size, size);
+  if (text) {
+    // 3Dでは反転した家具を鏡に映すので、文字を先に裏返しておく
+    if (item.flip) {
+      context.translate(size, 0);
+      context.scale(-1, 1);
+    }
+    context.fillStyle = solidColor(item.color) ?? INK;
+    context.font = `700 ${(markerTextSize(shape, text) / markerTextureSpan(shape)) * size}px ${TEXT_FONT}`;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(text, size / 2, size / 2);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  face.map = texture;
+  face.color.set(0xffffff);
+  face.needsUpdate = true;
 }
 
 // 木や植え込みの、丸いこぶが連なった輪郭。inner はこぶの付け根の半径（外枠に対する比）
@@ -3975,10 +4170,11 @@ function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: n
     if (item.flip) ctx.scale(-1, 1);
     ctx.lineWidth = 1 / scale;
     ctx.strokeStyle = solidColor(item.color) ?? INK;
-    ctx.fillStyle = furnitureSymbolFill(item.kind);
+    ctx.fillStyle = furnitureFill(item);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     drawFurnitureSymbol(item.kind, item.w, item.h, symbol);
+    if (item.kind === "evidenceMarker") drawMarkerLabel({ ...item, symbol });
   } finally {
     ctx = planContext;
   }
@@ -5137,6 +5333,7 @@ function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
 function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
   const floorTop = yBase === 0 ? 0.08 : 0;
   const group = buildFurnitureModel({ ...furnitureItem, rise: FLOOR_SPACING - floorTop });
+  if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
   const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
   group.position.set(pos.x, yBase + floorTop, pos.z);
   group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
@@ -5586,6 +5783,9 @@ function updatePropertiesPanel(): void {
       `</optgroup>`,
   ).join("");
   const defaultHeight = FURNITURE_DEFS[selectedFurniture.kind].height;
+  const markerRow = selectedFurniture.kind === "evidenceMarker"
+    ? `<label>番号（印に書く文字。${MAX_MARKER_LABEL}文字まで）<input id="markerLabelInput" value="${escapeHtml(selectedFurniture.markerLabel ?? "")}" maxlength="${MAX_MARKER_LABEL}" autocomplete="off" /></label>`
+    : "";
   const heightRow = defaultHeight !== undefined
     ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${MIN_FURNITURE_HEIGHT}" max="${MAX_FURNITURE_HEIGHT}" step="10" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
     : "";
@@ -5614,9 +5814,10 @@ function updatePropertiesPanel(): void {
         <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" ${placementDisabled} /></label>
       </div>
       ${heightRow}
+      ${markerRow}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
-      ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? INK)}
+      ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
       ${colorField("furnitureColor3dInput", "色 3D", selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8")}
     </div>
   `;
@@ -5629,7 +5830,10 @@ function updatePropertiesPanel(): void {
     selectedFurniture.h = def.h;
     setFurnitureSymbol(selectedFurniture, lastSymbolByKind[kind] ?? 0);
     delete selectedFurniture.height;
+    if (kind !== "evidenceMarker") delete selectedFurniture.markerLabel;
+    else selectedFurniture.markerLabel ??= nextMarkerLabel();
   });
+  bindInput("#markerLabelInput", (value) => (selectedFurniture.markerLabel = value.trim().slice(0, MAX_MARKER_LABEL)));
   bindNumber("#furnitureHeightInput", (value) => {
     const height = clamp(Math.round(value), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT);
     if (height === defaultHeight) delete selectedFurniture.height;
