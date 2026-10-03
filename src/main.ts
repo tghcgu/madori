@@ -6871,8 +6871,12 @@ function persistState(): void {
 
 // ---- ご意見・ご要望のフォーム ----
 
-// Google フォーム。「使っている版とブラウザ」の欄（entry.144245894）に、使っている環境を自動で入れて開く
-const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform";
+// Google フォーム。「使っている版とブラウザ」の欄（entry.144245894）に、使っている環境を自動で入れて開く。
+// 文章だけのフォーム（ログイン不要）と、画像も添えられるフォーム（Googleアカウントでのログインが必要）。画像付きは文章だけのものの複製
+const FEEDBACK_FORMS: { link: string; url: string }[] = [
+  { link: "#feedbackFormLink", url: "https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform" },
+  { link: "#feedbackImageFormLink", url: "https://docs.google.com/forms/d/e/1FAIpQLSfd6lucVdNQ5GqqXep8xos68t2Ri9CatBdMrap5dHaSH-EdeQ/viewform" },
+];
 const FEEDBACK_ENVIRONMENT_ENTRY = "entry.144245894";
 
 // 不具合を調べるときに役立つ、使っている環境の短い説明（間取りのデータは含めない）
@@ -6896,18 +6900,20 @@ function feedbackEnvironment(): string {
   ].join(" / ");
 }
 
-function feedbackFormUrl(): string {
-  return `${FEEDBACK_FORM_URL}?usp=pp_url&${FEEDBACK_ENVIRONMENT_ENTRY}=${encodeURIComponent(feedbackEnvironment())}`;
+function feedbackFormUrl(url: string): string {
+  return `${url}?usp=pp_url&${FEEDBACK_ENVIRONMENT_ENTRY}=${encodeURIComponent(feedbackEnvironment())}`;
 }
 
 // 開く直前の画面の大きさが入るよう、押したときにリンク先を作り直す
 function setupFeedbackForm(): void {
-  const link = document.querySelector<HTMLAnchorElement>("#feedbackFormLink");
-  if (!link) return;
-  const refresh = () => (link.href = feedbackFormUrl());
-  link.addEventListener("pointerdown", refresh);
-  link.addEventListener("focus", refresh);
-  refresh();
+  for (const form of FEEDBACK_FORMS) {
+    const link = document.querySelector<HTMLAnchorElement>(form.link);
+    if (!link) continue;
+    const refresh = () => (link.href = feedbackFormUrl(form.url));
+    link.addEventListener("pointerdown", refresh);
+    link.addEventListener("focus", refresh);
+    refresh();
+  }
 }
 
 // ---- 間取り専用版と、本体のお知らせ ----

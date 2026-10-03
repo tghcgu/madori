@@ -957,6 +957,10 @@ try {
   const filledIn = decodeURIComponent(new URL(formLink).searchParams.get('entry.144245894'));
   assert.match(filledIn, /^間取り専用版 \/ 版 [0-9a-f]{7} \/ (Edge|Chrome) \d+ \/ Windows \/ 画面 \d+×\d+ \/ 127\.0\.0\.1:\d+$/, filledIn);
   assert.equal(await page.locator('#feedbackFormLink').getAttribute('target'), '_blank');
+  // The form with images gets the same environment.
+  const imageFormLink = await page.locator('#feedbackImageFormLink').getAttribute('href');
+  assert.ok(imageFormLink.startsWith('https://docs.google.com/forms/d/e/1FAIpQLSfd6lucVdNQ5GqqXep8xos68t2Ri9CatBdMrap5dHaSH-EdeQ/viewform?usp=pp_url&entry.144245894='), imageFormLink);
+  assert.equal(decodeURIComponent(new URL(imageFormLink).searchParams.get('entry.144245894')), filledIn);
   assert.deepEqual((await saved()).floors, planBefore.floors, 'the same plan opens in both editions');
   await page.locator('[data-tool="select"]').click();
   const clue = await planPoint(260, 200);
