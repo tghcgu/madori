@@ -1186,6 +1186,13 @@ select:focus-visible {
   margin-top: 12px;
 }
 
+/* ご意見・ご要望: いちばん目立つ「フォームで送る」 */
+.feedback-link.feedback-primary {
+  border-color: rgba(39, 117, 209, 0.52);
+  background: rgba(39, 117, 209, 0.1);
+  color: #145da8;
+}
+
 .feedback-link:hover {
   border-color: var(--line-strong);
   background: #f9fafc;

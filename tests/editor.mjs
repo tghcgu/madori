@@ -951,6 +951,12 @@ try {
     assert.equal(await page.locator(selector).isVisible(), false, `${selector} is not in the plan-only edition`);
   }
   assert.equal(await page.locator('#fullEditionLink').isVisible(), true, 'a link back to the full app');
+  // The feedback form opens with the edition, app version and browser filled in (and nothing from the plan).
+  const formLink = await page.locator('#feedbackFormLink').getAttribute('href');
+  assert.ok(formLink.startsWith('https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform?usp=pp_url&entry.144245894='), formLink);
+  const filledIn = decodeURIComponent(new URL(formLink).searchParams.get('entry.144245894'));
+  assert.match(filledIn, /^間取り専用版 \/ 版 [0-9a-f]{7} \/ (Edge|Chrome) \d+ \/ Windows \/ 画面 \d+×\d+ \/ 127\.0\.0\.1:\d+$/, filledIn);
+  assert.equal(await page.locator('#feedbackFormLink').getAttribute('target'), '_blank');
   assert.deepEqual((await saved()).floors, planBefore.floors, 'the same plan opens in both editions');
   await page.locator('[data-tool="select"]').click();
   const clue = await planPoint(260, 200);

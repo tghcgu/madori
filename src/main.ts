@@ -935,6 +935,7 @@ function setupUi(): void {
   setupImageExport();
   setupEdition();
   setupTopNote();
+  setupFeedbackForm();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -6866,6 +6867,47 @@ function persistState(): void {
   saveTimer = window.setTimeout(() => {
     saveStatus.textContent = "保存済み";
   }, 320);
+}
+
+// ---- ご意見・ご要望のフォーム ----
+
+// Google フォーム。「使っている版とブラウザ」の欄（entry.144245894）に、使っている環境を自動で入れて開く
+const FEEDBACK_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform";
+const FEEDBACK_ENVIRONMENT_ENTRY = "entry.144245894";
+
+// 不具合を調べるときに役立つ、使っている環境の短い説明（間取りのデータは含めない）
+function feedbackEnvironment(): string {
+  const agent = navigator.userAgent;
+  const version = (pattern: RegExp) => pattern.exec(agent)?.[1];
+  const browser = version(/Edg\/(\d+)/) ? `Edge ${version(/Edg\/(\d+)/)}`
+    : version(/Firefox\/(\d+)/) ? `Firefox ${version(/Firefox\/(\d+)/)}`
+    : version(/Chrome\/(\d+)/) ? `Chrome ${version(/Chrome\/(\d+)/)}`
+    : version(/Version\/(\d+)[^ ]* .*Safari/) ? `Safari ${version(/Version\/(\d+)[^ ]* .*Safari/)}`
+    : "その他のブラウザ";
+  const system = /Windows/.test(agent) ? "Windows" : /iPhone|iPad/.test(agent) ? "iOS" : /Android/.test(agent) ? "Android"
+    : /Mac OS X|Macintosh/.test(agent) ? "Mac" : /Linux/.test(agent) ? "Linux" : "その他のOS";
+  return [
+    PLAN_EDITION ? "間取り専用版" : "本体（3Dあり）",
+    `版 ${__APP_COMMIT__}`,
+    browser,
+    system,
+    `画面 ${window.innerWidth}×${window.innerHeight}`,
+    location.host,
+  ].join(" / ");
+}
+
+function feedbackFormUrl(): string {
+  return `${FEEDBACK_FORM_URL}?usp=pp_url&${FEEDBACK_ENVIRONMENT_ENTRY}=${encodeURIComponent(feedbackEnvironment())}`;
+}
+
+// 開く直前の画面の大きさが入るよう、押したときにリンク先を作り直す
+function setupFeedbackForm(): void {
+  const link = document.querySelector<HTMLAnchorElement>("#feedbackFormLink");
+  if (!link) return;
+  const refresh = () => (link.href = feedbackFormUrl());
+  link.addEventListener("pointerdown", refresh);
+  link.addEventListener("focus", refresh);
+  refresh();
 }
 
 // ---- 間取り専用版と、本体のお知らせ ----

@@ -301,6 +301,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 広告なし
 - 訪問数の把握にはCloudflare Web Analyticsを使用
 - Cloudflare Web AnalyticsはCookieを使用せず、個人を追跡しない構成
+- ご意見・ご要望のフォームはGoogleフォーム。フォームに書いた内容と、自動で入る使用環境（アプリの版・ブラウザ・画面の大きさ・URL）はGoogleに送られる。間取りのデータは送られない
 
 JSONファイルを「読み込み」した場合も、処理はブラウザ内で行われます。
 
@@ -535,7 +536,8 @@ npm.cmd run dev
 
 不具合、改善案、追加してほしい家具や設備は、次の方法でお知らせください。
 
-- メール: **knihud@gmail.com**
+- フォーム（Googleフォーム。Googleアカウントがなくても送れます）: アプリ左の「ご意見・ご要望」の「フォームで送る」から開くと、使っている版（アプリの版・本体か間取り専用版か・ブラウザ・OS・画面の大きさ・URL）が自動で入ります。直接開く場合は https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform
+- メール: **knihud@gmail.com**（画面の画像などを添付したいとき）
 - GitHub Issues: https://github.com/tghcgu/madori/issues
 - Pull Request: https://github.com/tghcgu/madori/pulls
 
@@ -818,6 +820,7 @@ Import restores a previously exported file. The loader also migrates older singl
 - No account, application database, or cloud synchronization
 - No advertising
 - Cookie-free Cloudflare Web Analytics is used for aggregate visit counts
+- The feedback form is a Google Form: what you write and the filled-in environment (app version, browser, screen size, URL) go to Google; plan data is never sent
 
 Imported JSON files are processed entirely in the browser.
 
@@ -1046,7 +1049,8 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 
 ## Feedback and Contributions
 
-- Email: **knihud@gmail.com**
+- Form (Google Forms, no Google account needed): open it from "フォームで送る" under "ご意見・ご要望" in the app to fill in the app version, edition, browser, OS, screen size and URL automatically, or directly at https://docs.google.com/forms/d/e/1FAIpQLSd2tDbVHoz1r5CUKdsK221_-KkIjx0U6NSRZFmiZZqPWk7jEg/viewform
+- Email: **knihud@gmail.com** (for screenshots and other attachments)
 - GitHub Issues: https://github.com/tghcgu/madori/issues
 - Pull Requests: https://github.com/tghcgu/madori/pulls
 
