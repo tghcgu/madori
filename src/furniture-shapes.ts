@@ -442,7 +442,7 @@ export function spiralPlantTopView(w: number, h: number): SpiralPlantTopView {
   };
 }
 
-// ---- 事件・調査の印（足跡・番号の印・倒れた人・血・割れたガラス） ----
+// ---- 事件・調査の印（足跡・番号の印・倒れた人・血・破片） ----
 // どれも床に置く平らな物か低い物なので、上から見た形をここで決め、2Dはそのまま描き、3Dはその形で薄い板や立体を作る
 
 // 決まった並びの乱数（描き直しても形が変わらないように）
@@ -1304,7 +1304,7 @@ export function bloodShape(w: number, h: number, variant = 0): BloodShape {
   return { blobs: [main, small], drops };
 }
 
-// 割れたガラス: 中央に大きめ、外ほど小さい破片（幅・奥行に対する割合の座標）
+// 破片（ひとまとまりの形）: 中央に大きめ、外ほど小さい破片（幅・奥行に対する割合の座標）
 const GLASS_SHARDS: Point2[][] = [
   [[-0.08, -0.06], [0.12, -0.13], [0.05, 0.09]],
   [[0.13, -0.02], [0.31, 0.04], [0.17, 0.15]],
@@ -1321,4 +1321,72 @@ const GLASS_SHARDS: Point2[][] = [
 
 export function glassShards(w: number, h: number): Point2[][] {
   return GLASS_SHARDS.map((shard) => shard.map(([x, y]): Point2 => [x * w, y * h]));
+}
+
+// 破片をまく幅（cm）の標準と、いちばん大きな破片の半径（標準の幅のとき）
+export const SHARD_SPREAD = 40;
+const SHARD_SIZE = 12;
+
+// 範囲（幅 w × 奥行 h の内側）からはみ出さないように、破片を中へ寄せて縮める
+function fitPolygon(points: Point2[], w: number, h: number): Point2[] {
+  const cx = points.reduce((sum, p) => sum + p[0], 0) / points.length, cy = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+  const tx = Math.min(w / 2, Math.max(-w / 2, cx)), ty = Math.min(h / 2, Math.max(-h / 2, cy));
+  let k = 1;
+  for (const [x, y] of points) {
+    const dx = x - cx, dy = y - cy;
+    if (dx) k = Math.min(k, Math.max(0, (dx > 0 ? w / 2 - tx : tx + w / 2) / Math.abs(dx)));
+    if (dy) k = Math.min(k, Math.max(0, (dy > 0 ? h / 2 - ty : ty + h / 2) / Math.abs(dy)));
+  }
+  return points.map(([x, y]): Point2 => [tx + (x - cx) * k, ty + (y - cy) * k]);
+}
+
+// なぞった道すじ（cm、家具の中心が原点）に沿って、幅 spread の中へ破片をまく。量 density が多いほど細かく並ぶ。
+// 小さな破片が多く、大きな破片は少ない。乱数の並びは決まっているので、2Dと3Dで同じ破片になる
+export function shardTrail(path: Point2[], w: number, h: number, spread = SHARD_SPREAD, density = 1): Point2[][] {
+  const lengths = [0];
+  for (let i = 1; i < path.length; i += 1) lengths.push(lengths[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const total = lengths[lengths.length - 1] ?? 0;
+  if (path.length < 2 || total < 1) return [];
+  const at = (s: number): Point2 => {
+    const t = Math.min(total, Math.max(0, s));
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < t) i += 1;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const k = (t - lengths[i - 1]) / span;
+    return [path[i - 1][0] + (path[i][0] - path[i - 1][0]) * k, path[i - 1][1] + (path[i][1] - path[i - 1][1]) * k];
+  };
+  const random = seeded(52711);
+  const scale = Math.min(1.6, Math.max(0.5, spread / SHARD_SPREAD));
+  const step = Math.max(1.5, 7 / Math.max(0.2, density));
+  const shards: Point2[][] = [];
+  for (let s = 0; s <= total; s += step) {
+    const [px, py] = at(s);
+    const back = at(s - 3), ahead = at(s + 3);
+    const heading = Math.atan2(ahead[1] - back[1], ahead[0] - back[0]);
+    const across = (random() - 0.5) * spread, along = (random() - 0.5) * step;
+    const cx = px - Math.sin(heading) * across + Math.cos(heading) * along;
+    const cy = py + Math.cos(heading) * across + Math.sin(heading) * along;
+    const size = (2.5 + random() * random() * (SHARD_SIZE - 2.5)) * scale;
+    const sides = random() < 0.6 ? 3 : 4;
+    const turn = random() * Math.PI * 2;
+    const points: Point2[] = [];
+    for (let k = 0; k < sides; k += 1) {
+      const a = turn + (k / sides) * Math.PI * 2 + (random() - 0.5) * 0.9;
+      const r = size * (0.45 + random() * 0.55);
+      points.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+    shards.push(fitPolygon(points, w, h));
+  }
+  return shards;
+}
+
+// 破片の家具1つ分。道すじ（幅・奥行に対する割合）があればそれに沿ってまき、なければ前からある形（ひとまとまり）
+export function shardPieces(w: number, h: number, path?: readonly (readonly number[])[], spread = SHARD_SPREAD, density = 1): Point2[][] {
+  if (path && path.length >= 2) return shardTrail(path.map(([u, v]): Point2 => [u * w, v * h]), w, h, spread, density);
+  return glassShards(w, h);
+}
+
+// 道すじのまわりに足す余白（cm）。いちばん大きな破片と、まく幅の半分
+export function shardMargin(spread = SHARD_SPREAD): number {
+  return spread / 2 + SHARD_SIZE * Math.min(1.6, Math.max(0.5, spread / SHARD_SPREAD)) + 1;
 }

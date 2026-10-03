@@ -722,6 +722,41 @@ try {
   assert.equal((await footprints())[0].path, undefined, 'the trail can be made straight again');
   console.log('PASS: footprints: drawn along a dragged path, straight on click, stride, redraw and straighten, flat in 3D');
 
+  // Shards ("破片", formerly broken glass) are scattered along a dragged path; a click still places the cluster.
+  await choose('[data-furniture="brokenGlass"]');
+  assert.equal((await page.locator('[data-furniture="brokenGlass"]').textContent()).trim(), '破片');
+  await dragAlong([[100, 300], [500, 300]]);
+  const shardItems = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'brokenGlass');
+  let shards = (await shardItems())[0];
+  assert.ok(shards.path?.length >= 2 && shards.brush === 40, 'the drawn path and the spread are saved');
+  assert.ok(shards.w > 400, 'the frame covers the path');
+  const clusterAt = await planPoint(700, 450);
+  await page.mouse.click(clusterAt.x, clusterAt.y);
+  assert.equal((await shardItems()).length, 2);
+  assert.equal((await shardItems())[1].path, undefined, 'a click places the cluster');
+  // Spread, amount and color of the selected shards.
+  await page.locator('[data-tool="select"]').click();
+  const shardCenter = await planPoint(shards.x + shards.w / 2, shards.y + shards.h / 2);
+  await page.mouse.click(shardCenter.x, shardCenter.y);
+  assert.equal(await page.locator('#shardSpreadInput').inputValue(), '40');
+  await page.locator('#shardSpreadInput').fill('80');
+  await page.locator('#shardSpreadInput').press('Enter');
+  shards = (await shardItems())[0];
+  assert.equal(shards.brush, 80);
+  assert.ok(shards.h > 100, 'a wider spread makes the frame deeper');
+  await page.locator('#shardDensityInput').selectOption('2');
+  assert.equal((await shardItems())[0].density, 2);
+  await page.locator('#furnitureColorInputCode').fill('#8b5a2b');
+  await page.locator('#furnitureColorInputCode').press('Enter');
+  assert.equal((await shardItems())[0].color, '#8b5a2b');
+  const shardMaterials = await page.evaluate(id => window.__editorTest.materials(id), shards.id);
+  assert.ok(shardMaterials.some(m => m.name === 'glass-shard' && m.color === '8b5a2b' && !m.transparent), `colored shards in 3D: ${JSON.stringify(shardMaterials.slice(0, 2))}`);
+  await page.locator('#shardGatherButton').click();
+  assert.equal((await shardItems())[0].path, undefined, 'the shards can be gathered into the cluster again');
+  await page.keyboard.press('Control+z');
+  assert.ok((await shardItems())[0].path, 'undo');
+  console.log('PASS: shards: scattered along a dragged path, cluster on click, spread, amount, color, gather and undo');
+
   // People: stand about 170 cm tall, change posture and poses, move each arm and leg with sliders or by dragging the wrist/ankle handles.
   await importPlan({ floors: [{ id: 'q1', name: '', entities: [{ id: 'floor', type: 'room', name: '', x: 0, y: 0, w: 900, h: 600, color: '#ffffff' }] }], activeFloor: 0, selectedId: null, roofs: [] });
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));

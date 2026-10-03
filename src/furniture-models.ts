@@ -10,7 +10,7 @@ import {
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
   SPIRAL_POT_SCALE, spiralLeaves,
-  CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, glassShards, markerTextureSpan, personDesign, personLayout, personOutline,
+  CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, markerTextureSpan, personDesign, personLayout, personOutline, shardPieces,
   type PersonPart, type PersonPose, type StoneSlab,
 } from "./furniture-shapes.ts";
 import { parseColorCode } from "./colors.ts";
@@ -29,9 +29,11 @@ export interface FurnitureModelOptions {
   height?: number;
   // 別デザインの番号（1から）。2Dの記号と同じ番号で、3Dも同じデザインになる
   symbol?: number;
-  // 足跡: なぞった道すじ（幅・奥行に対する割合）と歩幅 cm
+  // 足跡・破片: なぞった道すじ（幅・奥行に対する割合）、足跡の歩幅 cm、破片をまく幅 cm と量
   path?: number[][];
   stride?: number;
+  brush?: number;
+  density?: number;
   // 人: 姿勢と手足の角度
   pose?: PersonPose;
 }
@@ -2147,10 +2149,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       break;
     }
     case "brokenGlass": {
-      // 2Dと同じ形の、床に散らばった薄いガラスの破片
-      const shard = m.glass("glass-shard", 0xa6d2e2, 0.6);
-      const edge = m.material("glass-edge", 0x5d8fa4, 0.2, 0.1);
-      for (const piece of glassShards(item.w, item.h)) {
+      // 2Dと同じ形の、床に散らばった薄い破片。色を決めていなければ透けたガラス、決めていればその色の破片（陶器や木の破片など）
+      const custom = Boolean(item.color3d ?? item.color);
+      const shard = m.material("glass-shard", 0xa6d2e2, custom ? 0.6 : 0.12, custom ? 0 : 0.05, true);
+      if (!custom) {
+        shard.transparent = true;
+        shard.opacity = 0.6;
+        shard.depthWrite = false;
+        shard.side = THREE.DoubleSide;
+      }
+      const edge = m.material("glass-edge", 0x55606a, 0.3, 0.1);
+      for (const piece of shardPieces(item.w, item.h, item.path, item.brush, item.density)) {
         const outline = new THREE.Shape(piece.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
         shapeSlab(outline, 0.004, 0.004, m, shard, 1);
         // 破片の縁（上から見ると2Dの線と同じ所）

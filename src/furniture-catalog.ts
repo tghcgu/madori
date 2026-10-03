@@ -173,7 +173,8 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   // ペンで描いた線・塗り（パーツの一覧には出さず、ツールの「ペン」で描く）
   paint: { label: "ペンで描いた線", w: 30, h: 30 },
   bloodPool: { label: "血だまり", w: 90, h: 70 },
-  brokenGlass: { label: "割れたガラス", w: 80, h: 60 },
+  // 割れたガラスなどの破片。なぞった道すじに沿ってまける（クリックだけなら、ひとまとまり）
+  brokenGlass: { label: "破片", w: 80, h: 60 },
 };
 
 // 家具ごとの別デザインの名前（1番以降。0番は標準）。2Dの記号と3Dのモデルが、この番号で同じデザインになる

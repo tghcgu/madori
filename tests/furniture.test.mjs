@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
 import {
   PERSON_HEIGHT, PERSON_PRESETS, bloodShape, evidenceMarkerShape, footprintPathTrail, footprintTrail, glassShards, markerTextSize, normalizePersonPose,
-  partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights,
+  partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights, shardMargin, shardPieces, shardTrail,
 } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
 
@@ -321,4 +321,33 @@ test('people and drawn footprints build 3D models that fill their frame and foll
     const materials = new Set(standing.children.map(child => child.material.name));
     assert.deepEqual([...materials].sort(), ['footprint', 'mannequin', 'mannequin-joint']);
   } finally { [standing, lying, legacy, path, straight, paint].forEach(dispose); }
+});
+
+test('shards drawn along a path stay near the path and inside the frame, and more of them with a higher amount', () => {
+  const path = [[-100, 0], [100, 0]];
+  const margin = shardMargin(40);
+  const w = 200 + margin * 2, h = margin * 2;
+  const pieces = shardTrail(path, w, h, 40, 1);
+  assert.ok(pieces.length >= 25, `shards along 200 cm: ${pieces.length}`);
+  assert.ok(pieces.flat().every(([x, y]) => Math.abs(x) <= w / 2 + 1e-6 && Math.abs(y) <= h / 2 + 1e-6), 'shards stay inside the frame');
+  assert.ok(pieces.every(piece => piece.length === 3 || piece.length === 4));
+  const centers = pieces.map(piece => piece.reduce((sum, p) => sum + p[1], 0) / piece.length);
+  assert.ok(centers.every(y => Math.abs(y) <= 20 + 1e-6), 'shards stay within the spread of the path');
+  assert.ok(shardTrail(path, w, h, 40, 2).length > pieces.length * 1.8, 'more shards with "多め"');
+  assert.deepEqual(shardTrail(path, w, h, 40, 1), pieces, 'the same shards every time (2D and 3D agree)');
+  // Without a path, the original cluster is kept.
+  assert.equal(shardPieces(80, 60).length, 11);
+  assert.deepEqual(shardPieces(w, h, [[-100 / w, 0], [100 / w, 0]], 40, 1), pieces);
+});
+
+test('shard models follow the path and use an opaque tinted color when one is chosen', () => {
+  const glass = buildFurnitureModel({ kind: 'brokenGlass', w: 280, h: 80, path: [[-0.35, 0], [0.35, 0]], brush: 40 });
+  const brown = buildFurnitureModel({ kind: 'brokenGlass', w: 280, h: 80, path: [[-0.35, 0], [0.35, 0]], brush: 40, color3d: '#8b5a2b' });
+  try {
+    const shard = group => group.children.find(child => child.material.name === 'glass-shard').material;
+    assert.ok(shard(glass).transparent, 'plain shards are see-through glass');
+    assert.ok(!shard(brown).transparent && shard(brown).color.getHexString() === '8b5a2b', 'colored shards are solid');
+    const box = new THREE.Box3().setFromObject(glass, true).getSize(new THREE.Vector3());
+    assert.ok(Math.abs(box.x - 2.8) < 1e-5 && Math.abs(box.z - 0.8) < 1e-5 && box.y < 0.01);
+  } finally { dispose(glass); dispose(brown); }
 });

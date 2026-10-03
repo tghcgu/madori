@@ -13,7 +13,7 @@ import {
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
   blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
-  CHALK_WIDTH, bloodShape, evidenceMarkerShape, glassShards, markerTextSize, markerTextureSpan,
+  CHALK_WIDTH, SHARD_SPREAD, bloodShape, evidenceMarkerShape, markerTextSize, markerTextureSpan, shardMargin, shardPieces, shardTrail,
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
   PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
   type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
@@ -96,9 +96,11 @@ interface Furniture {
   stride?: number;
   // 人: 姿勢と手足の角度（手足を動かすまでは持たない）
   pose?: PersonPose;
-  // ペンで描いた線: 太さ cm と、囲んで塗りつぶすか（道すじは path）
+  // ペンで描いた線: 太さ cm と、囲んで塗りつぶすか（道すじは path）。破片では brush がまく幅
   brush?: number;
   filled?: boolean;
+  // 破片の量（1 がふつう）
+  density?: number;
   locked?: boolean;
 }
 
@@ -375,7 +377,7 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
 ];
 
 // 床に付いた跡（足跡・血）は、2Dの色をそのまま跡の塗りにする。色を決めていないときの塗り
-const MARK_FILLS: Partial<Record<FurnitureKind, string>> = { footprints: "#6b625a", bloodPool: "#a3201c" };
+const MARK_FILLS: Partial<Record<FurnitureKind, string>> = { footprints: "#6b625a", bloodPool: "#a3201c", brokenGlass: "#dcedf4" };
 // 番号の印に書ける文字数
 const MAX_MARKER_LABEL = 4;
 // 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
@@ -388,7 +390,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG 模型 もけい マネキン ポーズ",
   person: "ひと 人 人間 にんげん 人物 じんぶつ 人型 ひとがた 模型 もけい マネキン ポーズ 立つ たつ 立っている 座る すわる 歩く あるく TRPG",
   bloodPool: "ち 血 血痕 けっこん 血だまり ちだまり しぶき 跡 あと 事件 じけん TRPG",
-  brokenGlass: "がらす ガラス 破片 はへん 割れ われ 窓 まど 事件 じけん TRPG",
+  brokenGlass: "はへん かけら 割れたガラス がらす ガラス 割れ われ 窓 まど 瓦礫 がれき 陶器 とうき 皿 さら 木片 散らばる ちらばる 事件 じけん TRPG",
   sofa: "ソファー", sofaCorner: "ソファー コーナー", armchair: "椅子 いす イス チェア ソファー ひとりがけ",
   chair: "いす イス チェア", stool: "椅子 いす イス", bench: "椅子 いす イス 屋外",
   diningTable: "テーブル 食卓 しょくたく 椅子 いす", roundTable: "まるテーブル", table: "座卓 ちゃぶ台",
@@ -498,6 +500,9 @@ const PEN_DEFAULT_COLOR = "#9b1c17";
 const DEFAULT_BRUSH = 15;
 const penSettings: { color: string; brush: number; filled: boolean } = { color: PEN_DEFAULT_COLOR, brush: DEFAULT_BRUSH, filled: false };
 const MAX_BRUSH = 300;
+// 次になぞって描く破片の、まく幅と量（選んだ破片で変えると、次からもそれを使う）
+const shardSettings: { spread: number; density: number } = { spread: SHARD_SPREAD, density: 1 };
+const SHARD_DENSITIES: [number, string][] = [[0.5, "少なめ"], [1, "ふつう"], [2, "多め"]];
 // ペンのよく使う色（血の色が最初）
 const PEN_COLORS: [string, string][] = [
   ["#9b1c17", "血の色"], ["#e03131", "赤"], ["#f08c00", "だいだい"], ["#f2c230", "黄"], ["#2f9e44", "緑"], ["#1c7ed6", "青"],
@@ -619,6 +624,7 @@ interface SavedViewState {
   ghost?: { target?: string; color?: string; opacity?: number };
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
   pen?: { color?: string; brush?: number; filled?: boolean };
+  shards?: { spread?: number; density?: number };
 }
 
 const viewState: SavedViewState = loadViewState();
@@ -748,9 +754,13 @@ function normalizeEntity(value: unknown): Entity {
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
-      path: entity.kind === "footprints" ? normalizeFootprintPath(entity.path) : undefined,
+      path: entity.kind === "footprints" || entity.kind === "brokenGlass" ? normalizeFootprintPath(entity.path) : undefined,
       stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
       pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
+      ...(entity.kind === "brokenGlass" ? {
+        brush: finite(entity.brush) ? clamp(Math.round(entity.brush!), 5, MAX_BRUSH) : undefined,
+        density: SHARD_DENSITIES.some(([value]) => value === entity.density) ? entity.density : undefined,
+      } : {}),
       ...(entity.kind === "paint" ? {
         path: normalizePaintPath(entity.path),
         brush: finite(entity.brush) ? clamp(Math.round(entity.brush!), 1, MAX_BRUSH) : DEFAULT_BRUSH,
@@ -1796,6 +1806,11 @@ function applySavedDisplaySettings(): void {
     if (typeof color === "string") ghostSettings.color = parseColorCode(color)?.code ?? "";
     if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
   }
+  if (viewState.shards && typeof viewState.shards === "object") {
+    const { spread, density } = viewState.shards;
+    if (typeof spread === "number" && Number.isFinite(spread)) shardSettings.spread = clamp(Math.round(spread), 5, MAX_BRUSH);
+    if (SHARD_DENSITIES.some(([value]) => value === density)) shardSettings.density = density as number;
+  }
   if (viewState.pen && typeof viewState.pen === "object") {
     const { color, brush, filled } = viewState.pen;
     penSettings.color = parseColorCode(color)?.code ?? PEN_DEFAULT_COLOR;
@@ -1886,6 +1901,7 @@ function saveViewState(): void {
   viewState.symbols = { ...lastSymbolByKind };
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
+  viewState.shards = { ...shardSettings };
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -1980,7 +1996,7 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   // 足跡は、なぞった道すじに付ける（クリックだけなら、まっすぐな足跡）。ペンも、なぞった所に線を描く
-  if (activeTool === "paint" || (activeTool === "furniture" && activeFurniture === "footprints")) {
+  if (activeTool === "paint" || (activeTool === "furniture" && (activeFurniture === "footprints" || activeFurniture === "brokenGlass"))) {
     drag.dragMode = "path";
     drag.path = [point];
     render2d();
@@ -2100,6 +2116,7 @@ function handlePointerUp(event: PointerEvent): void {
 
   if (drag.dragMode === "path" && drag.path) {
     if (activeTool === "paint") placePaintStroke(drag.path);
+    else if (activeFurniture === "brokenGlass") placeShardPath(drag.path);
     else placeFootprintPath(drag.path);
     commitState();
   }
@@ -2663,6 +2680,7 @@ function drawPlan(width: number, height: number, options: { grid: boolean; ghost
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
     if (drag.dragMode === "path" && drag.path) {
       if (activeTool === "paint") drawPaintPreview(drag.path);
+      else if (activeFurniture === "brokenGlass") drawShardPreview(drag.path);
       else drawFootprintPreview(drag.path);
     }
     if (drag.dragMode === "draw" && activeTool !== "furniture") {
@@ -3219,7 +3237,6 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
   if (mark) return mark;
   if (kind === "evidenceMarker") return "#f4c430";
   if (kind === "fallenPerson" || kind === "person") return "#e4e0da";
-  if (kind === "brokenGlass") return "#dcedf4";
   if (["sofa", "sofa2", "sofaCorner", "armchair", "officeChair", "zaisu", "stool", "bed", "bedSemiDouble", "bedDouble", "bunkBed"].includes(kind)) return "#edf3f2";
   if (["table", "sideTable", "roundTable", "longTable", "desk", "deskL", "bench", "shelf", "closet", "wardrobe", "cupboard", "shoeCabinet"].includes(kind)) return "#f7f5f0";
   return "#ffffff";
@@ -4065,7 +4082,7 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       drawBlood(w, h, 0);
       break;
     case "brokenGlass":
-      drawBrokenGlass(w, h);
+      drawBrokenGlass(w, h, item);
       break;
     default: {
       strokeRoundedRect(-hw, -hh, w, h, 4, true);
@@ -4683,9 +4700,14 @@ function pathLength(points: Point2[]): number {
   return total;
 }
 
-function footprintRedrawTarget(): Furniture | null {
+// 「なぞり直す」を押した足跡・破片
+function pathRedrawTarget(kind: FurnitureKind): Furniture | null {
   const target = footprintRedrawId ? findEntity(footprintRedrawId) : null;
-  return target?.type === "furniture" && target.kind === "footprints" && !isLocked(target) ? target : null;
+  return target?.type === "furniture" && target.kind === kind && !isLocked(target) ? target : null;
+}
+
+function footprintRedrawTarget(): Furniture | null {
+  return pathRedrawTarget("footprints");
 }
 
 // なぞり終えたとき。短ければ（クリック）まっすぐな足跡を置き、長ければその道すじに沿った足跡を作る（または描き直す）
@@ -4788,12 +4810,153 @@ function bindFootprintEditor(item: Furniture): void {
   });
 }
 
-function drawBrokenGlass(w: number, h: number): void {
-  for (const shard of glassShards(w, h)) {
+// 破片。色を決めていればその色で塗り、縁はその色を暗くした線（決めていなければ、前からある水色のガラスと黒い縁）
+function drawBrokenGlass(w: number, h: number, item?: Furniture): void {
+  const color = solidColor(item?.color);
+  ctx.save();
+  if (color) ctx.strokeStyle = darkenColor(color, 0.55);
+  for (const shard of shardPieces(w, h, item?.path, item?.brush, item?.density)) {
     traceLoop(shard);
     ctx.fill();
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+function darkenColor(color: string, amount: number): string {
+  const rgb = parseColorCode(color)?.rgb ?? INK;
+  const channel = (index: number) => Math.round(parseInt(rgb.slice(1 + index * 2, 3 + index * 2), 16) * (1 - amount)).toString(16).padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+// 破片をなぞり終えたとき。短ければ（クリック）ひとまとまりの破片を置き、長ければ道すじに沿ってまく（または描き直す）
+function placeShardPath(points: Point[]): void {
+  const redraw = pathRedrawTarget("brokenGlass");
+  footprintRedrawId = null;
+  const path = tidyPath(points);
+  if (path.length < 2 || pathLength(path) < 15) {
+    if (redraw) return;
+    const base = FURNITURE_DEFS.brokenGlass;
+    const item: Furniture = { id: newId("furniture"), type: "furniture", kind: "brokenGlass", x: snap(points[0].x - base.w / 2), y: snap(points[0].y - base.h / 2), w: base.w, h: base.h, rotation: 0 };
+    activeEntities().push(item);
+    state.selectedId = item.id;
+    return;
+  }
+  const spread = redraw?.brush ?? shardSettings.spread;
+  const density = redraw?.density ?? shardSettings.density;
+  const frame = pathFrame(path, shardMargin(spread));
+  const item: Furniture = redraw ?? { id: newId("furniture"), type: "furniture", kind: "brokenGlass", x: 0, y: 0, w: 1, h: 1, rotation: 0 };
+  Object.assign(item, frame, { rotation: 0, brush: spread });
+  if (density === 1) delete item.density;
+  else item.density = density;
+  delete item.flip;
+  if (!redraw) activeEntities().push(item);
+  state.selectedId = item.id;
+  if (redraw) {
+    activeTool = "select";
+    setActiveButton("[data-tool]", activeTool);
+    setActiveButton("[data-furniture]", "");
+  }
+}
+
+// 道すじ（間取りの cm）から、余白を付けた範囲と、範囲に対する割合の道すじを作る
+function pathFrame(path: Point2[], margin: number): { x: number; y: number; w: number; h: number; path: number[][] } {
+  const xs = path.map((point) => point[0]), ys = path.map((point) => point[1]);
+  const w = roundTenth(Math.max(20, Math.max(...xs) - Math.min(...xs) + margin * 2));
+  const h = roundTenth(Math.max(20, Math.max(...ys) - Math.min(...ys) + margin * 2));
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  return {
+    x: roundTenth(cx - w / 2), y: roundTenth(cy - h / 2), w, h,
+    path: path.map(([x, y]) => [Math.round(((x - cx) / w) * 10000) / 10000, Math.round(((y - cy) / h) * 10000) / 10000]),
+  };
+}
+
+// なぞっている間の見本: 道すじと、そこにまかれる破片
+function drawShardPreview(points: Point[]): void {
+  const path = tidyPath(points);
+  if (path.length < 2) return;
+  const redraw = pathRedrawTarget("brokenGlass");
+  const color = solidColor(redraw?.color);
+  ctx.save();
+  ctx.strokeStyle = "rgba(39, 117, 209, 0.55)";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+  traceOpenPath(path);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = color ?? "#dcedf4";
+  ctx.strokeStyle = color ? darkenColor(color, 0.55) : INK;
+  ctx.lineWidth = 1.2 / view.zoom;
+  for (const shard of shardTrail(path, Infinity, Infinity, redraw?.brush ?? shardSettings.spread, redraw?.density ?? shardSettings.density)) {
+    traceLoop(shard);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function shardEditorHtml(item: Furniture, disabled: string): string {
+  const density = item.density ?? 1;
+  return `
+    <div class="two-col">
+      <label>まく幅 cm<input id="shardSpreadInput" type="number" min="5" max="${MAX_BRUSH}" step="5" value="${item.brush ?? SHARD_SPREAD}" ${disabled || (item.path ? "" : "disabled")} /></label>
+      <label>量<select id="shardDensityInput" ${disabled || (item.path ? "" : "disabled")}>${SHARD_DENSITIES.map(([value, label]) => `<option value="${value}" ${value === density ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+    </div>
+    <div class="two-col">
+      <button type="button" class="prop-button" id="shardRedrawButton" ${disabled}>なぞり直す</button>
+      <button type="button" class="prop-button" id="shardGatherButton" ${disabled || (item.path ? "" : "disabled")}>ひとまとまりにする</button>
+    </div>
+    <p class="pose-hint">パーツの「破片」を選んで2Dをドラッグすると、なぞった所に破片が散らばります（クリックだけなら、ひとまとまり）。色は「色 2D」「色 3D」で変えられます（陶器や木の破片など）。</p>`;
+}
+
+// 道すじのある破片で、まく幅や量を変えたとき。道すじの場所はそのままに、範囲を合わせ直す
+function refitShards(item: Furniture): void {
+  if (!item.path) return;
+  const points = item.path.map(([u, v]): Point2 => [u * item.w, v * item.h]);
+  const frame = pathFrame(points, shardMargin(item.brush ?? SHARD_SPREAD));
+  const center = furnitureLocalToWorld(item, [frame.x + frame.w / 2, frame.y + frame.h / 2]);
+  item.w = frame.w;
+  item.h = frame.h;
+  item.path = frame.path;
+  item.x = roundTenth(center.x - frame.w / 2);
+  item.y = roundTenth(center.y - frame.h / 2);
+}
+
+function bindShardEditor(item: Furniture): void {
+  bindNumber("#shardSpreadInput", (value) => {
+    item.brush = clamp(Math.round(value), 5, MAX_BRUSH);
+    shardSettings.spread = item.brush;
+    refitShards(item);
+  });
+  bindSelect("#shardDensityInput", (value) => {
+    const density = Number(value);
+    if (!SHARD_DENSITIES.some(([option]) => option === density)) return;
+    if (density === 1) delete item.density;
+    else item.density = density;
+    shardSettings.density = density;
+  });
+  propertiesPanel.querySelector<HTMLButtonElement>("#shardRedrawButton")?.addEventListener("click", () => {
+    footprintRedrawId = item.id;
+    activeFurniture = "brokenGlass";
+    activeTool = "furniture";
+    setActiveButton("[data-furniture]", activeFurniture);
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    const hint = propertiesPanel.querySelector<HTMLParagraphElement>(".pose-hint");
+    if (hint) hint.textContent = "2Dの上をドラッグして、破片をまく所をなぞってください。";
+  });
+  bindButton("#shardGatherButton", () => {
+    const base = FURNITURE_DEFS.brokenGlass;
+    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+    delete item.path;
+    delete item.brush;
+    delete item.density;
+    item.w = base.w;
+    item.h = base.h;
+    item.x = snap(cx - base.w / 2);
+    item.y = snap(cy - base.h / 2);
+  });
 }
 
 // 番号の印を置くときの番号。どの階にもある番号の印の、いちばん大きい番号の次
@@ -6631,6 +6794,7 @@ function updatePropertiesPanel(): void {
       ${markerRow}
       ${isPersonKind(selectedFurniture.kind) ? personEditorHtml(selectedFurniture, placementDisabled) : ""}
       ${selectedFurniture.kind === "footprints" ? footprintEditorHtml(selectedFurniture, placementDisabled) : ""}
+      ${selectedFurniture.kind === "brokenGlass" ? shardEditorHtml(selectedFurniture, placementDisabled) : ""}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
       ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
@@ -6655,6 +6819,7 @@ function updatePropertiesPanel(): void {
   bindInput("#markerLabelInput", (value) => (selectedFurniture.markerLabel = value.trim().slice(0, MAX_MARKER_LABEL)));
   if (isPersonKind(selectedFurniture.kind)) bindPersonEditor(selectedFurniture);
   if (selectedFurniture.kind === "footprints") bindFootprintEditor(selectedFurniture);
+  if (selectedFurniture.kind === "brokenGlass") bindShardEditor(selectedFurniture);
   bindNumber("#furnitureHeightInput", (value) => {
     const height = clamp(Math.round(value), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT);
     if (height === defaultHeight) delete selectedFurniture.height;
