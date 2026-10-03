@@ -113,6 +113,10 @@
               <label class="check"><input id="imageExportNames" type="checkbox" checked /> 部屋の名前を入れる</label>
               <button class="text-button primary-export" id="imageExportPlan" type="button" title="2Dの間取りをPNG画像にする">間取りの画像を書き出す</button>
               <button class="text-button" id="imageExport3d" type="button" title="いまの3Dの見え方をPNG画像にする">3Dの画像（いまの見え方）</button>
+              <div class="credit-copy">
+                <span>画像を公開するときは、クレジットの表記をお願いします</span>
+                <button class="text-button" type="button" data-copy-credit="ja" title="「間取りクイック3D https://madori-5yu.pages.dev/」をコピーする">クレジットをコピー</button>
+              </div>
             </div>
           </div>
           <button class="text-button" id="importButton" type="button">
@@ -269,6 +273,13 @@
               <div class="about-text">
                 <p>本ツールはα版（開発途中のテスト公開版）の間取り作成シミュレーターです。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。スマートフォンやタブレットでは編集操作が正しく動作しない場合があるため、PCのブラウザからのご利用を推奨します。</p>
                 <p>創作・検討・個人利用・商用を問わず、幅広い用途にご利用いただけます。作成した間取りや画像を公開・配布する際は、クレジット表記（「間取りクイック3D」の名称、可能であればURLの併記）が必須です。</p>
+                <div class="credit-box">
+                  <span class="credit-text">間取りクイック3D <span class="credit-url">https://madori-5yu.pages.dev/</span></span>
+                  <div class="credit-actions">
+                    <button type="button" class="feedback-link feedback-primary" data-copy-credit="ja">クレジットをコピー</button>
+                    <button type="button" class="feedback-link" data-copy-credit="en">英語でコピー</button>
+                  </div>
+                </div>
                 <p class="about-heading">禁止事項</p>
                 <ul class="about-list">
                   <li>嫌がらせ、ヘイトスピーチ、差別的表現</li>

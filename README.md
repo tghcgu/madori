@@ -548,6 +548,7 @@ npm.cmd run dev
 - 創作、検討、個人利用、商用利用を問わず利用できます。
 - 作成した間取りや画像を公開・配布する場合は、`間取りクイック3D`の名称をクレジット表記してください。
 - 可能であれば本番URL `https://madori-5yu.pages.dev/`も併記してください。
+- 上部の「画像」メニューと、アプリ左の「このアプリについて」にある「クレジットをコピー」で、`間取りクイック3D https://madori-5yu.pages.dev/`をそのまま貼り付けられます（英語の表記もコピーできます）。
 - 嫌がらせ、差別、個人情報の無断公開、スパム、権利侵害、不正アクセス、犯罪の助長、運営妨害などには利用できません。
 - 詳細な禁止事項はアプリ内の「このアプリについて」を確認してください。
 - 本ツールと作成物は無保証です。
@@ -1061,6 +1062,7 @@ For bug reports, include the site URL, browser, reproduction steps, expected beh
 - The app may be used for creative work, planning, personal projects, and commercial work.
 - When publishing or distributing generated plans or images, credit `Madori Quick 3D` / `間取りクイック3D`.
 - Include `https://madori-5yu.pages.dev/` with the credit when possible.
+- "クレジットをコピー" in the image menu and under "このアプリについて" copies `間取りクイック3D https://madori-5yu.pages.dev/` (or `Madori Quick 3D https://madori-5yu.pages.dev/` in English) ready to paste.
 - Do not use the app for harassment, discrimination, doxxing, spam, rights violations, unauthorized access, criminal facilitation, or service disruption.
 - See the in-app About section for the fuller prohibited-use list.
 - The application and generated output are provided without warranty.

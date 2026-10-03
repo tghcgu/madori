@@ -936,6 +936,7 @@ function setupUi(): void {
   setupEdition();
   setupTopNote();
   setupFeedbackForm();
+  setupCreditCopy();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -6867,6 +6868,50 @@ function persistState(): void {
   saveTimer = window.setTimeout(() => {
     saveStatus.textContent = "保存済み";
   }, 320);
+}
+
+// ---- クレジット表記のコピー ----
+
+// 作った間取りや画像を公開するときに添えるクレジット。どのサイトから開いても、本番のURLにする
+const CREDIT_TEXT: Record<"ja" | "en", string> = {
+  ja: "間取りクイック3D https://madori-5yu.pages.dev/",
+  en: "Madori Quick 3D https://madori-5yu.pages.dev/",
+};
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // クリップボードの機能が使えないブラウザでは、見えない入力欄を選んでコピーする
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.append(area);
+    area.select();
+    const copied = document.execCommand("copy");
+    area.remove();
+    return copied;
+  }
+}
+
+function setupCreditCopy(): void {
+  document.querySelectorAll<HTMLButtonElement>("[data-copy-credit]").forEach((button) => {
+    const label = button.textContent ?? "";
+    let timer = 0;
+    button.addEventListener("click", async () => {
+      const copied = await copyText(CREDIT_TEXT[button.dataset.copyCredit === "en" ? "en" : "ja"]);
+      button.textContent = copied ? "コピーしました" : "コピーできませんでした";
+      button.classList.toggle("is-copied", copied);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        button.textContent = label;
+        button.classList.remove("is-copied");
+      }, 1600);
+    });
+  });
 }
 
 // ---- ご意見・ご要望のフォーム ----

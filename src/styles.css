@@ -1180,6 +1180,52 @@ select:focus-visible {
   margin-top: 12px;
 }
 
+/* クレジット表記: 表記する文と、コピーのボタン */
+.credit-box {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.credit-text {
+  color: var(--ink);
+  font-weight: 700;
+  user-select: all;
+}
+
+/* URLの途中（ハイフンなど）では折り返さず、入らなければ次の行へ送る */
+.credit-url {
+  white-space: nowrap;
+}
+
+.credit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.credit-copy {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.credit-copy > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.is-copied {
+  border-color: rgba(47, 158, 68, 0.55) !important;
+  background: rgba(47, 158, 68, 0.1) !important;
+  color: #2b8a3e !important;
+}
+
 /* ご意見・ご要望: いちばん目立つ「フォームで送る」 */
 .feedback-link.feedback-primary {
   border-color: rgba(39, 117, 209, 0.52);

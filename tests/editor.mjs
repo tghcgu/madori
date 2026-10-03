@@ -957,6 +957,15 @@ try {
   const filledIn = decodeURIComponent(new URL(formLink).searchParams.get('entry.144245894'));
   assert.match(filledIn, /^間取り専用版 \/ 版 [0-9a-f]{7} \/ (Edge|Chrome) \d+ \/ Windows \/ 画面 \d+×\d+ \/ 127\.0\.0\.1:\d+$/, filledIn);
   assert.equal(await page.locator('#feedbackFormLink').getAttribute('target'), '_blank');
+  // The credit is copied in one click, from the image menu or the about section, always with the production URL.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  if (await page.locator('#imageExportMenu').isHidden()) await page.locator('#imageExportButton').click();
+  await page.locator('#imageExportMenu [data-copy-credit="ja"]').click();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '間取りクイック3D https://madori-5yu.pages.dev/');
+  assert.equal(await page.locator('#imageExportMenu [data-copy-credit="ja"]').textContent(), 'コピーしました');
+  await page.locator('.topbar h1').click({ position: { x: 10, y: 8 } });
+  await page.locator('.credit-box [data-copy-credit="en"]').evaluate(button => button.click());
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'Madori Quick 3D https://madori-5yu.pages.dev/');
   // The form with images gets the same environment.
   const imageFormLink = await page.locator('#feedbackImageFormLink').getAttribute('href');
   assert.ok(imageFormLink.startsWith('https://docs.google.com/forms/d/e/1FAIpQLSfd6lucVdNQ5GqqXep8xos68t2Ri9CatBdMrap5dHaSH-EdeQ/viewform?usp=pp_url&entry.144245894='), imageFormLink);
