@@ -1071,6 +1071,11 @@ try {
   const filledIn = decodeURIComponent(new URL(formLink).searchParams.get('entry.144245894'));
   assert.match(filledIn, /^間取り専用版 \/ 版 [0-9a-f]{7} \/ (Edge|Chrome) \d+ \/ Windows \/ 画面 \d+×\d+ \/ 127\.0\.0\.1:\d+$/, filledIn);
   assert.equal(await page.locator('#feedbackFormLink').getAttribute('target'), '_blank');
+  // The changelog lists the updates newest first, with the latest date next to its heading.
+  assert.match(await page.locator('#changelogLatest').textContent(), /^最新 \d{1,2}月\d{1,2}日$/);
+  const days = await page.locator('#changelogList .changelog-day time').evaluateAll(times => times.map(time => time.getAttribute('datetime')));
+  assert.ok(days.length > 10 && days.every((day, i) => !i || days[i - 1] > day), `newest first: ${days.slice(0, 3)}`);
+  assert.equal(days[days.length - 1], '2026-06-27', 'back to the first version');
   // The credit is copied in one click, from the image menu or the about section, always with the production URL.
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   if (await page.locator('#imageExportMenu').isHidden()) await page.locator('#imageExportButton').click();

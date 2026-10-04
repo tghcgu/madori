@@ -545,6 +545,98 @@ npm.cmd run dev
 - 非常に大きいプランや部材数の多いプランでは処理が重くなる場合があります。
 - 自動保存データはドメインとブラウザプロファイルごとに分かれます。
 
+## 更新履歴
+
+アプリ左の「更新履歴」と同じ内容です（新しい順）。
+
+### 2026年10月4日
+
+- 2Dの「絵柄」を追加。間取り全体を、ドット絵のマップや、和紙に墨の筆で描いたような見た目に切り替えられます（画像の書き出しも同じ絵柄）
+
+### 2026年10月3日
+
+- 「割れたガラス」を「破片」に変え、ドラッグでなぞった所に破片をまけるように（まく幅・量・色を変えられます）
+- クレジット表記をワンクリックでコピーできるように
+- ご意見・ご要望をGoogleフォームで受け付けるように（使っている環境が自動で入ります）。画像を添えて送れるフォームも追加
+
+### 2026年10月2日
+
+- 3Dを使わない「間取り専用版」（/plan/）を公開
+- ペンを追加。好きな色で線や点を描いたり、囲んで塗ったりできます
+- 人の模型を追加。立つ・うつぶせ・あおむけ、ポーズの見本、腰・首・ひじ・ひざなどの関節を自由に動かせます（3Dはデッサン人形風）
+- 足跡を、なぞった道すじに沿って付けられるように
+- 事件・調査の印（番号の印・足跡・倒れた人・血・割れたガラス）を追加
+- 色をカラーコードで入力できるように。末尾の2桁で透明度も決められます
+- 地下の階と、上限のない階数に対応。透かす階・色・濃さを選べるように
+- 書き出した画像が薄く見えないように。お知らせを上のバーへ移動
+
+### 2026年9月29日
+
+- すべての家具の3Dを、真上から見たとき2Dの記号と同じ形に
+- パーツ7種類とデザイン10種類を追加
+
+### 2026年9月28日
+
+- 2D・3Dともに、ほぼ無限に拡大・縮小できるように
+- 再読み込みしても、見ていた場所や表示の設定がそのまま残るように
+- 3Dの家具にも、2Dと同じデザインの種類を追加
+
+### 2026年9月25日
+
+- テキストツールを追加。間取りの好きな所に文字を置けます
+- 2Dの記号を、文字を使わず形だけで分かりやすく。記号のデザイン違いを追加
+- 屋外の物（高さを変えられます）と、3Dの草地を追加
+- 2Dと3Dの境目をドラッグで動かせるように
+
+### 2026年9月24日
+
+- パーツ検索（ひらがなや別名でも探せます）を追加し、よく使う物を先頭に
+- 2Dの屋根の表示切替を追加。寸法の表示で屋根の寸法も切り替え
+
+### 2026年9月17日
+
+- すべての家具の3Dモデルと、ドア・窓の作りをより細かく
+- 名前のない部屋を作れるように。保存データの復旧を改善
+
+### 2026年9月7日
+
+- 床材（フローリング・タイル・石の床・草地）と家具を追加
+
+### 2026年9月1日
+
+- 「支援する」欄を追加
+
+### 2026年7月21日
+
+- アプリのアイコンを追加
+
+### 2026年7月19日
+
+- 屋根を複数置いて編集できるように
+
+### 2026年7月17日
+
+- 「選択中」の欄をツールのすぐ下に移し、折りたためるように
+
+### 2026年7月12日
+
+- 家具と引き戸を追加。置いた物を動かないように固定できるように
+- 作例の雛形を追加。Cloudflare Pages（madori-5yu.pages.dev）で公開
+
+### 2026年7月10日
+
+- 大きな更新：白黒の図面風の2D、複数の階、屋根、家具の一覧、2Dと3Dで別々の色
+- Rキーでの回転、斜めの壁、円や多角形の壁、下の階を半透明で重ねる表示
+- ショートカット一覧と「このアプリについて」を追加。α版として公開
+
+### 2026年7月5日
+
+- GitHub Pages で公開
+
+### 2026年6月27日
+
+- 最初の版：2Dで描いた間取りを3Dで見られる。表示の切り替え、右ドラッグでの移動、ドア・窓、曲線の壁
+
 ## フィードバックと開発参加
 
 不具合、改善案、追加してほしい家具や設備は、次の方法でお知らせください。
@@ -1072,6 +1164,98 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 - 3D performance and appearance vary by browser and GPU.
 - Very large plans or plans with many objects may become slower.
 - Automatic saves are isolated by domain and browser profile.
+
+## Changelog
+
+The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-04
+
+- 2D styles: draw the whole plan as a pixel-art map or in brush ink on washi paper (exported images follow the style)
+
+### 2026-10-03
+
+- Broken glass is now shards: drag to scatter them along a path, with adjustable spread, amount and color
+- Copy the credit line in one click
+- Feedback through Google Forms with your environment filled in, plus a form that takes images
+
+### 2026-10-02
+
+- Plan-only edition without 3D at /plan/
+- Pen for lines, dots and filled areas in any color
+- Posable person: standing or lying, pose presets, and every joint adjustable (a wooden mannequin in 3D)
+- Footprints follow a drawn path
+- Investigation marks: numbered markers, footprints, a fallen person, blood and broken glass
+- Colors can be typed as color codes, with optional transparency
+- Basements and unlimited floors; choose which floors to show through, and their color and strength
+- Exported images no longer look faint; the notice moved into the top bar
+
+### 2026-09-29
+
+- Every 3D model matches its 2D symbol when seen from above
+- 7 new items and 10 new designs
+
+### 2026-09-28
+
+- Zoom 2D and 3D almost without limit
+- The viewpoint and display settings survive reloads
+- 3D models get the same design variants as the 2D symbols
+
+### 2026-09-25
+
+- Text tool for free text anywhere on the plan
+- Clearer 2D symbols drawn with shapes only, and symbol variants
+- Outdoor items with adjustable height, and grass in 3D
+- Drag the boundary between 2D and 3D
+
+### 2026-09-24
+
+- Part search (hiragana and aliases too), with frequent items first
+- Toggle roofs on the 2D plan; the dimension toggle covers roofs too
+
+### 2026-09-17
+
+- More detailed 3D furniture, doors and windows
+- Unnamed rooms, and better recovery of saved plans
+
+### 2026-09-07
+
+- Floor surfaces (wood, tile, stone, grass) and more furniture
+
+### 2026-09-01
+
+- A section for supporting the project
+
+### 2026-07-21
+
+- App icons
+
+### 2026-07-19
+
+- Multiple editable roofs
+
+### 2026-07-17
+
+- The selection panel sits right below the tools and can be collapsed
+
+### 2026-07-12
+
+- More furniture, sliding doors, and placement locks
+- A sample plan template; published on Cloudflare Pages (madori-5yu.pages.dev)
+
+### 2026-07-10
+
+- Big update: monochrome drawing-style 2D, multiple floors, roofs, a furniture catalog, and separate 2D and 3D colors
+- Rotation with R, diagonal walls, circle and polygon walls, and the floor below shown as a translucent guide
+- A shortcut reference and an about section; released as an alpha
+
+### 2026-07-05
+
+- Published on GitHub Pages
+
+### 2026-06-27
+
+- First version: draw a plan in 2D and see it in 3D, with view modes, right-drag panning, doors, windows and curved walls
 
 ## Feedback and Contributions
 

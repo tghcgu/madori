@@ -7,6 +7,7 @@ import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
+import { CHANGELOG, changelogDate } from "./changelog";
 import { makeTranslucent } from "./translucency";
 import {
   DEFAULT_PIXEL_DOT, PAPER_COLOR, PIXEL_DOTS, PLAN_STYLES, createBrushContext, createPixelContext, createWashiTexture, drawPixelTexts, styledFont,
@@ -973,6 +974,7 @@ function setupUi(): void {
   setupTopNote();
   setupFeedbackForm();
   setupCreditCopy();
+  setupChangelog();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -7302,6 +7304,21 @@ function persistState(): void {
   saveTimer = window.setTimeout(() => {
     saveStatus.textContent = "保存済み";
   }, 320);
+}
+
+// ---- 更新履歴 ----
+
+// 左の「更新履歴」に、新しい順に日付と変わった所を並べる。見出しの横には最新の日付
+function setupChangelog(): void {
+  const list = document.querySelector<HTMLDivElement>("#changelogList");
+  const latest = document.querySelector<HTMLSpanElement>("#changelogLatest");
+  if (!list) return;
+  list.innerHTML = CHANGELOG.map((entry) => `
+    <section class="changelog-day">
+      <h3><time datetime="${entry.date}">${changelogDate(entry.date)}</time></h3>
+      <ul>${entry.items.map((item) => `<li>${escapeHtml(item.ja)}</li>`).join("")}</ul>
+    </section>`).join("");
+  if (latest && CHANGELOG[0]) latest.textContent = `最新 ${changelogDate(CHANGELOG[0].date).replace(/^\d+年/, "")}`;
 }
 
 // ---- クレジット表記のコピー ----
