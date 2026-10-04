@@ -98,6 +98,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
 - ほかの階を半透明で重ねる「透過」表示。横の▼から、透かす階（すぐ下・すぐ上・ほかの階すべて・階を名前で指定）、透かす色（カラーコード。空欄なら元の色）、濃さを選べます。透かした階は一度ふつうに描いてから1回だけ半透明で重ねるので、壁の角や重なった所も同じ濃さです
 - 2D上の屋根の一時表示・非表示
+- 2Dの「絵柄」で、間取り全体の描き方を切り替え（標準・ドット・筆と和風）。詳しくは下の「2Dの絵柄」
 - パーツ検索（ひらがな・カタカナ・別名でも検索可。例: いす、まど、れいぞうこ）
 - 選択した要素の配置固定
 - マウスホイールによるズーム（0.0001倍〜1万倍まで、ほぼ無限に拡大・縮小。遠くまで引くと方眼の間隔も自動で広がり、大きく拡大したときは部屋の中にも方眼を薄く表示して、右ドラッグで動かしていることが分かるようにします）
@@ -143,12 +144,22 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 本体の表示の切り替えや3Dで見ていた向きは、間取り専用版を開いても変わりません
 - 本体の上のバーの文字の所に、間取り専用版のお知らせを出しています。×で消せて、消すと開発中の注意書きに戻ります（注意書きも×で消せます。消した文は次からも出ません）。画面の高さは使いません
 
+### 2Dの絵柄
+
+2Dの上の「絵柄」から、間取り全体の描き方を選べます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ絵柄はブラウザに保存され、画像の書き出しもその絵柄になります。
+
+- 標準: これまでどおりの、くっきりした線画
+- ドット: ドット絵のマップのように、間取り全体を四角いドットで描きます。細い線はドットのます目に沿った1ドットの線（曲線は階段状、四角の角はそのまま）、壁などの太い線と塗りはドットごとに1色にまとめます。文字はぼかさずにくっきり描きます。ドットの大きさは細かい（2px）・ふつう（3px）・粗い（5px）から選べ、スクロールしてもドットの形がちらつかないよう、間取りを1ドットずつ動かします
+- 筆・和風: 和紙の地に、墨の筆で描いたように描きます。線は入りでふくらみ、止めや払いで終わり、手で引いたようにわずかに揺れます。四角は辺ごとに筆を運び、角で少し突き抜けます。壁などの太い線は筆の毛ごとに描き、終わりの方でかすれます。塗りは縁が少し波打つ淡い色、白は和紙の色になり、最後に和紙の繊維とむらを重ねます。文字は楷書・教科書体（なければ明朝）で、墨が少しにじんだように描きます。同じ形の線はいつ描いても同じ形なので、動かしたりスクロールしたりしても線がちらつきません
+- 選択中の枠のつまみ・作図中の線・屋根の破線などの操作用の印は、どの絵柄でもくっきり描きます
+
 ### 画像の書き出し
 
 上部の「画像」から、間取りをPNG画像にできます。
 
 - 書き出す階: 表示中の階 / 全部の階を1枚に（階の名前付きで並べる） / 階ごとに1枚ずつ。複数の階は同じ範囲・同じ倍率にそろえるので、重ねて見比べられます
 - 方眼と部屋の名前は入れるかどうかを選べます。寸法は2Dの「寸法」の表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
+- 2Dの「絵柄」がドットや筆・和風なら、画像もその絵柄で描きます（ドットは画面と同じ大きさのドット、筆は和紙の地）
 - 線の太さや文字の大きさの割合は、2Dで間取り全体を表示したときと同じにします（大きな間取りでも、縮めて見たときに線が細く薄くならないように）。細かさは画面の2倍以上・1cmが1.5ピクセル以上で、大きすぎる間取りはどの端末でも作れる大きさまで下げます
 - 「3Dの画像（いまの見え方）」は、3Dで見ている向きのまま画面の2倍の細かさで書き出します
 - ファイル名は`madori-YYYY-MM-DD-1F.png`、`madori-YYYY-MM-DD-all.png`、`madori-YYYY-MM-DD-3d.png`のようになります
@@ -230,7 +241,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（間取り・3D）、新規作成 |
 | 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、雛形 |
-| 2Dペイン | 間取りの作成、選択、移動、リサイズ、透過・寸法・屋根の表示切替 |
+| 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・ドット・筆と和風）、透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
 左上のパネル切替ボタンで、編集パネルを一時的に隠せます。作業内容に応じて、上部の表示切替から2Dまたは3Dを広く表示できます。
@@ -277,7 +288,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 「新規」は作成済みの要素がある場合に確認を表示します。確定した後もUndoで戻せます。名前などの入力中は、Ctrl / Cmd + Zは入力欄の文字だけを取り消します。
 
 - 保存キー: `madori-quick-3d-plan`
-- 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）、画像の書き出しの設定もブラウザへ保存
+- 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）、2Dの絵柄とドットの大きさ、画像の書き出しの設定もブラウザへ保存
 - 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
@@ -400,6 +411,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
+│  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆と和風）の描き方
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
@@ -628,6 +640,7 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Toggle dimension labels for rooms and roofs (off by default)
 - Show the floor below as a translucent guide
 - Temporarily hide roofs on the 2D plan
+- Switch how the whole 2D plan is drawn with "絵柄" (standard, dots, or brush on washi); see "2D styles" below
 - Search parts by name, including hiragana, katakana, and common aliases
 - Lock selected items to prevent accidental movement or deletion
 - Zoom with the mouse wheel (almost without limit, from 0.0001x to 10,000x; the grid spacing widens automatically when zoomed far out, and when zoomed far in the grid also shows faintly inside rooms so you can see the view moving) and pan with right-drag
@@ -668,12 +681,22 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 - It leaves the full app's view mode and 3D camera untouched.
 - The full app shows a notice about the plan-only edition in the text area of the top bar, where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
 
+### 2D styles
+
+"絵柄" above the 2D plan changes how the whole plan is drawn. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. The choice is saved in the browser, and exported images use it too.
+
+- 標準 (standard): the crisp line drawing as before.
+- ドット (dots): the whole plan drawn in square dots like a pixel-art map. Thin lines become one-dot lines on the dot grid (stair-stepped on curves, square at corners); thick lines such as walls and fills take one color per dot. Text stays sharp without blurring. Dots are 2, 3, or 5 px, and the plan moves one dot at a time so the dots do not flicker while scrolling.
+- 筆・和風 (brush): drawn with a sumi ink brush on washi paper. Lines swell where the brush lands, end with a stop or a sweep, and wobble slightly like hand-drawn lines; rectangles are drawn one side at a time and overshoot a little at the corners. Thick lines such as walls are drawn bristle by bristle and run dry toward their ends. Fills are pale washes with slightly wavy edges, white becomes the paper color, and the paper's fibers and mottling lie over everything. Text uses a brush-style typeface (kaisho or kyokasho, otherwise mincho) with a slight ink bleed. The same line always gets the same brush shape, so nothing flickers while moving or scrolling.
+- Selection handles, lines being drawn, and the dashed roof outlines stay crisp in every style.
+
 ### Image export
 
 "画像" in the top bar saves the plan as PNG images.
 
 - Floors: the current floor, all floors in one image (each with its name), or one image per floor. Several floors share the same area and scale so they line up.
 - Grid and room names can be left out. Dimensions follow the 2D dimension toggle. Selection frames, roofs, ghost floors, and lock icons are never included.
+- When the 2D style is dots or brush, the image is drawn in that style (the same dot size as on screen, or on washi paper).
 - Line widths and text keep the same proportions as the whole plan shown in the 2D view, so large plans do not look faint when the image is scaled down. Resolution is at least twice the screen and 1.5 pixels per centimeter, reduced for very large plans so every device can create the image.
 - "3Dの画像" saves the current 3D view at twice the screen resolution.
 
@@ -754,7 +777,7 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, image export (plan and 3D), and new plan |
 | Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
-| 2D pane | Drawing, selection, movement, resizing, and toggles for ghost floors, dimensions, and roofs |
+| 2D pane | Drawing, selection, movement, resizing, the 2D style (standard, dots, brush), and toggles for ghost floors, dimensions, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
 The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let you dedicate more space to the current task.
@@ -801,7 +824,7 @@ Plans are saved automatically to browser `localStorage`. There is no login or cl
 If some saved items are invalid, the original data is backed up before valid items are recovered. Use the recovery banner to download the original JSON unchanged. If the backup fails, for example because storage is full, autosave stops to protect the original; export ongoing work with the regular Export button. Malformed JSON cannot be recovered automatically, but remains downloadable. New asks for confirmation before removing existing items, and can be undone.
 
 - Main storage key: `madori-quick-3d-plan`
-- View mode, the 2D/3D boundary position, dimensions, shadows, lighting, and lower-floor display are also saved
+- View mode, the 2D/3D boundary position, dimensions, shadows, lighting, lower-floor display, and the 2D style with its dot size are also saved
 - Reloading or reopening the app restores where you were looking in 2D (position and zoom), the 3D camera position and direction, floors and roofs hidden in 3D, the 2D roof display, the collapsed tool panel, which palette groups are open, and the design picked for each furniture type (switching the view mode, or loading a template, a new plan, or a file, still frames the whole plan)
 - Data normally survives reloads and browser restarts
 - Clearing site storage deletes the saved plan

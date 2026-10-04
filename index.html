@@ -309,6 +309,30 @@
               <span id="planStats"></span>
             </div>
             <div class="pane-actions">
+              <div class="style-options">
+                <button class="toggle-button" id="planStyleButton" type="button" title="2Dの絵柄を選ぶ（標準・ドット・筆と和風）" aria-haspopup="true" aria-expanded="false">
+                  <i data-lucide="palette"></i>
+                  <span id="planStyleLabel">絵柄</span>
+                </button>
+                <div class="style-menu" id="planStyleMenu" hidden>
+                  <div class="style-choices" role="radiogroup" aria-label="2Dの絵柄">
+                    <button type="button" class="style-choice" role="radio" aria-checked="true" data-plan-style="standard">
+                      <span class="style-sample style-sample-standard" aria-hidden="true"></span>
+                      <span><strong>標準</strong><small>くっきりした線画</small></span>
+                    </button>
+                    <button type="button" class="style-choice" role="radio" aria-checked="false" data-plan-style="pixel">
+                      <span class="style-sample style-sample-pixel" aria-hidden="true"></span>
+                      <span><strong>ドット</strong><small>ドット絵のマップ</small></span>
+                    </button>
+                    <button type="button" class="style-choice" role="radio" aria-checked="false" data-plan-style="brush">
+                      <span class="style-sample style-sample-brush" aria-hidden="true"></span>
+                      <span><strong>筆・和風</strong><small>和紙に墨と淡い色</small></span>
+                    </button>
+                  </div>
+                  <label id="pixelDotRow" hidden>ドットの大きさ<select id="pixelDotSelect"></select></label>
+                  <p class="style-note">画像の書き出しもこの絵柄になります。間取りの形と3Dは変わりません。</p>
+                </div>
+              </div>
               <div class="ghost-options">
                 <button class="toggle-button is-active" id="ghostToggle" type="button" title="ほかの階を透かして表示" aria-pressed="true">
                   <i data-lucide="layers"></i>

@@ -9,6 +9,10 @@ import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type Fu
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { makeTranslucent } from "./translucency";
 import {
+  DEFAULT_PIXEL_DOT, PAPER_COLOR, PIXEL_DOTS, PLAN_STYLES, createBrushContext, createPixelContext, createWashiTexture, drawPixelTexts, styledFont,
+  type PixelText, type PlanStyle,
+} from "./plan-style";
+import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
@@ -503,6 +507,9 @@ const MAX_BRUSH = 300;
 // 次になぞって描く破片の、まく幅と量（選んだ破片で変えると、次からもそれを使う）
 const shardSettings: { spread: number; density: number } = { spread: SHARD_SPREAD, density: 1 };
 const SHARD_DENSITIES: [number, string][] = [[0.5, "少なめ"], [1, "ふつう"], [2, "多め"]];
+// 2Dの絵柄（標準・ドット・筆と和風）と、ドットの大きさ（見ていた場所などと一緒にブラウザへ保存）
+let planStyle: PlanStyle = "standard";
+let pixelDot = DEFAULT_PIXEL_DOT;
 // ペンのよく使う色（血の色が最初）
 const PEN_COLORS: [string, string][] = [
   ["#9b1c17", "血の色"], ["#e03131", "赤"], ["#f08c00", "だいだい"], ["#f2c230", "黄"], ["#2f9e44", "緑"], ["#1c7ed6", "青"],
@@ -519,6 +526,23 @@ const ghostSettings: { target: string; color: string; opacity: number } = { targ
 let ghostCanvas: HTMLCanvasElement | null = null;
 // 透明度のある色の要素をいったん描く作業用のキャンバス（同じく起動直後から使う）
 let translucentCanvas: HTMLCanvasElement | null = null;
+// 絵柄を付けて描いている間の設定（標準の絵柄で描いている間は null）。
+// raw は絵柄を付けない描き先（方眼）、overlays はあとで絵柄なしで上に描く物（選択のつまみ・作図中の線など）、
+// layer はほかのキャンバス（透かす階・透明度のある色）にも同じ絵柄を付ける関数、texts はドットの絵柄であとから描く文字
+interface StylePass {
+  style: PlanStyle;
+  raw: CanvasRenderingContext2D;
+  overlays: (() => void)[];
+  layer: (raw: CanvasRenderingContext2D, keepTexts: boolean) => CanvasRenderingContext2D;
+  texts: PixelText[];
+  alpha: number;
+}
+let stylePass: StylePass | null = null;
+// ドットの絵柄の作業用のキャンバス（細かく描く所・ドットにした所・文字）と、筆の絵柄の和紙の模様
+let pixelSourceCanvas: HTMLCanvasElement | null = null;
+let pixelDotCanvas: HTMLCanvasElement | null = null;
+let pixelTextCanvas: HTMLCanvasElement | null = null;
+let washiTexture: HTMLCanvasElement | null = null;
 
 // 透かす色のカラーコードに透明度があればそれを、なければ「濃さ」を使う
 function ghostOpacity(): number {
@@ -625,6 +649,7 @@ interface SavedViewState {
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
   pen?: { color?: string; brush?: number; filled?: boolean };
   shards?: { spread?: number; density?: number };
+  look?: { style?: string; dot?: number };
 }
 
 const viewState: SavedViewState = loadViewState();
@@ -942,6 +967,7 @@ function setupUi(): void {
   });
 
   setupGhostMenu();
+  setupPlanStyleMenu();
   setupImageExport();
   setupEdition();
   setupTopNote();
@@ -1806,6 +1832,11 @@ function applySavedDisplaySettings(): void {
     if (typeof color === "string") ghostSettings.color = parseColorCode(color)?.code ?? "";
     if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
   }
+  if (viewState.look && typeof viewState.look === "object") {
+    const { style, dot } = viewState.look;
+    if (PLAN_STYLES.some((option) => option.value === style)) planStyle = style as PlanStyle;
+    if (PIXEL_DOTS.some((option) => option.value === dot)) pixelDot = dot as number;
+  }
   if (viewState.shards && typeof viewState.shards === "object") {
     const { spread, density } = viewState.shards;
     if (typeof spread === "number" && Number.isFinite(spread)) shardSettings.spread = clamp(Math.round(spread), 5, MAX_BRUSH);
@@ -1902,6 +1933,7 @@ function saveViewState(): void {
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
   viewState.shards = { ...shardSettings };
+  viewState.look = { style: planStyle, dot: pixelDot };
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -2640,12 +2672,220 @@ function render2d(): void {
   const ratio = getCanvasPixelRatio();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  drawPlan(width, height, { grid: true, ghost: true, editing: true });
+  drawStyledPlan(ctx, width, height, ratio, { grid: true, ghost: true, editing: true });
   scheduleViewStateSave();
 }
 
+interface PlanDrawOptions {
+  grid: boolean;
+  ghost: boolean;
+  editing: boolean;
+}
+
+// ---- 2Dの絵柄 ----
+
+// 間取りを、いまの絵柄で target に描く。target の変換は、画面の1pxを ratio 画素にして、描き始めの所へ動かしたもの。
+// paper は筆の絵柄で和紙の地と模様も描くとき（画像の書き出しでは、画像全体にまとめて描く）
+function drawStyledPlan(target: CanvasRenderingContext2D, width: number, height: number, ratio: number, options: PlanDrawOptions, paper = true): void {
+  const saved = ctx;
+  try {
+    if (planStyle === "brush") drawBrushPlan(target, width, height, ratio, options, paper);
+    else if (planStyle === "pixel") drawPixelPlan(target, width, height, options);
+    else {
+      ctx = target;
+      drawPlan(width, height, options);
+    }
+  } finally {
+    ctx = saved;
+  }
+}
+
+// 絵柄を付けて間取りを描き、あとで上に描く物（つまみなど）と、控えた文字を返す
+function runStylePass(style: PlanStyle, raw: CanvasRenderingContext2D, layer: StylePass["layer"], draw: () => void): StylePass {
+  const pass: StylePass = { style, raw, overlays: [], layer, texts: [], alpha: 1 };
+  const saved = { ctx, stylePass };
+  stylePass = pass;
+  ctx = layer(raw, true);
+  try {
+    draw();
+  } finally {
+    ctx = saved.ctx;
+    stylePass = saved.stylePass;
+  }
+  return pass;
+}
+
+// 絵柄を付けている間は、選択のつまみ・作図中の線などを、あとで絵柄なしで上に描く
+function deferOverlay(draw: () => void): boolean {
+  if (!stylePass) return false;
+  stylePass.overlays.push(draw);
+  return true;
+}
+
+function drawOverlays(target: CanvasRenderingContext2D, pass: StylePass): void {
+  if (!pass.overlays.length) return;
+  const saved = ctx;
+  ctx = target;
+  target.save();
+  target.translate(view.x, view.y);
+  target.scale(view.zoom, view.zoom);
+  try {
+    pass.overlays.forEach((draw) => draw());
+  } finally {
+    target.restore();
+    ctx = saved;
+  }
+}
+
+// 筆・和風: 和紙の地に、筆の線と淡い塗りで描き、最後に和紙の繊維を重ねる
+function drawBrushPlan(target: CanvasRenderingContext2D, width: number, height: number, ratio: number, options: PlanDrawOptions, paper: boolean): void {
+  if (paper) {
+    target.save();
+    target.fillStyle = PAPER_COLOR;
+    target.fillRect(0, 0, width, height);
+    target.restore();
+  }
+  const pass = runStylePass("brush", target, (raw) => createBrushContext(raw, { unit: ratio }), () => drawPlan(width, height, options));
+  if (paper) drawWashi(target, width, height, view.x, view.y);
+  drawOverlays(target, pass);
+}
+
+// 和紙の繊維とむらを、描いた物ごと乗算で重ねる。(anchorX, anchorY) に模様の始まりを合わせる（間取りと一緒に動くように）
+function drawWashi(target: CanvasRenderingContext2D, width: number, height: number, anchorX: number, anchorY: number): void {
+  washiTexture ??= createWashiTexture();
+  const pattern = target.createPattern(washiTexture, "repeat");
+  if (!pattern) return;
+  pattern.setTransform(new DOMMatrix().translate(anchorX, anchorY));
+  target.save();
+  target.globalCompositeOperation = "multiply";
+  target.fillStyle = pattern;
+  target.fillRect(0, 0, width, height);
+  target.restore();
+}
+
+// ドット: 画面の1pxの細かさで描いてから、ドットごとに真ん中の1画素の色をとって（ぼかさずに縮めて）大きく映す。
+// 細い線は描くときにドットのます目に沿わせ、文字は画面の細かさでぼかさずに描く
+function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: number, options: PlanDrawOptions): void {
+  const dot = pixelDot;
+  const columns = Math.max(1, Math.ceil(width / dot)), rows = Math.max(1, Math.ceil(height / dot));
+  const w = columns * dot, h = rows * dot;
+  pixelSourceCanvas ??= document.createElement("canvas");
+  const sourceCanvas = pixelSourceCanvas;
+  if (sourceCanvas.width !== w || sourceCanvas.height !== h) {
+    sourceCanvas.width = w;
+    sourceCanvas.height = h;
+  }
+  const source = sourceCanvas.getContext("2d");
+  if (!source) return;
+  source.setTransform(1, 0, 0, 1, 0, 0);
+  source.globalAlpha = 1;
+  source.globalCompositeOperation = "source-over";
+  source.fillStyle = "#ffffff";
+  source.fillRect(0, 0, w, h);
+  // 間取りをドットのます目に合わせて1ドットずつ動かす（スクロールしても、ドットの形がちらつかない）
+  const realView = view;
+  view = { ...view, x: Math.round(view.x / dot) * dot, y: Math.round(view.y / dot) * dot };
+  let pass: StylePass;
+  try {
+    pass = runStylePass("pixel", source, (raw, keepTexts) => createPixelContext(raw, {
+      dot,
+      text: keepTexts ? (text) => {
+        if (!stylePass) return false;
+        stylePass.texts.push({ ...text, alpha: text.alpha * stylePass.alpha });
+        return true;
+      } : undefined,
+    }), () => drawPlan(width, height, options));
+  } finally {
+    view = realView;
+  }
+  pixelDotCanvas ??= document.createElement("canvas");
+  const dots = pixelDotCanvas;
+  if (dots.width !== columns || dots.height !== rows) {
+    dots.width = columns;
+    dots.height = rows;
+  }
+  const dotContext = dots.getContext("2d");
+  if (!dotContext) return;
+  dotContext.imageSmoothingEnabled = false;
+  dotContext.clearRect(0, 0, columns, rows);
+  dotContext.drawImage(sourceCanvas, 0, 0, w, h, 0, 0, columns, rows);
+  target.save();
+  target.imageSmoothingEnabled = false;
+  target.drawImage(dots, 0, 0, w, h);
+  target.restore();
+  pixelTextCanvas ??= document.createElement("canvas");
+  drawPixelTexts(target, pass.texts, w, h, pixelTextCanvas);
+  drawOverlays(target, pass);
+}
+
+function setupPlanStyleMenu(): void {
+  const button = document.querySelector<HTMLButtonElement>("#planStyleButton");
+  const menu = document.querySelector<HTMLDivElement>("#planStyleMenu");
+  const dots = document.querySelector<HTMLSelectElement>("#pixelDotSelect");
+  if (!button || !menu || !dots) return;
+  dots.innerHTML = PIXEL_DOTS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("");
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+    if (menu.hidden) return;
+    // 狭い画面でも、メニューが画面の外にはみ出さないように横へずらす
+    menu.style.translate = "";
+    const rect = menu.getBoundingClientRect();
+    const margin = 8;
+    const shift = rect.left < margin ? margin - rect.left : Math.min(0, window.innerWidth - margin - rect.right);
+    if (shift) menu.style.translate = `${shift}px 0`;
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+    close();
+  });
+  menu.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    close();
+    button.focus();
+  });
+  menu.querySelectorAll<HTMLButtonElement>("[data-plan-style]").forEach((choice) => {
+    choice.addEventListener("click", () => {
+      const style = PLAN_STYLES.find((option) => option.value === choice.dataset.planStyle);
+      if (!style) return;
+      planStyle = style.value;
+      syncPlanStyleMenu();
+      render2d();
+      scheduleViewStateSave();
+    });
+  });
+  dots.addEventListener("change", () => {
+    const value = Number(dots.value);
+    if (!PIXEL_DOTS.some((option) => option.value === value)) return;
+    pixelDot = value;
+    render2d();
+    scheduleViewStateSave();
+  });
+  syncPlanStyleMenu();
+}
+
+function syncPlanStyleMenu(): void {
+  const style = PLAN_STYLES.find((option) => option.value === planStyle) ?? PLAN_STYLES[0];
+  const button = document.querySelector<HTMLButtonElement>("#planStyleButton");
+  const label = document.querySelector<HTMLSpanElement>("#planStyleLabel");
+  if (label) label.textContent = planStyle === "standard" ? "絵柄" : style.label;
+  button?.classList.toggle("is-active", planStyle !== "standard");
+  document.querySelectorAll<HTMLButtonElement>("[data-plan-style]").forEach((choice) => {
+    choice.setAttribute("aria-checked", String(choice.dataset.planStyle === planStyle));
+  });
+  const dots = document.querySelector<HTMLSelectElement>("#pixelDotSelect");
+  if (dots) dots.value = String(pixelDot);
+  const dotRow = document.querySelector<HTMLLabelElement>("#pixelDotRow");
+  if (dotRow) dotRow.hidden = planStyle !== "pixel";
+  planCanvas.dataset.style = planStyle;
+}
+
 // 間取りを描く。editing は画面だけの物（屋根の破線・固定の印・作図中の線）も描くとき
-function drawPlan(width: number, height: number, options: { grid: boolean; ghost: boolean; editing: boolean }): void {
+function drawPlan(width: number, height: number, options: PlanDrawOptions): void {
   ctx.save();
   ctx.translate(view.x, view.y);
   ctx.scale(view.zoom, view.zoom);
@@ -2708,21 +2948,30 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
   // 5本ごとの太い線は、線の番号で見分ける（小数の間隔でも割り算の誤差が出ない）
   const firstX = Math.floor(left / step), lastX = Math.ceil(right / step);
   const firstY = Math.floor(top / step), lastY = Math.ceil(bottom / step);
+  // 絵柄を付けて描いている間も、方眼は絵柄を付けずにまっすぐ引く。筆では和紙に刷ったような茶色の線、
+  // ドットでは線をドットのます目に合わせた1ドットの線（ドットにまとめたときに、とぎれとぎれにならないように）
+  const g = stylePass?.raw ?? ctx;
+  const dot = stylePass?.style === "pixel" ? pixelDot : 0;
+  const [minor, major] = stylePass?.style === "brush" ? ["rgba(150, 118, 76, 0.11)", "rgba(150, 118, 76, 0.22)"]
+    : dot ? ["#f5f6f8", "#e9ecf0"] : ["#f2f4f7", "#e2e6ec"];
+  const snap = (value: number, offset: number) => (dot ? (Math.floor((value * view.zoom + offset) / dot) * dot + dot / 2 - offset) / view.zoom : value);
 
-  ctx.lineWidth = 1 / view.zoom;
+  g.lineWidth = (dot || 1) / view.zoom;
   for (let i = firstX; i <= lastX; i += 1) {
-    ctx.beginPath();
-    ctx.strokeStyle = i % 5 === 0 ? "#e2e6ec" : "#f2f4f7";
-    ctx.moveTo(i * step, top);
-    ctx.lineTo(i * step, bottom);
-    ctx.stroke();
+    const x = snap(i * step, view.x);
+    g.beginPath();
+    g.strokeStyle = i % 5 === 0 ? major : minor;
+    g.moveTo(x, top);
+    g.lineTo(x, bottom);
+    g.stroke();
   }
   for (let i = firstY; i <= lastY; i += 1) {
-    ctx.beginPath();
-    ctx.strokeStyle = i % 5 === 0 ? "#e2e6ec" : "#f2f4f7";
-    ctx.moveTo(left, i * step);
-    ctx.lineTo(right, i * step);
-    ctx.stroke();
+    const y = snap(i * step, view.y);
+    g.beginPath();
+    g.strokeStyle = i % 5 === 0 ? major : minor;
+    g.moveTo(left, y);
+    g.lineTo(right, y);
+    g.stroke();
   }
 }
 
@@ -2744,18 +2993,20 @@ function drawFloorBelowGhost(): void {
   if (!floors.length) return;
   ghostCanvas ??= document.createElement("canvas");
   const target = ghostCanvas;
-  if (target.width !== planCanvas.width || target.height !== planCanvas.height) {
-    target.width = planCanvas.width;
-    target.height = planCanvas.height;
+  const host = ctx.canvas;
+  if (target.width !== host.width || target.height !== host.height) {
+    target.width = host.width;
+    target.height = host.height;
   }
   const ghostContext = target.getContext("2d");
   if (!ghostContext) return;
   const planContext = ctx;
   const transform = planContext.getTransform();
-  ctx = ghostContext;
+  // 絵柄を付けているときは、透かす階にも同じ絵柄を付ける（文字もその場で描く）
+  ctx = stylePass ? stylePass.layer(ghostContext, false) : ghostContext;
   try {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, target.width, target.height);
+    ghostContext.setTransform(1, 0, 0, 1, 0, 0);
+    ghostContext.clearRect(0, 0, target.width, target.height);
     ctx.setTransform(transform);
     // 部屋の塗りを先に全部描き、その上に線の要素を描く（ほかの階の床が線を隠さないように）
     drawLayer(floors.flatMap((floor) => floor.entities.filter(isRoom)), drawRoom);
@@ -2773,11 +3024,11 @@ function drawFloorBelowGhost(): void {
     const tint = parseColorCode(ghostSettings.color);
     if (tint) {
       // 透かす色が決まっているときは、描いた形をその色1色に塗り替える
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = "source-in";
-      ctx.fillStyle = tint.rgb;
-      ctx.fillRect(0, 0, target.width, target.height);
-      ctx.globalCompositeOperation = "source-over";
+      ghostContext.setTransform(1, 0, 0, 1, 0, 0);
+      ghostContext.globalCompositeOperation = "source-in";
+      ghostContext.fillStyle = tint.rgb;
+      ghostContext.fillRect(0, 0, target.width, target.height);
+      ghostContext.globalCompositeOperation = "source-over";
     }
   } finally {
     ctx = planContext;
@@ -2824,14 +3075,19 @@ function drawTranslucent(alpha: number, draw: () => void): void {
   const layer = target.getContext("2d");
   if (!layer) return;
   const transform = base.getTransform();
-  ctx = layer;
+  // 絵柄を付けているときは同じ絵柄で描く。ドットの絵柄で控える文字には、この透明度も付ける
+  const pass = stylePass;
+  const outerAlpha = pass?.alpha ?? 1;
+  ctx = pass ? pass.layer(layer, true) : layer;
+  if (pass) pass.alpha = outerAlpha * alpha;
   try {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, target.width, target.height);
+    layer.setTransform(1, 0, 0, 1, 0, 0);
+    layer.clearRect(0, 0, target.width, target.height);
     ctx.setTransform(transform);
     draw();
   } finally {
     ctx = base;
+    if (pass) pass.alpha = outerAlpha;
   }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2860,6 +3116,7 @@ function drawSelectionMarks(entity: Entity): void {
 }
 
 function drawRoof2d(roofItem: Roof): void {
+  if (deferOverlay(() => drawRoof2d(roofItem))) return;
   const selected = state.selectedId === roofItem.id;
   const horizontal = roofItem.w >= roofItem.h;
   const cx = roofItem.x + roofItem.w / 2;
@@ -2955,6 +3212,7 @@ function drawRoom(room: Room): void {
 }
 
 function drawRoomLabelGuide(room: Room): void {
+  if (deferOverlay(() => drawRoomLabelGuide(room))) return;
   const bounds = getRoomLabelBounds(room);
   if (!bounds) return;
   ctx.save();
@@ -2971,6 +3229,7 @@ function drawWall2d(wallItem: LinearElement): void {
 }
 
 function drawLineHandles(entity: LinearElement): void {
+  if (deferOverlay(() => drawLineHandles(entity))) return;
   ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
@@ -4261,6 +4520,7 @@ function personHandleAt(item: Furniture, point: Point): number {
 
 // 手首・足首は白い丸、ひじ・ひざは小さな水色の丸、頭は中に点のある丸
 function drawPersonHandles(item: Furniture): void {
+  if (deferOverlay(() => drawPersonHandles(item))) return;
   ctx.save();
   ctx.strokeStyle = "#2775d1";
   ctx.lineWidth = 2 / view.zoom;
@@ -4495,6 +4755,7 @@ function refitPaint(item: Furniture): void {
 
 // なぞっている間の見本: いまのペンの色・太さで描く
 function drawPaintPreview(points: Point[]): void {
+  if (deferOverlay(() => drawPaintPreview(points))) return;
   const path = tidyPaintPath(points);
   if (!path.length) return;
   const parsed = parseColorCode(penSettings.color);
@@ -4752,6 +5013,7 @@ function placeFootprintPath(points: Point[]): void {
 
 // なぞっている間の見本: 道すじと、そこに付く足跡
 function drawFootprintPreview(points: Point[]): void {
+  if (deferOverlay(() => drawFootprintPreview(points))) return;
   const path = tidyPath(points);
   if (path.length < 2) return;
   const redraw = footprintRedrawTarget();
@@ -4873,6 +5135,7 @@ function pathFrame(path: Point2[], margin: number): { x: number; y: number; w: n
 
 // なぞっている間の見本: 道すじと、そこにまかれる破片
 function drawShardPreview(points: Point[]): void {
+  if (deferOverlay(() => drawShardPreview(points))) return;
   const path = tidyPath(points);
   if (path.length < 2) return;
   const redraw = pathRedrawTarget("brokenGlass");
@@ -5833,6 +6096,7 @@ function drawShape2d(shape: Shape): void {
 }
 
 function drawShapeHandle(shape: Shape): void {
+  if (deferOverlay(() => drawShapeHandle(shape))) return;
   ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
@@ -5844,6 +6108,7 @@ function drawShapeHandle(shape: Shape): void {
 }
 
 function drawPreview(start: Point, current: Point): void {
+  if (deferOverlay(() => drawPreview(start, current))) return;
   ctx.save();
   ctx.setLineDash([8 / view.zoom, 6 / view.zoom]);
   ctx.lineWidth = 2 / view.zoom;
@@ -5897,6 +6162,7 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
 }
 
 function drawResizeHandles(entity: Room | Furniture | Roof): void {
+  if (deferOverlay(() => drawResizeHandles(entity))) return;
   const handles = [
     { x: entity.x, y: entity.y },
     { x: entity.x + entity.w, y: entity.y },
@@ -5920,7 +6186,8 @@ function textLines(label: TextLabel): string[] {
 // 文字のまとまりの幅と高さ（ワールド座標）。フォントの大きさをそのまま cm として扱う
 function measureTextLabel(label: TextLabel): { w: number; h: number } {
   ctx.save();
-  ctx.font = `${label.size}px ${TEXT_FONT}`;
+  // 絵柄の書体で測る（筆やドットでは、書体が替わって文字の幅も変わる）
+  ctx.font = styledFont(`${label.size}px ${TEXT_FONT}`, planStyle);
   const lines = textLines(label);
   const w = Math.max(label.size * 0.6, ...lines.map((line) => ctx.measureText(line).width));
   ctx.restore();
@@ -5943,6 +6210,7 @@ function drawTextLabel(label: TextLabel): void {
 }
 
 function drawTextSelection(label: TextLabel): void {
+  if (deferOverlay(() => drawTextSelection(label))) return;
   const { w, h } = measureTextLabel(label);
   const pad = 4 / view.zoom;
   ctx.save();
@@ -5973,6 +6241,7 @@ function focusTextContentInput(): void {
 }
 
 function drawLockedIndicator(entity: Entity): void {
+  if (deferOverlay(() => drawLockedIndicator(entity))) return;
   let anchor: Point;
   if (entity.type === "room" || entity.type === "roof") {
     anchor = { x: entity.x + entity.w - 16 / view.zoom, y: entity.y + 16 / view.zoom };
@@ -7227,13 +7496,14 @@ function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number
   state.selectedId = null;
   hideRoomNames = !imageExportSettings.names;
   try {
-    ctx.save();
-    ctx.setTransform(ratio, 0, 0, ratio, left * ratio, top * ratio);
-    ctx.beginPath();
-    ctx.rect(0, 0, width, height);
-    ctx.clip();
-    drawPlan(width, height, { grid: imageExportSettings.grid, ghost: false, editing: false });
-    ctx.restore();
+    target.save();
+    target.setTransform(ratio, 0, 0, ratio, left * ratio, top * ratio);
+    target.beginPath();
+    target.rect(0, 0, width, height);
+    target.clip();
+    // いまの2Dの絵柄で描く（筆の和紙は、画像全体にまとめて描く）
+    drawStyledPlan(target, width, height, ratio, { grid: imageExportSettings.grid, ghost: false, editing: false }, false);
+    target.restore();
   } finally {
     ctx = saved.ctx;
     view = saved.view;
@@ -7275,23 +7545,39 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
   canvas.height = Math.max(1, Math.round(cellH * rows * ratio));
   const target = canvas.getContext("2d");
   if (!target) return canvas;
-  target.fillStyle = "#ffffff";
+  target.fillStyle = planStyle === "brush" ? PAPER_COLOR : "#ffffff";
   target.fillRect(0, 0, canvas.width, canvas.height);
   floorIndexes.forEach((floorIndex, i) => {
     const left = (i % columns) * cellW;
     const top = Math.floor(i / columns) * cellH;
-    if (labelled) {
-      target.save();
-      target.setTransform(ratio, 0, 0, ratio, 0, 0);
-      target.fillStyle = INK;
-      target.font = `700 22px ${TEXT_FONT}`;
-      target.textBaseline = "middle";
-      target.fillText(state.floors[floorIndex].name, left + 16, top + heading / 2);
-      target.restore();
-    }
+    if (labelled) drawExportHeading(target, state.floors[floorIndex].name, left + 16, top + heading / 2, ratio, cellW * columns, cellH * rows);
     drawFloorForExport(target, floorIndex, bounds, left, top + heading, ratio, zoom);
   });
+  if (planStyle === "brush") {
+    target.save();
+    target.setTransform(ratio, 0, 0, ratio, 0, 0);
+    drawWashi(target, cellW * columns, cellH * rows, 0, 0);
+    target.restore();
+  }
   return canvas;
+}
+
+// 複数の階を並べた画像の、階の名前。間取りと同じ絵柄の文字にする
+function drawExportHeading(target: CanvasRenderingContext2D, text: string, x: number, y: number, ratio: number, width: number, height: number): void {
+  target.save();
+  target.setTransform(ratio, 0, 0, ratio, 0, 0);
+  const font = `700 22px ${TEXT_FONT}`;
+  if (planStyle === "pixel") {
+    pixelTextCanvas ??= document.createElement("canvas");
+    drawPixelTexts(target, [{ text, x, y, transform: new DOMMatrix(), font: styledFont(font, "pixel"), color: INK, align: "left", baseline: "middle", alpha: 1 }], width, height, pixelTextCanvas);
+  } else {
+    const g = planStyle === "brush" ? createBrushContext(target, { unit: ratio }) : target;
+    g.fillStyle = INK;
+    g.font = font;
+    g.textBaseline = "middle";
+    g.fillText(text, x, y);
+  }
+  target.restore();
 }
 
 function exportPlanImages(): void {

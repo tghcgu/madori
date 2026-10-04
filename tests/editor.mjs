@@ -972,6 +972,85 @@ try {
   assert.match((await threeDownload).suggestedFilename(), /-3d\.png$/);
   console.log('PASS: image export: the current floor and all floors as PNG with the plan contents, and the 3D view');
 
+  // 2D styles: dots or brush on washi change how the whole plan is drawn (and the exported image), never the plan itself.
+  const planBeforeStyle = JSON.stringify((await saved()).floors);
+  const chooseStyle = async style => {
+    await page.locator('#planStyleButton').click();
+    await page.locator(`[data-plan-style="${style}"]`).click();
+    await page.locator('#planStyleButton').click();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  };
+  const canvasPixels = async (x, y, size) => {
+    const screen = await planPoint(x, y);
+    return page.locator('#planCanvas').evaluate((canvas, [px, py, size]) => {
+      const rect = canvas.getBoundingClientRect(), ratio = canvas.width / rect.width;
+      const left = Math.round((px - rect.left) * ratio), top = Math.round((py - rect.top) * ratio);
+      return { left, top, ratio, data: [...canvas.getContext('2d').getImageData(left, top, size, size).data] };
+    }, [screen.x, screen.y, size]);
+  };
+  // Every dot is one square of a single color, lined up with the canvas.
+  const dotted = ({ left, top, data }, size, dot) => {
+    let colors = new Set(), uniform = true;
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const i = (y * size + x) * 4, color = data.slice(i, i + 3).join();
+        colors.add(color);
+        const ox = x - ((left + x) % dot), oy = y - ((top + y) % dot);
+        if (ox < 0 || oy < 0) continue;
+        const j = (oy * size + ox) * 4;
+        if (data.slice(j, j + 3).join() !== color) uniform = false;
+      }
+    }
+    return { uniform, colors: colors.size };
+  };
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
+  await chooseStyle('pixel');
+  assert.equal(await page.locator('#planStyleLabel').textContent(), 'ドット');
+  assert.equal(await page.locator('[data-plan-style="pixel"]').getAttribute('aria-checked'), 'true');
+  const dotArea = await canvasPixels(230, 160, 60);
+  const dots = dotted(dotArea, 60, 3 * dotArea.ratio);
+  assert.ok(dots.uniform && dots.colors >= 2, `the blood pool is drawn in square dots: ${JSON.stringify(dots)}`);
+  // Smaller dots, and the exported image is made of dots too (each dot is 3 px on the screen, twice that in the image).
+  await page.locator('#planStyleButton').click();
+  await page.locator('#pixelDotSelect').selectOption('5');
+  await page.locator('#planStyleButton').click();
+  const bigDots = dotted(await canvasPixels(230, 160, 60), 60, 5 * dotArea.ratio);
+  assert.ok(bigDots.uniform, 'coarse dots are 5 px');
+  await page.locator('#planStyleButton').click();
+  await page.locator('#pixelDotSelect').selectOption('3');
+  await page.locator('#planStyleButton').click();
+  const pixelImage = await exportImage('#imageExportPlan', 'current');
+  assert.ok(isRed(pixelImage.blood) && pixelImage.wall.every(value => value < 80), `the dot image keeps the plan: ${pixelImage.blood} ${pixelImage.wall}`);
+  await chooseStyle('brush');
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '筆・和風');
+  assert.equal(await page.locator('#pixelDotRow').isHidden(), true, 'the dot size is only for dots');
+  const paper = shown(await pixelAt(450, 330));
+  assert.ok(paper[0] > 200 && paper[0] > paper[2] + 8, `a white room is washi paper: ${paper}`);
+  // Walls are brush strokes in ink (the dry end of a stroke may leave a few gaps).
+  const inked = [];
+  for (const y of [80, 160, 240, 320]) inked.push(shown(await pixelAt(600, y)).every(value => value < 110));
+  assert.ok(inked.filter(Boolean).length >= 2, `walls are drawn in ink: ${inked}`);
+  const brushImage = await exportImage('#imageExportPlan', 'current');
+  assert.ok(brushImage.corner[0] > 200 && brushImage.corner[0] > brushImage.corner[2] + 8, `the image is on washi paper too: ${brushImage.corner}`);
+  assert.ok(isRed(brushImage.blood), `the blood pool keeps its color in the brush style: ${brushImage.blood}`);
+  // The plan is edited the same way: dragging the blood pool moves it.
+  const bloodBefore = (await saved()).floors[0].entities.find(entity => entity.id === 'clue');
+  await move(await planPoint(260, 200), 60, 0);
+  const bloodAfter = (await saved()).floors[0].entities.find(entity => entity.id === 'clue');
+  assert.ok(bloodAfter.x > bloodBefore.x + 20, `selecting and dragging still work: ${bloodBefore.x} -> ${bloodAfter.x}`);
+  await page.keyboard.press('Control+z');
+  assert.equal(JSON.stringify((await saved()).floors), planBeforeStyle, 'choosing a style never changes the plan');
+  // The style is kept after a reload, like the other display settings.
+  await page.waitForTimeout(700);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '筆・和風');
+  await chooseStyle('standard');
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
+  const white = shown(await pixelAt(450, 330));
+  assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
+  console.log('PASS: 2D styles: dots and brush on washi, dot sizes, exported images, editing, undo and kept after a reload');
+
   // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
   assert.equal(await page.locator('#editionNote').isVisible(), true, 'the full app announces the plan-only edition in the top bar');
   assert.equal(await page.locator('#alphaNote').isVisible(), false, 'in place of the alpha note');
