@@ -604,38 +604,81 @@ npm.cmd run dev
 
 ### 2026年9月1日
 
-- 「支援する」欄を追加
+- 「支援する」欄を追加（Amazon ほしい物リスト）
+
+### 2026年8月4日
+
+- スマホ・タブレットで開いたときだけ、PCでの利用をおすすめするお知らせを出すように（幅の狭いPCの画面では出ません）
+
+### 2026年7月24日
+
+- Google検索の結果に、サイト名「間取りクイック3D」が出るように
 
 ### 2026年7月21日
 
-- アプリのアイコンを追加
+- アプリのアイコンを追加（ブラウザのタブやホーム画面に出ます）
+
+### 2026年7月20日
+
+- 使い方の説明（README）を日本語と英語で詳しく
 
 ### 2026年7月19日
 
-- 屋根を複数置いて編集できるように
+- 屋根を複数置いて、それぞれの形・大きさ・位置を編集できるように
 
 ### 2026年7月17日
 
-- 「選択中」の欄をツールのすぐ下に移し、折りたためるように
+- 「選択中」の欄を折りたためるように
+
+### 2026年7月13日
+
+- 「選択中」の欄を、ツールのすぐ下に移動
+- PCでの利用をおすすめする注意書きを追加
+- 利用条件で禁止する使い方を詳しくし、作った間取りや画像を公開するときのクレジット表記を必須に
 
 ### 2026年7月12日
 
-- 家具と引き戸を追加。置いた物を動かないように固定できるように
-- 作例の雛形を追加。Cloudflare Pages（madori-5yu.pages.dev）で公開
+- 家具を追加（壁掛け時計・ホールクロック・水槽など）。引き戸を追加
+- 置いた物を動かないように固定できるように
+- 作例の雛形「サンプル」を追加
+- Cloudflare Pages（madori-5yu.pages.dev）でも公開
+- 訪問数の把握に、Cookieを使わず個人を追跡しないアクセス計測を使うように（プライバシーの説明も更新）
+
+### 2026年7月11日
+
+- 利用条件に、嫌がらせや差別的な目的での利用の禁止を追加
 
 ### 2026年7月10日
 
-- 大きな更新：白黒の図面風の2D、複数の階、屋根、家具の一覧、2Dと3Dで別々の色
-- Rキーでの回転、斜めの壁、円や多角形の壁、下の階を半透明で重ねる表示
-- ショートカット一覧と「このアプリについて」を追加。α版として公開
+- 大きな更新：2Dを白黒の図面風の線画に。家具23種類を種類ごとの一覧にし、ドア・窓も一覧へ
+- 1F〜4Fの階を切り替えて編集。下の階を薄く重ねて表示し、3Dでは階を積み重ねて表示
+- 屋根（切妻・寄棟・陸屋根、軒の出つき）
+- 壁・ドア・窓・図形・家具ごとに色を選べ、2Dと3Dで別々の色にもできるように
+- 3Dの影の表示の切り替え、光の向き、5段階の光の強さ、階や屋根ごとの表示の切り替え
+- 3Dで、ドアの上や窓の上下を壁でふさぎ、開口の所だけ壁を抜くように
+- 壁・ドア・窓の長さを数字で入力したり、端のつまみで伸び縮みさせたりできるように
+- ドアや家具の左右反転（Fキー）と、真ん中に縦の枠がある窓
+- Rキーで回転（Shift+Rで15°ずつ）、角度の入力
+- 斜めの壁（15°ずつ）と、円・円弧・三角形〜八角形の図形の壁
+- 編集パネルを一時的に隠すボタン
+- ショートカット一覧、「このアプリについて」（免責やデータの扱い）、「ご意見・ご要望」を追加。α版として公開
 
 ### 2026年7月5日
 
 - GitHub Pages で公開
 
+### 2026年7月2日
+
+- ブラウザのタブに出るアイコンを追加
+
 ### 2026年6月27日
 
-- 最初の版：2Dで描いた間取りを3Dで見られる。表示の切り替え、右ドラッグでの移動、ドア・窓、曲線の壁
+- 最初の版：部屋・壁・ドア・窓・家具（ソファ・ベッド・机・テーブル・キッチン・浴槽）を2Dで描くと、そのまま3Dで見られる
+- 雛形（ワンルーム・1LDK・2LDK）、元に戻す・やり直す、ブラウザへの自動保存、ファイルへの書き出し・読み込み
+- 2D・3D・同時の表示の切り替えと、右ドラッグでの2Dの移動
+- 円と円弧の壁。ドア・窓が壁より優先されるように
+- 方眼に合わせた作図、ドアの開き方の描き方、3Dの閉じたドアと窓枠を改善
+- 部屋の名前の位置を動かせるように
 
 ## フィードバックと開発参加
 
@@ -1224,38 +1267,81 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-09-01
 
-- A section for supporting the project
+- A section for supporting the project (an Amazon wishlist)
+
+### 2026-08-04
+
+- The note recommending a PC only appears on phones and tablets, not in narrow PC windows
+
+### 2026-07-24
+
+- Google search results show the site name 間取りクイック3D
 
 ### 2026-07-21
 
-- App icons
+- App icons for browser tabs and home screens
+
+### 2026-07-20
+
+- A detailed README in Japanese and English
 
 ### 2026-07-19
 
-- Multiple editable roofs
+- Multiple roofs, each with its own shape, size and position
 
 ### 2026-07-17
 
-- The selection panel sits right below the tools and can be collapsed
+- The selection panel can be collapsed
+
+### 2026-07-13
+
+- The selection panel moved right below the tools
+- A note recommending use on a PC
+- Usage terms list prohibited uses in detail, and credit is required when publishing plans or images
 
 ### 2026-07-12
 
-- More furniture, sliding doors, and placement locks
-- A sample plan template; published on Cloudflare Pages (madori-5yu.pages.dev)
+- More furniture (wall clock, grandfather clock, aquarium and more) and sliding doors
+- Lock items in place
+- A sample plan template
+- Also published on Cloudflare Pages (madori-5yu.pages.dev)
+- Cookie-free visit counting that does not track individuals (privacy note updated)
+
+### 2026-07-11
+
+- Usage terms prohibit harassment and hate speech
 
 ### 2026-07-10
 
-- Big update: monochrome drawing-style 2D, multiple floors, roofs, a furniture catalog, and separate 2D and 3D colors
-- Rotation with R, diagonal walls, circle and polygon walls, and the floor below shown as a translucent guide
-- A shortcut reference and an about section; released as an alpha
+- Big update: 2D became black-and-white drawing-style line art, with 23 kinds of furniture grouped by type and doors and windows in the list
+- Floors 1F to 4F, the floor below shown faintly in 2D, and floors stacked in 3D
+- Roofs: gable, hip and flat, with eaves
+- Colors for each wall, door, window, shape and piece of furniture, separately for 2D and 3D
+- 3D shadow toggle, light direction, five light levels, and showing or hiding each floor and the roof
+- In 3D, walls fill the space above doors and around windows, leaving only the openings
+- Wall, door and window lengths can be typed or dragged from their ends
+- Flip doors and furniture with F, and a window with a center mullion
+- Rotate with R (Shift+R for 15 degrees) and type an angle
+- Diagonal walls in 15-degree steps, and circle, arc and triangle-to-octagon walls
+- A button to hide the editing panel for more room
+- A shortcut reference, an about section (disclaimer and data handling) and a feedback section; released as an alpha
 
 ### 2026-07-05
 
 - Published on GitHub Pages
 
+### 2026-07-02
+
+- A browser tab icon
+
 ### 2026-06-27
 
-- First version: draw a plan in 2D and see it in 3D, with view modes, right-drag panning, doors, windows and curved walls
+- First version: draw rooms, walls, doors, windows and furniture (sofa, bed, desk, table, kitchen, bath) in 2D and see them in 3D
+- Templates (studio, 1LDK, 2LDK), undo and redo, automatic saving in the browser, and export and import as a file
+- 2D, 3D and side-by-side views, and right-drag panning in 2D
+- Circle and arc walls; doors and windows take priority over walls
+- Drawing snaps to the grid, clearer door swings, and better closed doors and window frames in 3D
+- Room names can be moved
 
 ## Feedback and Contributions
 
