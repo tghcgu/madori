@@ -1051,6 +1051,29 @@ try {
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
   console.log('PASS: 2D styles: dots and brush on washi, dot sizes, exported images, editing, undo and kept after a reload');
 
+  // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
+  const squeezed = () => page.evaluate(() => {
+    const problems = [];
+    for (const button of document.querySelectorAll('.top-actions button, .top-actions a')) {
+      const box = button.getBoundingClientRect();
+      if (!box.width) continue;
+      for (const part of button.querySelectorAll('span, svg')) {
+        const r = part.getBoundingClientRect();
+        if (r.width > 1 && getComputedStyle(part).position !== 'absolute' && (r.right > box.right + 1 || r.left < box.left - 1)) problems.push(button.id || button.textContent.trim());
+      }
+    }
+    if (document.documentElement.scrollWidth > window.innerWidth + 1) problems.push(`page ${document.documentElement.scrollWidth} > ${window.innerWidth}`);
+    return problems;
+  });
+  for (const width of [1360, 1280, 1100, 1024, 900, 820, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.waitForTimeout(150);
+    assert.deepEqual(await squeezed(), [], `the top bar fits at ${width} px`);
+    assert.equal(await page.locator('#topNote').isVisible(), width >= 1340, `the notice shows only where it fits (${width} px)`);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  console.log('PASS: top bar: buttons never squeezed from 390 to 1360 px, the notice hides where it does not fit');
+
   // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
   assert.equal(await page.locator('#editionNote').isVisible(), true, 'the full app announces the plan-only edition in the top bar');
   assert.equal(await page.locator('#alphaNote').isVisible(), false, 'in place of the alpha note');

@@ -549,6 +549,10 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年10月5日
+
+- ノートPCやタブレットなど少し狭い画面で、上のバーのボタンが押しつぶされて文字とアイコンが重なっていたのを修正。入りきらない幅ではお知らせを隠し、ボタンをアイコンだけにします
+
 ### 2026年10月4日
 
 - 2Dの「絵柄」を追加。間取り全体を、ドット絵のマップや、和紙に墨の筆で描いたような見た目に切り替えられます（画像の書き出しも同じ絵柄）
@@ -766,14 +770,14 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
 - Drag room labels independently from room geometry
-- Choose a different design for furniture from the thumbnails under Selection (39 types, including chairs, sofas, beds, tables, fridges, washers, toilets, plants, rugs, rocks, garden lights, flower beds, fences, and stools). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked. Designs marked "2D symbol only" (such as the hatched closet) keep the standard 3D model
+- Choose a different design for furniture from the thumbnails under Selection (43 types, including chairs, sofas, beds, tables, fridges, washers, toilets, plants, rugs, rocks, garden lights, flower beds, fences, stools, numbered markers, footprints, the fallen person, and blood; the plant's "spiral leaves" design keeps the previous standard 3D shape). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked. Designs marked "2D symbol only" (such as the hatched closet) keep the standard 3D model
 - Seen from directly above, each 3D model matches its 2D symbol. Rock outlines and ridges, pond outlines and rim stones, stepping stone and flower layouts, wood grain, rug patterns, and plant leaf directions are generated from the same data for 2D and 3D (identifying marks such as the fridge snowflake or the shoes on the shoe cabinet appear only in 2D)
 - Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. The pen settings are remembered in the browser.
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Edit dimensions, line length, angle, coordinates, and colors numerically
-- Set separate 2D and 3D colors
+- Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
-- Show the floor below as a translucent guide
+- Show other floors as a translucent guide ("透過"). The ▼ next to it picks which floors (the one below, the one above, all others, or one by name), a tint color (a color code, or blank for the original colors) and the strength. Ghost floors are drawn normally first and made see-through once, so wall corners and overlaps stay even
 - Temporarily hide roofs on the 2D plan
 - Switch how the whole 2D plan is drawn with "絵柄" (standard, dots, or brush on washi); see "2D styles" below
 - Search parts by name, including hiragana, katakana, and common aliases
@@ -1211,6 +1215,10 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-05
+
+- Fixed top bar buttons being squeezed (text over icons) on laptops and tablets; where they do not fit, the notice hides and the buttons show icons only
 
 ### 2026-10-04
 

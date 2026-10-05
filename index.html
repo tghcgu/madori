@@ -61,7 +61,7 @@
             <h1>間取りクイック3D<span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。">α版</span></h1>
             <span id="saveStatus">保存済み</span>
           </div>
-          <div class="alpha-note top-note" id="topNote">
+          <div class="top-note" id="topNote">
             <span class="top-note-text edition-note" id="editionNote" hidden>お知らせ：3Dを使わない「間取り専用版」もできました。<a href="%BASE_URL%plan/">間取り専用版を開く</a></span>
             <span class="top-note-text" id="alphaNote">開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。</span>
             <button class="top-note-close" id="topNoteClose" type="button" title="この文を消す" aria-label="この文を消す">×</button>
@@ -92,7 +92,7 @@
             <i data-lucide="box"></i>
             <span>3Dでも見る</span>
           </a>
-          <button class="text-button" id="exportButton" type="button">
+          <button class="text-button" id="exportButton" type="button" title="間取りをファイル（JSON）に書き出す">
             <i data-lucide="download"></i>
             <span>書き出し</span>
           </button>
@@ -119,11 +119,11 @@
               </div>
             </div>
           </div>
-          <button class="text-button" id="importButton" type="button">
+          <button class="text-button" id="importButton" type="button" title="書き出したファイル（JSON）を読み込む">
             <i data-lucide="upload"></i>
             <span>読み込み</span>
           </button>
-          <button class="text-button danger" id="resetButton" type="button">
+          <button class="text-button danger" id="resetButton" type="button" title="新しい間取りを始める（いまの間取りは確認してから消します）">
             <i data-lucide="rotate-ccw"></i>
             <span>新規</span>
           </button>

@@ -497,7 +497,8 @@ let symbolPreview = false;
 // 足跡の歩幅 cm の範囲と、「道すじを描き直す」を押した足跡（次になぞった道すじで描き直す）
 const MIN_STRIDE = 20;
 const MAX_STRIDE = 200;
-let footprintRedrawId: string | null = null;
+// 「なぞり直す」を押した足跡・破片（次になぞった道すじで描き直す）
+let pathRedrawId: string | null = null;
 // 手足を動かしている間の3Dの描き直し。1コマに1回だけにし、選択中のパネルは作り直さない（動かしているスライダーが外れないように）
 let threeRefreshQueued = false;
 // ペンの色・太さ・描き方（見ていた場所などと一緒にブラウザへ保存）
@@ -918,7 +919,7 @@ function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
       activeTool = button.dataset.tool as Tool;
-      footprintRedrawId = null;
+      pathRedrawId = null;
       // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
       if (activeTool === "paint") state.selectedId = null;
       updatePropertiesPanel();
@@ -1222,7 +1223,7 @@ function createPaletteButton(label: string, keywords: string, onClick: () => voi
 function createFurnitureButton(kind: FurnitureKind): HTMLButtonElement {
   const button = createPaletteButton(FURNITURE_DEFS[kind].label, SEARCH_KEYWORDS[kind] ?? "", () => {
     activeFurniture = kind;
-    footprintRedrawId = null;
+    pathRedrawId = null;
     setActiveButton("[data-furniture]", activeFurniture);
     activeTool = "furniture";
     setActiveButton("[data-tool]", activeTool);
@@ -2883,7 +2884,6 @@ function syncPlanStyleMenu(): void {
   if (dots) dots.value = String(pixelDot);
   const dotRow = document.querySelector<HTMLLabelElement>("#pixelDotRow");
   if (dotRow) dotRow.hidden = planStyle !== "pixel";
-  planCanvas.dataset.style = planStyle;
 }
 
 // 間取りを描く。editing は画面だけの物（屋根の破線・固定の印・作図中の線）も描くとき
@@ -4965,18 +4965,14 @@ function pathLength(points: Point2[]): number {
 
 // 「なぞり直す」を押した足跡・破片
 function pathRedrawTarget(kind: FurnitureKind): Furniture | null {
-  const target = footprintRedrawId ? findEntity(footprintRedrawId) : null;
+  const target = pathRedrawId ? findEntity(pathRedrawId) : null;
   return target?.type === "furniture" && target.kind === kind && !isLocked(target) ? target : null;
-}
-
-function footprintRedrawTarget(): Furniture | null {
-  return pathRedrawTarget("footprints");
 }
 
 // なぞり終えたとき。短ければ（クリック）まっすぐな足跡を置き、長ければその道すじに沿った足跡を作る（または描き直す）
 function placeFootprintPath(points: Point[]): void {
-  const redraw = footprintRedrawTarget();
-  footprintRedrawId = null;
+  const redraw = pathRedrawTarget("footprints");
+  pathRedrawId = null;
   const path = tidyPath(points);
   if (path.length < 2 || pathLength(path) < 30) {
     if (redraw) return;
@@ -5018,7 +5014,7 @@ function drawFootprintPreview(points: Point[]): void {
   if (deferOverlay(() => drawFootprintPreview(points))) return;
   const path = tidyPath(points);
   if (path.length < 2) return;
-  const redraw = footprintRedrawTarget();
+  const redraw = pathRedrawTarget("footprints");
   const bare = (redraw ? redraw.symbol ?? 0 : rememberedSymbol("footprints").symbol ?? 0) === 1;
   ctx.save();
   ctx.strokeStyle = "rgba(39, 117, 209, 0.55)";
@@ -5054,7 +5050,7 @@ function bindFootprintEditor(item: Furniture): void {
     else item.stride = stride;
   });
   propertiesPanel.querySelector<HTMLButtonElement>("#footprintRedrawButton")?.addEventListener("click", () => {
-    footprintRedrawId = item.id;
+    pathRedrawId = item.id;
     activeFurniture = "footprints";
     activeTool = "furniture";
     setActiveButton("[data-furniture]", activeFurniture);
@@ -5096,7 +5092,7 @@ function darkenColor(color: string, amount: number): string {
 // 破片をなぞり終えたとき。短ければ（クリック）ひとまとまりの破片を置き、長ければ道すじに沿ってまく（または描き直す）
 function placeShardPath(points: Point[]): void {
   const redraw = pathRedrawTarget("brokenGlass");
-  footprintRedrawId = null;
+  pathRedrawId = null;
   const path = tidyPath(points);
   if (path.length < 2 || pathLength(path) < 15) {
     if (redraw) return;
@@ -5202,7 +5198,7 @@ function bindShardEditor(item: Furniture): void {
     shardSettings.density = density;
   });
   propertiesPanel.querySelector<HTMLButtonElement>("#shardRedrawButton")?.addEventListener("click", () => {
-    footprintRedrawId = item.id;
+    pathRedrawId = item.id;
     activeFurniture = "brokenGlass";
     activeTool = "furniture";
     setActiveButton("[data-furniture]", activeFurniture);

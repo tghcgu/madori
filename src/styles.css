@@ -116,7 +116,8 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  /* ボタンは縮めない（押しつぶすと文字と絵が重なる）。入りきらない幅では、文を隠したりボタンを絵だけにしたりする */
+  flex-shrink: 0;
 }
 
 .icon-button,
@@ -243,12 +244,6 @@ select:focus-visible {
   max-width: 440px;
 }
 
-@media (max-width: 1180px) {
-  .alpha-note {
-    display: none;
-  }
-}
-
 /* ---- 間取り専用版（/plan/）。3Dの欄と、3Dだけで使うボタンや設定を出さない ---- */
 [data-edition="plan"] .view-switch,
 [data-edition="plan"] .three-pane,
@@ -333,6 +328,34 @@ select:focus-visible {
 .top-note-close:hover {
   background: rgba(20, 30, 45, 0.08);
   color: var(--ink);
+}
+
+/* 上のバーに文が2行で入りきらない幅では、文を出さない（ボタンを押しつぶさないように。.top-note の指定より後に置く）。
+   ボタンの幅は約730px、ロゴと名前は約260pxで、文には300pxほど要る */
+@media (max-width: 1339px) {
+  .brand .top-note {
+    display: none;
+  }
+}
+
+/* 文字の付いたボタンも入りきらない幅では、上の文字のボタンを絵だけにする。文字は読み上げ用に残す */
+@media (max-width: 1039px) {
+  .top-actions .text-button {
+    /* 隠した文字がボタンの中に収まるように（外へはみ出すと、スマホで画面が横に動いてしまう） */
+    position: relative;
+    width: 38px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .top-actions .text-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .mobile-notice {
@@ -1936,6 +1959,11 @@ body[data-resizing="down"] {
     width: 100%;
     overflow-x: auto;
     padding-bottom: 2px;
+  }
+
+  /* 入りきらないときは、ボタンを縮めずに横へ流す */
+  .top-actions > * {
+    flex-shrink: 0;
   }
 
   .view-switch {
