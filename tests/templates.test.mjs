@@ -20,9 +20,10 @@ function visualBox(item) {
   return { x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 };
 }
 
-test('there are 27 templates in groups, each with a plan', () => {
-  assert.equal(keys.length, 27);
-  assert.equal(new Set(keys).size, 27, 'no key is listed twice');
+test('there are 50 templates in six groups, each with a plan', () => {
+  assert.equal(keys.length, 50);
+  assert.equal(TEMPLATE_GROUPS.length, 6);
+  assert.equal(new Set(keys).size, 50, 'no key is listed twice');
   for (const key of keys) assert.ok(IN_MAIN.includes(key) || hasTemplatePlan(key), `${key} has a plan`);
   for (const group of TEMPLATE_GROUPS) {
     assert.ok(group.label && group.templates.length);

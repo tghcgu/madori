@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PAPER_COLOR, PLAN_STYLES, STYLE_LOOKS, brushStroke, dashPolyline, inkColor, lineCells, parseCssColor, shapeSeed, sketchLines, splitStrokes, styledFont, toneLevel,
-  washColor, wobblePolygon,
+  PAPER_COLOR, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_PALETTE, STYLE_LOOKS, brushStroke, dashPolyline, inkColor, isDotStyle, lineCells, parseCssColor, retroColors,
+  shapeSeed, sketchLines, splitStrokes, styledFont, toneLevel, washColor, wobblePolygon,
 } from '../src/plan-style.ts';
 
 // 点から線分までの距離
@@ -18,10 +18,19 @@ function signedArea(polygon) {
   return area / 2;
 }
 
-test('there are nine 2D styles, each with a name, a hint and its own background and grid', () => {
-  assert.deepEqual(PLAN_STYLES.map(style => style.value), ['standard', 'pixel', 'brush', 'pencil', 'manga', 'blueprint', 'parchment', 'chalk', 'neon']);
+test('there are 17 2D styles in five groups, each with a name, a hint and its own background and grid', () => {
+  assert.deepEqual(PLAN_STYLES.map(style => style.value), [
+    'standard', 'blueprint', 'cad', 'copy', 'pencil', 'watercolor', 'crayon', 'chalk', 'brush', 'sumie', 'parchment', 'manga', 'pop', 'pixel', 'retro', 'neon', 'horror',
+  ]);
+  assert.equal(PLAN_STYLE_GROUPS.length, 5);
+  for (const group of PLAN_STYLE_GROUPS) assert.ok(PLAN_STYLES.some(style => style.group === group), `${group} has styles`);
+  // メニューは分類の順に並べるので、一覧も分類ごとにまとまっている
+  const groupOrder = PLAN_STYLES.map(style => PLAN_STYLE_GROUPS.indexOf(style.group));
+  assert.deepEqual(groupOrder, [...groupOrder].sort((a, b) => a - b), 'styles are listed group by group');
+  assert.ok(groupOrder.every(index => index >= 0), 'every style is in a group');
+  assert.deepEqual(PLAN_STYLES.filter(style => isDotStyle(style.value)).map(style => style.value), ['pixel', 'retro'], 'dots and the retro game are drawn in dots');
   for (const { value, label, hint } of PLAN_STYLES) {
-    assert.ok(label && hint, value);
+    assert.ok(label && hint && [...hint].length <= 8, `${value} has a name and a short hint`);
     const look = STYLE_LOOKS[value];
     assert.equal(look.grid.length, 2, `${value} has a fine and a bold grid color`);
     for (const color of look.grid) assert.ok(parseCssColor(color), `${value} grid color ${color}`);
@@ -34,8 +43,37 @@ test('there are nine 2D styles, each with a name, a hint and its own background 
   };
   const [r, , b] = parseCssColor(STYLE_LOOKS.blueprint.background);
   assert.ok(b > r * 2, 'the blueprint is blue');
-  assert.ok(lightness('neon') < 40 && lightness('chalk') < 90, 'neon and the chalkboard are dark');
-  assert.ok(lightness('parchment') > 180 && lightness('pencil') > 230, 'old maps and pencil sketches are on light paper');
+  assert.ok(lightness('neon') < 40 && lightness('chalk') < 90 && lightness('cad') < 30 && lightness('horror') < 40, 'neon, the chalkboard, CAD and horror are dark');
+  assert.ok(['parchment', 'pencil', 'watercolor', 'sumie', 'crayon', 'pop', 'copy'].every(style => lightness(style) > 180), 'paper styles are light');
+  const [gr, gg, gb] = parseCssColor(STYLE_LOOKS.retro.background);
+  assert.ok(gg > gr && gg > gb, 'the retro game is green');
+});
+
+test('the retro game turns dots into four greens, mixing in-between shades in a pattern fixed to the plan', () => {
+  const shades = RETRO_PALETTE.map(color => color.join());
+  const paint = (colors, width, height, originX = 0, originY = 0) => {
+    const data = new Uint8ClampedArray(width * height * 4);
+    for (let i = 0; i < width * height; i += 1) data.set(colors(i % width, Math.floor(i / width)), i * 4);
+    retroColors(data, width, height, originX, originY);
+    const out = [];
+    for (let i = 0; i < data.length; i += 4) {
+      assert.equal(data[i + 3], 255, 'every dot is solid');
+      out.push(shades.indexOf(`${data[i]},${data[i + 1]},${data[i + 2]}`));
+    }
+    return out;
+  };
+  assert.ok(paint(() => [255, 255, 255, 255], 8, 8).every(level => level === 3), 'white is the lightest green');
+  assert.ok(paint(() => [0, 0, 0, 0], 8, 8).every(level => level === 3), 'see-through dots are paper');
+  assert.ok(paint(() => [0, 0, 0, 255], 8, 8).every(level => level === 0), 'black is the darkest green');
+  const gray = paint(() => [128, 128, 128, 255], 8, 8);
+  assert.ok(gray.every(level => level >= 0), 'only the four greens are used');
+  assert.deepEqual([...new Set(gray)].sort(), [1, 2], 'middle gray mixes the two middle greens');
+  // 混ぜ方の並びは間取りと一緒に動く（原点を1つずらすと、並びも1つずれる）
+  // （間取りが右へ1ドット動くと、間取りの x の所は画面の x + 1 に映る）
+  const shade = (x, y) => [100 + ((((x * 7 + y * 3) % 5) + 5) % 5) * 20, 120, 110, 255];
+  const still = paint(shade, 8, 8);
+  const moved = paint((x, y) => shade(x - 1, y), 8, 8, 1, 0);
+  for (let y = 0; y < 8; y += 1) for (let x = 1; x < 8; x += 1) assert.equal(moved[y * 8 + x], still[y * 8 + x - 1]);
 });
 
 test('manga tones go from white to solid black in steps of a tenth', () => {
@@ -102,6 +140,15 @@ test('styles change only the typeface of text, keeping its size and weight', () 
   assert.match(styledFont(font, 'blueprint'), /^700 12\.5px "BIZ UDGothic"/);
   assert.equal(styledFont(font, 'manga'), font);
   assert.equal(styledFont(font, 'neon'), font);
+  // 水彩・クレヨンは教科書体、墨絵は筆と同じ楷書、ホラーは明朝、CADはゴシック、レトロゲームはドットと同じ。ポップとコピーはそのまま
+  assert.match(styledFont(font, 'watercolor'), /^700 12\.5px "UD デジタル 教科書体/);
+  assert.match(styledFont(font, 'crayon'), /^700 12\.5px "UD デジタル 教科書体/);
+  assert.equal(styledFont(font, 'sumie'), styledFont(font, 'brush'));
+  assert.match(styledFont(font, 'horror'), /^700 12\.5px "Yu Mincho"/);
+  assert.match(styledFont(font, 'cad'), /^700 12\.5px "BIZ UDGothic"/);
+  assert.equal(styledFont(font, 'retro'), styledFont(font, 'pixel'));
+  assert.equal(styledFont(font, 'pop'), font);
+  assert.equal(styledFont(font, 'copy'), font);
 });
 
 test('dot lines step one dot at a time, without doubled dots on curves, and keep square corners', () => {

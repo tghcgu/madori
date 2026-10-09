@@ -302,6 +302,17 @@ export const PARASOL_CORNERS = Array.from({ length: 8 }, (_, i) => (i / 8) * Mat
 export const COAT_HOOK_ANGLES = Array.from({ length: 6 }, (_, i) => (i / 6) * Math.PI * 2 - Math.PI / 2);
 export const COAT_HOOK_REACH = 0.45;
 
+// 墓石: 台石（全体）の上に上台と竿石。手前に花立て2つと香炉。
+// 中心の位置と大きさは幅・奥行に対する割合（y は手前が正）、高さは m
+export const GRAVE_PARTS = {
+  base: { height: 0.15 },
+  middle: { y: -0.08, w: 0.72, d: 0.6, height: 0.2 },
+  stone: { y: -0.12, w: 0.46, d: 0.3, height: 0.62 },
+  vases: [[-0.4, 0.34], [0.4, 0.34]] as Point2[],
+  vaseRadius: 0.06,
+  incense: { y: 0.37, w: 0.24, d: 0.12 },
+};
+
 // 物干し台: 2本の竿の位置（奥行に対する割合）と、両端の台の幅
 export const DRYER_POLES = [-0.3, 0.3];
 export function dryerFootWidth(w: number): number {

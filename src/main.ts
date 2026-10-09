@@ -11,13 +11,13 @@ import { CHANGELOG, changelogDate } from "./changelog";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
 import { makeTranslucent } from "./translucency";
 import {
-  DEFAULT_PIXEL_DOT, PIXEL_DOTS, PLAN_STYLES, STYLE_LOOKS, createPixelContext, drawPixelTexts, styleContext, styleFinish, styledFont,
-  type PixelText, type PlanStyle,
+  DEFAULT_PIXEL_DOT, PIXEL_DOTS, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_INK, STYLE_LOOKS, createPixelContext, drawPixelTexts, isDotStyle, retroColors,
+  styleContext, styleFinish, styledFont, type PixelText, type PlanStyle,
 } from "./plan-style";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
-  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
+  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, GRAVE_PARTS, PARASOL_CORNERS,
   blockWallCaps, cribRail, dryerFootWidth, roundFlowerBedLayout, spiralPlantTopView,
   CHALK_WIDTH, SHARD_SPREAD, bloodShape, evidenceMarkerShape, markerTextSize, markerTextureSpan, shardMargin, shardPieces, shardTrail,
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
@@ -377,7 +377,7 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
   { label: "家電", kinds: ["fridge", "washer", "tv", "airConditioner"] },
   { label: "キッチン・水回り", kinds: ["kitchen", "kitchenL", "kitchenIsland", "bath", "unitBath", "shower", "toilet", "washbasin"] },
   { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"] },
-  { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
+  { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "grave", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
   { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
   { label: "人・事件・調査", kinds: ["person", "fallenPerson", "footprints", "evidenceMarker", "bloodPool", "brokenGlass"] },
 ];
@@ -428,6 +428,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   fence: "ふぇんす 柵 さく 塀 へい 囲い かこい 庭 にわ 屋外 外 そと",
   gardenLight: "がいとう 街灯 照明 しょうめい ライト 庭園灯 庭 にわ 屋外 外 そと",
   stoneLantern: "いしどうろう 灯籠 とうろう 和風 庭 にわ 屋外 外 そと",
+  grave: "はか 墓 お墓 ぼせき ぼち 墓地 霊園 れいえん 寺 てら 石 いし 屋外 外 そと",
   mailbox: "ゆうびん ポスト 郵便受け 玄関 げんかん 屋外 外 そと",
   shed: "ものおき 倉庫 そうこ 収納 庭 にわ 屋外 外 そと",
   dogHouse: "いぬごや 犬 いぬ ペット 庭 にわ 屋外 外 そと",
@@ -541,9 +542,10 @@ interface StylePass {
   alpha: number;
 }
 let stylePass: StylePass | null = null;
-// ドットの絵柄の作業用のキャンバス（細かく描く所・ドットにした所・文字）
+// ドットの絵柄の作業用のキャンバス（細かく描く所・ドットにした所・レトロゲームの4色にした所・文字）
 let pixelSourceCanvas: HTMLCanvasElement | null = null;
 let pixelDotCanvas: HTMLCanvasElement | null = null;
+let retroCanvas: HTMLCanvasElement | null = null;
 let pixelTextCanvas: HTMLCanvasElement | null = null;
 
 // 透かす色のカラーコードに透明度があればそれを、なければ「濃さ」を使う
@@ -2693,7 +2695,7 @@ interface PlanDrawOptions {
 function drawStyledPlan(target: CanvasRenderingContext2D, width: number, height: number, ratio: number, options: PlanDrawOptions, paper = true): void {
   const saved = ctx;
   try {
-    if (planStyle === "pixel") drawPixelPlan(target, width, height, options);
+    if (isDotStyle(planStyle)) drawPixelPlan(target, width, height, options, planStyle === "retro");
     else if (planStyle === "standard") {
       ctx = target;
       drawPlan(width, height, options);
@@ -2759,8 +2761,8 @@ function drawWrappedPlan(target: CanvasRenderingContext2D, width: number, height
 }
 
 // ドット: 画面の1pxの細かさで描いてから、ドットごとに真ん中の1画素の色をとって（ぼかさずに縮めて）大きく映す。
-// 細い線は描くときにドットのます目に沿わせ、文字は画面の細かさでぼかさずに描く
-function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: number, options: PlanDrawOptions): void {
+// 細い線は描くときにドットのます目に沿わせ、文字は画面の細かさでぼかさずに描く。retro ならドットを緑の4色にする（レトロゲーム）
+function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: number, options: PlanDrawOptions, retro = false): void {
   const dot = pixelDot;
   const columns = Math.max(1, Math.ceil(width / dot)), rows = Math.max(1, Math.ceil(height / dot));
   const w = columns * dot, h = rows * dot;
@@ -2804,12 +2806,30 @@ function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: 
   dotContext.imageSmoothingEnabled = false;
   dotContext.clearRect(0, 0, columns, rows);
   dotContext.drawImage(sourceCanvas, 0, 0, w, h, 0, 0, columns, rows);
+  let shown = dots;
+  if (retro) {
+    // レトロゲーム: ドットを緑の4色にする（混ぜ方の並びは間取りに合わせて動く）
+    retroCanvas ??= document.createElement("canvas");
+    if (retroCanvas.width !== columns || retroCanvas.height !== rows) {
+      retroCanvas.width = columns;
+      retroCanvas.height = rows;
+    }
+    const retroContext = retroCanvas.getContext("2d", { willReadFrequently: true });
+    if (retroContext) {
+      retroContext.clearRect(0, 0, columns, rows);
+      retroContext.drawImage(dots, 0, 0);
+      const image = retroContext.getImageData(0, 0, columns, rows);
+      retroColors(image.data, columns, rows, Math.round(realView.x / dot), Math.round(realView.y / dot));
+      retroContext.putImageData(image, 0, 0);
+      shown = retroCanvas;
+    }
+  }
   target.save();
   target.imageSmoothingEnabled = false;
-  target.drawImage(dots, 0, 0, w, h);
+  target.drawImage(shown, 0, 0, w, h);
   target.restore();
   pixelTextCanvas ??= document.createElement("canvas");
-  drawPixelTexts(target, pass.texts, w, h, pixelTextCanvas);
+  drawPixelTexts(target, retro ? pass.texts.map((text) => ({ ...text, color: RETRO_INK })) : pass.texts, w, h, pixelTextCanvas);
   drawOverlays(target, pass);
 }
 
@@ -2820,12 +2840,16 @@ function setupPlanStyleMenu(): void {
   const choices = document.querySelector<HTMLDivElement>("#planStyleChoices");
   if (!button || !menu || !dots || !choices) return;
   dots.innerHTML = PIXEL_DOTS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("");
-  // 絵柄ごとの見本（開いたときに、その絵柄で小さな部屋を描く）
-  choices.innerHTML = PLAN_STYLES.map(({ value, label, hint }) => `
-    <button type="button" class="style-choice" role="radio" aria-checked="false" data-plan-style="${value}" title="${escapeHtml(`${label}（${hint}）`)}">
-      <canvas class="style-thumb" aria-hidden="true"></canvas>
-      <strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small>
-    </button>`).join("");
+  // 絵柄ごとの見本を、分類ごとに並べる（開いたときに、その絵柄で小さな部屋を描く）
+  choices.innerHTML = PLAN_STYLE_GROUPS.map((group) => `
+    <div class="style-group">
+      <p class="style-group-label">${escapeHtml(group)}</p>
+      <div class="style-group-choices">${PLAN_STYLES.filter((style) => style.group === group).map(({ value, label, hint }) => `
+        <button type="button" class="style-choice" role="radio" aria-checked="false" data-plan-style="${value}" title="${escapeHtml(`${label}（${hint}）`)}">
+          <canvas class="style-thumb" aria-hidden="true"></canvas>
+          <strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small>
+        </button>`).join("")}</div>
+    </div>`).join("");
   let thumbnailsDrawn = false;
   const close = () => {
     menu.hidden = true;
@@ -2943,7 +2967,7 @@ function syncPlanStyleMenu(): void {
   const dots = document.querySelector<HTMLSelectElement>("#pixelDotSelect");
   if (dots) dots.value = String(pixelDot);
   const dotRow = document.querySelector<HTMLLabelElement>("#pixelDotRow");
-  if (dotRow) dotRow.hidden = planStyle !== "pixel";
+  if (dotRow) dotRow.hidden = !isDotStyle(planStyle);
 }
 
 // 間取りを描く。editing は画面だけの物（屋根の破線・固定の印・作図中の線）も描くとき
@@ -4345,6 +4369,20 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       }
       ctx.fillStyle = "#ffffff";
       strokeCircle(0, 0, Math.min(w, h) * 0.12, true);
+      break;
+    }
+    case "grave": {
+      // 台石と、上台・竿石（上から見た四角）、手前の花立て2つと香炉（3Dと同じ位置・大きさ。GRAVE_PARTS）
+      const { middle, stone, vases, vaseRadius, incense } = GRAVE_PARTS;
+      ctx.fillStyle = OUTDOOR_STONE;
+      strokeRoundedRect(-hw, -hh, w, h, 2, true);
+      ctx.fillStyle = SYMBOL_SHADE;
+      strokeRoundedRect(-(middle.w * w) / 2, middle.y * h - (middle.d * h) / 2, middle.w * w, middle.d * h, 1.5, true);
+      ctx.fillStyle = "#c9ccc8";
+      strokeRoundedRect(-(stone.w * w) / 2, stone.y * h - (stone.d * h) / 2, stone.w * w, stone.d * h, 1, true);
+      ctx.fillStyle = "#ffffff";
+      for (const [vx, vy] of vases) strokeCircle(vx * w, vy * h, vaseRadius * Math.min(w, h), true);
+      strokeRoundedRect(-(incense.w * w) / 2, incense.y * h - (incense.d * h) / 2, incense.w * w, incense.d * h, 1, true);
       break;
     }
     case "mailbox": {
@@ -7638,9 +7676,10 @@ function drawExportHeading(target: CanvasRenderingContext2D, text: string, x: nu
   target.save();
   target.setTransform(ratio, 0, 0, ratio, 0, 0);
   const font = `700 22px ${TEXT_FONT}`;
-  if (planStyle === "pixel") {
+  if (isDotStyle(planStyle)) {
     pixelTextCanvas ??= document.createElement("canvas");
-    drawPixelTexts(target, [{ text, x, y, transform: new DOMMatrix(), font: styledFont(font, "pixel"), color: INK, align: "left", baseline: "middle", alpha: 1 }], width, height, pixelTextCanvas);
+    const color = planStyle === "retro" ? RETRO_INK : INK;
+    drawPixelTexts(target, [{ text, x, y, transform: new DOMMatrix(), font: styledFont(font, "pixel"), color, align: "left", baseline: "middle", alpha: 1 }], width, height, pixelTextCanvas);
   } else {
     const g = styleContext(planStyle, target, { unit: ratio, anchorX: 0, anchorY: 0 }) ?? target;
     g.fillStyle = INK;

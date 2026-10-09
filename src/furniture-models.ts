@@ -7,7 +7,7 @@ import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   bezierPoint, closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, rockVertexHeights, rugDiamonds,
   steppingStoneLayout, woodGrain, type Point2, type RockShape,
-  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, PARASOL_CORNERS,
+  CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, GRAVE_PARTS, PARASOL_CORNERS,
   blockWallCaps, cribBars, cribRail, dryerFootWidth, roundFlowerBedLayout, type FlowerBedLayout,
   SPIRAL_POT_SCALE, spiralLeaves,
   CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, markerTextureSpan, personDesign, personLayout, personOutline, shardPieces,
@@ -1907,6 +1907,21 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.box(w * 0.44, 0.12, d * 0.2, 0, 0.72, 0, opening, 0);
       part(0.1, 0.5, 0.18, 0.82, 1, 6);
       m.ellipsoid(w * 0.14, 0.14, d * 0.14, [0, 1.05, 0], granite);
+      break;
+    }
+    case "grave": {
+      // 墓石: 台石・上台・竿石と、手前の花立て2つ・香炉（2Dの記号と同じ位置・大きさ。GRAVE_PARTS）
+      const granite = m.material("grave-granite", 0x9a9b97, 0.55, 0.05, true);
+      const polished = m.material("grave-stone", 0x7f817e, 0.35, 0.1, true);
+      const metal = m.material("grave-metal", 0x4f5250, 0.5, 0.4);
+      const { base, middle, stone, vases, vaseRadius, incense } = GRAVE_PARTS;
+      m.box(w, base.height, d, 0, base.height / 2, 0, granite, 0.01);
+      m.box(w * middle.w, middle.height, d * middle.d, 0, base.height + middle.height / 2, d * middle.y, granite, 0.01);
+      const top = base.height + middle.height;
+      m.box(w * stone.w, stone.height, d * stone.d, 0, top + stone.height / 2, d * stone.y, polished, 0.012);
+      const vase = vaseRadius * Math.min(w, d);
+      for (const [vx, vz] of vases) m.cylinder(vase, vase, 0.24, [w * vx, base.height + 0.12, d * vz], metal, 14);
+      m.box(w * incense.w, 0.08, d * incense.d, 0, base.height + 0.04, d * incense.y, metal, 0.005);
       break;
     }
     case "mailbox": {

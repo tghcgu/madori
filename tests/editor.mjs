@@ -1058,9 +1058,11 @@ try {
     return { colors: colors.size, hash };
   }));
   await page.locator('#planStyleButton').click();
-  assert.equal(samples.length, 9);
-  assert.ok(samples.every(sample => sample.colors > 4), `every sample is drawn: ${samples.map(sample => sample.colors)}`);
-  assert.equal(new Set(samples.map(sample => sample.hash)).size, 9, 'each style has its own sample');
+  assert.equal(samples.length, 17);
+  assert.equal(await page.locator('#planStyleChoices .style-group').count(), 5, 'the styles are shown in five groups');
+  // （レトロゲームは4色だけで描く）
+  assert.ok(samples.every(sample => sample.colors >= 4), `every sample is drawn: ${samples.map(sample => sample.colors)}`);
+  assert.equal(new Set(samples.map(sample => sample.hash)).size, 17, 'each style has its own sample');
   // The other styles each have their own paper or board, and the walls stand out from it.
   const lightness = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
   const looks = {
@@ -1070,6 +1072,14 @@ try {
     parchment: { label: '古地図', ground: c => c[0] > 180 && c[0] > c[2] + 25 },
     chalk: { label: '黒板', ground: c => lightness(c) < 120 && c[1] > c[0] },
     neon: { label: 'ネオン', ground: c => lightness(c) < 60 },
+    watercolor: { label: '水彩', ground: c => lightness(c) > 225 },
+    sumie: { label: '墨絵', ground: c => lightness(c) > 215 && Math.max(...c) - Math.min(...c) < 30 },
+    crayon: { label: 'クレヨン', ground: c => lightness(c) > 225 },
+    pop: { label: 'ポップ', ground: c => lightness(c) > 235 },
+    cad: { label: 'CAD', ground: c => lightness(c) < 40 },
+    horror: { label: 'ホラー', ground: c => lightness(c) < 90 },
+    copy: { label: 'コピー', ground: c => lightness(c) > 225 && Math.max(...c) - Math.min(...c) < 12 },
+    retro: { label: 'レトロゲーム', ground: c => c[1] > c[0] + 10 && c[1] > c[2] + 60 },
   };
   for (const [style, look] of Object.entries(looks)) {
     await chooseStyle(style);
@@ -1079,7 +1089,8 @@ try {
     const walls = [];
     for (const y of [80, 160, 240, 320]) walls.push(Math.abs(lightness(shown(await pixelAt(600, y))) - lightness(ground)) > 60);
     assert.ok(walls.filter(Boolean).length >= 2, `${style}: the walls stand out: ${walls}`);
-    if (style === 'blueprint' || style === 'neon') {
+    if (style === 'retro') assert.equal(await page.locator('#pixelDotRow').getAttribute('hidden'), null, 'the retro game has a dot size too');
+    if (style === 'blueprint' || style === 'neon' || style === 'retro') {
       const styledImage = await exportImage('#imageExportPlan', 'current');
       assert.ok(look.ground(styledImage.corner), `${style}: the image has the same background: ${styledImage.corner}`);
       assert.ok(Math.abs(lightness(styledImage.wall) - lightness(styledImage.corner)) > 60, `${style}: the image keeps the walls: ${styledImage.wall}`);
@@ -1090,7 +1101,7 @@ try {
   assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
   const white = shown(await pixelAt(450, 330));
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
-  console.log('PASS: 2D styles: samples in the menu, dots, brush on washi, pencil, manga, blueprint, old map, chalkboard and neon, exported images, editing, undo and kept after a reload');
+  console.log('PASS: 2D styles: 17 styles in five groups with samples, dots, brush on washi and every other style, exported images, editing, undo and kept after a reload');
 
   // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
   const squeezed = () => page.evaluate(() => {
@@ -1398,18 +1409,18 @@ try {
   await page.context().close();
   console.log('PASS: partial recovery, original download and quota-failure protection');
 
-  // Templates: 27 in five groups. The newer ones are whole buildings with walls, doors, furniture, floors and roofs.
+  // Templates: 50 in six groups. The newer ones are whole buildings with walls, doors, furniture, floors and roofs.
   page = await open();
   page.on('dialog', dialog => dialog.accept());
-  assert.equal(await page.locator('#templateList .template-group').count(), 5);
-  assert.equal(await page.locator('[data-template]').count(), 27);
+  assert.equal(await page.locator('#templateList .template-group').count(), 6);
+  assert.equal(await page.locator('[data-template]').count(), 50);
   await choose('[data-template="westernMansion"]');
   let built = await saved();
   assert.deepEqual(built.floors.map(floor => floor.name), ['B1F', '1F', '2F'], 'the mansion has a cellar and two floors');
   assert.equal(built.activeFloor, 1, 'it opens on the ground floor');
   assert.ok(built.roofs.length >= 1);
   assert.equal(await page.locator('#floorTabs .floor-tab.is-active').first().textContent().then(text => text.trim()), '1F');
-  for (const [template, names] of [['hospital', ['診察室1', 'ナース室', '手術室']], ['dungeon', ['牢屋', '大広間', '宝物庫']], ['cafe', ['客席', '厨房']]]) {
+  for (const [template, names] of [['castle', ['玉座の間', '大広間', '城門']], ['hospital', ['診察室1', 'ナース室', '手術室']], ['dungeon', ['牢屋', '大広間', '宝物庫']], ['cafe', ['客席', '厨房']]]) {
     await choose(`[data-template="${template}"]`);
     built = await saved();
     const entities = built.floors.flatMap(floor => floor.entities);
@@ -1422,7 +1433,7 @@ try {
   await page.locator('#undoButton').click();
   assert.ok((await saved()).floors.flatMap(floor => floor.entities).some(entity => entity.name === '宝物庫'), 'loading a template can be undone');
   await page.context().close();
-  console.log('PASS: templates: 27 in five groups, mansion with a cellar, hospital, dungeon and cafe in 2D and 3D, and undo');
+  console.log('PASS: templates: 50 in six groups, mansion with a cellar, castle, hospital, dungeon and cafe in 2D and 3D, and undo');
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);

@@ -64,6 +64,7 @@ export type FurnitureKind =
   | "fence"
   | "gardenLight"
   | "stoneLantern"
+  | "grave"
   | "mailbox"
   | "shed"
   | "dogHouse"
@@ -155,6 +156,7 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   fence: { label: "フェンス", w: 180, h: 20, height: 120 },
   gardenLight: { label: "外灯", w: 30, h: 30, height: 200 },
   stoneLantern: { label: "石灯籠", w: 60, h: 60 },
+  grave: { label: "墓石", w: 70, h: 80 },
   mailbox: { label: "郵便ポスト", w: 40, h: 30 },
   shed: { label: "物置", w: 180, h: 90 },
   dogHouse: { label: "犬小屋", w: 70, h: 90 },

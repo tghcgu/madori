@@ -1,4 +1,4 @@
-// 雛形（間取りの見本）。家・病院・洋館など27種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
+// 雛形（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
 // 壁は部屋の縁から自動で立てる（隣り合う部屋の縁は1本にまとめる）。家具の位置は、回したあとの見た目の左上で書く
 
@@ -16,8 +16,12 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
       { key: "oneLdk", label: "1LDK", title: "LDKと寝室" },
       { key: "twoLdk", label: "2LDK", title: "LDKと洋室2つ" },
       { key: "twoStory", label: "二階建て 3LDK", title: "1階にLDK、2階に寝室と洋室" },
-      { key: "japaneseHouse", label: "平屋の日本家屋", title: "茶の間・座敷・土間・縁側と庭のある和風の家" },
+      { key: "threeStory", label: "三階建て", title: "1階に車庫と水回り、2階にLDK、3階に寝室。狭い土地の三階建て" },
+      { key: "mansion", label: "マンション", title: "3LDKのマンションの1戸。玄関からの廊下とバルコニー" },
       { key: "apartment", label: "アパート", title: "1Kが3部屋ずつの二階建て。外廊下と外階段" },
+      { key: "shareHouse", label: "シェアハウス", title: "共用のLDKと水回り、個室5つの二階建て" },
+      { key: "japaneseHouse", label: "平屋の日本家屋", title: "茶の間・座敷・土間・縁側と庭のある和風の家" },
+      { key: "oldFarmhouse", label: "古民家", title: "土間・囲炉裏の間・座敷と縁側、庭と蔵" },
       { key: "sample", label: "サンプル（作例）", title: "いろいろな家具や床を置いた作例" },
     ],
   },
@@ -25,16 +29,23 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
     label: "屋敷・宿",
     templates: [
       { key: "westernMansion", label: "洋館", title: "大広間・食堂・書斎のある二階建てと地下室" },
+      { key: "samuraiHouse", label: "武家屋敷", title: "広間・書院・茶室と、池のある庭" },
       { key: "lodge", label: "山荘・ペンション", title: "暖炉のラウンジと客室4つ。森とテラス" },
       { key: "ryokan", label: "旅館", title: "客室・宴会場・大浴場と中庭" },
       { key: "hotel", label: "ホテル", title: "廊下に客室が並ぶ1フロア" },
+      { key: "dormitory", label: "寮", title: "個室が並ぶ二階建て。食堂・大浴場・洗濯室" },
     ],
   },
   {
     label: "お店",
     templates: [
       { key: "cafe", label: "カフェ", title: "カウンターと客席、テラス席" },
+      { key: "restaurant", label: "レストラン", title: "テーブル席・個室・厨房とワインセラー" },
+      { key: "ramen", label: "ラーメン屋", title: "L字のカウンターと厨房、テーブル席" },
+      { key: "izakaya", label: "居酒屋", title: "カウンター・座敷・個室と厨房" },
       { key: "bar", label: "バー", title: "カウンターとボックス席" },
+      { key: "salon", label: "美容院", title: "鏡の前の席・シャンプー台・待合" },
+      { key: "bookstore", label: "本屋", title: "本棚の列・平台・レジとカフェ" },
       { key: "convenience", label: "コンビニ", title: "売り場・レジ・事務所と駐車場" },
     ],
   },
@@ -43,22 +54,39 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
     templates: [
       { key: "hospital", label: "病院", title: "待合・診察室・病室・手術室" },
       { key: "school", label: "学校", title: "教室3つ・職員室・保健室・昇降口" },
-      { key: "office", label: "オフィス", title: "執務室・会議室・社長室" },
+      { key: "nursery", label: "保育園", title: "保育室・お昼寝の部屋・給食室と園庭" },
       { key: "library", label: "図書館", title: "本棚と閲覧席、書庫" },
+      { key: "gymnasium", label: "体育館", title: "広いアリーナ・ステージ・更衣室・器具庫" },
+      { key: "office", label: "オフィス", title: "執務室・会議室・社長室" },
+      { key: "lab", label: "研究所", title: "実験室・資料室・サーバー室" },
+      { key: "police", label: "警察署", title: "刑事課・取調室・留置場" },
+      { key: "policeBox", label: "交番", title: "小さな交番。机と奥の休憩室" },
+      { key: "museum", label: "美術館", title: "展示室3つとショップ" },
+      { key: "cinema", label: "映画館", title: "スクリーンと客席・ロビー・映写室" },
       { key: "church", label: "教会", title: "長椅子の並ぶ礼拝堂" },
       { key: "shrine", label: "神社", title: "本殿・拝殿・社務所と参道" },
-      { key: "police", label: "警察署", title: "刑事課・取調室・留置場" },
-      { key: "lab", label: "研究所", title: "実験室・資料室・サーバー室" },
-      { key: "museum", label: "美術館", title: "展示室3つとショップ" },
+      { key: "temple", label: "寺", title: "本堂・庫裏・鐘楼と墓地" },
       { key: "bathhouse", label: "銭湯", title: "男湯・女湯と番台" },
+      { key: "factory", label: "廃工場", title: "作業場・倉庫・事務所" },
     ],
   },
   {
-    label: "屋外・そのほか",
+    label: "屋外・乗り物",
     templates: [
       { key: "park", label: "公園", title: "遊び場・池・広場" },
-      { key: "factory", label: "廃工場", title: "作業場・倉庫・事務所" },
+      { key: "campsite", label: "キャンプ場", title: "テント・タープ・焚き火・バンガローと川" },
+      { key: "cruiseShip", label: "客船", title: "客室・レストラン・プールデッキ・操舵室" },
+      { key: "sleeperTrain", label: "寝台列車", title: "個室の寝台車と食堂車の2両" },
+    ],
+  },
+  {
+    label: "ファンタジー・SF",
+    templates: [
+      { key: "castle", label: "城", title: "玉座の間・大広間・塔・兵舎と城門" },
+      { key: "adventurersInn", label: "冒険者の宿", title: "酒場・暖炉・依頼の掲示板と2階の客室" },
+      { key: "wizardTower", label: "魔法使いの塔", title: "らせん階段でつながる書庫・研究室・寝室" },
       { key: "dungeon", label: "地下牢", title: "牢屋・大広間・武器庫・宝物庫のダンジョン" },
+      { key: "spaceship", label: "宇宙船", title: "操縦室・居室・食堂・医務室・機関室" },
     ],
   },
 ];
@@ -1388,11 +1416,1067 @@ function dungeon(b: PlanBuilder): void {
     .item("rock", 1250, 640, { w: 60, h: 45, symbol: 1 });
 }
 
+// ---- 住まい（つづき） ----
+
+function threeStory(b: PlanBuilder): void {
+  const ground = b.floor();
+  ground.room("車庫", 0, 0, 300, 520, C.stone, "stone")
+    .room("玄関", 300, 0, 200, 200, C.stone, "stone").label(20, 140)
+    .room("", 300, 200, 200, 560, C.wood, "wood")
+    .room("洗面", 0, 520, 300, 180, C.tile, "tile")
+    .room("浴室", 0, 700, 300, 300, C.tile, "tile")
+    .room("トイレ", 300, 760, 200, 240, C.tile, "tile").label(20, 100)
+    .open(300, 200, 500, 200)
+    .walls()
+    .sliding(20, 0, 280, 0)
+    .door(360, 0, 440, 0)
+    .door(300, 615, 300, 690)
+    .door(180, 700, 260, 700)
+    .door(330, 760, 410, 760)
+    .window(0, 560, 0, 660).window(0, 780, 0, 920).window(500, 850, 500, 950)
+    .item("car", 60, 40)
+    .item("bicycle", 240, 320)
+    .item("shoeCabinet", 465, 60, { rot: 90 })
+    .item("stairs", 390, 380)
+    .item("washbasin", 110, 520)
+    .item("washer", 200, 520)
+    .item("bath", 130, 920)
+    .item("shower", 20, 760)
+    .item("toilet", 380, 925, { rot: 180 });
+
+  const middle = b.floor();
+  middle.room("LDK", 0, 0, 500, 760, C.wood, "wood")
+    .room("納戸", 0, 760, 300, 240, C.warm)
+    .room("トイレ", 300, 760, 200, 240, C.tile, "tile").label(20, 100)
+    .walls()
+    .door(100, 760, 180, 760)
+    .door(320, 760, 390, 760)
+    .window(60, 0, 440, 0, true).window(0, 300, 0, 420).window(500, 260, 500, 360)
+    .item("stairs", 390, 380)
+    .item("sofa", 10, 100, { rot: 270 })
+    .item("table", 130, 135, { rot: 90 })
+    .item("tv", 460, 125, { rot: 90 })
+    .item("kitchen", 0, 450, { rot: 270 })
+    .item("fridge", 0, 690)
+    .item("diningTable", 110, 480)
+    .row("shelf", 20, 965, 3, 95, 0, { rot: 180 })
+    .item("toilet", 420, 925, { rot: 180 });
+
+  const top = b.floor();
+  top.room("寝室", 0, 0, 500, 380, C.wood, "wood")
+    .room("洋室", 0, 380, 300, 380, C.wood, "wood")
+    .room("", 300, 380, 200, 380, C.wood, "wood")
+    .room("納戸", 0, 760, 500, 240, C.warm)
+    .walls()
+    .door(310, 380, 380, 380)
+    .door(300, 600, 300, 680)
+    .door(320, 760, 400, 760)
+    .window(60, 0, 440, 0, true).window(0, 450, 0, 700).window(500, 100, 500, 300)
+    .item("stairs", 390, 380)
+    .item("bedDouble", 180, 20)
+    .item("sideTable", 120, 30)
+    .item("sideTable", 330, 30)
+    .item("wardrobe", 30, 335, { rot: 180 })
+    .item("bed", 20, 540)
+    .item("desk", 160, 390)
+    .item("officeChair", 190, 455, { rot: 180 })
+    .row("shelf", 30, 965, 4, 110, 0, { rot: 180 });
+  b.roof("gable", -40, -40, 580, 1080, top);
+}
+
+function mansion(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("バルコニー", 0, 1100, 800, 150, "plain", C.gray)
+    .room("洋室1", 0, 0, 300, 350, C.wood, "wood")
+    .room("玄関", 300, 0, 150, 170, C.stone, "stone").label(60, 120)
+    .room("", 300, 170, 150, 430, C.wood, "wood")
+    .room("洋室2", 450, 0, 350, 350, C.wood, "wood")
+    .room("浴室", 0, 350, 160, 250, C.tile, "tile")
+    .room("洗面", 160, 350, 140, 250, C.tile, "tile")
+    .room("トイレ", 450, 350, 120, 250, C.tile, "tile")
+    .room("納戸", 570, 350, 230, 250, C.warm)
+    .room("LDK", 0, 600, 520, 500, C.wood, "wood").label(20, 80)
+    .room("洋室3", 520, 600, 280, 500, C.wood, "wood")
+    .open(300, 170, 450, 170)
+    .walls()
+    .door(340, 0, 420, 0)
+    .door(300, 200, 300, 280)
+    .door(450, 200, 450, 280)
+    .door(300, 400, 300, 480)
+    .door(160, 420, 160, 500)
+    .door(450, 380, 450, 450)
+    .door(620, 350, 700, 350)
+    .door(340, 600, 420, 600)
+    .sliding(520, 700, 520, 860)
+    .window(60, 0, 240, 0).window(500, 0, 760, 0).window(800, 100, 800, 280)
+    .window(60, 1100, 460, 1100, true).window(570, 1100, 760, 1100, true)
+    // 洋室1・洋室2
+    .item("bed", 10, 140)
+    .item("desk", 170, 10)
+    .item("officeChair", 200, 75, { rot: 180 })
+    .item("wardrobe", 150, 305, { rot: 180 })
+    .item("desk", 560, 10)
+    .item("officeChair", 590, 75, { rot: 180 })
+    .item("bedSemiDouble", 660, 130)
+    .item("wardrobe", 540, 305, { rot: 180 })
+    // 玄関・水回り・納戸
+    .item("shoeCabinet", 300, 60, { rot: 270 })
+    .item("bath", 0, 520)
+    .item("shower", 35, 410)
+    .item("washbasin", 190, 545, { rot: 180 })
+    .item("washer", 215, 420)
+    .item("toilet", 495, 500, { rot: 90 })
+    .row("shelf", 590, 565, 2, 100, 0, { rot: 180 })
+    // LDK
+    .item("kitchen", 20, 600)
+    .item("fridge", 265, 600)
+    .item("diningTable", 60, 740)
+    .item("rug", 275, 860, { w: 240, h: 200 })
+    .item("sofa", 290, 870, { rot: 270 })
+    .item("table", 395, 905, { rot: 90 })
+    .item("tv", 480, 895, { rot: 90 })
+    .item("plantLarge", 20, 1030)
+    // 洋室3・バルコニー
+    .item("closet", 600, 600)
+    .item("bed", 685, 880)
+    .item("desk", 540, 1035, { rot: 180 })
+    .item("officeChair", 570, 970)
+    .item("clothesDryer", 480, 1145)
+    .item("plantLarge", 20, 1180);
+}
+
+function shareHouse(b: PlanBuilder): void {
+  const ground = b.floor();
+  ground.room("LDK", 0, 0, 550, 600, C.wood, "wood")
+    .room("玄関", 550, 0, 200, 200, C.stone, "stone").label(60, 140)
+    .room("", 550, 200, 200, 700, C.wood, "wood")
+    .room("トイレ", 750, 0, 250, 150, C.tile, "tile")
+    .room("洗面", 750, 150, 250, 250, C.tile, "tile")
+    .room("浴室", 750, 400, 250, 250, C.tile, "tile")
+    .room("納戸", 750, 650, 250, 250, C.warm)
+    .room("個室1", 0, 600, 550, 300, C.wood, "wood")
+    .open(550, 200, 750, 200)
+    .walls()
+    .door(600, 0, 690, 0)
+    .door(750, 40, 750, 120)
+    .door(750, 260, 750, 340)
+    .door(800, 400, 880, 400)
+    .door(750, 700, 750, 780)
+    .door(550, 300, 550, 380)
+    .door(550, 700, 550, 780)
+    .window(80, 0, 480, 0, true).window(0, 150, 0, 450, true)
+    .window(0, 650, 0, 850).window(100, 900, 450, 900)
+    .window(1000, 460, 1000, 590)
+    // LDK
+    .item("fridge", 220, 0)
+    .item("kitchen", 290, 0)
+    .item("longTable", 60, 200)
+    .row("chair", 75, 150, 3, 60, 0)
+    .row("chair", 75, 265, 3, 60, 0, { rot: 180 })
+    .item("sofa", 290, 330)
+    .item("table", 325, 440)
+    .item("tv", 315, 560, { rot: 180 })
+    // 個室1
+    .item("bed", 10, 650, { rot: 270 })
+    .item("wardrobe", 250, 605)
+    .item("desk", 300, 840, { rot: 180 })
+    .item("officeChair", 330, 775)
+    // 玄関・廊下・水回り
+    .item("shoeCabinet", 550, 60, { rot: 270 })
+    .item("stairs", 600, 580)
+    .item("toilet", 925, 50, { rot: 90 })
+    .item("washbasin", 945, 170, { rot: 90 })
+    .item("washer", 930, 300)
+    .item("bath", 920, 460, { rot: 90 })
+    .item("shower", 770, 540)
+    .row("shelf", 780, 870, 2, 100, 0, { rot: 180 });
+
+  const upper = b.floor();
+  upper.room("個室2", 0, 0, 550, 450, C.wood, "wood")
+    .room("個室3", 0, 450, 550, 450, C.wood, "wood")
+    .room("", 550, 0, 200, 900, C.wood, "wood")
+    .room("個室4", 750, 0, 250, 450, C.wood, "wood")
+    .room("個室5", 750, 450, 250, 300, C.wood, "wood")
+    .room("トイレ", 750, 750, 250, 150, C.tile, "tile")
+    .walls()
+    .door(550, 200, 550, 280).door(550, 700, 550, 780)
+    .door(750, 200, 750, 280).door(750, 500, 750, 580).door(750, 790, 750, 860)
+    .window(100, 0, 450, 0).window(0, 100, 0, 350).window(0, 550, 0, 800).window(100, 900, 450, 900)
+    .window(800, 0, 950, 0).window(1000, 100, 1000, 350).window(1000, 500, 1000, 700).window(600, 0, 700, 0)
+    .item("stairs", 600, 580)
+    .item("bed", 20, 220).item("desk", 400, 10).item("officeChair", 430, 75, { rot: 180 }).item("wardrobe", 150, 405, { rot: 180 })
+    .item("bed", 20, 680).item("desk", 400, 460).item("officeChair", 430, 525, { rot: 180 })
+    .item("desk", 870, 10).item("officeChair", 900, 75, { rot: 180 }).item("bed", 880, 220)
+    .item("bed", 885, 520).item("sideTable", 800, 690)
+    .item("toilet", 925, 800, { rot: 90 });
+  b.roof("gable", -40, -40, 1080, 980, upper);
+}
+
+function oldFarmhouse(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("庭", 0, 540, 1900, 560, "grass", C.grass)
+    .room("土間", 0, 0, 400, 540, C.stone, "stone")
+    .room("囲炉裏の間", 400, 0, 400, 450, C.wood, "wood")
+    .room("座敷", 800, 0, 450, 450, C.tatami)
+    .room("奥座敷", 1250, 0, 450, 450, C.tatami)
+    .room("縁側", 400, 450, 1500, 90, C.wood, "wood")
+    .room("風呂", 1700, 0, 200, 250, C.tile, "tile")
+    .room("便所", 1700, 250, 200, 200, C.tile, "tile")
+    .room("蔵", 1450, 650, 350, 300, C.darkStone, "stone").label(20, 120)
+    .open(400, 60, 400, 400)
+    .walls()
+    .sliding(80, 540, 280, 540)
+    .sliding(400, 470, 400, 520)
+    .sliding(800, 100, 800, 350)
+    .sliding(1250, 100, 1250, 350)
+    .sliding(450, 450, 750, 450)
+    .sliding(850, 450, 1200, 450)
+    .sliding(1300, 450, 1650, 450)
+    .door(1740, 450, 1820, 450)
+    .door(1740, 250, 1820, 250)
+    .door(1580, 950, 1670, 950)
+    .window(0, 100, 0, 300)
+    .window(450, 0, 750, 0, true).window(880, 0, 1170, 0).window(1330, 0, 1620, 0)
+    .window(450, 540, 1000, 540, true).window(1100, 540, 1650, 540, true)
+    .window(1900, 60, 1900, 190)
+    // 土間（かまど・作業台）
+    .item("kitchen", 0, 120, { rot: 270 })
+    .item("cupboard", 200, 5)
+    .item("longTable", 120, 380, { color: "#8a6a4a" })
+    .item("bicycle", 320, 280)
+    // 囲炉裏の間・座敷・奥座敷
+    .item("kotatsu", 510, 160, { color: "#5a4a3a" })
+    .item("zaisu", 572, 90)
+    .item("zaisu", 572, 345, { rot: 180 })
+    .item("zaisu", 440, 222, { rot: 270 })
+    .item("zaisu", 695, 222, { rot: 90 })
+    .item("table", 925, 180, { w: 200, h: 90 })
+    .row("zaisu", 955, 110, 2, 90, 0)
+    .row("zaisu", 955, 275, 2, 90, 0, { rot: 180 })
+    .item("futon", 1300, 120)
+    .item("futon", 1430, 120)
+    .item("wardrobe", 1560, 5)
+    // 風呂・便所
+    .item("bath", 1720, 160)
+    .item("toilet", 1840, 260)
+    // 庭と蔵
+    .item("tree", 60, 700)
+    .item("pond", 450, 760)
+    .item("stoneLantern", 820, 680)
+    .item("rock", 1180, 620)
+    .item("shrub", 1050, 990)
+    .row("shelf", 1480, 655, 3, 100, 0)
+    .item("wardrobe", 1755, 760, { rot: 90 });
+  b.roof("hip", -40, -40, 1980, 620, f);
+  b.roof("gable", 1420, 620, 410, 360, f);
+}
+
+// ---- 屋敷・宿（つづき） ----
+
+function samuraiHouse(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("庭", 0, 590, 1700, 610, "grass", C.grass)
+    .room("台所", 0, 0, 300, 300, C.wood, "wood").label(80, 110)
+    .room("玄関", 0, 300, 300, 290, C.stone, "stone")
+    .room("広間", 300, 0, 600, 500, C.tatami)
+    .room("書院", 900, 0, 450, 500, C.tatami)
+    .room("茶室", 1350, 0, 300, 300, C.tatami)
+    .room("水屋", 1350, 300, 300, 200, C.wood, "wood")
+    .room("縁側", 300, 500, 1350, 90, C.wood, "wood")
+    .open(300, 500, 300, 590)
+    .open(300, 590, 1650, 590)
+    .walls()
+    .sliding(0, 380, 0, 520)
+    .sliding(60, 300, 200, 300)
+    .sliding(300, 80, 300, 220)
+    .sliding(300, 330, 300, 470)
+    .sliding(900, 80, 900, 420)
+    .sliding(1350, 80, 1350, 220)
+    .sliding(1400, 300, 1500, 300)
+    .sliding(350, 500, 850, 500)
+    .sliding(950, 500, 1300, 500)
+    .sliding(1400, 500, 1600, 500)
+    .window(0, 40, 0, 160).window(30, 0, 270, 0)
+    .window(380, 0, 820, 0, true).window(980, 0, 1270, 0).window(1650, 60, 1650, 240)
+    // 台所・玄関
+    .item("kitchen", 30, 0)
+    .item("cupboard", 0, 180, { rot: 270 })
+    .item("bench", 60, 530, { w: 180, h: 45 })
+    // 広間
+    .item("table", 420, 210, { w: 360, h: 80 })
+    .row("zaisu", 440, 135, 4, 85, 0)
+    .row("zaisu", 440, 300, 4, 85, 0, { rot: 180 })
+    // 書院（床の間と文机）
+    .item("shelf", 1050, 5, { w: 180, h: 45, color: "#8a6a4a" })
+    .item("table", 1000, 250)
+    .item("zaisu", 1022, 305, { rot: 180 })
+    // 茶室・水屋
+    .item("sideTable", 1475, 125, { color: "#3f3a36" })
+    .item("zaisu", 1472, 50)
+    .item("zaisu", 1472, 190, { rot: 180 })
+    .item("cupboard", 1605, 330, { rot: 90 })
+    .item("washbasin", 1380, 445, { rot: 180 })
+    // 庭
+    .item("pond", 500, 760, { w: 400, h: 260 })
+    .item("stoneLantern", 300, 700)
+    .item("stoneLantern", 1000, 680)
+    .item("rock", 950, 880)
+    .item("tree", 1250, 700)
+    .item("conifer", 60, 900)
+    .item("steppingStones", 150, 620)
+    .item("shrub", 1100, 1080);
+  b.roof("hip", -40, -40, 1730, 670, f);
+}
+
+function dormitory(b: PlanBuilder): void {
+  const ground = b.floor();
+  ground.room("洗濯室", 0, 0, 250, 300, C.tile, "tile").label(20, 150)
+    .room("玄関", 0, 300, 250, 220, C.stone, "stone")
+    .room("食堂", 250, 0, 550, 400, C.wood, "wood")
+    .room("厨房", 800, 0, 300, 400, C.tile, "tile")
+    .room("大浴場", 1100, 0, 500, 400, C.tile, "tile")
+    .room("", 250, 400, 1350, 120, C.wood, "wood")
+    .room("管理人室", 0, 520, 250, 280, C.tatami).label(10, 80)
+    .room("101", 250, 520, 450, 280, C.wood, "wood")
+    .room("102", 700, 520, 450, 280, C.wood, "wood")
+    .room("103", 1150, 520, 450, 280, C.wood, "wood")
+    .open(250, 400, 250, 520)
+    .walls()
+    .door(0, 380, 0, 470)
+    .door(80, 300, 170, 300)
+    .door(100, 520, 180, 520)
+    .door(600, 400, 680, 400)
+    .door(900, 400, 980, 400)
+    .door(1150, 400, 1230, 400)
+    .door(800, 150, 800, 230)
+    .window(0, 60, 0, 240).window(330, 0, 720, 0, true).window(860, 0, 1040, 0).window(1180, 0, 1520, 0)
+    .window(1600, 100, 1600, 300).window(0, 600, 0, 740)
+    .item("stairs", 260, 410, { rot: 90 })
+    // 洗濯室・玄関・管理人室
+    .row("washer", 10, 10, 3, 75, 0)
+    .item("shoeCabinet", 215, 305, { rot: 90 })
+    .item("desk", 110, 740, { rot: 180 })
+    .item("officeChair", 140, 675)
+    // 食堂・厨房・大浴場
+    .item("longTable", 340, 90, { w: 360, h: 70 })
+    .row("chair", 355, 40, 6, 60, 0)
+    .row("chair", 355, 165, 6, 60, 0, { rot: 180 })
+    .item("longTable", 340, 270, { w: 360, h: 70 })
+    .row("chair", 355, 220, 6, 60, 0)
+    .row("chair", 355, 345, 6, 60, 0, { rot: 180 })
+    .item("kitchen", 1035, 20, { rot: 90 })
+    .item("fridge", 1035, 300)
+    .item("longTable", 850, 260, { w: 160, h: 60 })
+    .item("bath", 1250, 30, { w: 300, h: 150 })
+    .row("shower", 1310, 300, 3, 95, 0);
+  for (const x of [250, 700, 1150]) {
+    ground.item("desk", x + 150, 520)
+      .item("officeChair", x + 180, 585, { rot: 180 })
+      .item("bed", x + 10, 690, { rot: 270 })
+      .item("wardrobe", x + 405, 600, { rot: 90 })
+      .door(x + 310, 520, x + 390, 520);
+  }
+
+  const upper = b.floor();
+  upper.room("201", 0, 0, 400, 400, C.wood, "wood")
+    .room("202", 400, 0, 400, 400, C.wood, "wood")
+    .room("203", 800, 0, 400, 400, C.wood, "wood")
+    .room("204", 1200, 0, 400, 400, C.wood, "wood")
+    .room("", 0, 400, 1600, 120, C.wood, "wood")
+    .room("205", 0, 520, 400, 280, C.wood, "wood")
+    .room("206", 400, 520, 400, 280, C.wood, "wood")
+    .room("207", 800, 520, 400, 280, C.wood, "wood")
+    .room("トイレ", 1200, 520, 400, 280, C.tile, "tile").label(20, 120)
+    .walls()
+    .door(1250, 520, 1330, 520)
+    .window(1600, 430, 1600, 490)
+    .item("stairs", 260, 410, { rot: 90 })
+    .row("toilet", 1230, 725, 3, 80, 0, { rot: 180 })
+    .item("washbasin", 1545, 560, { rot: 90 })
+    .item("washbasin", 1545, 650, { rot: 90 });
+  for (const x of [0, 400, 800, 1200]) {
+    upper.item("bed", x + 20, 180)
+      .item("desk", x + 260, 10)
+      .item("officeChair", x + 290, 75, { rot: 180 })
+      .item("wardrobe", x + 355, 200, { rot: 90 })
+      .door(x + 150, 400, x + 230, 400)
+      .window(x + 80, 0, x + 320, 0);
+  }
+  for (const x of [0, 400, 800]) {
+    upper.item("bed", x + 10, 690, { rot: 270 })
+      .item("desk", x + 260, 530)
+      .item("officeChair", x + 290, 595, { rot: 180 })
+      .door(x + 150, 520, x + 230, 520)
+      .window(x + 80, 800, x + 320, 800);
+  }
+  b.roof("gable", -40, -40, 1680, 880, upper);
+}
+
+// ---- お店（つづき） ----
+
+function restaurant(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("客席", 0, 0, 900, 700, C.wood, "wood")
+    .room("エントランス", 0, 700, 300, 200, C.stone, "stone")
+    .room("トイレ", 300, 700, 300, 200, C.tile, "tile").label(20, 60)
+    .room("ワインセラー", 600, 700, 300, 200, C.darkStone, "stone").label(20, 70)
+    .room("個室", 900, 0, 400, 350, C.wood, "wood")
+    .room("厨房", 900, 350, 400, 550, C.tile, "tile")
+    .open(40, 700, 260, 700)
+    .walls()
+    .door(100, 900, 200, 900)
+    .door(400, 700, 480, 700)
+    .door(700, 700, 780, 700)
+    .door(900, 120, 900, 200)
+    .door(900, 500, 900, 580)
+    .door(1300, 700, 1300, 780)
+    .window(80, 0, 820, 0, true).window(0, 150, 0, 550, true).window(950, 0, 1250, 0).window(1300, 60, 1300, 290)
+    .item("diningTable", 80, 80).item("diningTable", 380, 80).item("diningTable", 680, 80)
+    .item("diningTable", 80, 400).item("diningTable", 380, 400).item("diningTable", 680, 400)
+    .item("desk", 60, 640, { w: 120, h: 50 })
+    .item("plantLarge", 820, 620)
+    .item("diningTable", 1020, 95)
+    .item("plant", 1245, 295)
+    .item("kitchen", 1235, 380, { rot: 90 })
+    .item("kitchenIsland", 960, 600)
+    .item("fridge", 920, 830)
+    .item("fridge", 995, 830)
+    .item("cupboard", 1100, 855, { rot: 180 })
+    .item("coatStand", 240, 720)
+    .item("bench", 20, 760, { w: 150, h: 45 })
+    .item("toilet", 520, 825, { rot: 180 })
+    .item("washbasin", 330, 845, { rot: 180 })
+    .row("shelf", 620, 870, 3, 90, 0, { rot: 180 })
+    .item("shelf", 870, 770, { rot: 90 });
+}
+
+function ramen(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("客席", 0, 0, 450, 700, C.wood, "wood")
+    .room("", 450, 400, 200, 300, C.wood, "wood")
+    .room("厨房", 450, 0, 350, 400, C.tile, "tile")
+    .room("トイレ", 650, 400, 150, 300, C.tile, "tile")
+    .open(450, 0, 450, 400)
+    .open(450, 400, 450, 700)
+    .open(450, 400, 650, 400)
+    .walls()
+    .sliding(220, 700, 380, 700)
+    .door(650, 600, 650, 680)
+    .window(0, 150, 0, 550, true).window(500, 0, 750, 0)
+    // L字のカウンター
+    .item("longTable", 400, 40, { w: 330, h: 50, rot: 90 })
+    .item("longTable", 455, 405, { w: 190, h: 50 })
+    .row("stool", 350, 60, 5, 0, 60)
+    .row("stool", 470, 465, 4, 45, 0)
+    // テーブル席
+    .item("table", 60, 100, { w: 80, h: 70 }).item("chair", 10, 112, { rot: 270 }).item("chair", 145, 112, { rot: 90 })
+    .item("table", 60, 330, { w: 80, h: 70 }).item("chair", 10, 342, { rot: 270 }).item("chair", 145, 342, { rot: 90 })
+    .item("table", 60, 560, { w: 80, h: 70 }).item("chair", 10, 572, { rot: 270 }).item("chair", 145, 572, { rot: 90 })
+    // 厨房・トイレ
+    .item("kitchen", 735, 20, { rot: 90 })
+    .item("fridge", 735, 300)
+    .item("longTable", 520, 150, { w: 160, h: 60 })
+    .item("toilet", 725, 470, { rot: 90 });
+}
+
+function izakaya(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("客席", 0, 0, 650, 550, C.wood, "wood")
+    .room("厨房", 650, 0, 350, 550, C.tile, "tile")
+    .room("トイレ", 0, 550, 150, 300, C.tile, "tile").label(20, 120)
+    .room("座敷", 150, 550, 400, 300, C.tatami)
+    .room("個室", 550, 550, 300, 300, C.tatami)
+    .room("倉庫", 850, 550, 150, 300, C.warm).label(10, 120)
+    .open(650, 60, 650, 490)
+    .walls()
+    .sliding(60, 0, 200, 0)
+    .door(30, 550, 110, 550)
+    .sliding(200, 550, 500, 550)
+    .sliding(570, 550, 640, 550)
+    .door(880, 550, 960, 550)
+    .window(0, 100, 0, 450).window(300, 0, 600, 0).window(1000, 100, 1000, 450)
+    // カウンター
+    .item("longTable", 600, 65, { w: 420, h: 50, rot: 90 })
+    .row("stool", 545, 80, 6, 0, 68)
+    // テーブル席
+    .item("table", 100, 150, { w: 120, h: 70 }).row("chair", 115, 100, 2, 60, 0).row("chair", 115, 225, 2, 60, 0, { rot: 180 })
+    .item("table", 330, 150, { w: 120, h: 70 }).row("chair", 345, 100, 2, 60, 0).row("chair", 345, 225, 2, 60, 0, { rot: 180 })
+    .item("table", 100, 380, { w: 120, h: 70 }).row("chair", 115, 330, 2, 60, 0).row("chair", 115, 455, 2, 60, 0, { rot: 180 })
+    .item("table", 330, 380, { w: 120, h: 70 }).row("chair", 345, 330, 2, 60, 0).row("chair", 345, 455, 2, 60, 0, { rot: 180 })
+    // 厨房
+    .item("kitchen", 935, 40, { rot: 90 })
+    .item("fridge", 935, 300)
+    .item("longTable", 720, 200, { w: 160, h: 60 })
+    .item("cupboard", 700, 505, { rot: 180 })
+    // トイレ・座敷・個室・倉庫
+    .item("toilet", 50, 775, { rot: 180 })
+    .item("table", 250, 660, { w: 200, h: 80 })
+    .row("zaisu", 270, 593, 3, 65, 0)
+    .row("zaisu", 270, 745, 3, 65, 0, { rot: 180 })
+    .item("table", 620, 690, { w: 160, h: 80 })
+    .row("zaisu", 640, 625, 2, 65, 0)
+    .row("zaisu", 640, 775, 2, 65, 0, { rot: 180 })
+    .item("shelf", 970, 640, { rot: 90 })
+    .item("shelf", 970, 740, { rot: 90 });
+}
+
+function salon(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("サロン", 0, 0, 800, 450, C.warm)
+    .room("トイレ", 350, 450, 150, 200, C.tile, "tile").label(20, 90)
+    .room("スタッフ室", 500, 450, 300, 200, C.cool).label(20, 50)
+    .walls()
+    .door(80, 450, 180, 450)
+    .door(380, 450, 450, 450)
+    .door(540, 450, 620, 450)
+    .window(0, 60, 0, 180, true).window(800, 60, 800, 160)
+    // 鏡の前の席・シャンプー台
+    .row("shelf", 120, 5, 4, 150, 0, { w: 100, h: 20, color: "#dfe9ef" })
+    .row("officeChair", 140, 60, 4, 150, 0)
+    .item("washbasin", 745, 190, { rot: 90 })
+    .item("washbasin", 745, 290, { rot: 90 })
+    .item("armchair", 660, 188, { rot: 90 })
+    .item("armchair", 660, 288, { rot: 90 })
+    // 待合・レジ
+    .item("sofa2", 0, 200, { rot: 270 })
+    .item("table", 100, 220, { rot: 90 })
+    .item("desk", 250, 385, { rot: 180 })
+    .item("plantLarge", 720, 380)
+    // トイレ・スタッフ室
+    .item("toilet", 430, 575, { rot: 180 })
+    .item("longTable", 620, 540, { w: 140, h: 60 })
+    .item("stool", 640, 605)
+    .item("stool", 700, 605)
+    .item("washer", 735, 460);
+}
+
+function bookstore(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("売り場", 0, 0, 900, 800, C.wood, "wood")
+    .room("カフェ", 900, 0, 300, 450, C.wood, "wood")
+    .room("事務所", 900, 450, 300, 350, C.cool)
+    .open(900, 50, 900, 400)
+    .walls()
+    .sliding(100, 800, 300, 800)
+    .door(900, 650, 900, 730)
+    .window(0, 100, 0, 700, true).window(950, 0, 1150, 0).window(1200, 60, 1200, 400)
+    // 壁の本棚と、背中合わせの本棚の列
+    .row("shelf", 120, 0, 8, 95, 0);
+  for (const x of [150, 320, 490, 660]) {
+    f.item("shelf", x, 120, { w: 360, h: 35, rot: 90 })
+      .item("shelf", x + 35, 120, { w: 360, h: 35, rot: 270 });
+  }
+  f.item("table", 150, 580, { w: 140, h: 70, color: "#c9a27a" })
+    .item("table", 400, 580, { w: 140, h: 70, color: "#c9a27a" })
+    .item("longTable", 650, 640, { w: 180, h: 60 })
+    .item("officeChair", 710, 705, { rot: 180 })
+    .item("plantLarge", 20, 720)
+    // カフェ
+    .item("roundTable", 960, 100, { w: 70, h: 70 }).item("chair", 915, 112, { rot: 270 }).item("chair", 1035, 112, { rot: 90 })
+    .item("roundTable", 960, 280, { w: 70, h: 70 }).item("chair", 915, 292, { rot: 270 }).item("chair", 1035, 292, { rot: 90 })
+    .item("longTable", 1150, 120, { w: 200, h: 50, rot: 90 })
+    // 事務所
+    .item("desk", 1060, 470)
+    .item("officeChair", 1090, 535, { rot: 180 })
+    .row("shelf", 920, 765, 3, 90, 0, { rot: 180 });
+}
+
+// ---- 施設（つづき） ----
+
+function nursery(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("園庭", 0, -550, 1100, 550, "plain", C.sand)
+    .room("保育室", 0, 0, 700, 500, C.wood, "wood")
+    .room("お昼寝室", 700, 0, 400, 500, C.tatami)
+    .room("給食室", 0, 500, 350, 300, C.tile, "tile")
+    .room("職員室", 350, 500, 350, 300, C.cool).label(100, 40)
+    .room("トイレ", 700, 500, 400, 300, C.tile, "tile")
+    .walls()
+    .sliding(100, 0, 300, 0).sliding(400, 0, 600, 0)
+    .sliding(700, 100, 700, 400)
+    .door(150, 500, 230, 500)
+    .door(360, 500, 440, 500)
+    .door(800, 500, 880, 500)
+    .door(600, 800, 690, 800)
+    .window(780, 0, 1020, 0).window(0, 100, 0, 400).window(1100, 100, 1100, 400).window(80, 800, 280, 800).window(1100, 560, 1100, 740)
+    // 保育室
+    .item("rug", 60, 80, { w: 300, h: 200, color: "#7fb3d5" })
+    .item("table", 420, 150, { w: 120, h: 60, color: "#f2c14e" })
+    .row("stool", 425, 105, 3, 40, 0)
+    .row("stool", 425, 215, 3, 40, 0)
+    .item("table", 420, 330, { w: 120, h: 60, color: "#9ccc65" })
+    .row("stool", 425, 285, 3, 40, 0)
+    .row("stool", 425, 395, 3, 40, 0)
+    .row("shelf", 60, 465, 3, 95, 0, { rot: 180 })
+    .item("piano", 520, 440, { rot: 180 })
+    // お昼寝室
+    .row("futon", 740, 120, 4, 85, 0, { w: 70, h: 130 })
+    .row("futon", 740, 300, 4, 85, 0, { w: 70, h: 130 })
+    // 給食室・職員室・トイレ
+    .item("kitchen", 20, 735, { rot: 180 })
+    .item("fridge", 275, 735)
+    .item("longTable", 60, 600, { w: 160, h: 60 })
+    .item("desk", 640, 540, { rot: 90 })
+    .item("officeChair", 570, 570, { rot: 270 })
+    .item("desk", 380, 620)
+    .item("officeChair", 410, 685, { rot: 180 })
+    .row("toilet", 750, 725, 4, 70, 0, { rot: 180 })
+    .row("washbasin", 1045, 540, 2, 0, 85, { rot: 90 })
+    // 園庭
+    .item("swing", 100, -450)
+    .item("tree", 800, -520)
+    .item("bench", 400, -120)
+    .item("flowerBed", 420, -530)
+    .item("trashCan", 620, -60);
+  b.roof("hip", -30, -30, 1160, 860, f);
+}
+
+function gymnasium(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("アリーナ", 0, 0, 2400, 1500, C.wood, "wood")
+    .room("器具庫", 0, 1500, 500, 400, C.gray)
+    .room("ステージ", 500, 1500, 1100, 400, C.wood, "wood")
+    .room("男子更衣室", 1600, 1500, 400, 400, C.cool).label(20, 100)
+    .room("女子更衣室", 2000, 1500, 400, 400, C.rose).label(20, 100)
+    .open(550, 1500, 1550, 1500)
+    .walls()
+    .sliding(1050, 0, 1350, 0)
+    .sliding(150, 1500, 400, 1500)
+    .door(1650, 1500, 1730, 1500)
+    .door(2050, 1500, 2130, 1500)
+    .window(200, 0, 900, 0, true).window(1500, 0, 2200, 0, true)
+    .window(0, 200, 0, 600, true).window(0, 900, 0, 1300, true)
+    .window(2400, 200, 2400, 600, true).window(2400, 900, 2400, 1300, true)
+    .row("bench", 100, 1400, 3, 250, 0, { w: 200, h: 50 })
+    .row("bench", 1600, 1400, 3, 250, 0, { w: 200, h: 50 })
+    .item("rug", 50, 1600, { w: 200, h: 100, color: "#3a6ea5" })
+    .item("rug", 280, 1600, { w: 200, h: 100, color: "#3a6ea5" })
+    .row("shelf", 30, 1865, 5, 90, 0, { rot: 180 })
+    .item("piano", 600, 1820)
+    .item("desk", 1000, 1560, { w: 100, h: 50 })
+    .item("closet", 1620, 1835).item("closet", 1800, 1835)
+    .item("bench", 1700, 1680, { w: 200, h: 45 })
+    .item("closet", 2020, 1835).item("closet", 2200, 1835)
+    .item("bench", 2100, 1680, { w: 200, h: 45 });
+  b.roof("gable", -40, -40, 2480, 1980, f);
+}
+
+function policeBox(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("", -150, 400, 800, 250, "stone", C.stone)
+    .room("執務室", 0, 0, 300, 400, C.gray)
+    .room("休憩室", 300, 0, 200, 250, C.tatami)
+    .room("トイレ", 300, 250, 200, 150, C.tile, "tile")
+    .walls()
+    .sliding(80, 400, 220, 400)
+    .door(300, 80, 300, 160)
+    .door(300, 290, 300, 360)
+    .window(0, 100, 0, 300).window(230, 400, 290, 400).window(500, 60, 500, 200)
+    .item("desk", 90, 200)
+    .item("officeChair", 120, 135)
+    .item("chair", 128, 270, { rot: 180 })
+    .item("shelf", 200, 0)
+    .item("coatStand", 240, 330)
+    .item("table", 380, 100, { w: 80, h: 60 })
+    .item("zaisu", 392, 165, { rot: 180 })
+    .item("toilet", 425, 300, { rot: 90 })
+    .item("bicycle", 300, 450, { rot: 90 })
+    .item("bicycle", 300, 540, { rot: 90 })
+    .item("gardenLight", 240, 410, { color: "#d9302c" });
+  b.roof("gable", -30, -30, 560, 460, f);
+}
+
+function cinema(b: PlanBuilder): void {
+  const f = b.floor();
+  f.room("シアター", 0, 0, 1200, 1000, "#4a4f5a")
+    .room("ロビー", 0, 1000, 900, 400, C.warm).label(20, 100)
+    .room("映写室", 900, 1000, 300, 200, C.gray)
+    .room("トイレ", 900, 1200, 300, 200, C.tile, "tile")
+    .walls()
+    .door(100, 1000, 200, 1000)
+    .door(700, 1000, 800, 1000)
+    .door(900, 1050, 900, 1130)
+    .door(900, 1250, 900, 1330)
+    .sliding(300, 1400, 600, 1400)
+    .item("tv", 150, 20, { w: 900, h: 30 })
+    .item("desk", 1020, 1010, { w: 100, h: 60, color: "#55595f" })
+    .item("officeChair", 1040, 1075, { rot: 180 })
+    .item("longTable", 550, 1100, { w: 300, h: 60 })
+    .item("sofa2", 60, 1320, { rot: 180 })
+    .item("plantLarge", 820, 1320)
+    .row("toilet", 1000, 1325, 3, 60, 0, { rot: 180 });
+  // 客席（スクリーンを向く）。真ん中に通路
+  for (let r = 0; r < 7; r += 1) {
+    f.row("chair", 120, 250 + r * 95, 6, 55, 0, { w: 50, h: 50, rot: 180, color: "#a33a3a" })
+      .row("chair", 700, 250 + r * 95, 6, 55, 0, { w: 50, h: 50, rot: 180, color: "#a33a3a" });
+  }
+  b.roof("flat", -30, -30, 1260, 1460, f);
+}
+
+function temple(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("", 0, 0, 2000, 1700, "plain", C.sand)
+    .area("", 950, 650, 100, 1050, "stone", C.stone)
+    .area("墓地", 100, 950, 750, 600, "stone", C.stone)
+    .area("鐘楼", 300, 250, 220, 220, "wood", C.wood)
+    .room("本堂", 650, 150, 700, 500, C.wood, "wood")
+    .room("庫裏", 1450, 150, 450, 500, C.tatami)
+    .walls()
+    .sliding(750, 650, 1250, 650)
+    .door(1500, 650, 1590, 650)
+    .window(650, 250, 650, 550).window(1350, 250, 1350, 550).window(1900, 250, 1900, 550).window(1500, 150, 1850, 150)
+    // 本堂
+    .item("cupboard", 850, 160, { w: 300, h: 70, color: "#c9a227" })
+    .item("floorLamp", 790, 170)
+    .item("floorLamp", 1165, 170)
+    .row("zaisu", 750, 330, 7, 75, 0)
+    .row("zaisu", 750, 430, 7, 75, 0)
+    // 庫裏
+    .item("kitchen", 1835, 380, { rot: 90 })
+    .item("table", 1550, 300, { w: 140, h: 80 })
+    .item("zaisu", 1570, 230)
+    .item("zaisu", 1630, 230)
+    // 鐘楼・墓地・境内
+    .item("roundTable", 360, 330, { w: 100, h: 100, color: "#8a6a3a" })
+    .item("conifer", 60, 500)
+    .item("conifer", 1700, 800)
+    .item("tree", 1400, 1000)
+    .row("stoneLantern", 870, 760, 3, 0, 300)
+    .row("stoneLantern", 1070, 760, 3, 0, 300);
+  for (let r = 0; r < 4; r += 1) f.row("grave", 160, 1050 + r * 120, 8, 80, 0, { w: 60, h: 70 });
+  b.roof("hip", 620, 120, 760, 560, f);
+  b.roof("gable", 1420, 120, 510, 560, f);
+  b.roof("hip", 280, 230, 260, 260, f);
+}
+
+// ---- 屋外・乗り物（つづき） ----
+
+function campsite(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("", 0, 0, 2000, 1400, "grass", C.grass)
+    .area("川", 0, 1250, 2000, 150, "plain", "#8cc0dc")
+    .area("駐車場", 0, 0, 500, 600, "stone", C.stone)
+    .area("炊事場", 800, 100, 400, 300, "stone", C.stone)
+    .room("バンガロー", 1500, 100, 350, 350, C.wood, "wood")
+    .room("トイレ", 1550, 800, 250, 200, C.tile, "tile")
+    .walls()
+    .door(1850, 150, 1850, 230)
+    .door(1550, 850, 1550, 930)
+    .window(1520, 100, 1700, 100).window(1500, 200, 1500, 350)
+    .item("car", 60, 100)
+    .item("car", 280, 100, { symbol: 1 })
+    .item("kitchen", 880, 300, { rot: 180 })
+    .item("longTable", 900, 200)
+    .item("bunkBed", 1520, 230)
+    .item("bunkBed", 1640, 230)
+    .item("sideTable", 1780, 380)
+    .item("toilet", 1650, 925, { rot: 180 })
+    .item("toilet", 1720, 925, { rot: 180 })
+    // テントとタープ・焚き火
+    .item("shed", 650, 650, { w: 220, h: 200, color: "#e07b39" })
+    .item("shed", 950, 650, { w: 220, h: 200, color: "#3f8f6b" })
+    .item("shed", 1250, 650, { w: 220, h: 200, color: "#d9b23f" })
+    .item("parasol", 600, 950)
+    .item("longTable", 630, 1040)
+    .item("bench", 630, 990, { w: 180, h: 40 })
+    .item("bench", 630, 1105, { w: 180, h: 40 })
+    .item("pond", 1000, 1000, { w: 110, h: 110, color: "#d9662b" })
+    .item("stool", 940, 1035)
+    .item("stool", 1125, 1035)
+    .item("stool", 1035, 1125)
+    .item("conifer", 600, 150)
+    .item("conifer", 1300, 150)
+    .item("tree", 100, 750)
+    .item("conifer", 1810, 1050);
+  b.roof("gable", 780, 80, 440, 340, f);
+  b.roof("gable", 1480, 80, 390, 390, f);
+  b.roof("gable", 1530, 780, 290, 240, f);
+}
+
+function cruiseShip(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("プールデッキ", -500, 0, 800, 740, "wood", C.wood)
+    .area("プール", -420, 170, 360, 400, "tile", "#7fc4e8")
+    .room("", 300, 320, 1050, 100, C.gray)
+    .room("レストラン", 1350, 0, 800, 740, C.wood, "wood")
+    .room("操舵室", 2150, 170, 300, 400, C.cool);
+  // 客室（上の列と下の列）
+  [300, 650, 1000].forEach((x, i) => {
+    f.room(`${101 + i}`, x, 0, 350, 320, C.cream).label(10, 220)
+      .room(`${104 + i}`, x, 420, 350, 320, C.cream);
+  });
+  f.walls()
+    .door(300, 340, 300, 400)
+    .door(1350, 340, 1350, 400)
+    .door(2150, 300, 2150, 380)
+    .window(1420, 0, 2080, 0, true).window(1420, 740, 2080, 740, true).window(2450, 200, 2450, 540, true)
+    .item("bench", -480, 200, { rot: 90 })
+    .item("bench", -480, 400, { rot: 90 })
+    .item("parasol", 20, 60)
+    .item("roundTable", 100, 140, { w: 80, h: 80 })
+    .item("plantLarge", 220, 650)
+    .item("diningTable", 1420, 140).item("diningTable", 1650, 140).item("diningTable", 1880, 140)
+    .item("diningTable", 1420, 470).item("diningTable", 1650, 470).item("diningTable", 1880, 470)
+    .item("desk", 2390, 300, { rot: 90 })
+    .item("desk", 2390, 430, { rot: 90 })
+    .item("officeChair", 2320, 330, { rot: 270 })
+    .item("officeChair", 2320, 460, { rot: 270 });
+  for (const x of [300, 650, 1000]) {
+    f.item("bed", x + 20, 10).item("bed", x + 140, 10).item("sideTable", x + 260, 20)
+      .door(x + 250, 320, x + 330, 320)
+      .window(x + 80, 0, x + 260, 0)
+      .item("bed", x + 20, 530, { rot: 180 }).item("bed", x + 140, 530, { rot: 180 }).item("sideTable", x + 260, 680)
+      .door(x + 250, 420, x + 330, 420)
+      .window(x + 80, 740, x + 260, 740);
+  }
+}
+
+function sleeperTrain(b: PlanBuilder): void {
+  const f = b.floor();
+  // 1両目: 個室の寝台が7つと、トイレ・通路
+  for (let i = 0; i < 7; i += 1) {
+    const x = i * 250;
+    f.room(`${i + 1}号室`, x, 0, 250, 200, C.cream);
+  }
+  f.room("トイレ", 1750, 0, 250, 200, C.tile, "tile")
+    .room("", 0, 200, 2000, 100, C.wood, "wood")
+    // 2両目: 食堂車と、広い個室が2つ
+    .room("食堂車", 0, 400, 1200, 300, C.wood, "wood").label(10, 115)
+    .room("8号室", 1200, 400, 400, 200, C.cream)
+    .room("9号室", 1600, 400, 400, 200, C.cream)
+    .room("", 1200, 600, 800, 100, C.wood, "wood")
+    .walls()
+    .door(0, 220, 0, 280).door(2000, 220, 2000, 280)
+    .door(1800, 200, 1880, 200)
+    .door(0, 520, 0, 580).door(1200, 620, 1200, 680).door(2000, 620, 2000, 680)
+    .sliding(1240, 600, 1350, 600).sliding(1640, 600, 1750, 600)
+    .window(100, 300, 600, 300).window(800, 300, 1300, 300).window(1450, 300, 1900, 300)
+    .window(100, 400, 1100, 400, true).window(100, 700, 1100, 700, true)
+    .window(1260, 400, 1540, 400).window(1660, 400, 1940, 400)
+    .item("toilet", 1925, 120, { rot: 90 })
+    .item("washbasin", 1750, 110, { rot: 270 })
+    .item("bedDouble", 1380, 450, { rot: 90 })
+    .item("bedDouble", 1780, 450, { rot: 90 });
+  for (let i = 0; i < 7; i += 1) {
+    const x = i * 250;
+    f.item("bed", x + 25, 90, { rot: 90 })
+      .sliding(x + 60, 200, x + 190, 200)
+      .window(x + 40, 0, x + 210, 0);
+  }
+  for (let i = 0; i < 5; i += 1) {
+    const x = 40 + i * 230;
+    f.item("table", x + 60, 410, { w: 70, h: 70 }).item("chair", x + 10, 422, { rot: 270 }).item("chair", x + 135, 422, { rot: 90 })
+      .item("table", x + 60, 620, { w: 70, h: 70 }).item("chair", x + 10, 632, { rot: 270 }).item("chair", x + 135, 632, { rot: 90 });
+  }
+}
+
+// ---- ファンタジー・SF ----
+
+function castle(b: PlanBuilder): void {
+  const f = b.floor();
+  f.area("前庭", 0, 1300, 2000, 400, "grass", C.grass)
+    .room("北西の塔", 0, 0, 500, 600, C.darkStone, "stone")
+    .room("玉座の間", 500, 0, 1000, 800, C.stone, "stone")
+    .room("北東の塔", 1500, 0, 500, 600, C.darkStone, "stone")
+    .room("兵舎", 0, 600, 500, 700, C.wood, "wood")
+    .room("大広間", 500, 800, 1000, 500, C.wood, "wood")
+    .room("厨房", 1500, 600, 500, 700, C.stone, "stone")
+    .room("城門", 900, 1300, 200, 200, C.darkStone, "stone").label(10, 120)
+    .walls()
+    .door(500, 250, 500, 350).door(1500, 250, 1500, 350)
+    .door(200, 600, 300, 600).door(1700, 600, 1800, 600)
+    .door(950, 800, 1050, 800)
+    .door(500, 1000, 500, 1100).door(1500, 1000, 1500, 1100)
+    .door(950, 1300, 1050, 1300)
+    .sliding(920, 1500, 1080, 1500)
+    .window(0, 200, 0, 400).window(2000, 200, 2000, 400).window(700, 0, 1300, 0, true)
+    .window(0, 800, 0, 1100).window(2000, 1150, 2000, 1250)
+    // 塔（らせん階段）
+    .item("stairsSpiral", 180, 230).item("floorLamp", 60, 500)
+    .item("stairsSpiral", 1680, 230).item("floorLamp", 1895, 500)
+    // 玉座の間
+    .item("rug", 920, 120, { w: 160, h: 640, color: "#8e1f2a" })
+    .item("armchair", 945, 15, { w: 110, h: 100, color: "#c9a227" })
+    .item("armchair", 790, 40, { color: "#8e1f2a" })
+    .item("armchair", 1130, 40, { color: "#8e1f2a" })
+    .item("floorLamp", 700, 200).item("floorLamp", 1255, 200).item("floorLamp", 700, 550).item("floorLamp", 1255, 550)
+    // 兵舎
+    .item("longTable", 160, 720)
+    .row("stool", 175, 785, 4, 45, 0)
+    .row("bunkBed", 30, 900, 4, 115, 0)
+    // 大広間
+    .item("longTable", 700, 950, { w: 600, h: 80 })
+    .row("chair", 720, 900, 10, 58, 0)
+    .row("chair", 720, 1035, 10, 58, 0, { rot: 180 })
+    .item("fireplace", 1200, 800)
+    // 厨房
+    .item("kitchen", 1935, 700, { rot: 90 })
+    .item("longTable", 1600, 900, { w: 200, h: 70 })
+    .row("roundTable", 1530, 1180, 3, 70, 0, { w: 60, h: 60, color: "#8a5a2b" })
+    // 前庭
+    .item("pond", 600, 1450, { w: 120, h: 120, color: "#6f8fa6" })
+    .item("tree", 150, 1380)
+    .item("tree", 1600, 1350)
+    .item("shrub", 1250, 1550);
+  b.roof("hip", -30, -30, 560, 660, f);
+  b.roof("hip", 1470, -30, 560, 660, f);
+  b.roof("gable", 470, -30, 1060, 1360, f);
+}
+
+function adventurersInn(b: PlanBuilder): void {
+  const ground = b.floor();
+  ground.room("酒場", 0, 0, 800, 900, C.wood, "wood")
+    .room("厨房", 800, 0, 400, 450, C.tile, "tile")
+    .room("倉庫", 800, 450, 400, 250, C.wood, "wood")
+    .room("", 800, 700, 400, 200, C.wood, "wood")
+    .walls()
+    .door(300, 900, 400, 900)
+    .door(800, 100, 800, 180)
+    .door(900, 450, 980, 450)
+    .door(800, 760, 800, 840)
+    .window(0, 100, 0, 300).window(0, 600, 0, 800).window(500, 900, 700, 900).window(1200, 60, 1200, 240)
+    // 暖炉・依頼の掲示板・カウンター
+    .item("fireplace", 0, 380, { rot: 270 })
+    .item("shelf", 300, 0, { w: 160, h: 15, color: "#8a5a2b" })
+    .item("longTable", 680, 250, { w: 400, h: 60, rot: 90 })
+    .row("stool", 630, 270, 6, 0, 65)
+    .row("shelf", 770, 300, 3, 0, 100, { rot: 90 })
+    .item("plantLarge", 720, 820);
+  // 丸テーブルと丸椅子
+  for (const [x, y] of [[150, 150], [400, 150], [150, 600], [400, 600]]) {
+    ground.item("roundTable", x, y)
+      .item("stool", x - 45, y + 30).item("stool", x + 105, y + 30)
+      .item("stool", x + 30, y - 45).item("stool", x + 30, y + 105);
+  }
+  ground.item("kitchen", 1135, 40, { rot: 90 })
+    .item("longTable", 880, 200, { w: 160, h: 60 })
+    .item("roundTable", 830, 380, { w: 60, h: 60, color: "#8a5a2b" })
+    .row("roundTable", 830, 600, 4, 85, 0, { w: 70, h: 70, color: "#8a5a2b" })
+    .item("stairs", 880, 750, { rot: 90 });
+
+  const upper = b.floor();
+  upper.room("客室1", 0, 0, 300, 400, C.wood, "wood")
+    .room("客室2", 300, 0, 300, 400, C.wood, "wood")
+    .room("客室3", 600, 0, 300, 400, C.wood, "wood")
+    .room("客室4", 900, 0, 300, 400, C.wood, "wood")
+    .room("", 0, 400, 1200, 120, C.wood, "wood")
+    .room("客室5", 0, 520, 400, 380, C.wood, "wood")
+    .room("客室6", 400, 520, 400, 380, C.wood, "wood")
+    .room("", 800, 520, 400, 380, C.wood, "wood")
+    .open(800, 520, 1200, 520)
+    .walls()
+    .item("stairs", 880, 750, { rot: 90 });
+  for (const x of [0, 300, 600, 900]) {
+    upper.item("bed", x + 20, 180).item("sideTable", x + 130, 190).item("wardrobe", x + 180, 10, { w: 100, h: 45 })
+      .door(x + 200, 400, x + 280, 400)
+      .window(x + 60, 0, x + 160, 0);
+  }
+  for (const x of [0, 400]) {
+    upper.item("bunkBed", x + 30, 680).item("bunkBed", x + 150, 680).item("wardrobe", x + 270, 855, { w: 100, h: 45, rot: 180 })
+      .door(x + 250, 520, x + 330, 520)
+      .window(x + 60, 900, x + 220, 900);
+  }
+  upper.window(0, 600, 0, 800);
+  b.roof("hip", -40, -40, 1280, 980, upper);
+}
+
+function wizardTower(b: PlanBuilder): void {
+  const ground = b.floor();
+  ground.room("書庫", 0, 0, 700, 700, C.wood, "wood")
+    .walls()
+    .door(250, 700, 350, 700)
+    .window(700, 150, 700, 300).window(0, 620, 0, 680)
+    .item("stairsSpiral", 520, 520)
+    .row("shelf", 0, 100, 5, 0, 100, { rot: 270 })
+    .row("shelf", 120, 0, 5, 100, 0)
+    .item("rug", 180, 260, { w: 300, h: 200, color: "#5b3a6b" })
+    .item("desk", 250, 300, { w: 140, h: 70 })
+    .item("armchair", 280, 375, { rot: 180 })
+    .item("floorLamp", 430, 290);
+
+  const middle = b.floor();
+  middle.room("研究室", 0, 0, 700, 700, C.darkStone, "stone")
+    .walls()
+    .window(0, 150, 0, 260).window(300, 700, 450, 700)
+    .item("stairsSpiral", 520, 520)
+    .item("longTable", 100, 150, { w: 300, h: 80 })
+    .item("roundTable", 150, 400, { w: 100, h: 100, color: "#2f3436" })
+    .item("aquarium", 450, 10, { color: "#7fd1b9" })
+    .row("shelf", 0, 300, 2, 0, 100, { rot: 270 })
+    .item("fireplace", 655, 150, { rot: 90 })
+    .item("catTower", 420, 300);
+
+  const top = b.floor();
+  top.room("寝室", 0, 0, 400, 700, C.wood, "wood")
+    .room("星見台", 400, 0, 300, 700, C.wood, "wood")
+    .walls()
+    .door(400, 300, 400, 380)
+    .window(100, 0, 300, 0).window(700, 60, 700, 300, true).window(450, 700, 650, 700, true)
+    .item("stairsSpiral", 520, 520)
+    .item("bed", 40, 60)
+    .item("wardrobe", 0, 400, { rot: 270 })
+    .item("desk", 180, 640, { rot: 180 })
+    .item("chair", 218, 590)
+    .item("floorLamp", 530, 120)
+    .item("armchair", 510, 220)
+    .item("roundTable", 430, 360, { w: 70, h: 70 });
+  b.roof("hip", -40, -40, 780, 780, top);
+}
+
+function spaceship(b: PlanBuilder): void {
+  const f = b.floor();
+  const hull = "#e9eef3";
+  f.room("", 0, 350, 2000, 100, C.gray)
+    .room("食堂", 1200, 0, 800, 350, hull)
+    .room("機関室", 0, 450, 800, 350, C.darkStone, "stone")
+    .room("貨物室", 800, 450, 400, 350, C.gray)
+    .room("医務室", 1200, 450, 400, 350, C.mint)
+    .room("エアロック", 1600, 450, 400, 350, C.gray)
+    .room("操縦室", 2000, 150, 400, 500, "#dfe7ef");
+  [0, 300, 600, 900].forEach((x, i) => {
+    f.room(`居室${i + 1}`, x, 0, 300, 350, hull);
+  });
+  f.walls()
+    .door(2000, 360, 2000, 440)
+    .sliding(1250, 350, 1330, 350)
+    .sliding(100, 450, 180, 450)
+    .sliding(1050, 450, 1130, 450)
+    .sliding(1250, 450, 1330, 450)
+    .sliding(1650, 450, 1730, 450)
+    .door(1750, 800, 1850, 800)
+    .window(2400, 200, 2400, 600, true).window(2050, 150, 2350, 150).window(2050, 650, 2350, 650)
+    // 操縦室
+    .item("desk", 2340, 200, { rot: 90 }).item("desk", 2340, 340, { rot: 90 }).item("desk", 2340, 480, { rot: 90 })
+    .item("officeChair", 2270, 230, { rot: 270 }).item("officeChair", 2270, 370, { rot: 270 }).item("officeChair", 2270, 510, { rot: 270 })
+    .item("armchair", 2120, 360, { rot: 90 })
+    // 食堂
+    .item("longTable", 1350, 150, { w: 360, h: 80 })
+    .row("chair", 1365, 100, 6, 60, 0)
+    .row("chair", 1365, 235, 6, 60, 0, { rot: 180 })
+    .item("kitchen", 1935, 50, { rot: 90 })
+    // 機関室・貨物室・医務室・エアロック
+    .item("roundTable", 300, 520, { w: 200, h: 200, color: "#3fa7d6" })
+    .item("wardrobe", 580, 700, { w: 180, h: 90, color: "#4a5560" })
+    .row("shelf", 770, 480, 2, 0, 100, { rot: 90, color: "#4a5560" })
+    .item("wardrobe", 830, 560, { w: 180, h: 90, color: "#8a7a5a" })
+    .item("wardrobe", 830, 680, { w: 180, h: 90, color: "#5a7a8a" })
+    .item("bed", 1240, 560).item("bed", 1380, 560)
+    .item("washbasin", 1545, 470, { rot: 90 })
+    .row("coatStand", 1630, 560, 3, 70, 0);
+  for (const x of [0, 300, 600, 900]) {
+    f.item("bunkBed", x + 180, 120).item("closet", x, 220, { w: 100, h: 45, rot: 270 })
+      .sliding(x + 40, 350, x + 150, 350)
+      .window(x + 100, 0, x + 200, 0);
+  }
+}
+
 const BUILDERS: Record<string, (b: PlanBuilder) => void> = {
-  japaneseHouse, apartment, westernMansion, lodge, ryokan, hotel,
-  cafe, bar, convenience,
-  hospital, school, office, library, church, shrine, police, lab, museum, bathhouse,
-  park, factory, dungeon,
+  threeStory, mansion, apartment, shareHouse, japaneseHouse, oldFarmhouse,
+  westernMansion, samuraiHouse, lodge, ryokan, hotel, dormitory,
+  cafe, restaurant, ramen, izakaya, bar, salon, bookstore, convenience,
+  hospital, school, nursery, library, gymnasium, office, lab, police, policeBox, museum, cinema, church, shrine, temple, bathhouse, factory,
+  park, campsite, cruiseShip, sleeperTrain,
+  castle, adventurersInn, wizardTower, dungeon, spaceship,
 };
 
 // 地下の階がある雛形（下から数えた地下の階の数）
