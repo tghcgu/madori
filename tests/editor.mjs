@@ -1045,11 +1045,52 @@ try {
   await page.reload();
   await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal(await page.locator('#planStyleLabel').textContent(), '筆・和風');
+  // The menu shows every style as a small sample drawn in that style.
+  await page.locator('#planStyleButton').click();
+  const samples = await page.locator('.style-thumb').evaluateAll(canvases => canvases.map(canvas => {
+    const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const colors = new Set();
+    let hash = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      colors.add(`${data[i] >> 4},${data[i + 1] >> 4},${data[i + 2] >> 4}`);
+      hash = (Math.imul(hash, 31) + data[i] + data[i + 1] * 3 + data[i + 2] * 7) >>> 0;
+    }
+    return { colors: colors.size, hash };
+  }));
+  await page.locator('#planStyleButton').click();
+  assert.equal(samples.length, 9);
+  assert.ok(samples.every(sample => sample.colors > 4), `every sample is drawn: ${samples.map(sample => sample.colors)}`);
+  assert.equal(new Set(samples.map(sample => sample.hash)).size, 9, 'each style has its own sample');
+  // The other styles each have their own paper or board, and the walls stand out from it.
+  const lightness = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
+  const looks = {
+    pencil: { label: '鉛筆', ground: c => lightness(c) > 225 },
+    manga: { label: 'マンガ', ground: c => lightness(c) > 235 },
+    blueprint: { label: '設計図', ground: c => c[2] > c[0] + 50 },
+    parchment: { label: '古地図', ground: c => c[0] > 180 && c[0] > c[2] + 25 },
+    chalk: { label: '黒板', ground: c => lightness(c) < 120 && c[1] > c[0] },
+    neon: { label: 'ネオン', ground: c => lightness(c) < 60 },
+  };
+  for (const [style, look] of Object.entries(looks)) {
+    await chooseStyle(style);
+    assert.equal(await page.locator('#planStyleLabel').textContent(), look.label);
+    const ground = shown(await pixelAt(452, 333));
+    assert.ok(look.ground(ground), `${style}: a white room takes the look of the style: ${ground}`);
+    const walls = [];
+    for (const y of [80, 160, 240, 320]) walls.push(Math.abs(lightness(shown(await pixelAt(600, y))) - lightness(ground)) > 60);
+    assert.ok(walls.filter(Boolean).length >= 2, `${style}: the walls stand out: ${walls}`);
+    if (style === 'blueprint' || style === 'neon') {
+      const styledImage = await exportImage('#imageExportPlan', 'current');
+      assert.ok(look.ground(styledImage.corner), `${style}: the image has the same background: ${styledImage.corner}`);
+      assert.ok(Math.abs(lightness(styledImage.wall) - lightness(styledImage.corner)) > 60, `${style}: the image keeps the walls: ${styledImage.wall}`);
+    }
+  }
+  assert.equal(JSON.stringify((await saved()).floors), planBeforeStyle, 'no style changes the plan');
   await chooseStyle('standard');
   assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
   const white = shown(await pixelAt(450, 330));
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
-  console.log('PASS: 2D styles: dots and brush on washi, dot sizes, exported images, editing, undo and kept after a reload');
+  console.log('PASS: 2D styles: samples in the menu, dots, brush on washi, pencil, manga, blueprint, old map, chalkboard and neon, exported images, editing, undo and kept after a reload');
 
   // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
   const squeezed = () => page.evaluate(() => {
@@ -1356,6 +1397,32 @@ try {
   assert.match(await page.locator('#saveStatus').textContent(), /自動保存停止/);
   await page.context().close();
   console.log('PASS: partial recovery, original download and quota-failure protection');
+
+  // Templates: 27 in five groups. The newer ones are whole buildings with walls, doors, furniture, floors and roofs.
+  page = await open();
+  page.on('dialog', dialog => dialog.accept());
+  assert.equal(await page.locator('#templateList .template-group').count(), 5);
+  assert.equal(await page.locator('[data-template]').count(), 27);
+  await choose('[data-template="westernMansion"]');
+  let built = await saved();
+  assert.deepEqual(built.floors.map(floor => floor.name), ['B1F', '1F', '2F'], 'the mansion has a cellar and two floors');
+  assert.equal(built.activeFloor, 1, 'it opens on the ground floor');
+  assert.ok(built.roofs.length >= 1);
+  assert.equal(await page.locator('#floorTabs .floor-tab.is-active').first().textContent().then(text => text.trim()), '1F');
+  for (const [template, names] of [['hospital', ['診察室1', 'ナース室', '手術室']], ['dungeon', ['牢屋', '大広間', '宝物庫']], ['cafe', ['客席', '厨房']]]) {
+    await choose(`[data-template="${template}"]`);
+    built = await saved();
+    const entities = built.floors.flatMap(floor => floor.entities);
+    for (const name of names) assert.ok(entities.some(entity => entity.type === 'room' && entity.name === name), `${template} has ${name}`);
+    assert.ok(entities.filter(entity => entity.type === 'wall').length >= 8 && entities.some(entity => entity.type === 'door'), `${template} has walls and doors`);
+    assert.ok(entities.filter(entity => entity.type === 'furniture').length >= 10, `${template} is furnished`);
+  }
+  await page.locator('button[data-view-mode="three"]').click();
+  assert.ok((await pixels()).colors > 20, 'the template shows in 3D');
+  await page.locator('#undoButton').click();
+  assert.ok((await saved()).floors.flatMap(floor => floor.entities).some(entity => entity.name === '宝物庫'), 'loading a template can be undone');
+  await page.context().close();
+  console.log('PASS: templates: 27 in five groups, mansion with a cellar, hospital, dungeon and cafe in 2D and 3D, and undo');
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);

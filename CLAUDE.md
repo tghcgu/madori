@@ -35,7 +35,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 | `npx playwright install chromium` | E2E・見比べ用のブラウザ。Windows は入っている Edge を使うので不要（ほかのOSだけ。`E2E_BROWSER_CHANNEL` で変えられる） |
 | `npm run dev` | 開発用サーバー（http://127.0.0.1:5173/） |
 | `npm test` | 単体テスト（Node の `--experimental-strip-types` で `src/*.ts` をそのまま読む） |
-| `npm run test:e2e` | 画面を動かすテスト（約5分。いまは `PASS:` の行が29本） |
+| `npm run test:e2e` | 画面を動かすテスト（約5分。いまは `PASS:` の行が30本） |
 | `npm run test:visual` | 3Dの家具の一覧画像（`.codex/furniture-quality/`） |
 | `npm run build` | 型チェック → ビルド → `/plan/` を作る |
 | `npm run compare -- [種類,…]` | 2Dの記号と3Dの真上図の見比べ画像（`.codex/compare/`） |
@@ -48,6 +48,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 - 起動の処理は `src/main.ts` のいちばん最後（`// ---- 起動 ----`）。上の方に置くと、後ろで宣言した `let` / `const` を読んで止まる（TDZ。過去に何度も起きた）。
 - `src/` のコードはテストが Node でそのまま読むので、`enum`・`namespace`・コンストラクタ引数のプロパティなど、型を消すだけで動かない書き方はしない。テストが読むファイル（`main.ts` 以外）は、読み込んだだけで DOM を触らない（`document` などを使うのは関数の中だけ）。
 - 2Dは全体で1つの `ctx` に描く。オフスクリーンの描画や2Dの絵柄（`src/plan-style.ts`）は `ctx` を差し替えて描く。
+- 雛形を足すときは `src/templates.ts`（`TEMPLATE_GROUPS` に並べ、`BUILDERS` に作り方を足す）。壁・ドア・家具の置き方と、部屋の名前が家具に隠れないかは `tests/templates.test.mjs` が確かめる。
 - E2E は、テスト用の Vite プラグインで `window.__editorTest` を `main.ts` の後ろに足して中を調べる（`tests/editor.mjs` の先頭）。
 - コードのコメントは日本語。コミットメッセージは英語（`git log` に合わせる）。
 - `.codex/` は作業用（git に入らない）。大事な物はここに置かない。

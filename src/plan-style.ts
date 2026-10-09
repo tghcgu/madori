@@ -1,13 +1,22 @@
 // 2Dの絵柄。間取りの形（2Dと3Dで共通の形）はそのままに、描き方だけを変える。
-// ドット: いったん細かく描いた絵を、ドット（何pxかの四角）ごとに1色へまとめる。細い線は、ドットの中のいちばん暗い色で残す
-// 筆・和風: 線を筆の運び（入り・ゆらぎ・止めや払い・かすれ）で描き、塗りを和紙にのせた淡い色にする
+// ドット: いったん細かく描いた絵を、ドット（何pxかの四角）ごとに1色へまとめる。細い線は、ドットのます目に沿わせる
+// 筆・和風・古地図・黒板: 線を筆の運び（入り・ゆらぎ・止めや払い・かすれ）で描き、塗りを紙や板になじませる
+// 鉛筆: 線を2本の手描きの線に、濃い塗りを斜線（ハッチング）にする
+// マンガ: 線を黒にし、塗りを濃さに合わせたスクリーントーンにする
+// 設計図・ネオン: 線と塗りの色を置き換える（ネオンは線を光らせる）
 
-export type PlanStyle = "standard" | "pixel" | "brush";
+export type PlanStyle = "standard" | "pixel" | "brush" | "pencil" | "manga" | "blueprint" | "parchment" | "chalk" | "neon";
 
 export const PLAN_STYLES: { value: PlanStyle; label: string; hint: string }[] = [
-  { value: "standard", label: "標準", hint: "線画" },
-  { value: "pixel", label: "ドット", hint: "ドット絵" },
-  { value: "brush", label: "筆・和風", hint: "墨と和紙" },
+  { value: "standard", label: "標準", hint: "くっきりした線画" },
+  { value: "pixel", label: "ドット", hint: "ドット絵のマップ" },
+  { value: "brush", label: "筆・和風", hint: "和紙に墨と淡い色" },
+  { value: "pencil", label: "鉛筆", hint: "手描きの下描き" },
+  { value: "manga", label: "マンガ", hint: "白黒とトーン" },
+  { value: "blueprint", label: "設計図", hint: "青焼きの図面" },
+  { value: "parchment", label: "古地図", hint: "羊皮紙にセピア" },
+  { value: "chalk", label: "黒板", hint: "黒板にチョーク" },
+  { value: "neon", label: "ネオン", hint: "夜に光る線" },
 ];
 
 // ドットの大きさ（画面のpx）
@@ -22,11 +31,31 @@ export const DEFAULT_PIXEL_DOT = 3;
 export const PAPER_COLOR = "#f4eee0";
 const SUMI: [number, number, number] = [38, 33, 30];
 
-// 絵柄ごとの文字の書体。ドットは画面向けのゴシック、筆は楷書・教科書体（なければ明朝）
+// 絵柄ごとの文字の書体。ドットは画面向けのゴシック、筆は楷書・教科書体（なければ明朝）、鉛筆と黒板は手書きに近い教科書体、古地図は明朝
+const HANDWRITING = '"UD デジタル 教科書体 N-R", "UD Digi Kyokasho N-R", YuKyokasho, Klee, "HG正楷書体-PRO", "Yu Mincho", YuMincho, serif';
 const FONT_FAMILIES: Record<PlanStyle, string | null> = {
   standard: null,
   pixel: '"MS Gothic", "ＭＳ ゴシック", "Osaka-Mono", Osaka, "BIZ UDGothic", monospace',
   brush: '"HG正楷書体-PRO", "HGSeikaishotaiPRO", "UD デジタル 教科書体 N-R", "UD Digi Kyokasho N-R", YuKyokasho, Klee, "Yu Mincho", YuMincho, "Hiragino Mincho ProN", serif',
+  pencil: HANDWRITING,
+  manga: null,
+  blueprint: '"BIZ UDGothic", "BIZ UDゴシック", "Osaka", "Yu Gothic UI", sans-serif',
+  parchment: '"Yu Mincho", YuMincho, "Hiragino Mincho ProN", "MS Mincho", serif',
+  chalk: HANDWRITING,
+  neon: null,
+};
+
+// 絵柄ごとの地の色と方眼の色（細い線・5本ごとの線）。地の色が null なら透明（標準）
+export const STYLE_LOOKS: Record<PlanStyle, { background: string | null; grid: [string, string] }> = {
+  standard: { background: null, grid: ["#f2f4f7", "#e2e6ec"] },
+  pixel: { background: "#ffffff", grid: ["#f5f6f8", "#e9ecf0"] },
+  brush: { background: PAPER_COLOR, grid: ["rgba(150, 118, 76, 0.11)", "rgba(150, 118, 76, 0.22)"] },
+  pencil: { background: "#fbfaf6", grid: ["rgba(96, 132, 170, 0.12)", "rgba(96, 132, 170, 0.24)"] },
+  manga: { background: "#ffffff", grid: ["rgba(0, 0, 0, 0.04)", "rgba(0, 0, 0, 0.08)"] },
+  blueprint: { background: "#1d4e89", grid: ["rgba(190, 220, 255, 0.10)", "rgba(190, 220, 255, 0.24)"] },
+  parchment: { background: "#ead9b2", grid: ["rgba(110, 76, 34, 0.08)", "rgba(110, 76, 34, 0.17)"] },
+  chalk: { background: "#2e4a3b", grid: ["rgba(255, 255, 255, 0.05)", "rgba(255, 255, 255, 0.11)"] },
+  neon: { background: "#090c18", grid: ["rgba(64, 96, 180, 0.16)", "rgba(64, 120, 220, 0.34)"] },
 };
 
 // 書体の指定（例 `700 12px "Yu Gothic UI", sans-serif`）の、書体の名前だけを絵柄の書体に替える
@@ -270,6 +299,10 @@ export interface BrushStrokeOptions {
   extendEnd?: number;
   // 破線の1つなどの短い線。かすれを付けない
   simple?: boolean;
+  // 太い線が終わりの方でかすれる確からしさ（0〜1。ふつうは 0.55）
+  dry?: number;
+  // 線のどこでも、粉のように細かく途切れる割合（チョーク）。0 なら途切れない
+  grain?: number;
 }
 
 // 筆圧（太さの割合）。入りで少しふくらみ、止めでわずかに細って戻るか、払いで細く抜ける
@@ -409,11 +442,12 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
     return oriented(polygon);
   };
 
-  if (options.simple || width < 3.2 * unit || total < width * 5) return [band(0, count - 1, 0, 1, seed + 3)];
+  const grain = options.grain ?? 0;
+  if (options.simple || ((width < 3.2 * unit || total < width * 5) && !grain)) return [band(0, count - 1, 0, 1, seed + 3)];
 
-  // 太い線は、筆の毛の束ごとに描く。墨が少なくなる終わりの方で、外側の毛からかすれる
-  const bristles = Math.min(7, Math.max(3, Math.round(width / (1.5 * unit))));
-  const dry = random() < 0.55;
+  // 太い線は、筆の毛の束ごとに描く。墨が少なくなる終わりの方で、外側の毛からかすれる（チョークは細い線も束にして、どこでも途切れさせる）
+  const bristles = grain ? Math.min(5, Math.max(2, Math.round(width / (1.2 * unit)))) : Math.min(7, Math.max(3, Math.round(width / (1.5 * unit))));
+  const dry = random() < (options.dry ?? 0.55);
   const polygons: number[][] = [];
   for (let j = 0; j < bristles; j += 1) {
     const lane = ((j + 0.5) / bristles - 0.5) * 0.82;
@@ -428,12 +462,12 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
         if (gap === 0) runStart = k;
         continue;
       }
-      if (s > dryFrom && k < count - 1) {
-        const progress = (s - dryFrom) / Math.max(1, total - dryFrom);
-        if (random() < (0.03 + 0.22 * progress * progress) * (0.6 + edge)) {
-          if (k - 1 > runStart) polygons.push(band(runStart, k - 1, lane, spread, seed + 11 + j));
-          gap = 1 + Math.floor(random() * 4);
-        }
+      const progress = (s - dryFrom) / Math.max(1, total - dryFrom);
+      const chance = (s > dryFrom && k < count - 1 ? (0.03 + 0.22 * progress * progress) * (0.6 + edge) : 0)
+        + (grain && k < count - 1 ? grain * (0.6 + edge) : 0);
+      if (chance > 0 && random() < chance) {
+        if (k - 1 > runStart) polygons.push(band(runStart, k - 1, lane, spread, seed + 11 + j));
+        gap = 1 + Math.floor(random() * 4);
       }
     }
     if (gap === 0 && count - 1 > runStart) polygons.push(band(runStart, count - 1, lane, spread, seed + 11 + j));
@@ -954,25 +988,146 @@ function remember<T>(cache: Map<string, T>, key: string, value: T): T {
   return value;
 }
 
+// ---- 筆の色合い（筆・和風、古地図、黒板） ----
+
+export interface BrushPalette {
+  // 線・塗り・文字の色。tone は1本ごとの濃淡（-1〜1）
+  ink(value: string, tone: number): string;
+  wash(value: string): string;
+  text(value: string): string;
+  // 文字のにじみ（画面のpx。0 ならにじませない）
+  bleed: number;
+  // 線の太さ（画素）
+  width(deviceWidth: number, unit: number): number;
+  // 太い線が終わりでかすれる確からしさと、線のどこでも途切れる割合（チョーク）
+  dry: number;
+  grain: number;
+  // 模様（床の柄など）の塗りの上に重ねる、紙や板の色（柄の色が浮かないように）
+  patternVeil: string;
+  // 文字の書体の絵柄
+  font: PlanStyle;
+}
+
+// 色に透明度を付ける（rgb(...) を rgba(...) に）
+function alphaColor(value: string, alpha: number): string {
+  const parsed = parseCssColor(value);
+  return parsed ? cssColor(parsed.slice(0, 3), parsed[3] * alpha) : value;
+}
+
+function isColorful(r: number, g: number, b: number): boolean {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  return max > 0 && (max - min) / max >= 0.14;
+}
+
+const lightnessOf = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+const SUMI_PALETTE: BrushPalette = {
+  ink: inkColor,
+  wash: washColor,
+  text: (value) => inkColor(value),
+  bleed: 1.4,
+  width: (w, unit) => (w < 3 * unit ? w * 1.45 + 0.6 * unit : w),
+  dry: 0.55,
+  grain: 0,
+  patternVeil: "rgba(244, 238, 224, 0.2)",
+  font: "brush",
+};
+
+// 古地図: 羊皮紙にセピアのペン。色は褪せて紙になじむ
+const SEPIA: [number, number, number] = [72, 48, 28];
+const PARCHMENT_RGB: [number, number, number] = [234, 217, 178];
+
+function sepiaInk(value: string, tone: number): string {
+  return cachedColor(`s${tone}${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    const lightness = lightnessOf(r, g, b);
+    let rgb = isColorful(r, g, b)
+      ? mix(mix([r, g, b], [lightness, lightness, lightness], 0.35), SEPIA, 0.45)
+      : mix(SEPIA, PARCHMENT_RGB, Math.min(0.85, Math.max(0, (lightness - 30) / 240)));
+    rgb = rgb.map((v) => v * (1 - tone * 0.06));
+    return cssColor(rgb, a);
+  });
+}
+
+function sepiaWash(value: string): string {
+  return cachedColor(`sw${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (Math.min(r, g, b) >= 245) return cssColor(mix(PARCHMENT_RGB, [250, 240, 214], 0.6), a);
+    const gray = lightnessOf(r, g, b);
+    return cssColor(mix(mix([r, g, b], [gray, gray, gray], 0.3), PARCHMENT_RGB, 0.45), a);
+  });
+}
+
+const PARCHMENT_PALETTE: BrushPalette = {
+  ink: sepiaInk,
+  wash: sepiaWash,
+  text: (value) => sepiaInk(value, 0),
+  bleed: 0.8,
+  width: (w, unit) => (w < 3 * unit ? w * 1.1 + 0.45 * unit : w * 0.92),
+  dry: 0.25,
+  grain: 0,
+  patternVeil: "rgba(226, 204, 158, 0.55)",
+  font: "parchment",
+};
+
+// 黒板: 濃い緑の板に白いチョーク。黒い線ほどはっきり、薄い線ほど薄く、色はパステルに
+const CHALK_RGB: [number, number, number] = [244, 242, 230];
+
+function chalkInk(value: string, tone: number): string {
+  return cachedColor(`c${tone}${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (isColorful(r, g, b)) return cssColor(mix([r, g, b], [255, 255, 255], 0.45), a * (0.9 - tone * 0.05));
+    return cssColor(CHALK_RGB, a * (0.95 - (lightnessOf(r, g, b) / 255) * 0.5) * (1 - tone * 0.06));
+  });
+}
+
+function chalkWash(value: string): string {
+  return cachedColor(`cw${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (Math.min(r, g, b) >= 240) return cssColor([255, 255, 255], a * 0.05);
+    return cssColor(mix([r, g, b], [255, 255, 255], 0.5), a * 0.24);
+  });
+}
+
+const CHALK_PALETTE: BrushPalette = {
+  ink: chalkInk,
+  wash: chalkWash,
+  text: () => "rgba(246, 244, 234, 0.95)",
+  bleed: 0.9,
+  width: (w, unit) => (w < 3 * unit ? w * 1.5 + 0.8 * unit : w),
+  dry: 1,
+  grain: 0.07,
+  patternVeil: "rgba(46, 74, 59, 0.72)",
+  font: "chalk",
+};
+
 export interface BrushContextOptions {
   // 画面の1pxあたりの画素数
   unit: number;
+  // 線と塗りの色合い（ふつうは墨と和紙）
+  palette?: BrushPalette;
 }
 
-// 筆・和風の描き先。線は筆の線に、塗りは縁の波打つ淡い色に、文字は楷書でにじませる
+// 筆の描き先（筆・和風、古地図、黒板）。線は筆の線に、塗りは縁の波打つ淡い色に、文字は絵柄の書体でにじませる
 export function createBrushContext(base: CanvasRenderingContext2D, options: BrushContextOptions): CanvasRenderingContext2D {
   const unit = options.unit;
+  const palette = options.palette ?? SUMI_PALETTE;
   const recorder = createPathRecorder(base);
   const overrides = recordingOverrides(base, recorder);
-
-  // 細い線は少し太く（筆の線らしく）、太い線（壁など）はそのままの太さで
-  const brushWidth = (deviceWidth: number) => (deviceWidth < 3 * unit ? deviceWidth * 1.45 + 0.6 * unit : deviceWidth);
 
   const strokePaths = (subpaths: SubPath[]) => {
     const style = base.strokeStyle;
     if (typeof style !== "string") return false;
     const scale = recorder.scale();
-    const width = brushWidth(base.lineWidth * scale);
+    const width = palette.width(base.lineWidth * scale, unit);
     const dash = base.getLineDash().map((value) => value * scale);
     const dashed = dash.some((value) => value > 0);
     const capExtend = base.lineCap === "square" ? width / 2 : 0;
@@ -1013,7 +1168,7 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
         if (piece.points.length < 2) return;
         const seed = piece.seed;
         const flags = `${piece.closed ? 1 : 0}${piece.cornerStart ? 1 : 0}${piece.cornerEnd ? 1 : 0}${dashed ? 1 : 0}`;
-        const key = geometryKey(piece.points, `${Math.round(width * 100)}|${unit}|${seed}|${flags}|${Math.round(capExtend * 10)}`);
+        const key = geometryKey(piece.points, `${palette.font}|${Math.round(width * 100)}|${unit}|${seed}|${flags}|${Math.round(capExtend * 10)}`);
         let cached = brushStrokeCache.get(key);
         if (!cached) {
           const overshoot = (corner: boolean) => (corner ? width * 0.5 + (0.5 + hashUnit(seed, 9) * 1.5) * unit : capExtend);
@@ -1025,6 +1180,8 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
             extendStart: piece.closed ? 0 : overshoot(piece.cornerStart),
             extendEnd: piece.closed ? 0 : overshoot(piece.cornerEnd),
             simple: dashed,
+            dry: palette.dry,
+            grain: palette.grain,
           });
           cached = remember(brushStrokeCache, key, { path: polygonsPath(polygons), tone: seed % 3 });
         }
@@ -1035,7 +1192,7 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
     if (!drawn) return true;
     inPixels(base, recorder, () => {
       tones.forEach((path, tone) => {
-        base.fillStyle = inkColor(style, tone - 1);
+        base.fillStyle = palette.ink(style, tone - 1);
         base.fill(path);
       });
     });
@@ -1066,7 +1223,7 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
         path.addPath(cached, { e: points[0], f: points[1] });
       });
       inPixels(base, recorder, () => {
-        base.fillStyle = washColor(style);
+        base.fillStyle = palette.wash(style);
         base.fill(path, rule);
       });
       return;
@@ -1088,6 +1245,9 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
       path.closePath();
     });
     base.fill(path, rule);
+    base.fillStyle = palette.patternVeil;
+    base.fill(path, rule);
+    base.fillStyle = style;
   };
 
   overrides.set("stroke", (path?: Path2D) => {
@@ -1106,16 +1266,19 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
     const style = base.fillStyle;
     base.save();
     if (typeof style === "string") {
-      base.fillStyle = inkColor(style);
-      // 墨が和紙に少しにじんだように
-      base.shadowColor = inkColor(style, 0).replace(/^rgb\((.*)\)$/, "rgba($1, 0.45)");
-      base.shadowBlur = 1.4 * unit;
+      const color = palette.text(style);
+      base.fillStyle = color;
+      // 墨やチョークが少しにじんだように
+      if (palette.bleed) {
+        base.shadowColor = alphaColor(color, 0.45);
+        base.shadowBlur = palette.bleed * unit;
+      }
     }
     if (maxWidth === undefined) base.fillText(text, x, y);
     else base.fillText(text, x, y, maxWidth);
     base.restore();
   });
-  return wrapContext(base, overrides, (font) => styledFont(font, "brush"));
+  return wrapContext(base, overrides, (font) => styledFont(font, palette.font));
 }
 
 export interface PixelContextOptions {
@@ -1203,58 +1366,619 @@ export function createPixelContext(base: CanvasRenderingContext2D, options: Pixe
   return wrapContext(base, overrides, (font) => styledFont(font, "pixel"));
 }
 
-// ---- 和紙 ----
+// ---- 色を置き換える絵柄（設計図・ネオン） ----
 
-// 和紙の繊維とむらの模様（白地。乗算で重ねる）。継ぎ目が出ないように、端をまたぐ物は反対側にも描く
-export function createWashiTexture(size = 512, seed = 1): HTMLCanvasElement {
+interface RecolorPalette {
+  stroke(value: string): string;
+  fill(value: string): string;
+  text: string;
+  // 模様（床の柄など）の塗りの代わりの色
+  pattern: string;
+  // ネオン: 線のまわりの光（色と、太さに足す画面のpx）と、文字の光
+  glow?: { color(stroke: string): string; extra: number };
+  textGlow?: { color: string; blur: number };
+  font: PlanStyle;
+}
+
+// 色相はそのままに、あざやかで明るい色にする（ネオンの線）
+function neonColor(r: number, g: number, b: number): number[] {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let hue = 0;
+  if (max !== min) {
+    const d = max - min;
+    hue = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  }
+  hue = (hue * 60 + 360) % 360;
+  const lightness = 0.62, chroma = (1 - Math.abs(2 * lightness - 1)) * 1;
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1)), m = lightness - chroma / 2;
+  const [rr, gg, bb] = hue < 60 ? [chroma, x, 0] : hue < 120 ? [x, chroma, 0] : hue < 180 ? [0, chroma, x] : hue < 240 ? [0, x, chroma] : hue < 300 ? [x, 0, chroma] : [chroma, 0, x];
+  return [(rr + m) * 255, (gg + m) * 255, (bb + m) * 255];
+}
+
+const BLUEPRINT: RecolorPalette = {
+  stroke: (value) => cachedColor(`b${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (isColorful(r, g, b)) return cssColor(mix([r, g, b], [255, 255, 255], 0.55), a * 0.95);
+    return cssColor([236, 246, 255], a * (0.95 - (lightnessOf(r, g, b) / 255) * 0.5));
+  }),
+  fill: (value) => cachedColor(`bf${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (Math.min(r, g, b) >= 240) return cssColor([255, 255, 255], a * 0.05);
+    if (isColorful(r, g, b)) return cssColor(mix([r, g, b], [190, 215, 255], 0.6), a * 0.2);
+    return cssColor([255, 255, 255], a * (0.06 + (1 - lightnessOf(r, g, b) / 255) * 0.3));
+  }),
+  text: "rgba(240, 248, 255, 0.95)",
+  pattern: "rgba(255, 255, 255, 0.07)",
+  font: "blueprint",
+};
+
+const NEON: RecolorPalette = {
+  stroke: (value) => cachedColor(`n${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (isColorful(r, g, b)) return cssColor(neonColor(r, g, b), a);
+    return lightnessOf(r, g, b) < 140 ? cssColor([90, 240, 255], a) : cssColor([70, 140, 255], a * 0.75);
+  }),
+  fill: (value) => cachedColor(`nf${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (Math.min(r, g, b) >= 240) return cssColor([16, 22, 44], a * 0.92);
+    return cssColor(mix([r, g, b], [9, 12, 24], isColorful(r, g, b) ? 0.8 : 0.86), a * 0.92);
+  }),
+  text: "#eafcff",
+  pattern: "rgba(22, 34, 66, 0.85)",
+  glow: { color: (stroke) => alphaColor(stroke, 0.22), extra: 5 },
+  textGlow: { color: "rgba(80, 230, 255, 0.85)", blur: 6 },
+  font: "neon",
+};
+
+// 線・塗り・文字の色だけを置き換える描き先。形はそのまま（ネオンは線のまわりを光らせる）
+function createRecolorContext(base: CanvasRenderingContext2D, palette: RecolorPalette, unit: number): CanvasRenderingContext2D {
+  const overrides = new Map<PropertyKey, unknown>();
+  const withStroke = (draw: () => void) => {
+    const style = base.strokeStyle;
+    if (typeof style !== "string") {
+      draw();
+      return;
+    }
+    const color = palette.stroke(style);
+    const width = base.lineWidth;
+    if (palette.glow) {
+      const t = base.getTransform();
+      const scale = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c)) || 1;
+      base.strokeStyle = palette.glow.color(color);
+      base.lineWidth = width + (palette.glow.extra * unit) / scale;
+      draw();
+      base.lineWidth = width;
+    }
+    base.strokeStyle = color;
+    draw();
+    base.strokeStyle = style;
+  };
+  const withFill = (draw: () => void) => {
+    const style = base.fillStyle;
+    base.fillStyle = typeof style === "string" ? palette.fill(style) : palette.pattern;
+    draw();
+    base.fillStyle = style;
+  };
+  overrides.set("stroke", (path?: Path2D) => withStroke(() => (path ? base.stroke(path) : base.stroke())));
+  overrides.set("strokeRect", (x: number, y: number, w: number, h: number) => withStroke(() => base.strokeRect(x, y, w, h)));
+  overrides.set("fill", (first?: Path2D | CanvasFillRule, second?: CanvasFillRule) =>
+    withFill(() => (typeof first === "object" ? base.fill(first, second) : base.fill(first))));
+  overrides.set("fillRect", (x: number, y: number, w: number, h: number) => withFill(() => base.fillRect(x, y, w, h)));
+  overrides.set("fillText", (text: string, x: number, y: number, maxWidth?: number) => {
+    base.save();
+    base.fillStyle = palette.text;
+    if (palette.textGlow) {
+      base.shadowColor = palette.textGlow.color;
+      base.shadowBlur = palette.textGlow.blur * unit;
+    }
+    if (maxWidth === undefined) base.fillText(text, x, y);
+    else base.fillText(text, x, y, maxWidth);
+    base.restore();
+  });
+  return wrapContext(base, overrides, (font) => styledFont(font, palette.font));
+}
+
+export interface StyleContextOptions {
+  // 画面の1pxあたりの画素数と、間取りの原点の画素の位置（トーンや斜線を間取りに合わせて動かす）
+  unit: number;
+  anchorX: number;
+  anchorY: number;
+}
+
+// ---- マンガ（白黒とスクリーントーン） ----
+
+// 塗りの色の濃さを、トーンの濃さ（0 は白、1 はベタ）にする。0.1 ずつ
+export function toneLevel(value: string): number {
+  const parsed = parseCssColor(value);
+  if (!parsed) return 0;
+  const darkness = 1 - lightnessOf(parsed[0], parsed[1], parsed[2]) / 255;
+  if (darkness < 0.05) return 0;
+  if (darkness > 0.86) return 1;
+  return Math.min(0.8, Math.max(0.1, Math.round(darkness * 10) / 10));
+}
+
+const toneTiles = new Map<string, HTMLCanvasElement>();
+
+// トーン1つ分の模様（網点）。薄いトーンは白地に黒い点、濃いトーンは黒地に白い点
+function toneTile(level: number, size: number): HTMLCanvasElement {
+  const key = `${level}|${size}`;
+  const cached = toneTiles.get(key);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const g = canvas.getContext("2d");
+  if (g) {
+    const dark = level > 0.55;
+    g.fillStyle = dark ? "#141414" : "#ffffff";
+    g.fillRect(0, 0, size, size);
+    g.fillStyle = dark ? "#ffffff" : "#141414";
+    const radius = size * Math.sqrt((dark ? 1 - level : level) / Math.PI);
+    g.beginPath();
+    g.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
+    g.fill();
+  }
+  toneTiles.set(key, canvas);
+  return canvas;
+}
+
+function createMangaContext(base: CanvasRenderingContext2D, options: StyleContextOptions): CanvasRenderingContext2D {
+  const unit = options.unit;
+  const overrides = new Map<PropertyKey, unknown>();
+  const patterns = new Map<number, CanvasPattern | null>();
+  // トーンは間取りに貼り付け（スクロールしても網点が動かない）、45度に傾ける
+  const anchor = new DOMMatrix().translate(options.anchorX, options.anchorY).rotate(45);
+  const tone = (level: number): CanvasPattern | string => {
+    if (level <= 0) return "#ffffff";
+    if (level >= 1) return "#141414";
+    let pattern = patterns.get(level);
+    if (pattern === undefined) {
+      pattern = base.createPattern(toneTile(level, Math.max(3, Math.round(4.5 * unit))), "repeat");
+      patterns.set(level, pattern);
+    }
+    if (!pattern) return "#9a9a9a";
+    pattern.setTransform(base.getTransform().inverse().multiply(anchor));
+    return pattern;
+  };
+  const withFill = (draw: () => void) => {
+    const style = base.fillStyle, alpha = base.globalAlpha;
+    if (typeof style === "string") {
+      const parsed = parseCssColor(style);
+      base.fillStyle = tone(toneLevel(style));
+      if (parsed && parsed[3] < 1) base.globalAlpha = alpha * parsed[3];
+    } else base.fillStyle = tone(0.2);
+    draw();
+    base.globalAlpha = alpha;
+    base.fillStyle = style;
+  };
+  // 線は黒（薄い灰色の線は、細めの濃い灰色）
+  const withStroke = (draw: () => void) => {
+    const style = base.strokeStyle, width = base.lineWidth;
+    if (typeof style === "string") {
+      const parsed = parseCssColor(style);
+      const light = parsed ? lightnessOf(parsed[0], parsed[1], parsed[2]) > 170 : false;
+      const a = parsed?.[3] ?? 1;
+      base.strokeStyle = light ? `rgba(40, 40, 40, ${Math.round(a * 0.75 * 1000) / 1000})` : `rgba(10, 10, 10, ${a})`;
+      const t = base.getTransform();
+      const scale = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c)) || 1;
+      base.lineWidth = Math.max(width * (light ? 1 : 1.15), unit / scale);
+    }
+    draw();
+    base.strokeStyle = style;
+    base.lineWidth = width;
+  };
+  overrides.set("stroke", (path?: Path2D) => withStroke(() => (path ? base.stroke(path) : base.stroke())));
+  overrides.set("strokeRect", (x: number, y: number, w: number, h: number) => withStroke(() => base.strokeRect(x, y, w, h)));
+  overrides.set("fill", (first?: Path2D | CanvasFillRule, second?: CanvasFillRule) =>
+    withFill(() => (typeof first === "object" ? base.fill(first, second) : base.fill(first))));
+  overrides.set("fillRect", (x: number, y: number, w: number, h: number) => withFill(() => base.fillRect(x, y, w, h)));
+  overrides.set("fillText", (text: string, x: number, y: number, maxWidth?: number) => {
+    const style = base.fillStyle;
+    base.fillStyle = "#111111";
+    if (maxWidth === undefined) base.fillText(text, x, y);
+    else base.fillText(text, x, y, maxWidth);
+    base.fillStyle = style;
+  });
+  return wrapContext(base, overrides, (font) => styledFont(font, "manga"));
+}
+
+// ---- 鉛筆（手描きの線と斜線） ----
+
+export interface SketchOptions {
+  width: number;
+  unit: number;
+  seed: number;
+  closed?: boolean;
+}
+
+// 鉛筆で引いた線を、少しずつずれた何本かの細い線（画素の座標の折れ線）にする。
+// 端は少し行き過ぎたり手前で止まったりし、長い線はわずかに反る。太い線（壁など）は、細い線を並べて塗る
+export function sketchLines(path: readonly number[], options: SketchOptions): number[][] {
+  const { width, unit, seed } = options;
+  let points = dedupe(path, 0.25 * unit);
+  if (points.length < 4) return [];
+  if (options.closed) points = [...points, points[0], points[1], points[2], points[3]];
+  const lengths = [0];
+  for (let i = 2; i < points.length; i += 2) lengths.push(lengths[lengths.length - 1] + Math.hypot(points[i] - points[i - 2], points[i + 1] - points[i - 1]));
+  const total = lengths[lengths.length - 1];
+  if (total < unit) return [];
+  // 道すじの s の所の位置と向き（両端の外は、端の向きのまま延ばす）
+  const at = (s: number): [number, number, number, number] => {
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < s) i += 1;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const dx = (points[i * 2] - points[i * 2 - 2]) / span, dy = (points[i * 2 + 1] - points[i * 2 - 1]) / span;
+    const k = s - lengths[i - 1];
+    return [points[i * 2 - 2] + dx * k, points[i * 2 - 1] + dy * k, dx, dy];
+  };
+  const random = seededRandom(seed);
+  const passes = width < 2.6 * unit ? 2 : Math.min(7, Math.max(2, Math.round(width / (1.3 * unit))));
+  const step = Math.max(2 * unit, Math.min(6 * unit, total / 6));
+  const lines: number[][] = [];
+  for (let p = 0; p < passes; p += 1) {
+    const lane = width < 2.6 * unit ? (p - 0.5) * 0.8 * unit : ((p + 0.5) / passes - 0.5) * width * 0.85;
+    const start = options.closed ? 0 : -(random() * 2 - 0.6) * 2.2 * unit;
+    const end = options.closed ? total : total + (random() * 2 - 0.6) * 2.2 * unit;
+    const bow = options.closed ? 0 : (random() * 2 - 1) * Math.min(total * 0.012, 2 * unit);
+    const wavelength = (40 + random() * 40) * unit;
+    const line: number[] = [];
+    const count = Math.max(2, Math.ceil((end - start) / step) + 1);
+    for (let i = 0; i < count; i += 1) {
+      const s = start + ((end - start) * i) / (count - 1);
+      const [x, y, dx, dy] = at(s);
+      const offset = lane + 0.45 * unit * wave(seed + p * 13, s / wavelength) + bow * Math.sin((Math.PI * Math.min(Math.max(s, 0), total)) / total);
+      line.push(x - dy * offset, y + dx * offset);
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+const sketchCache = new Map<string, Path2D>();
+
+// 鉛筆の色。黒は鉛筆の濃い灰色、薄い灰色はかすかな線、色は色鉛筆
+function graphite(value: string): string {
+  return cachedColor(`g${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (isColorful(r, g, b)) return cssColor(mix([r, g, b], [60, 60, 66], 0.25), a * 0.85);
+    return cssColor([52, 52, 58], a * (0.85 - (lightnessOf(r, g, b) / 255) * 0.45));
+  });
+}
+
+// 塗りは色鉛筆で薄くぬったように（白はほとんど塗らない）
+function pencilTint(value: string): string {
+  return cachedColor(`gt${value}`, () => {
+    const parsed = parseCssColor(value);
+    if (!parsed) return value;
+    const [r, g, b, a] = parsed;
+    if (Math.min(r, g, b) >= 240) return cssColor([251, 250, 246], a * 0.85);
+    return cssColor(mix([r, g, b], [251, 250, 246], 0.35), a * 0.55);
+  });
+}
+
+function createSketchContext(base: CanvasRenderingContext2D, options: StyleContextOptions): CanvasRenderingContext2D {
+  const unit = options.unit;
+  const recorder = createPathRecorder(base);
+  const overrides = recordingOverrides(base, recorder);
+
+  const strokePaths = (subpaths: SubPath[]) => {
+    const style = base.strokeStyle;
+    if (typeof style !== "string") return false;
+    const scale = recorder.scale();
+    const width = Math.max(unit, base.lineWidth * scale);
+    const dash = base.getLineDash().map((value) => value * scale);
+    const dashed = dash.some((value) => value > 0);
+    const limit = 3 * (base.canvas.width + base.canvas.height);
+    const margin = Math.max(200 * unit, width * 4);
+    const path = new Path2D();
+    subpaths.forEach((subpath, index) => {
+      const points = subpath.points;
+      if (points.length < 4) return;
+      const n = points.length;
+      const loop = subpath.closed || Math.hypot(points[n - 2] - points[0], points[n - 1] - points[1]) < 0.5;
+      let pieces: StrokePiece[];
+      if (dashed) {
+        const closedPoints = subpath.closed ? [...points, points[0], points[1]] : points;
+        pieces = dashPolyline(closedPoints, dash, base.lineDashOffset * scale).map((piece) => ({ points: piece, closed: false, cornerStart: false, cornerEnd: false }));
+      } else {
+        const loopPoints = loop && !subpath.closed ? points.slice(0, -2) : points;
+        const loopSharp = loop && !subpath.closed ? subpath.sharp.slice(0, -1) : subpath.sharp;
+        pieces = splitStrokes(loopPoints, loopSharp, loop);
+      }
+      pieces.forEach((piece, pieceIndex) => {
+        const runs = polylineLength(piece.points) > limit
+          ? clipPolyline(piece.closed ? [...piece.points, piece.points[0], piece.points[1]] : piece.points, -margin, -margin, base.canvas.width + margin, base.canvas.height + margin)
+          : [piece.points];
+        runs.forEach((run, runIndex) => {
+          if (run.length < 4) return;
+          const closed = piece.closed && runs.length === 1;
+          const seed = shapeSeed(run, scale, index * 131 + pieceIndex * 7 + runIndex);
+          const key = geometryKey(run, `${Math.round(width * 100)}|${unit}|${seed}|${closed ? 1 : 0}`);
+          let cached = sketchCache.get(key);
+          if (!cached) {
+            const lines = sketchLines(relative(run), { width, unit, seed, closed });
+            const linesPath = new Path2D();
+            for (const line of lines) {
+              linesPath.moveTo(line[0], line[1]);
+              for (let i = 2; i < line.length; i += 2) linesPath.lineTo(line[i], line[i + 1]);
+            }
+            cached = remember(sketchCache, key, linesPath);
+          }
+          path.addPath(cached, { e: run[0], f: run[1] });
+        });
+      });
+    });
+    base.save();
+    base.setTransform(1, 0, 0, 1, 0, 0);
+    base.setLineDash([]);
+    base.lineCap = "round";
+    base.lineJoin = "round";
+    base.lineWidth = Math.max(0.9 * unit, Math.min(1.3 * unit, width * 0.55));
+    base.strokeStyle = graphite(style);
+    base.stroke(path);
+    base.restore();
+    return true;
+  };
+
+  // 斜線（ハッチング）。濃い塗りほど細かく、とても濃い所は交差させる。斜線は間取りに貼り付ける
+  const hatch = (clip: () => void, bounds: number[], darkness: number) => {
+    if (darkness < 0.12 || bounds.length < 4) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let i = 0; i < bounds.length; i += 2) {
+      minX = Math.min(minX, bounds[i]);
+      maxX = Math.max(maxX, bounds[i]);
+      minY = Math.min(minY, bounds[i + 1]);
+      maxY = Math.max(maxY, bounds[i + 1]);
+    }
+    minX = Math.max(minX, -10);
+    minY = Math.max(minY, -10);
+    maxX = Math.min(maxX, base.canvas.width + 10);
+    maxY = Math.min(maxY, base.canvas.height + 10);
+    if (maxX <= minX || maxY <= minY) return;
+    const spacing = (9 - darkness * 6) * unit;
+    const lines = new Path2D();
+    const directions = darkness > 0.55 ? [1, -1] : [1];
+    for (const direction of directions) {
+      // x + direction * y = c の線を、範囲の中だけ引く
+      const anchor = options.anchorX + direction * options.anchorY;
+      const corners = [minX + direction * minY, maxX + direction * minY, minX + direction * maxY, maxX + direction * maxY];
+      const low = Math.min(...corners), high = Math.max(...corners);
+      for (let c = Math.ceil((low - anchor) / spacing) * spacing + anchor; c <= high; c += spacing) {
+        const jitter = (hashUnit(Math.round(c), direction + 3) - 0.5) * 0.8 * unit;
+        const y0 = minY, y1 = maxY;
+        lines.moveTo(c + jitter - direction * y0, y0);
+        lines.lineTo(c - jitter - direction * y1, y1);
+      }
+    }
+    base.save();
+    clip();
+    base.setTransform(1, 0, 0, 1, 0, 0);
+    base.globalAlpha *= 0.3 + darkness * 0.45;
+    base.strokeStyle = "rgb(52, 52, 58)";
+    base.lineWidth = 0.8 * unit;
+    base.setLineDash([]);
+    base.stroke(lines);
+    base.restore();
+  };
+
+  const fillWith = (fill: () => void, clip: () => void, bounds: number[]) => {
+    const style = base.fillStyle;
+    let darkness = 0.3;
+    if (typeof style === "string") {
+      const parsed = parseCssColor(style);
+      darkness = parsed ? (1 - lightnessOf(parsed[0], parsed[1], parsed[2]) / 255) * parsed[3] : 0;
+      base.fillStyle = pencilTint(style);
+    } else base.fillStyle = "rgba(160, 160, 160, 0.12)";
+    fill();
+    base.fillStyle = style;
+    hatch(clip, bounds, darkness);
+  };
+
+  overrides.set("stroke", (path?: Path2D) => {
+    if (path) base.stroke(path);
+    else if (!strokePaths(recorder.subpaths())) base.stroke();
+  });
+  overrides.set("strokeRect", (x: number, y: number, w: number, h: number) => {
+    if (!strokePaths([rectSubpath(recorder, x, y, w, h)])) base.strokeRect(x, y, w, h);
+  });
+  overrides.set("fill", (first?: Path2D | CanvasFillRule, second?: CanvasFillRule) => {
+    if (typeof first === "object") {
+      base.fill(first, second);
+      return;
+    }
+    fillWith(() => base.fill(first), () => base.clip(first), recorder.subpaths().flatMap((subpath) => subpath.points));
+  });
+  overrides.set("fillRect", (x: number, y: number, w: number, h: number) => {
+    const rect = new Path2D();
+    rect.rect(x, y, w, h);
+    fillWith(() => base.fill(rect), () => base.clip(rect), rectSubpath(recorder, x, y, w, h).points);
+  });
+  overrides.set("fillText", (text: string, x: number, y: number, maxWidth?: number) => {
+    const style = base.fillStyle;
+    base.fillStyle = typeof style === "string" ? graphite(style) : "rgb(52, 52, 58)";
+    if (maxWidth === undefined) base.fillText(text, x, y);
+    else base.fillText(text, x, y, maxWidth);
+    base.fillStyle = style;
+  });
+  return wrapContext(base, overrides, (font) => styledFont(font, "pencil"));
+}
+
+// ---- 絵柄の入り口（main.ts から使う） ----
+
+// 絵柄の描き先。標準とドット（ドットは別の流れで描く）では null
+export function styleContext(style: PlanStyle, raw: CanvasRenderingContext2D, options: StyleContextOptions): CanvasRenderingContext2D | null {
+  switch (style) {
+    case "brush":
+      return createBrushContext(raw, { unit: options.unit, palette: SUMI_PALETTE });
+    case "parchment":
+      return createBrushContext(raw, { unit: options.unit, palette: PARCHMENT_PALETTE });
+    case "chalk":
+      return createBrushContext(raw, { unit: options.unit, palette: CHALK_PALETTE });
+    case "pencil":
+      return createSketchContext(raw, options);
+    case "manga":
+      return createMangaContext(raw, options);
+    case "blueprint":
+      return createRecolorContext(raw, BLUEPRINT, options.unit);
+    case "neon":
+      return createRecolorContext(raw, NEON, options.unit);
+    default:
+      return null;
+  }
+}
+
+// 描き終えたあと、全体に重ねる仕上げ（紙の模様や、まわりを少し暗くする）。(anchorX, anchorY) に模様の始まりを合わせる
+export function styleFinish(style: PlanStyle, target: CanvasRenderingContext2D, width: number, height: number, anchorX: number, anchorY: number): void {
+  const overlay = (kind: PaperKind, composite: GlobalCompositeOperation) => {
+    const pattern = target.createPattern(paperTexture(kind), "repeat");
+    if (!pattern) return;
+    pattern.setTransform(new DOMMatrix().translate(anchorX, anchorY));
+    target.save();
+    target.globalCompositeOperation = composite;
+    target.fillStyle = pattern;
+    target.fillRect(0, 0, width, height);
+    target.restore();
+  };
+  const vignette = (rgb: string, strength: number) => {
+    const gradient = target.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.3, width / 2, height / 2, Math.hypot(width, height) / 2);
+    gradient.addColorStop(0, `rgba(${rgb}, 0)`);
+    gradient.addColorStop(1, `rgba(${rgb}, ${strength})`);
+    target.save();
+    target.fillStyle = gradient;
+    target.fillRect(0, 0, width, height);
+    target.restore();
+  };
+  if (style === "brush") overlay("washi", "multiply");
+  else if (style === "parchment") {
+    overlay("parchment", "multiply");
+    vignette("92, 58, 20", 0.38);
+  } else if (style === "pencil") overlay("sketch", "multiply");
+  else if (style === "chalk") {
+    overlay("chalk", "source-over");
+    vignette("10, 20, 15", 0.35);
+  } else if (style === "neon") vignette("0, 0, 0", 0.55);
+  else if (style === "blueprint") vignette("5, 20, 50", 0.3);
+}
+
+// ---- 紙の模様 ----
+
+type PaperKind = "washi" | "parchment" | "sketch" | "chalk";
+
+interface PaperRecipe {
+  base: string | null;
+  blotches: { color: string; count: number; min: number; max: number }[];
+  fibers: { color: string; count: number; min: number; max: number; width: [number, number] } | null;
+  grain: number;
+}
+
+const PAPER_RECIPES: Record<PaperKind, PaperRecipe> = {
+  // 和紙: 白地に、ぼんやりしたむらと細長い繊維
+  washi: {
+    base: "#ffffff",
+    blotches: [{ color: "rgba(190, 168, 130, 0.07)", count: 19, min: 0.08, max: 0.28 }, { color: "rgba(255, 255, 255, 0.45)", count: 15, min: 0.08, max: 0.28 }],
+    fibers: { color: "rgba(140, 112, 76, A)", count: 230, min: 12, max: 70, width: [0.3, 0.8] },
+    grain: 8,
+  },
+  // 羊皮紙: 濃いしみと、少しの繊維
+  parchment: {
+    base: "#ffffff",
+    blotches: [{ color: "rgba(150, 105, 50, 0.12)", count: 26, min: 0.05, max: 0.22 }, { color: "rgba(255, 252, 240, 0.4)", count: 14, min: 0.08, max: 0.25 }],
+    fibers: { color: "rgba(120, 88, 48, A)", count: 70, min: 10, max: 40, width: [0.3, 0.7] },
+    grain: 12,
+  },
+  // スケッチブック: 紙の目のざらつきだけ
+  sketch: {
+    base: "#ffffff",
+    blotches: [{ color: "rgba(200, 200, 205, 0.06)", count: 12, min: 0.1, max: 0.3 }],
+    fibers: null,
+    grain: 10,
+  },
+  // 黒板: 消し残りのチョークの粉と、細かいすり傷（透明な地に重ねる）
+  chalk: {
+    base: null,
+    blotches: [{ color: "rgba(255, 255, 255, 0.045)", count: 22, min: 0.1, max: 0.35 }],
+    fibers: { color: "rgba(255, 255, 255, A)", count: 90, min: 20, max: 120, width: [0.4, 1.2] },
+    grain: 0,
+  },
+};
+
+const paperTextures = new Map<PaperKind, HTMLCanvasElement>();
+
+function paperTexture(kind: PaperKind): HTMLCanvasElement {
+  let canvas = paperTextures.get(kind);
+  if (!canvas) {
+    canvas = createPaperTexture(PAPER_RECIPES[kind], 512, kind === "washi" ? 1 : kind.length * 7919);
+    paperTextures.set(kind, canvas);
+  }
+  return canvas;
+}
+
+// 紙の模様（継ぎ目なく並べられる）。端をまたぐ物は反対側にも描く
+function createPaperTexture(recipe: PaperRecipe, size: number, seed: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const g = canvas.getContext("2d");
   if (!g) return canvas;
   const random = seededRandom(seed);
-  g.fillStyle = "#ffffff";
-  g.fillRect(0, 0, size, size);
+  if (recipe.base) {
+    g.fillStyle = recipe.base;
+    g.fillRect(0, 0, size, size);
+  }
   const wrapped = (draw: (ox: number, oy: number) => void) => {
     for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) draw(ox, oy);
   };
-  // むら: 大きくぼんやりした濃淡
-  for (let i = 0; i < 34; i += 1) {
-    const x = random() * size, y = random() * size, r = size * (0.08 + random() * 0.2);
-    const dark = random() < 0.55;
-    wrapped((ox, oy) => {
-      const gradient = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-      gradient.addColorStop(0, dark ? "rgba(190, 168, 130, 0.07)" : "rgba(255, 255, 255, 0.45)");
-      gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
-      g.fillStyle = gradient;
-      g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
-    });
+  for (const blotch of recipe.blotches) {
+    for (let i = 0; i < blotch.count; i += 1) {
+      const x = random() * size, y = random() * size, r = size * (blotch.min + random() * (blotch.max - blotch.min));
+      wrapped((ox, oy) => {
+        const gradient = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        gradient.addColorStop(0, blotch.color);
+        gradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+        g.fillStyle = gradient;
+        g.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+      });
+    }
   }
-  // 繊維: 細く長めの、ゆるく曲がった線
-  g.lineCap = "round";
-  for (let i = 0; i < 230; i += 1) {
-    const x = random() * size, y = random() * size;
-    const angle = random() * Math.PI * 2, length = 12 + random() * 58, bend = (random() - 0.5) * length * 0.5;
-    const ex = x + Math.cos(angle) * length, ey = y + Math.sin(angle) * length;
-    const qx = (x + ex) / 2 - Math.sin(angle) * bend, qy = (y + ey) / 2 + Math.cos(angle) * bend;
-    g.lineWidth = 0.3 + random() * 0.5;
-    g.strokeStyle = `rgba(140, 112, 76, ${0.05 + random() * 0.08})`;
-    wrapped((ox, oy) => {
-      g.beginPath();
-      g.moveTo(x + ox, y + oy);
-      g.quadraticCurveTo(qx + ox, qy + oy, ex + ox, ey + oy);
-      g.stroke();
-    });
+  const fibers = recipe.fibers;
+  if (fibers) {
+    g.lineCap = "round";
+    for (let i = 0; i < fibers.count; i += 1) {
+      const x = random() * size, y = random() * size;
+      const angle = random() * Math.PI * 2, length = fibers.min + random() * (fibers.max - fibers.min), bend = (random() - 0.5) * length * 0.5;
+      const ex = x + Math.cos(angle) * length, ey = y + Math.sin(angle) * length;
+      const qx = (x + ex) / 2 - Math.sin(angle) * bend, qy = (y + ey) / 2 + Math.cos(angle) * bend;
+      g.lineWidth = fibers.width[0] + random() * (fibers.width[1] - fibers.width[0]);
+      g.strokeStyle = fibers.color.replace("A", String(Math.round((0.05 + random() * 0.08) * 1000) / 1000));
+      wrapped((ox, oy) => {
+        g.beginPath();
+        g.moveTo(x + ox, y + oy);
+        g.quadraticCurveTo(qx + ox, qy + oy, ex + ox, ey + oy);
+        g.stroke();
+      });
+    }
   }
-  // 細かなざらつき
-  const image = g.getImageData(0, 0, size, size);
-  const data = image.data;
-  for (let i = 0; i < data.length; i += 4) {
-    const grain = (random() - 0.5) * 8;
-    data[i] = Math.max(0, Math.min(255, data[i] + grain));
-    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + grain));
-    data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + grain * 1.2));
+  if (recipe.grain) {
+    // 細かなざらつき
+    const image = g.getImageData(0, 0, size, size);
+    const data = image.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const grain = (random() - 0.5) * recipe.grain;
+      data[i] = Math.max(0, Math.min(255, data[i] + grain));
+      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + grain));
+      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + grain * 1.2));
+    }
+    g.putImageData(image, 0, 0);
   }
-  g.putImageData(image, 0, 0);
   return canvas;
 }

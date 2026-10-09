@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PAPER_COLOR, PLAN_STYLES, brushStroke, dashPolyline, inkColor, lineCells, parseCssColor, shapeSeed, splitStrokes, styledFont, washColor, wobblePolygon,
+  PAPER_COLOR, PLAN_STYLES, STYLE_LOOKS, brushStroke, dashPolyline, inkColor, lineCells, parseCssColor, shapeSeed, sketchLines, splitStrokes, styledFont, toneLevel,
+  washColor, wobblePolygon,
 } from '../src/plan-style.ts';
 
 // 点から線分までの距離
@@ -17,8 +18,73 @@ function signedArea(polygon) {
   return area / 2;
 }
 
-test('the three 2D styles are standard, dots and brush', () => {
-  assert.deepEqual(PLAN_STYLES.map(style => style.value), ['standard', 'pixel', 'brush']);
+test('there are nine 2D styles, each with a name, a hint and its own background and grid', () => {
+  assert.deepEqual(PLAN_STYLES.map(style => style.value), ['standard', 'pixel', 'brush', 'pencil', 'manga', 'blueprint', 'parchment', 'chalk', 'neon']);
+  for (const { value, label, hint } of PLAN_STYLES) {
+    assert.ok(label && hint, value);
+    const look = STYLE_LOOKS[value];
+    assert.equal(look.grid.length, 2, `${value} has a fine and a bold grid color`);
+    for (const color of look.grid) assert.ok(parseCssColor(color), `${value} grid color ${color}`);
+    if (look.background) assert.ok(parseCssColor(look.background), `${value} background`);
+  }
+  assert.equal(STYLE_LOOKS.standard.background, null, 'the standard style keeps the usual background');
+  const lightness = value => {
+    const [r, g, b] = parseCssColor(STYLE_LOOKS[value].background);
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+  };
+  const [r, , b] = parseCssColor(STYLE_LOOKS.blueprint.background);
+  assert.ok(b > r * 2, 'the blueprint is blue');
+  assert.ok(lightness('neon') < 40 && lightness('chalk') < 90, 'neon and the chalkboard are dark');
+  assert.ok(lightness('parchment') > 180 && lightness('pencil') > 230, 'old maps and pencil sketches are on light paper');
+});
+
+test('manga tones go from white to solid black in steps of a tenth', () => {
+  assert.equal(toneLevel('#ffffff'), 0);
+  assert.equal(toneLevel('#f6f6f6'), 0, 'nearly white stays white');
+  assert.equal(toneLevel('#000000'), 1);
+  assert.equal(toneLevel('#1a1a1a'), 1, 'nearly black becomes solid black');
+  assert.equal(toneLevel('not a color'), 0);
+  let previous = 0;
+  for (let v = 255; v >= 0; v -= 5) {
+    const level = toneLevel(`rgb(${v}, ${v}, ${v})`);
+    assert.ok(level >= previous, `darker grays get darker tones (${v})`);
+    assert.ok(Math.abs(level * 10 - Math.round(level * 10)) < 1e-9, `the tone of ${v} is a step of a tenth`);
+    previous = level;
+  }
+  assert.ok(toneLevel('#808080') >= 0.4 && toneLevel('#808080') <= 0.6, 'middle gray is a middle tone');
+  assert.ok(toneLevel('#b0413e') > 0 && toneLevel('#b0413e') < 1, 'a colour becomes a gray tone');
+});
+
+test('pencil lines go over a line a few times, stay close to it, and look the same every time', () => {
+  const near = (lines, path, limit) => {
+    for (const line of lines) {
+      for (let i = 0; i < line.length; i += 2) {
+        let distance = Infinity;
+        for (let j = 0; j + 3 < path.length; j += 2) distance = Math.min(distance, segmentDistance(line[i], line[i + 1], path[j], path[j + 1], path[j + 2], path[j + 3]));
+        assert.ok(distance <= limit, `(${line[i].toFixed(1)}, ${line[i + 1].toFixed(1)}) is ${distance.toFixed(2)} from the line`);
+      }
+    }
+  };
+  const path = [10, 20, 210, 20, 210, 120];
+  const thin = sketchLines(path, { width: 1, unit: 1, seed: 7 });
+  assert.equal(thin.length, 2, 'a thin line is drawn twice');
+  near(thin, path, 4);
+  assert.deepEqual(sketchLines(path, { width: 1, unit: 1, seed: 7 }), thin, 'the same line looks the same');
+  assert.notDeepEqual(sketchLines(path, { width: 1, unit: 1, seed: 8 }), thin, 'another line looks a little different');
+
+  // 太い線（壁）は、線の幅いっぱいに細い線を並べる
+  const thick = sketchLines([0, 0, 300, 0], { width: 10, unit: 1, seed: 3 });
+  assert.ok(thick.length >= 5 && thick.length <= 7, `a thick line is filled with ${thick.length} strokes`);
+  near(thick, [0, 0, 300, 0], 10 / 2 + 2);
+  const lanes = thick.map(line => line.filter((_, i) => i % 2 === 1).reduce((sum, y) => sum + y, 0) / (line.length / 2));
+  assert.ok(Math.max(...lanes) - Math.min(...lanes) > 5, 'the strokes spread across the width of the wall');
+
+  // 閉じた形はひと回りし、短すぎる線は描かない
+  const square = [0, 0, 100, 0, 100, 100, 0, 100];
+  const closed = sketchLines(square, { width: 1, unit: 1, seed: 5, closed: true });
+  near(closed, [...square, 0, 0], 3);
+  assert.ok(closed.every(line => line.length >= 8));
+  assert.deepEqual(sketchLines([0, 0, 0.3, 0], { width: 1, unit: 1, seed: 1 }), []);
 });
 
 test('styles change only the typeface of text, keeping its size and weight', () => {
@@ -29,6 +95,13 @@ test('styles change only the typeface of text, keeping its size and weight', () 
   assert.match(brush, /教科書体|正楷書体/);
   assert.equal(styledFont(brush, 'brush'), brush, 'changing the typeface twice gives the same font');
   assert.match(styledFont('13px "Yu Gothic UI", sans-serif', 'pixel'), /^13px "MS Gothic"/);
+  // 鉛筆と黒板は手書きらしい教科書体、古地図は明朝、設計図は図面の文字らしいゴシック。マンガとネオンはそのまま
+  assert.match(styledFont(font, 'pencil'), /^700 12\.5px "UD デジタル 教科書体/);
+  assert.match(styledFont(font, 'chalk'), /^700 12\.5px "UD デジタル 教科書体/);
+  assert.match(styledFont(font, 'parchment'), /^700 12\.5px "Yu Mincho"/);
+  assert.match(styledFont(font, 'blueprint'), /^700 12\.5px "BIZ UDGothic"/);
+  assert.equal(styledFont(font, 'manga'), font);
+  assert.equal(styledFont(font, 'neon'), font);
 });
 
 test('dot lines step one dot at a time, without doubled dots on curves, and keep square corners', () => {

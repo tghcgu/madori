@@ -77,7 +77,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 5. 上部の「同時」「2D」「3D」で表示を切り替えます。
 6. 大切なプランは「書き出し」からJSONファイルとして保存します。
 
-インストールもログインも不要です。最初から用意されている間取りを編集するか、「雛形」からワンルーム、1LDK、2LDK、二階建て3LDK、作例を読み込めます。
+インストールもログインも不要です。最初から用意されている間取りを編集するか、「雛形」から家・アパート・洋館・旅館・病院・学校・神社・地下牢など27種類の間取りを読み込めます。
 
 ## 主な機能
 
@@ -98,7 +98,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
 - ほかの階を半透明で重ねる「透過」表示。横の▼から、透かす階（すぐ下・すぐ上・ほかの階すべて・階を名前で指定）、透かす色（カラーコード。空欄なら元の色）、濃さを選べます。透かした階は一度ふつうに描いてから1回だけ半透明で重ねるので、壁の角や重なった所も同じ濃さです
 - 2D上の屋根の一時表示・非表示
-- 2Dの「絵柄」で、間取り全体の描き方を切り替え（標準・ドット・筆と和風）。詳しくは下の「2Dの絵柄」
+- 2Dの「絵柄」で、間取り全体の描き方を切り替え（標準・ドット・筆・和風・鉛筆・マンガ・設計図・古地図・黒板・ネオンの9種類）。詳しくは下の「2Dの絵柄」
 - パーツ検索（ひらがな・カタカナ・別名でも検索可。例: いす、まど、れいぞうこ）
 - 選択した要素の配置固定
 - マウスホイールによるズーム（0.0001倍〜1万倍まで、ほぼ無限に拡大・縮小。遠くまで引くと方眼の間隔も自動で広がり、大きく拡大したときは部屋の中にも方眼を薄く表示して、右ドラッグで動かしていることが分かるようにします）
@@ -146,11 +146,18 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 2Dの絵柄
 
-2Dの上の「絵柄」から、間取り全体の描き方を選べます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ絵柄はブラウザに保存され、画像の書き出しもその絵柄になります。
+2Dの上の「絵柄」から、間取り全体の描き方を選べます。メニューには、それぞれの絵柄で描いた小さな見本が並びます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ絵柄はブラウザに保存され、画像の書き出しもその絵柄になります。
 
 - 標準: これまでどおりの、くっきりした線画
 - ドット: ドット絵のマップのように、間取り全体を四角いドットで描きます。細い線はドットのます目に沿った1ドットの線（曲線は階段状、四角の角はそのまま）、壁などの太い線と塗りはドットごとに1色にまとめます。文字はぼかさずにくっきり描きます。ドットの大きさは細かい（2px）・ふつう（3px）・粗い（5px）から選べ、スクロールしてもドットの形がちらつかないよう、間取りを1ドットずつ動かします
 - 筆・和風: 和紙の地に、墨の筆で描いたように描きます。線は入りでふくらみ、止めや払いで終わり、手で引いたようにわずかに揺れます。四角は辺ごとに筆を運び、角で少し突き抜けます。壁などの太い線は筆の毛ごとに描き、終わりの方でかすれます。塗りは縁が少し波打つ淡い色、白は和紙の色になり、最後に和紙の繊維とむらを重ねます。文字は楷書・教科書体（なければ明朝）で、墨が少しにじんだように描きます。同じ形の線はいつ描いても同じ形なので、動かしたりスクロールしたりしても線がちらつきません
+- 鉛筆: 白い画用紙に、鉛筆で下描きしたように描きます。線は2〜3回なぞったように少しずつずれ、端は少し行き過ぎたり手前で止まったりします。壁などの太い線は細い線を並べて塗り、部屋や家具の塗りは色鉛筆の薄い色に、濃い色ほど細かい斜線（とても濃い所は網目）を重ねます。文字は手書きらしい教科書体です
+- マンガ: 白黒で描きます。線は黒く、塗りは色の濃さに合わせたスクリーントーン（網点）に、とても濃い色はベタ（黒）になります。トーンは間取りに貼り付いているので、スクロールしても網点は動きません
+- 設計図: 青焼きの図面のように、青い地に白っぽい線で描きます。塗りは淡い白、文字は図面の文字らしいゴシックです
+- 古地図: 羊皮紙の地に、セピアのペンで描きます。色は褪せて紙になじみ、紙のむらと縁の暗がりを重ねます。文字は明朝です
+- 黒板: 緑の黒板に、チョークで描きます。線は粉っぽくところどころかすれ、塗りは板の上に淡く、文字は手書きらしい教科書体です
+- ネオン: 夜のように暗い地に、光る線で描きます。線の色はあざやかに明るくなり、まわりがぼんやり光ります
+- 筆・古地図・黒板では、床の模様（木・畳・タイル・石・草など）の上に紙や板の色を薄く重ね、模様の色が浮かないようにします
 - 選択中の枠のつまみ・作図中の線・屋根の破線などの操作用の印は、どの絵柄でもくっきり描きます
 
 ### 画像の書き出し
@@ -159,7 +166,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 書き出す階: 表示中の階 / 全部の階を1枚に（階の名前付きで並べる） / 階ごとに1枚ずつ。複数の階は同じ範囲・同じ倍率にそろえるので、重ねて見比べられます
 - 方眼と部屋の名前は入れるかどうかを選べます。寸法は2Dの「寸法」の表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
-- 2Dの「絵柄」がドットや筆・和風なら、画像もその絵柄で描きます（ドットは画面と同じ大きさのドット、筆は和紙の地）
+- 2Dの「絵柄」が標準以外なら、画像もその絵柄で描きます（ドットは画面と同じ大きさのドット。筆は和紙、設計図は青い地、黒板は緑の板のように、地の色や紙の模様も入ります）
 - 線の太さや文字の大きさの割合は、2Dで間取り全体を表示したときと同じにします（大きな間取りでも、縮めて見たときに線が細く薄くならないように）。細かさは画面の2倍以上・1cmが1.5ピクセル以上で、大きすぎる間取りはどの端末でも作れる大きさまで下げます
 - 「3Dの画像（いまの見え方）」は、3Dで見ている向きのまま画面の2倍の細かさで書き出します
 - ファイル名は`madori-YYYY-MM-DD-1F.png`、`madori-YYYY-MM-DD-all.png`、`madori-YYYY-MM-DD-3d.png`のようになります
@@ -224,13 +231,37 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 雛形
 
-| 雛形 | 内容 |
-| --- | --- |
-| ワンルーム | 生活空間と水回りをまとめた小規模プラン |
-| 1LDK | LDK、寝室、玄関、水回りを含む基本プラン |
-| 2LDK | LDK、2部屋、水回り、家具を含むプラン |
-| 二階建て 3LDK | 1Fと2F、階段、複数室、屋根を含むプラン |
-| サンプル（作例） | 各種図形、家具、設備を確認するための作例 |
+家・お店・施設など27種類を、5つの分類に分けて並べています。どれも壁・ドア・窓・家具・床の模様・屋根まで入っていて、2Dでも3Dでもそのまま見られます（部屋の名前は家具に隠れない場所に置いています）。
+
+| 分類 | 雛形 | 内容 |
+| --- | --- | --- |
+| 住まい | ワンルーム | 1部屋と水回りの小さな家 |
+| 住まい | 1LDK | LDKと寝室 |
+| 住まい | 2LDK | LDKと洋室2つ |
+| 住まい | 二階建て 3LDK | 1階にLDK、2階に寝室と洋室、屋根 |
+| 住まい | 平屋の日本家屋 | 茶の間・座敷・土間・縁側と庭のある和風の家 |
+| 住まい | アパート | 1Kが3部屋ずつの二階建て。外廊下と外階段 |
+| 住まい | サンプル（作例） | いろいろな家具や床を置いた二階建ての作例 |
+| 屋敷・宿 | 洋館 | 大広間・食堂・書斎のある二階建てと地下室（B1F） |
+| 屋敷・宿 | 山荘・ペンション | 暖炉のラウンジと客室4つ。森とテラス |
+| 屋敷・宿 | 旅館 | 客室・宴会場・大浴場と中庭 |
+| 屋敷・宿 | ホテル | 廊下に客室が並ぶ1フロア |
+| お店 | カフェ | カウンターと客席、テラス席 |
+| お店 | バー | カウンターとボックス席 |
+| お店 | コンビニ | 売り場・レジ・事務所と駐車場 |
+| 施設 | 病院 | 待合・診察室・病室・手術室 |
+| 施設 | 学校 | 教室3つ・職員室・保健室・昇降口 |
+| 施設 | オフィス | 執務室・会議室・社長室 |
+| 施設 | 図書館 | 本棚と閲覧席、書庫 |
+| 施設 | 教会 | 長椅子の並ぶ礼拝堂 |
+| 施設 | 神社 | 本殿・拝殿・社務所と参道 |
+| 施設 | 警察署 | 刑事課・取調室・留置場 |
+| 施設 | 研究所 | 実験室・資料室・サーバー室 |
+| 施設 | 美術館 | 展示室3つとショップ |
+| 施設 | 銭湯 | 男湯・女湯と番台 |
+| 屋外・そのほか | 公園 | 遊び場・池・広場 |
+| 屋外・そのほか | 廃工場 | 作業場・倉庫・事務所 |
+| 屋外・そのほか | 地下牢 | 牢屋・大広間・武器庫・宝物庫のダンジョン |
 
 > [!WARNING]
 > 雛形を適用すると現在の間取りを置き換えます。確認ダイアログの内容を確認し、必要なプランは先に書き出してください。
@@ -241,7 +272,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（間取り・3D）、新規作成 |
 | 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、雛形 |
-| 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・ドット・筆と和風）、透過・寸法・屋根の表示切替 |
+| 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・ドット・筆・和風など9種類）、透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
 左上のパネル切替ボタンで、編集パネルを一時的に隠せます。作業内容に応じて、上部の表示切替から2Dまたは3Dを広く表示できます。
@@ -419,7 +450,8 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
-│  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆と和風）の描き方
+│  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆・鉛筆・マンガ・設計図・古地図・黒板・ネオン）の描き方
+│  ├─ templates.ts           # 雛形（家・病院・洋館など）の分類と間取りのデータ
 │  ├─ changelog.ts           # 更新履歴（アプリとREADMEで共通）
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
@@ -557,6 +589,12 @@ npm.cmd run dev
 ## 更新履歴
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
+
+### 2026年10月9日
+
+- 雛形を27種類に増やし、住まい・屋敷と宿・お店・施設・屋外とそのほかに分けて並べました。平屋の日本家屋・アパート・洋館（地下室つき）・山荘・旅館・ホテル・カフェ・バー・コンビニ・病院・学校・オフィス・図書館・教会・神社・警察署・研究所・美術館・銭湯・公園・廃工場・地下牢を追加。どれも壁・ドア・窓・家具・床・屋根まで入っていて、2Dでも3Dでも見られます
+- 2Dの絵柄に、鉛筆・マンガ・設計図・古地図・黒板・ネオンの6種類を追加（全部で9種類）。絵柄のメニューには、それぞれの絵柄で描いた見本が並びます
+- 筆・和風の絵柄で、木や草などの床の模様の色が浮かないよう、和紙の色を薄く重ねるように
 
 ### 2026年10月7日
 
@@ -771,7 +809,7 @@ It requires no account, installation, backend server, or database. Work is saved
 5. Switch between Split, 2D, and 3D views from the top bar.
 6. Export important plans as JSON using the Download button.
 
-You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-story 3LDK, or showcase template.
+You can edit the starter plan immediately or load one of 27 templates, from houses and an apartment to a Western mansion, a ryokan, a hospital, a school, a shrine, and a dungeon.
 
 ## Feature Overview
 
@@ -792,7 +830,7 @@ You can edit the starter plan immediately or load a studio, 1LDK, 2LDK, two-stor
 - Toggle dimension labels for rooms and roofs (off by default)
 - Show other floors as a translucent guide ("透過"). The ▼ next to it picks which floors (the one below, the one above, all others, or one by name), a tint color (a color code, or blank for the original colors) and the strength. Ghost floors are drawn normally first and made see-through once, so wall corners and overlaps stay even
 - Temporarily hide roofs on the 2D plan
-- Switch how the whole 2D plan is drawn with "絵柄" (standard, dots, or brush on washi); see "2D styles" below
+- Switch how the whole 2D plan is drawn with "絵柄" (nine styles: standard, dots, brush on washi, pencil, manga, blueprint, old map, chalkboard, and neon); see "2D styles" below
 - Search parts by name, including hiragana, katakana, and common aliases
 - Lock selected items to prevent accidental movement or deletion
 - Zoom with the mouse wheel (almost without limit, from 0.0001x to 10,000x; the grid spacing widens automatically when zoomed far out, and when zoomed far in the grid also shows faintly inside rooms so you can see the view moving) and pan with right-drag
@@ -835,11 +873,18 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 ### 2D styles
 
-"絵柄" above the 2D plan changes how the whole plan is drawn. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. The choice is saved in the browser, and exported images use it too.
+"絵柄" above the 2D plan changes how the whole plan is drawn. The menu shows a small sample drawn in each style. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. The choice is saved in the browser, and exported images use it too.
 
 - 標準 (standard): the crisp line drawing as before.
 - ドット (dots): the whole plan drawn in square dots like a pixel-art map. Thin lines become one-dot lines on the dot grid (stair-stepped on curves, square at corners); thick lines such as walls and fills take one color per dot. Text stays sharp without blurring. Dots are 2, 3, or 5 px, and the plan moves one dot at a time so the dots do not flicker while scrolling.
 - 筆・和風 (brush): drawn with a sumi ink brush on washi paper. Lines swell where the brush lands, end with a stop or a sweep, and wobble slightly like hand-drawn lines; rectangles are drawn one side at a time and overshoot a little at the corners. Thick lines such as walls are drawn bristle by bristle and run dry toward their ends. Fills are pale washes with slightly wavy edges, white becomes the paper color, and the paper's fibers and mottling lie over everything. Text uses a brush-style typeface (kaisho or kyokasho, otherwise mincho) with a slight ink bleed. The same line always gets the same brush shape, so nothing flickers while moving or scrolling.
+- 鉛筆 (pencil): a pencil sketch on white drawing paper. Each line is traced two or three times with small offsets, and ends overshoot or stop a little short. Thick lines such as walls are filled with fine strokes; fills are light colored pencil, with hatching that gets denser for darker colors (cross-hatching for the darkest). Text uses a handwriting-style kyokasho typeface.
+- マンガ (manga): black and white. Lines are black; fills become screentone dots that follow how dark the color is, and very dark colors become solid black. The tone is fixed to the plan, so the dots do not move while scrolling.
+- 設計図 (blueprint): pale lines on blueprint blue, with faint white fills and a drafting-style gothic typeface.
+- 古地図 (old map): sepia pen on parchment. Colors fade into the paper, with mottling and darker edges over everything. Text is mincho.
+- 黒板 (chalkboard): chalk on a green board. Lines are powdery with small gaps, fills are faint on the board, and text uses a handwriting-style typeface.
+- ネオン (neon): glowing lines on a dark night background. Line colors become bright and vivid with a soft glow around them.
+- In the brush, old map, and chalkboard styles, floor patterns (wood, tatami, tile, stone, grass) get a thin layer of the paper or board color so their colors do not stand out.
 - Selection handles, lines being drawn, and the dashed roof outlines stay crisp in every style.
 
 ### Image export
@@ -848,7 +893,7 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 - Floors: the current floor, all floors in one image (each with its name), or one image per floor. Several floors share the same area and scale so they line up.
 - Grid and room names can be left out. Dimensions follow the 2D dimension toggle. Selection frames, roofs, ghost floors, and lock icons are never included.
-- When the 2D style is dots or brush, the image is drawn in that style (the same dot size as on screen, or on washi paper).
+- When the 2D style is not the standard one, the image is drawn in that style (dots of the same size as on screen; the paper or board, such as washi, blueprint blue, or the green chalkboard, is included).
 - Line widths and text keep the same proportions as the whole plan shown in the 2D view, so large plans do not look faint when the image is scaled down. Resolution is at least twice the screen and 1.5 pixels per centimeter, reduced for very large plans so every device can create the image.
 - "3Dの画像" saves the current 3D view at twice the screen resolution.
 
@@ -912,13 +957,37 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 
 ### Templates
 
-| Template | Contents |
-| --- | --- |
-| Studio | Compact living area with bathroom facilities |
-| 1LDK | Living/dining/kitchen, bedroom, entrance, and bathroom area |
-| 2LDK | LDK, two rooms, bathroom area, and furniture |
-| Two-story 3LDK | Two floors, stairs, multiple rooms, furniture, and roof |
-| Showcase | A broad sample of shapes, furniture, and equipment |
+27 templates in five groups. Each one comes with walls, doors, windows, furniture, floor patterns, and roofs, ready to view in 2D and 3D (room names are placed where furniture does not hide them).
+
+| Group | Template | Contents |
+| --- | --- | --- |
+| Homes | Studio | A small home with one room and bathroom facilities |
+| Homes | 1LDK | LDK and a bedroom |
+| Homes | 2LDK | LDK and two rooms |
+| Homes | Two-story 3LDK | LDK downstairs, bedrooms upstairs, and a roof |
+| Homes | Japanese house | A one-story Japanese house with a living room, a tatami guest room, an earthen entrance, a veranda, and a garden |
+| Homes | Apartment | Two stories of three 1K units each, with an outdoor corridor and stairs |
+| Homes | Showcase | A two-story sample with many kinds of furniture and floors |
+| Mansions and inns | Western mansion | Two stories with a great hall, dining room, and study, plus a cellar (B1F) |
+| Mansions and inns | Lodge | A fireplace lounge and four guest rooms, with a terrace in the woods |
+| Mansions and inns | Ryokan | Guest rooms, a banquet hall, a large bath, and a courtyard |
+| Mansions and inns | Hotel | One floor of guest rooms along a corridor |
+| Shops | Cafe | A counter, tables, and terrace seats |
+| Shops | Bar | A counter and booth seats |
+| Shops | Convenience store | Sales floor, register, office, and parking |
+| Facilities | Hospital | Waiting room, consulting rooms, wards, and an operating room |
+| Facilities | School | Three classrooms, a staff room, a nurse's office, and the entrance |
+| Facilities | Office | Open office, meeting room, and president's office |
+| Facilities | Library | Bookshelves, reading tables, and stacks |
+| Facilities | Church | A chapel lined with pews |
+| Facilities | Shrine | Main hall, worship hall, shrine office, and approach |
+| Facilities | Police station | Detectives' room, interrogation rooms, and cells |
+| Facilities | Laboratory | Labs, archive, and server room |
+| Facilities | Art museum | Three galleries and a shop |
+| Facilities | Public bath | Men's and women's baths and the attendant's booth |
+| Outdoors and more | Park | Playground, pond, and plaza |
+| Outdoors and more | Abandoned factory | Workshop, warehouse, and office |
+| Outdoors and more | Dungeon | Cells, a great hall, an armory, and a treasure room |
 
 > [!WARNING]
 > Applying a template replaces the current plan after confirmation. Export anything important before replacing it.
@@ -929,7 +998,7 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, image export (plan and 3D), and new plan |
 | Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
-| 2D pane | Drawing, selection, movement, resizing, the 2D style (standard, dots, brush), and toggles for ghost floors, dimensions, and roofs |
+| 2D pane | Drawing, selection, movement, resizing, the 2D style (nine styles such as dots and brush), and toggles for ghost floors, dimensions, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
 The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let you dedicate more space to the current task.
@@ -1104,7 +1173,8 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence, plan-only edition
 │  ├─ furniture-shapes.ts    # Shape data shared by 2D symbols and 3D models
-│  ├─ plan-style.ts          # 2D styles (dots, brush on washi)
+│  ├─ plan-style.ts          # 2D styles (dots, brush, pencil, manga, blueprint, old map, chalkboard, neon)
+│  ├─ templates.ts           # Template groups and the plans of the newer templates
 │  ├─ changelog.ts           # Update history shared by the app and the README
 │  ├─ colors.ts              # Color codes with transparency
 │  ├─ translucency.ts        # 3D materials for see-through colors
@@ -1243,6 +1313,12 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-09
+
+- 27 templates in five groups: added a Japanese house, an apartment, a Western mansion with a cellar, a lodge, a ryokan, a hotel, a cafe, a bar, a convenience store, a hospital, a school, an office, a library, a church, a shrine, a police station, a laboratory, an art museum, a public bath, a park, an abandoned factory, and a dungeon, each with walls, doors, windows, furniture, floors, and roofs in 2D and 3D
+- Six more 2D styles: pencil, manga, blueprint, old map, chalkboard, and neon (nine in all). The style menu shows a sample drawn in each style
+- In the brush style, floor patterns such as wood and grass now get a thin layer of the paper color so they blend in
 
 ### 2026-10-07
 
