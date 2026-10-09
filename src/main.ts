@@ -11,8 +11,8 @@ import { CHANGELOG, changelogDate } from "./changelog";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
 import { makeTranslucent } from "./translucency";
 import {
-  DEFAULT_PIXEL_DOT, PIXEL_DOTS, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_INK, STYLE_LOOKS, createPixelContext, drawPixelTexts, isDotStyle, retroColors,
-  styleContext, styleFinish, styledFont, type PixelText, type PlanStyle,
+  DEFAULT_PIXEL_DOT, PIXEL_DOTS, PLAN_BACKGROUNDS, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_INK, STYLE_LOOKS, createPixelContext, drawPixelTexts, isDotStyle,
+  lookStyle, retroColors, styleContext, styleFinish, styledFont, type PixelText, type PlanBackground, type PlanStyle,
 } from "./plan-style";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
@@ -513,6 +513,8 @@ const shardSettings: { spread: number; density: number } = { spread: SHARD_SPREA
 const SHARD_DENSITIES: [number, string][] = [[0.5, "少なめ"], [1, "ふつう"], [2, "多め"]];
 // 2Dの絵柄（標準・ドット・筆と和風）と、ドットの大きさ（見ていた場所などと一緒にブラウザへ保存）
 let planStyle: PlanStyle = "standard";
+// 2Dの背景（地の色・方眼・紙の模様）。"auto" なら線画の絵柄に合わせる
+let planBackground: PlanBackground = "auto";
 let pixelDot = DEFAULT_PIXEL_DOT;
 // ペンのよく使う色（血の色が最初）
 const PEN_COLORS: [string, string][] = [
@@ -535,6 +537,8 @@ let translucentCanvas: HTMLCanvasElement | null = null;
 // layer はほかのキャンバス（透かす階・透明度のある色）にも同じ絵柄を付ける関数、texts はドットの絵柄であとから描く文字
 interface StylePass {
   style: PlanStyle;
+  // 地の色・方眼に使う絵柄（背景）
+  look: PlanStyle;
   raw: CanvasRenderingContext2D;
   overlays: (() => void)[];
   layer: (raw: CanvasRenderingContext2D, keepTexts: boolean) => CanvasRenderingContext2D;
@@ -653,7 +657,7 @@ interface SavedViewState {
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
   pen?: { color?: string; brush?: number; filled?: boolean };
   shards?: { spread?: number; density?: number };
-  look?: { style?: string; dot?: number };
+  look?: { style?: string; dot?: number; background?: string };
 }
 
 const viewState: SavedViewState = loadViewState();
@@ -1839,8 +1843,9 @@ function applySavedDisplaySettings(): void {
     if (typeof opacity === "number" && Number.isFinite(opacity)) ghostSettings.opacity = clamp(opacity, 0.03, 0.9);
   }
   if (viewState.look && typeof viewState.look === "object") {
-    const { style, dot } = viewState.look;
+    const { style, dot, background } = viewState.look;
     if (PLAN_STYLES.some((option) => option.value === style)) planStyle = style as PlanStyle;
+    if (PLAN_BACKGROUNDS.some((option) => option.value === background)) planBackground = background as PlanBackground;
     if (PIXEL_DOTS.some((option) => option.value === dot)) pixelDot = dot as number;
   }
   if (viewState.shards && typeof viewState.shards === "object") {
@@ -1939,7 +1944,7 @@ function saveViewState(): void {
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
   viewState.shards = { ...shardSettings };
-  viewState.look = { style: planStyle, dot: pixelDot };
+  viewState.look = { style: planStyle, dot: pixelDot, background: planBackground };
   try {
     localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
@@ -2695,8 +2700,8 @@ interface PlanDrawOptions {
 function drawStyledPlan(target: CanvasRenderingContext2D, width: number, height: number, ratio: number, options: PlanDrawOptions, paper = true): void {
   const saved = ctx;
   try {
-    if (isDotStyle(planStyle)) drawPixelPlan(target, width, height, options, planStyle === "retro");
-    else if (planStyle === "standard") {
+    if (isDotStyle(planStyle)) drawPixelPlan(target, width, height, options, planStyle === "retro", paper);
+    else if (planStyle === "standard" && planLook() === "standard") {
       ctx = target;
       drawPlan(width, height, options);
     } else drawWrappedPlan(target, width, height, ratio, options, paper);
@@ -2705,9 +2710,14 @@ function drawStyledPlan(target: CanvasRenderingContext2D, width: number, height:
   }
 }
 
+// 地の色・方眼・紙の模様に使う絵柄（背景を「おまかせ」にしたときは線画の絵柄）
+function planLook(): PlanStyle {
+  return lookStyle(planStyle, planBackground);
+}
+
 // 絵柄を付けて間取りを描き、あとで上に描く物（つまみなど）と、控えた文字を返す
 function runStylePass(style: PlanStyle, raw: CanvasRenderingContext2D, layer: StylePass["layer"], draw: () => void): StylePass {
-  const pass: StylePass = { style, raw, overlays: [], layer, texts: [], alpha: 1 };
+  const pass: StylePass = { style, look: planLook(), raw, overlays: [], layer, texts: [], alpha: 1 };
   const saved = { ctx, stylePass };
   stylePass = pass;
   ctx = layer(raw, true);
@@ -2742,27 +2752,29 @@ function drawOverlays(target: CanvasRenderingContext2D, pass: StylePass): void {
   }
 }
 
-// 筆・鉛筆・マンガ・設計図など: 絵柄の地の色を敷き、絵柄の描き先で間取りを描いてから、紙の模様などの仕上げを重ねる
+// 筆・鉛筆・マンガ・設計図など: 背景の地の色を敷き、線画の絵柄の描き先で間取りを描いてから、背景の紙の模様などの仕上げを重ねる
 function drawWrappedPlan(target: CanvasRenderingContext2D, width: number, height: number, ratio: number, options: PlanDrawOptions, paper: boolean): void {
   const style = planStyle;
-  const look = STYLE_LOOKS[style];
-  if (paper && look.background) {
+  const look = planLook();
+  const background = STYLE_LOOKS[look].background;
+  if (paper && background) {
     target.save();
-    target.fillStyle = look.background;
+    target.fillStyle = background;
     target.fillRect(0, 0, width, height);
     target.restore();
   }
   // トーンや斜線を間取りに貼り付けるための、間取りの原点の画素の位置
   const origin = target.getTransform().transformPoint({ x: view.x, y: view.y });
-  const wrap = (raw: CanvasRenderingContext2D) => styleContext(style, raw, { unit: ratio, anchorX: origin.x, anchorY: origin.y }) ?? raw;
+  const wrap = (raw: CanvasRenderingContext2D) =>
+    styleContext(style, raw, { unit: ratio, anchorX: origin.x, anchorY: origin.y, paper: background ?? "#ffffff" }) ?? raw;
   const pass = runStylePass(style, target, wrap, () => drawPlan(width, height, options));
-  if (paper) styleFinish(style, target, width, height, view.x, view.y);
+  if (paper) styleFinish(look, target, width, height, view.x, view.y);
   drawOverlays(target, pass);
 }
 
 // ドット: 画面の1pxの細かさで描いてから、ドットごとに真ん中の1画素の色をとって（ぼかさずに縮めて）大きく映す。
 // 細い線は描くときにドットのます目に沿わせ、文字は画面の細かさでぼかさずに描く。retro ならドットを緑の4色にする（レトロゲーム）
-function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: number, options: PlanDrawOptions, retro = false): void {
+function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: number, options: PlanDrawOptions, retro = false, paper = true): void {
   const dot = pixelDot;
   const columns = Math.max(1, Math.ceil(width / dot)), rows = Math.max(1, Math.ceil(height / dot));
   const w = columns * dot, h = rows * dot;
@@ -2777,7 +2789,9 @@ function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: 
   source.setTransform(1, 0, 0, 1, 0, 0);
   source.globalAlpha = 1;
   source.globalCompositeOperation = "source-over";
-  source.fillStyle = "#ffffff";
+  // 背景の地の色（ドットにまとめる前に敷く）。レトロゲームの地の緑は4色にしたあとの色なので、元は白にする
+  const look = planLook();
+  source.fillStyle = look === "retro" ? "#ffffff" : STYLE_LOOKS[look].background ?? "#ffffff";
   source.fillRect(0, 0, w, h);
   // 間取りをドットのます目に合わせて1ドットずつ動かす（スクロールしても、ドットの形がちらつかない）
   const realView = view;
@@ -2828,6 +2842,8 @@ function drawPixelPlan(target: CanvasRenderingContext2D, width: number, height: 
   target.imageSmoothingEnabled = false;
   target.drawImage(shown, 0, 0, w, h);
   target.restore();
+  // 背景の紙の模様などは、ドットの上に重ねる（文字と操作用の印はその上に、くっきり描く）
+  if (paper) styleFinish(look, target, width, height, realView.x, realView.y);
   pixelTextCanvas ??= document.createElement("canvas");
   drawPixelTexts(target, retro ? pass.texts.map((text) => ({ ...text, color: RETRO_INK })) : pass.texts, w, h, pixelTextCanvas);
   drawOverlays(target, pass);
@@ -2838,7 +2854,8 @@ function setupPlanStyleMenu(): void {
   const menu = document.querySelector<HTMLDivElement>("#planStyleMenu");
   const dots = document.querySelector<HTMLSelectElement>("#pixelDotSelect");
   const choices = document.querySelector<HTMLDivElement>("#planStyleChoices");
-  if (!button || !menu || !dots || !choices) return;
+  const backgrounds = document.querySelector<HTMLDivElement>("#planBackgroundChoices");
+  if (!button || !menu || !dots || !choices || !backgrounds) return;
   dots.innerHTML = PIXEL_DOTS.map(({ value, label }) => `<option value="${value}">${label}</option>`).join("");
   // 絵柄ごとの見本を、分類ごとに並べる（開いたときに、その絵柄で小さな部屋を描く）
   choices.innerHTML = PLAN_STYLE_GROUPS.map((group) => `
@@ -2850,7 +2867,25 @@ function setupPlanStyleMenu(): void {
           <strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small>
         </button>`).join("")}</div>
     </div>`).join("");
-  let thumbnailsDrawn = false;
+  // 背景の見本（いまの線画を、それぞれの背景で描く）
+  backgrounds.innerHTML = `<div class="style-group-choices">${PLAN_BACKGROUNDS.map(({ value, label, hint }) => `
+    <button type="button" class="style-choice" role="radio" aria-checked="false" data-plan-background="${value}" title="${escapeHtml(`${label}（${hint}）`)}">
+      <canvas class="style-thumb" aria-hidden="true"></canvas>
+      <strong>${escapeHtml(label)}</strong><small>${escapeHtml(hint)}</small>
+    </button>`).join("")}</div>`;
+  // 線画と背景のタブ
+  const tabs = menu.querySelectorAll<HTMLButtonElement>("[data-style-tab]");
+  const showTab = (tab: string) => {
+    tabs.forEach((item) => {
+      const active = item.dataset.styleTab === tab;
+      item.classList.toggle("is-active", active);
+      item.setAttribute("aria-selected", String(active));
+    });
+    choices.hidden = tab !== "line";
+    backgrounds.hidden = tab !== "background";
+    refreshStyleThumbnails(menu);
+  };
+  tabs.forEach((item) => item.addEventListener("click", () => showTab(item.dataset.styleTab ?? "line")));
   const close = () => {
     menu.hidden = true;
     button.setAttribute("aria-expanded", "false");
@@ -2859,10 +2894,7 @@ function setupPlanStyleMenu(): void {
     menu.hidden = !menu.hidden;
     button.setAttribute("aria-expanded", String(!menu.hidden));
     if (menu.hidden) return;
-    if (!thumbnailsDrawn) {
-      thumbnailsDrawn = true;
-      drawStyleThumbnails(choices);
-    }
+    refreshStyleThumbnails(menu);
     // 狭い画面でも、メニューが画面の外にはみ出さないように横へずらす
     menu.style.translate = "";
     const rect = menu.getBoundingClientRect();
@@ -2887,6 +2919,18 @@ function setupPlanStyleMenu(): void {
       syncPlanStyleMenu();
       render2d();
       scheduleViewStateSave();
+      refreshStyleThumbnails(menu);
+    });
+  });
+  menu.querySelectorAll<HTMLButtonElement>("[data-plan-background]").forEach((choice) => {
+    choice.addEventListener("click", () => {
+      const background = PLAN_BACKGROUNDS.find((option) => option.value === choice.dataset.planBackground);
+      if (!background) return;
+      planBackground = background.value;
+      syncPlanStyleMenu();
+      render2d();
+      scheduleViewStateSave();
+      refreshStyleThumbnails(menu);
     });
   });
   dots.addEventListener("change", () => {
@@ -2921,34 +2965,61 @@ function styleSamplePlan(): PlanState {
   return styleSample;
 }
 
-// メニューの見本を、それぞれの絵柄で描く。描いている間だけ、間取り・見ている所・絵柄を見本の物に差し替える
-function drawStyleThumbnails(container: HTMLElement): void {
-  const saved = { state, view: { ...view }, planStyle, ctx, hideRoomNames, showDimensions };
+// 開いているタブの見本を描き直す。線画の見本はいまの背景で、背景の見本はいまの線画で描く（同じ組み合わせなら描き直さない）
+function refreshStyleThumbnails(menu: HTMLElement): void {
+  const items: { canvas: HTMLCanvasElement; style: PlanStyle; background: PlanBackground }[] = [];
+  const add = (canvas: HTMLCanvasElement | null, style: PlanStyle, background: PlanBackground) => {
+    const key = `${style}|${background}`;
+    if (!canvas || canvas.dataset.drawn === key) return;
+    canvas.dataset.drawn = key;
+    items.push({ canvas, style, background });
+  };
+  const lines = menu.querySelector<HTMLElement>("#planStyleChoices");
+  if (lines && !lines.hidden) {
+    lines.querySelectorAll<HTMLButtonElement>("[data-plan-style]").forEach((choice) => {
+      const style = PLAN_STYLES.find((option) => option.value === choice.dataset.planStyle);
+      if (style) add(choice.querySelector("canvas"), style.value, planBackground);
+    });
+  }
+  const backgrounds = menu.querySelector<HTMLElement>("#planBackgroundChoices");
+  if (backgrounds && !backgrounds.hidden) {
+    backgrounds.querySelectorAll<HTMLButtonElement>("[data-plan-background]").forEach((choice) => {
+      const background = PLAN_BACKGROUNDS.find((option) => option.value === choice.dataset.planBackground);
+      if (background) add(choice.querySelector("canvas"), planStyle, background.value);
+    });
+  }
+  drawStyleThumbnails(items);
+}
+
+// メニューの見本を、それぞれの線画と背景で描く。描いている間だけ、間取り・見ている所・絵柄を見本の物に差し替える
+function drawStyleThumbnails(items: { canvas: HTMLCanvasElement; style: PlanStyle; background: PlanBackground }[]): void {
+  if (!items.length) return;
+  const saved = { state, view: { ...view }, planStyle, planBackground, ctx, hideRoomNames, showDimensions };
   const ratio = 2;
   try {
     state = styleSamplePlan();
     hideRoomNames = true;
     showDimensions = false;
-    container.querySelectorAll<HTMLButtonElement>("[data-plan-style]").forEach((choice) => {
-      const canvas = choice.querySelector<HTMLCanvasElement>("canvas");
-      const style = PLAN_STYLES.find((option) => option.value === choice.dataset.planStyle);
-      const target = canvas?.getContext("2d");
-      if (!canvas || !style || !target) return;
+    for (const { canvas, style, background } of items) {
+      const target = canvas.getContext("2d");
+      if (!target) continue;
       const w = 96, h = 62;
       canvas.width = w * ratio;
       canvas.height = h * ratio;
       const zoom = Math.min(w / 330, h / 230);
       view = { zoom, x: (w - 300 * zoom) / 2, y: (h - 200 * zoom) / 2 };
-      planStyle = style.value;
+      planStyle = style;
+      planBackground = background;
       target.setTransform(ratio, 0, 0, ratio, 0, 0);
       target.fillStyle = "#ffffff";
       target.fillRect(0, 0, w, h);
       drawStyledPlan(target, w, h, ratio, { grid: true, ghost: false, editing: false });
-    });
+    }
   } finally {
     state = saved.state;
     view = saved.view;
     planStyle = saved.planStyle;
+    planBackground = saved.planBackground;
     ctx = saved.ctx;
     hideRoomNames = saved.hideRoomNames;
     showDimensions = saved.showDimensions;
@@ -2957,12 +3028,18 @@ function drawStyleThumbnails(container: HTMLElement): void {
 
 function syncPlanStyleMenu(): void {
   const style = PLAN_STYLES.find((option) => option.value === planStyle) ?? PLAN_STYLES[0];
+  const background = PLAN_BACKGROUNDS.find((option) => option.value === planBackground) ?? PLAN_BACKGROUNDS[0];
+  const plain = planStyle === "standard" && planBackground === "auto";
   const button = document.querySelector<HTMLButtonElement>("#planStyleButton");
   const label = document.querySelector<HTMLSpanElement>("#planStyleLabel");
-  if (label) label.textContent = planStyle === "standard" ? "絵柄" : style.label;
-  button?.classList.toggle("is-active", planStyle !== "standard");
+  // 背景を線画と別に選んだときは「線画・背景」と出す
+  if (label) label.textContent = plain ? "絵柄" : planBackground === "auto" ? style.label : `${style.label}・${background.label}`;
+  button?.classList.toggle("is-active", !plain);
   document.querySelectorAll<HTMLButtonElement>("[data-plan-style]").forEach((choice) => {
     choice.setAttribute("aria-checked", String(choice.dataset.planStyle === planStyle));
+  });
+  document.querySelectorAll<HTMLButtonElement>("[data-plan-background]").forEach((choice) => {
+    choice.setAttribute("aria-checked", String(choice.dataset.planBackground === planBackground));
   });
   const dots = document.querySelector<HTMLSelectElement>("#pixelDotSelect");
   if (dots) dots.value = String(pixelDot);
@@ -3038,7 +3115,7 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
   // ドットでは線をドットのます目に合わせた1ドットの線（ドットにまとめたときに、とぎれとぎれにならないように）
   const g = stylePass?.raw ?? ctx;
   const dot = stylePass?.style === "pixel" ? pixelDot : 0;
-  const [minor, major] = STYLE_LOOKS[stylePass?.style ?? "standard"].grid;
+  const [minor, major] = STYLE_LOOKS[stylePass?.look ?? "standard"].grid;
   const snap = (value: number, offset: number) => (dot ? (Math.floor((value * view.zoom + offset) / dot) * dot + dot / 2 - offset) / view.zoom : value);
 
   g.lineWidth = (dot || 1) / view.zoom;
@@ -7655,7 +7732,7 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
   canvas.height = Math.max(1, Math.round(cellH * rows * ratio));
   const target = canvas.getContext("2d");
   if (!target) return canvas;
-  target.fillStyle = STYLE_LOOKS[planStyle].background ?? "#ffffff";
+  target.fillStyle = STYLE_LOOKS[planLook()].background ?? "#ffffff";
   target.fillRect(0, 0, canvas.width, canvas.height);
   floorIndexes.forEach((floorIndex, i) => {
     const left = (i % columns) * cellW;
@@ -7666,7 +7743,7 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
   // 紙の模様などの仕上げは、画像全体にまとめて重ねる
   target.save();
   target.setTransform(ratio, 0, 0, ratio, 0, 0);
-  styleFinish(planStyle, target, cellW * columns, cellH * rows, 0, 0);
+  styleFinish(planLook(), target, cellW * columns, cellH * rows, 0, 0);
   target.restore();
   return canvas;
 }

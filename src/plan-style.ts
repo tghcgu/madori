@@ -38,6 +38,34 @@ export function isDotStyle(style: PlanStyle): boolean {
   return style === "pixel" || style === "retro";
 }
 
+// 背景（地の色・方眼・紙の模様や縁の暗がり）。線画とは別に選べる。
+// auto は線画ごとの地（線画に合わせる）。ほかは、その名前の絵柄の地を使う
+export type PlanBackground =
+  | "auto" | "standard" | "brush" | "pencil" | "watercolor" | "parchment" | "copy" | "pop"
+  | "blueprint" | "chalk" | "cad" | "neon" | "horror" | "retro";
+
+export const PLAN_BACKGROUNDS: { value: PlanBackground; label: string; hint: string }[] = [
+  { value: "auto", label: "おまかせ", hint: "線画に合わせる" },
+  { value: "standard", label: "白", hint: "ふつうの方眼" },
+  { value: "brush", label: "和紙", hint: "生成りの和紙" },
+  { value: "pencil", label: "画用紙", hint: "白い画用紙" },
+  { value: "watercolor", label: "水彩紙", hint: "粗い紙の目" },
+  { value: "parchment", label: "羊皮紙", hint: "古びた紙と影" },
+  { value: "copy", label: "コピー用紙", hint: "トナーのむら" },
+  { value: "pop", label: "クリーム", hint: "明るい黄色" },
+  { value: "blueprint", label: "青焼き", hint: "図面の青" },
+  { value: "chalk", label: "黒板", hint: "緑の板" },
+  { value: "cad", label: "黒", hint: "CADの画面" },
+  { value: "neon", label: "夜", hint: "暗い紺色" },
+  { value: "horror", label: "暗がり", hint: "汚れとしみ" },
+  { value: "retro", label: "ゲームの緑", hint: "黄緑の画面" },
+];
+
+// 地の色・方眼・仕上げに使う絵柄（背景が「おまかせ」なら線画の絵柄）
+export function lookStyle(style: PlanStyle, background: PlanBackground): PlanStyle {
+  return background === "auto" ? style : background;
+}
+
 // ドットの大きさ（画面のpx）
 export const PIXEL_DOTS: { value: number; label: string }[] = [
   { value: 2, label: "細かい" },
@@ -342,20 +370,31 @@ export interface BrushStrokeOptions {
   dry?: number;
   // 線のどこでも、粉のように細かく途切れる割合（チョーク）。0 なら途切れない
   grain?: number;
+  // 筆圧の強弱（0〜1。ふつうは 0.4）。強いほど、入りで大きく押さえ、払いで細く抜け、途中の太さも大きく揺れる
+  swell?: number;
 }
 
-// 筆圧（太さの割合）。入りで少しふくらみ、止めでわずかに細って戻るか、払いで細く抜ける
-function pressureAt(s: number, total: number, width: number, unit: number, sweep: boolean): number {
+// 筆の線の部品（塗りつぶす多角形）と、それぞれの墨の濃さ（-1 は濃い、0 はふつう、1 は薄い）
+export interface BrushStrokeParts {
+  polygons: number[][];
+  tones: number[];
+}
+
+// 筆圧（太さの割合）。入りでふくらみ（起筆の押さえ）、止めで少し押さえて終わるか、払いで細く抜ける。
+// swell が強いほど、押さえが大きく、払いが細く抜ける（0.4 で控えめ）
+function pressureAt(s: number, total: number, width: number, unit: number, sweep: boolean, swell: number): number {
+  const strong = Math.max(0, swell - 0.4) / 0.6;
   const entry = Math.min(total * 0.3, width * 2.2 + 3 * unit);
   const exit = Math.min(total * 0.4, width * 3.5 + 6 * unit);
   let p = 1;
   if (s < entry) {
     const t = s / entry;
-    p = 0.6 + 0.4 * t + 0.3 * Math.sin(Math.PI * t) * (1 - 0.3 * t);
+    const start = 0.6 - 0.12 * strong;
+    p = start + (1 - start) * t + (0.3 + 0.35 * strong) * Math.sin(Math.PI * t) * (1 - 0.3 * t);
   }
   if (s > total - exit) {
     const u = (s - (total - exit)) / exit;
-    p *= sweep ? 1 - 0.72 * Math.pow(u, 1.6) : 1 - 0.14 * Math.sin(Math.PI * u);
+    p *= sweep ? 1 - (0.72 + 0.24 * strong) * Math.pow(u, 1.6 - 0.3 * strong) : 1 + (0.27 * strong - 0.14) * Math.sin(Math.PI * u);
   }
   return p;
 }
@@ -382,9 +421,15 @@ function blob(x: number, y: number, r: number, seed: number): number[] {
 
 // 筆で引いた1本の線を、塗りつぶす多角形の集まり（画素の座標）にする
 export function brushStroke(path: readonly number[], options: BrushStrokeOptions): number[][] {
+  return brushStrokeParts(path, options).polygons;
+}
+
+// 筆で引いた1本の線の部品と、部品ごとの墨の濃さ。太い線は毛の束ごとに分かれ、入りの方は濃く、かすれる終わりの方は薄い
+export function brushStrokeParts(path: readonly number[], options: BrushStrokeOptions): BrushStrokeParts {
   const { width, unit, seed } = options;
+  const single = (polygon: number[]): BrushStrokeParts => ({ polygons: [polygon], tones: [0] });
   let points = dedupe(path, 0.25 * unit);
-  if (points.length < 4) return points.length ? [blob(points[0], points[1], width * 0.55, seed)] : [];
+  if (points.length < 4) return points.length ? single(blob(points[0], points[1], width * 0.55, seed)) : { polygons: [], tones: [] };
   const random = seededRandom(seed);
   if (options.closed) {
     // 輪: はじめの所を通り過ぎるまで描いて、重ねて終える
@@ -412,7 +457,7 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
   const total = polylineLength(points);
   if (total < Math.max(width * 0.6, unit)) {
     const half = points.length >> 2 << 1;
-    return [blob(points[half], points[half + 1], width * 0.55, seed)];
+    return single(blob(points[half], points[half + 1], width * 0.55, seed));
   }
 
   // 等しい間隔に並べ直す
@@ -442,10 +487,12 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
   }
 
   // ゆらぎ（手で引いた線の小さな波と、長い線のわずかな反り）と、筆圧による太さ
-  const sweep = !options.simple && random() < 0.35;
-  const amplitude = (0.35 + (0.05 * width) / unit) * unit;
+  const swell = options.swell ?? 0.4;
+  const strong = Math.max(0, swell - 0.4) / 0.6;
+  const sweep = !options.simple && random() < 0.35 + 0.25 * strong;
+  const amplitude = (0.35 + (0.05 * width) / unit) * unit * (1 + 0.7 * strong);
   const wavelength = (55 + random() * 50) * unit;
-  const bow = options.closed ? 0 : Math.min(total * 0.006, 2.5 * unit) * (random() * 2 - 1);
+  const bow = options.closed ? 0 : Math.min(total * 0.006, (2.5 + 2 * strong) * unit) * (random() * 2 - 1);
   const pressure = 0.92 + random() * 0.16;
   const half = new Float64Array(count);
   for (let k = 0; k < count; k += 1) {
@@ -453,7 +500,9 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
     const offset = amplitude * wave(seed + 1, s / wavelength) + bow * Math.sin((Math.PI * s) / total);
     cx[k] += nx[k] * offset;
     cy[k] += ny[k] * offset;
-    const p = pressureAt(s, total, width, unit, sweep) * pressure * (1 + 0.1 * wave(seed + 2, s / (30 * unit)));
+    // 細かな揺れと、長い線で筆を押したり浮かせたりする大きな揺れ（筆圧が強いほど大きい）
+    const breathe = 1 + 0.1 * wave(seed + 2, s / (30 * unit)) + 0.22 * strong * wave(seed + 5, s / (70 * unit));
+    const p = pressureAt(s, total, width, unit, sweep, swell) * pressure * breathe;
     half[k] = Math.max(0.35 * unit, (width / 2) * p);
   }
 
@@ -482,12 +531,21 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
   };
 
   const grain = options.grain ?? 0;
-  if (options.simple || ((width < 3.2 * unit || total < width * 5) && !grain)) return [band(0, count - 1, 0, 1, seed + 3)];
+  // 筆圧が強い筆では、少し細い線も毛の束で描く（終わりの方がかすれる）
+  const bristleWidth = (3.2 - 0.8 * strong) * unit;
+  if (options.simple || ((width < bristleWidth || total < width * 5) && !grain)) return single(band(0, count - 1, 0, 1, seed + 3));
 
   // 太い線は、筆の毛の束ごとに描く。墨が少なくなる終わりの方で、外側の毛からかすれる（チョークは細い線も束にして、どこでも途切れさせる）
   const bristles = grain ? Math.min(5, Math.max(2, Math.round(width / (1.2 * unit)))) : Math.min(7, Math.max(3, Math.round(width / (1.5 * unit))));
   const dry = random() < (options.dry ?? 0.55);
   const polygons: number[][] = [];
+  const tones: number[] = [];
+  // 毛の束の一続きの部分。入りの方は墨が多くて濃く、終わりの方は薄い
+  const push = (from: number, to: number, lane: number, spread: number, roughSeed: number) => {
+    polygons.push(band(from, to, lane, spread, roughSeed));
+    const middle = (from + to) / 2 / (count - 1);
+    tones.push(middle < 0.35 ? -1 : middle > 0.7 ? 1 : 0);
+  };
   for (let j = 0; j < bristles; j += 1) {
     const lane = ((j + 0.5) / bristles - 0.5) * 0.82;
     const edge = Math.abs(lane) / 0.41;
@@ -505,13 +563,13 @@ export function brushStroke(path: readonly number[], options: BrushStrokeOptions
       const chance = (s > dryFrom && k < count - 1 ? (0.03 + 0.22 * progress * progress) * (0.6 + edge) : 0)
         + (grain && k < count - 1 ? grain * (0.6 + edge) : 0);
       if (chance > 0 && random() < chance) {
-        if (k - 1 > runStart) polygons.push(band(runStart, k - 1, lane, spread, seed + 11 + j));
+        if (k - 1 > runStart) push(runStart, k - 1, lane, spread, seed + 11 + j);
         gap = 1 + Math.floor(random() * 4);
       }
     }
-    if (gap === 0 && count - 1 > runStart) polygons.push(band(runStart, count - 1, lane, spread, seed + 11 + j));
+    if (gap === 0 && count - 1 > runStart) push(runStart, count - 1, lane, spread, seed + 11 + j);
   }
-  return polygons;
+  return { polygons, tones };
 }
 
 // 塗りの縁を、筆で塗ったように少し波打たせる（画素の座標の多角形）
@@ -1018,7 +1076,7 @@ function polygonsPath(polygons: readonly number[][]): Path2D {
 
 // 筆の線と塗りの形の控え。同じ形は場所が違っても作り直さない（スクロールや、ほかの物を動かしている間も軽く描ける）
 const BRUSH_CACHE_LIMIT = 8000;
-const brushStrokeCache = new Map<string, { path: Path2D; tone: number }>();
+const brushStrokeCache = new Map<string, (Path2D | null)[]>();
 const brushFillCache = new Map<string, Path2D>();
 
 function remember<T>(cache: Map<string, T>, key: string, value: T): T {
@@ -1049,6 +1107,9 @@ export interface BrushPalette {
   washEdge?: (value: string) => string;
   // 塗りに重ねる模様。tooth はクレヨンの紙の目（白い点や短い筋）、bloom は水彩の絵の具のむら
   texture?: "tooth" | "bloom";
+  // 筆圧の強弱（0〜1）と、線のにじみ（画面のpx。0 ならにじませない）
+  swell: number;
+  inkBleed: number;
   // 文字の書体の絵柄
   font: PlanStyle;
 }
@@ -1066,15 +1127,28 @@ function isColorful(r: number, g: number, b: number): boolean {
 
 const lightnessOf = (r: number, g: number, b: number) => 0.299 * r + 0.587 * g + 0.114 * b;
 
+// 淡彩の塗りの縁にたまる色（塗りより少し墨がかった色）
+function sumiWashEdge(value: string): string {
+  return cachedColor(`we${value}`, () => {
+    const parsed = parseCssColor(washColor(value));
+    if (!parsed || Math.min(parsed[0], parsed[1], parsed[2]) >= 238) return "rgba(0, 0, 0, 0)";
+    return cssColor(mix(parsed, SUMI, 0.3), parsed[3] * 0.22);
+  });
+}
+
 const SUMI_PALETTE: BrushPalette = {
   ink: inkColor,
   wash: washColor,
   text: (value) => inkColor(value),
   bleed: 1.4,
-  width: (w, unit) => (w < 3 * unit ? w * 1.45 + 0.6 * unit : w),
-  dry: 0.55,
+  width: (w, unit) => (w < 3 * unit ? w * 1.7 + 1 * unit : w * 1.05),
+  dry: 0.7,
   grain: 0,
   patternVeil: "rgba(244, 238, 224, 0.2)",
+  washEdge: sumiWashEdge,
+  texture: "bloom",
+  swell: 1,
+  inkBleed: 0.9,
   font: "brush",
 };
 
@@ -1116,6 +1190,8 @@ const PARCHMENT_PALETTE: BrushPalette = {
   dry: 0.25,
   grain: 0,
   patternVeil: "rgba(226, 204, 158, 0.55)",
+  swell: 0.45,
+  inkBleed: 0,
   font: "parchment",
 };
 
@@ -1151,6 +1227,8 @@ const CHALK_PALETTE: BrushPalette = {
   dry: 1,
   grain: 0.07,
   patternVeil: "rgba(46, 74, 59, 0.72)",
+  swell: 0.3,
+  inkBleed: 0,
   font: "chalk",
 };
 
@@ -1190,11 +1268,14 @@ const SUMIE_PALETTE: BrushPalette = {
   wash: sumieWash,
   text: (value) => sumieInk(value, 0),
   bleed: 1.6,
-  width: (w, unit) => (w < 3 * unit ? w * 1.5 + 0.6 * unit : w),
-  dry: 0.6,
+  width: (w, unit) => (w < 3 * unit ? w * 1.7 + 1 * unit : w * 1.05),
+  dry: 0.75,
   grain: 0,
   patternVeil: "rgba(243, 239, 230, 0.35)",
   patternGray: true,
+  texture: "bloom",
+  swell: 1,
+  inkBleed: 1.1,
   font: "sumie",
 };
 
@@ -1249,6 +1330,8 @@ const WATERCOLOR_PALETTE: BrushPalette = {
   patternVeil: "rgba(253, 251, 245, 0.35)",
   washEdge: watercolorEdge,
   texture: "bloom",
+  swell: 0.25,
+  inkBleed: 0,
   font: "watercolor",
 };
 
@@ -1292,6 +1375,8 @@ const CRAYON_PALETTE: BrushPalette = {
   grain: 0.1,
   patternVeil: "rgba(255, 253, 247, 0.3)",
   texture: "tooth",
+  swell: 0.35,
+  inkBleed: 0,
   font: "crayon",
 };
 
@@ -1370,6 +1455,8 @@ export interface BrushContextOptions {
   // 間取りの原点の画素の位置（クレヨンの紙の目を、間取りに貼り付ける）
   anchorX?: number;
   anchorY?: number;
+  // 下に敷いた地の色。床の模様に重ねる色を、この色にする（背景を線画と別に選んだとき）
+  paper?: string;
 }
 
 // 筆の描き先（筆・和風、墨絵、古地図、黒板、水彩、クレヨン）。線は筆の線に、塗りは縁の波打つ淡い色に、文字は絵柄の書体でにじませる
@@ -1378,6 +1465,9 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
   const palette = options.palette ?? SUMI_PALETTE;
   const recorder = createPathRecorder(base);
   const overrides = recordingOverrides(base, recorder);
+  // 床の模様に重ねる紙や板の色。地の色が分かれば、その色を同じ濃さで重ねる
+  const veilAlpha = parseCssColor(palette.patternVeil)?.[3] ?? 0.3;
+  const patternVeil = options.paper ? alphaColor(options.paper, veilAlpha) : palette.patternVeil;
   // 塗りに重ねる模様（クレヨンの紙の目・水彩のむら）。画素の座標で塗るときに使い、間取りと一緒に動く
   let texture: CanvasPattern | null | undefined;
   const texturePattern = () => {
@@ -1439,7 +1529,7 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
         let cached = brushStrokeCache.get(key);
         if (!cached) {
           const overshoot = (corner: boolean) => (corner ? width * 0.5 + (0.5 + hashUnit(seed, 9) * 1.5) * unit : capExtend);
-          const polygons = brushStroke(relative(piece.points), {
+          const parts = brushStrokeParts(relative(piece.points), {
             width,
             unit,
             seed,
@@ -1449,19 +1539,33 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
             simple: dashed,
             dry: palette.dry,
             grain: palette.grain,
+            swell: palette.swell,
           });
-          cached = remember(brushStrokeCache, key, { path: polygonsPath(polygons), tone: seed % 3 });
+          // 1本ごとの墨の濃さ（seed）に、部品ごとの濃さ（入りは濃く、かすれる所は薄く）を足して、3つの濃さに分ける
+          const groups: number[][][] = [[], [], []];
+          parts.polygons.forEach((polygon, i) => groups[Math.max(0, Math.min(2, (seed % 3) + parts.tones[i]))].push(polygon));
+          cached = remember(brushStrokeCache, key, groups.map((group) => (group.length ? polygonsPath(group) : null)));
         }
-        tones[cached.tone].addPath(cached.path, { e: piece.points[0], f: piece.points[1] });
+        cached.forEach((path, tone) => {
+          if (path) tones[tone].addPath(path, { e: piece.points[0], f: piece.points[1] });
+        });
         drawn = true;
       });
     });
     if (!drawn) return true;
     inPixels(base, recorder, () => {
+      base.save();
       tones.forEach((path, tone) => {
-        base.fillStyle = palette.ink(style, tone - 1);
+        const color = palette.ink(style, tone - 1);
+        base.fillStyle = color;
+        // 墨が和紙に少しにじんだように、線のまわりをぼかす
+        if (palette.inkBleed) {
+          base.shadowColor = alphaColor(color, 0.35);
+          base.shadowBlur = palette.inkBleed * unit;
+        }
         base.fill(path);
       });
+      base.restore();
     });
     return true;
   };
@@ -1537,7 +1641,7 @@ export function createBrushContext(base: CanvasRenderingContext2D, options: Brus
       base.fill(path, rule);
       base.restore();
     }
-    base.fillStyle = palette.patternVeil;
+    base.fillStyle = patternVeil;
     base.fill(path, rule);
     base.fillStyle = style;
   };
@@ -1882,6 +1986,8 @@ export interface StyleContextOptions {
   unit: number;
   anchorX: number;
   anchorY: number;
+  // 下に敷いた地の色（筆の仲間が、床の模様をなじませる色）
+  paper?: string;
 }
 
 // ---- マンガ（白黒とスクリーントーン） ----
@@ -2363,17 +2469,17 @@ function createSketchContext(base: CanvasRenderingContext2D, options: StyleConte
 export function styleContext(style: PlanStyle, raw: CanvasRenderingContext2D, options: StyleContextOptions): CanvasRenderingContext2D | null {
   switch (style) {
     case "brush":
-      return createBrushContext(raw, { unit: options.unit, palette: SUMI_PALETTE });
+      return createBrushContext(raw, { ...options, palette: SUMI_PALETTE });
     case "parchment":
-      return createBrushContext(raw, { unit: options.unit, palette: PARCHMENT_PALETTE });
+      return createBrushContext(raw, { ...options, palette: PARCHMENT_PALETTE });
     case "chalk":
-      return createBrushContext(raw, { unit: options.unit, palette: CHALK_PALETTE });
+      return createBrushContext(raw, { ...options, palette: CHALK_PALETTE });
     case "sumie":
-      return createBrushContext(raw, { unit: options.unit, palette: SUMIE_PALETTE });
+      return createBrushContext(raw, { ...options, palette: SUMIE_PALETTE });
     case "watercolor":
-      return createBrushContext(raw, { unit: options.unit, palette: WATERCOLOR_PALETTE, anchorX: options.anchorX, anchorY: options.anchorY });
+      return createBrushContext(raw, { ...options, palette: WATERCOLOR_PALETTE });
     case "crayon":
-      return createBrushContext(raw, { unit: options.unit, palette: CRAYON_PALETTE, anchorX: options.anchorX, anchorY: options.anchorY });
+      return createBrushContext(raw, { ...options, palette: CRAYON_PALETTE });
     case "pop":
       return createPopContext(raw, options);
     case "cad":

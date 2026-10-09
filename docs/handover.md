@@ -185,7 +185,8 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 ### 2Dの絵柄（`src/plan-style.ts`）の仕組み
 
 - **筆・和風**: 描き先（canvas）を包んで、道すじを記録する。
-  - 線は筆の形の多角形に作り直す（入り・揺れ・止めや払い・太い線のかすれ）。同じ形の線は結果を控えて使い回す。
+  - 線は筆の形の多角形に作り直す（入り・揺れ・止めや払い・太い線のかすれ。`brushStrokeParts`）。同じ形の線は結果を控えて使い回す。
+  - 筆圧の強弱は色合いの `swell`（筆・墨絵は 1、ほかは控えめ）。毛の束の部品ごとに墨の濃さを返し、入りは濃く、かすれる所は薄く塗る。`inkBleed` で線のまわりをにじませる（筆・墨絵だけ）。
   - 塗りは縁を少し波打たせ、和紙になじむ色にする。
   - 最後に和紙の模様を乗算で重ねる。
 - **墨絵・古地図・黒板・水彩・クレヨン**: 筆と同じ描き先（`createBrushContext`）で、色合い（`BrushPalette`）だけを替える。
@@ -201,8 +202,9 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 - **設計図・ネオン・CAD・ホラー・コピー**: 形はそのままで、線・塗り・文字の色だけを置き換える（`createRecolorContext`）。ネオンは線の下に太い半透明の線を引いて光らせる。コピーは床の模様を描いてから色を抜く（`grayPattern`）。
 - **入口と表**
   - `main.ts` の `drawWrappedPlan()` が、`styleContext()`（描き先を包む）で描いてから `styleFinish()`（紙の模様・縁の暗がり）を重ねる。ドットとレトロゲームだけは `drawPixelPlan()`（`isDotStyle()`）。
+  - 線画（`planStyle`）と背景（`planBackground`、一覧は `PLAN_BACKGROUNDS`）は別々に選ぶ。地の色・方眼・仕上げは `planLook()`（= `lookStyle()`。背景が `auto` なら線画の絵柄）で決め、`StylePass.look` に持たせる。筆の仲間には地の色を `paper` で渡し、床の模様に重ねる色にする。
   - 絵柄ごとの地の色と方眼の色は `STYLE_LOOKS`、書体は `FONT_FAMILIES`、紙の模様は `PAPER_RECIPES`。
-  - メニューの見本は、`drawStyleThumbnails()` が小さな部屋をそれぞれの絵柄で描く（初めてメニューを開いたとき）。
+  - メニューの見本は、`refreshStyleThumbnails()` が開いているタブの分だけ、`drawStyleThumbnails()` で小さな部屋を描く（線画の見本はいまの背景で、背景の見本はいまの線画で。同じ組み合わせは描き直さない）。
 - **絵柄を1つ足すとき**: `PlanStyle`・`PLAN_STYLES`（分類 `group` も）・`STYLE_LOOKS`・`FONT_FAMILIES` に足し、`styleContext()` と（紙の模様があれば）`styleFinish()` に分岐を足す。メニューの見本は自動で増える（見本の説明 `hint` は8文字まで）。`tests/plan-style.test.mjs` の絵柄の一覧と、`tests/editor.mjs` の `looks`（地の色と壁の見え方）にも足す。
 - **全部に共通**
   - 選択のつまみなど操作用の印は、`deferOverlay()` であとから絵柄なしで描く。

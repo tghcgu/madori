@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PAPER_COLOR, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_PALETTE, STYLE_LOOKS, brushStroke, dashPolyline, inkColor, isDotStyle, lineCells, parseCssColor, retroColors,
-  shapeSeed, sketchLines, splitStrokes, styledFont, toneLevel, washColor, wobblePolygon,
+  PAPER_COLOR, PLAN_BACKGROUNDS, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_PALETTE, STYLE_LOOKS, brushStroke, dashPolyline, inkColor, isDotStyle, lineCells, lookStyle,
+  parseCssColor, retroColors, shapeSeed, sketchLines, splitStrokes, styledFont, toneLevel, washColor, wobblePolygon,
 } from '../src/plan-style.ts';
 
 // 点から線分までの距離
@@ -47,6 +47,22 @@ test('there are 17 2D styles in five groups, each with a name, a hint and its ow
   assert.ok(['parchment', 'pencil', 'watercolor', 'sumie', 'crayon', 'pop', 'copy'].every(style => lightness(style) > 180), 'paper styles are light');
   const [gr, gg, gb] = parseCssColor(STYLE_LOOKS.retro.background);
   assert.ok(gg > gr && gg > gb, 'the retro game is green');
+});
+
+test('backgrounds are chosen apart from the line art, and "auto" follows the line art', () => {
+  const values = PLAN_BACKGROUNDS.map(background => background.value);
+  assert.equal(values[0], 'auto', 'the first choice follows the line art');
+  assert.equal(new Set(values).size, values.length, 'no background is listed twice');
+  for (const { value, label, hint } of PLAN_BACKGROUNDS) {
+    assert.ok(label && hint && [...hint].length <= 8, `${value} has a name and a short hint`);
+    if (value !== 'auto') assert.ok(STYLE_LOOKS[value], `${value} is the look of a style`);
+  }
+  // 地の色が違う絵柄は、どれも背景として選べる（同じ白い地の絵柄は「白」にまとめる）
+  const grounds = new Set(PLAN_BACKGROUNDS.filter(b => b.value !== 'auto').map(b => STYLE_LOOKS[b.value].background ?? '#ffffff'));
+  assert.equal(grounds.size, values.length - 1, 'each background has its own ground');
+  assert.equal(lookStyle('pencil', 'auto'), 'pencil');
+  assert.equal(lookStyle('pencil', 'chalk'), 'chalk');
+  assert.equal(lookStyle('standard', 'auto'), 'standard');
 });
 
 test('the retro game turns dots into four greens, mixing in-between shades in a pattern fixed to the plan', () => {

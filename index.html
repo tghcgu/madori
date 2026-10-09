@@ -311,14 +311,19 @@
             </div>
             <div class="pane-actions">
               <div class="style-options">
-                <button class="toggle-button" id="planStyleButton" type="button" title="2Dの絵柄を選ぶ（標準・ドット・筆と和風）" aria-haspopup="true" aria-expanded="false">
+                <button class="toggle-button" id="planStyleButton" type="button" title="2Dの線画と背景を選ぶ" aria-haspopup="true" aria-expanded="false">
                   <i data-lucide="palette"></i>
                   <span id="planStyleLabel">絵柄</span>
                 </button>
                 <div class="style-menu" id="planStyleMenu" hidden>
-                  <div class="style-choices" id="planStyleChoices" role="radiogroup" aria-label="2Dの絵柄"></div>
+                  <div class="style-tabs" role="tablist" aria-label="線画と背景">
+                    <button type="button" role="tab" class="is-active" aria-selected="true" data-style-tab="line">線画</button>
+                    <button type="button" role="tab" aria-selected="false" data-style-tab="background">背景</button>
+                  </div>
+                  <div class="style-choices" id="planStyleChoices" role="radiogroup" aria-label="2Dの線画"></div>
+                  <div class="style-choices" id="planBackgroundChoices" role="radiogroup" aria-label="2Dの背景" hidden></div>
                   <label id="pixelDotRow" hidden>ドットの大きさ<select id="pixelDotSelect"></select></label>
-                  <p class="style-note">画像の書き出しもこの絵柄になります。間取りの形と3Dは変わりません。</p>
+                  <p class="style-note">線画と背景は組み合わせられます。画像の書き出しもこの絵柄になります。間取りの形と3Dは変わりません。</p>
                 </div>
               </div>
               <div class="ghost-options">

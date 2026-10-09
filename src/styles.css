@@ -860,10 +860,51 @@ select:focus-visible {
   display: none;
 }
 
+/* 線画と背景のタブ */
+.style-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #eef2f6;
+}
+
+.style-tabs button {
+  flex: 1;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.style-tabs button.is-active {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(20, 30, 45, 0.14);
+}
+
 /* 絵柄の見本を、分類ごとに4列で並べる */
 .style-choices {
   display: grid;
   gap: 8px;
+}
+
+.style-choices[hidden] {
+  display: none;
+}
+
+/* 「線画・背景」が長くなっても、ボタンを押し広げない */
+#planStyleLabel {
+  display: inline-block;
+  max-width: 10em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 
 .style-group-label {

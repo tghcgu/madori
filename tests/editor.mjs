@@ -976,6 +976,7 @@ try {
   const planBeforeStyle = JSON.stringify((await saved()).floors);
   const chooseStyle = async style => {
     await page.locator('#planStyleButton').click();
+    await page.locator('[data-style-tab="line"]').click();
     await page.locator(`[data-plan-style="${style}"]`).click();
     await page.locator('#planStyleButton').click();
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -1047,7 +1048,7 @@ try {
   assert.equal(await page.locator('#planStyleLabel').textContent(), '筆・和風');
   // The menu shows every style as a small sample drawn in that style.
   await page.locator('#planStyleButton').click();
-  const samples = await page.locator('.style-thumb').evaluateAll(canvases => canvases.map(canvas => {
+  const samples = await page.locator('#planStyleChoices .style-thumb').evaluateAll(canvases => canvases.map(canvas => {
     const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
     const colors = new Set();
     let hash = 0;
@@ -1096,12 +1097,44 @@ try {
       assert.ok(Math.abs(lightness(styledImage.wall) - lightness(styledImage.corner)) > 60, `${style}: the image keeps the walls: ${styledImage.wall}`);
     }
   }
+  // The background is chosen apart from the line art: pencil lines on a chalkboard, kept after a reload.
+  const chooseBackground = async background => {
+    await page.locator('#planStyleButton').click();
+    await page.locator('[data-style-tab="background"]').click();
+    await page.locator(`[data-plan-background="${background}"]`).click();
+    await page.locator('#planStyleButton').click();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  };
+  await chooseStyle('pencil');
+  await chooseBackground('chalk');
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '鉛筆・黒板');
+  const board = shown(await pixelAt(-25, -25));
+  assert.ok(lightness(board) < 120 && board[1] > board[0], `the background is the chalkboard: ${board}`);
+  await page.locator('#planStyleButton').click();
+  await page.locator('[data-style-tab="background"]').click();
+  const backgroundSamples = await page.locator('#planBackgroundChoices .style-thumb').evaluateAll(canvases => canvases.map(canvas => {
+    const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const colors = new Set();
+    for (let i = 0; i < data.length; i += 16) colors.add(`${data[i] >> 4},${data[i + 1] >> 4},${data[i + 2] >> 4}`);
+    return colors.size;
+  }));
+  assert.equal(await page.locator('#planStyleChoices').isHidden(), true, 'one tab at a time');
+  await page.locator('#planStyleButton').click();
+  assert.equal(backgroundSamples.length, 14);
+  assert.ok(backgroundSamples.every(colors => colors >= 4), `every background sample is drawn: ${backgroundSamples}`);
+  await page.waitForTimeout(700);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '鉛筆・黒板', 'the background is kept after a reload');
+  await chooseBackground('auto');
+  assert.equal(await page.locator('#planStyleLabel').textContent(), '鉛筆');
+  assert.ok(lightness(shown(await pixelAt(-25, -25))) > 225, 'back to the pencil paper');
   assert.equal(JSON.stringify((await saved()).floors), planBeforeStyle, 'no style changes the plan');
   await chooseStyle('standard');
   assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
   const white = shown(await pixelAt(450, 330));
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
-  console.log('PASS: 2D styles: 17 styles in five groups with samples, dots, brush on washi and every other style, exported images, editing, undo and kept after a reload');
+  console.log('PASS: 2D styles: 17 line styles in five groups and 14 backgrounds with samples, combined freely, exported images, editing, undo and kept after a reload');
 
   // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
   const squeezed = () => page.evaluate(() => {

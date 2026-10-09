@@ -146,12 +146,15 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 2Dの絵柄
 
-2Dの上の「絵柄」から、間取り全体の描き方を選べます。メニューには、それぞれの絵柄で描いた小さな見本が、線画・手描き・和と古風・マンガとゲーム・夜と雰囲気の5つに分けて並びます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ絵柄はブラウザに保存され、画像の書き出しもその絵柄になります。
+2Dの上の「絵柄」から、間取り全体の描き方を選べます。メニューは「線画」と「背景」のタブに分かれていて、線の描き方と地（紙や板）を別々に選んで組み合わせられます（例: 鉛筆の線画を黒板に、ネオンの線画を羊皮紙に）。線画の見本はいまの背景で、背景の見本はいまの線画で描いて並べます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ線画と背景はブラウザに保存され、画像の書き出しもその絵柄になります。
+
+- 線画は17種類で、線画・手描き・和と古風・マンガとゲーム・夜と雰囲気の5つに分けて並べます（下の一覧）
+- 背景は14種類: おまかせ（線画に合わせる）・白・和紙・画用紙・水彩紙・羊皮紙・コピー用紙・クリーム・青焼き・黒板・黒・夜・暗がり・ゲームの緑。紙の模様や縁の暗がりも背景といっしょに変わります。筆の仲間の線画では、床の模様に重ねる色も背景の色になります
 
 - 標準: これまでどおりの、くっきりした線画
 - ドット: ドット絵のマップのように、間取り全体を四角いドットで描きます。細い線はドットのます目に沿った1ドットの線（曲線は階段状、四角の角はそのまま）、壁などの太い線と塗りはドットごとに1色にまとめます。文字はぼかさずにくっきり描きます。ドットの大きさは細かい（2px）・ふつう（3px）・粗い（5px）から選べ、スクロールしてもドットの形がちらつかないよう、間取りを1ドットずつ動かします
 - レトロゲーム: ドットの絵柄を、昔の携帯ゲーム機のような緑の4色だけで描きます。間の明るさは、決まった並びの点（ディザ）で隣の色と混ぜます。点の並びは間取りに貼り付いているので、スクロールしてもちらつきません。ドットの大きさも選べます
-- 筆・和風: 和紙の地に、墨の筆で描いたように描きます。線は入りでふくらみ、止めや払いで終わり、手で引いたようにわずかに揺れます。四角は辺ごとに筆を運び、角で少し突き抜けます。壁などの太い線は筆の毛ごとに描き、終わりの方でかすれます。塗りは縁が少し波打つ淡い色、白は和紙の色になり、最後に和紙の繊維とむらを重ねます。文字は楷書・教科書体（なければ明朝）で、墨が少しにじんだように描きます。同じ形の線はいつ描いても同じ形なので、動かしたりスクロールしたりしても線がちらつきません
+- 筆・和風: 和紙の地に、墨の筆で描いたように描きます。線は入りで押さえてふくらみ、止めで押さえて終わるか、払いで細く抜け、途中でも筆圧で太さが変わり、手で引いたように揺れて少し反ります。四角は辺ごとに筆を運び、角で少し突き抜けます。壁などの太い線（少し細い線も）は筆の毛ごとに描き、終わりの方でかすれます。1本の中でも、入りの方は墨が濃く、かすれる終わりの方は薄くなり、線のまわりは和紙に少しにじみます。塗りは縁が少し波打って少し濃くたまる淡い色で、むらがあり、白は和紙の色になり、最後に和紙の繊維とむらを重ねます。文字は楷書・教科書体（なければ明朝）で、墨が少しにじんだように描きます。同じ形の線はいつ描いても同じ形なので、動かしたりスクロールしたりしても線がちらつきません
 - 鉛筆: 白い画用紙に、鉛筆で下描きしたように描きます。線は2〜3回なぞったように少しずつずれ、端は少し行き過ぎたり手前で止まったりします。壁などの太い線は細い線を並べて塗り、部屋や家具の塗りは色鉛筆の薄い色に、濃い色ほど細かい斜線（とても濃い所は網目）を重ねます。文字は手書きらしい教科書体です
 - マンガ: 白黒で描きます。線は黒く、塗りは色の濃さに合わせたスクリーントーン（網点）に、とても濃い色はベタ（黒）になります。トーンは間取りに貼り付いているので、スクロールしても網点は動きません
 - 設計図: 青焼きの図面のように、青い地に白っぽい線で描きます。塗りは淡い白、文字は図面の文字らしいゴシックです
@@ -625,6 +628,8 @@ npm.cmd run dev
 
 - 雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました
 - 2Dの絵柄を17種類に。水彩・墨絵・クレヨン・ポップ・CAD・ホラー・コピー・レトロゲーム（緑の4色のドット）を追加し、絵柄のメニューを分類ごとに並べました
+- 2Dの「絵柄」を、線画と背景に分けて選べるように。たとえば鉛筆の線画を黒板に、ネオンの線画を羊皮紙に描けます（背景は「おまかせ」で線画に合わせます）
+- 筆・和風と墨絵の線を、より筆らしく。入りの押さえと払いの強弱、筆圧の揺れ、かすれ、1本の中の墨の濃淡、にじみと、塗りのむらを付けました
 - 家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺の雛形の墓地にも使っています）
 
 ### 2026年10月9日
@@ -910,12 +915,15 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 ### 2D styles
 
-"絵柄" above the 2D plan changes how the whole plan is drawn. The menu shows a small sample drawn in each style, in five groups: line art, hand-drawn, Japanese and old, manga and games, and night and mood. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. The choice is saved in the browser, and exported images use it too.
+"絵柄" above the 2D plan changes how the whole plan is drawn. The menu has two tabs, line art (線画) and background (背景), so the way lines are drawn and the ground (paper or board) can be combined freely (for example, pencil lines on a chalkboard or neon lines on parchment). Line-art samples are drawn on the current background, and background samples with the current line art. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. Both choices are saved in the browser, and exported images use them too.
+
+- 17 line-art styles, in five groups: line art, hand-drawn, Japanese and old, manga and games, and night and mood (listed below).
+- 14 backgrounds: auto (follows the line art), white, washi, drawing paper, watercolor paper, parchment, copy paper, cream, blueprint blue, chalkboard, black, night, gloom, and game green. Paper textures and darkened edges change with the background, and brush-family line art blends floor patterns into the background color.
 
 - 標準 (standard): the crisp line drawing as before.
 - ドット (dots): the whole plan drawn in square dots like a pixel-art map. Thin lines become one-dot lines on the dot grid (stair-stepped on curves, square at corners); thick lines such as walls and fills take one color per dot. Text stays sharp without blurring. Dots are 2, 3, or 5 px, and the plan moves one dot at a time so the dots do not flicker while scrolling.
 - レトロゲーム (retro game): the dot style in the four greens of an old handheld game console. In-between shades mix the neighboring greens in a fixed dot pattern (dithering) that is attached to the plan, so it does not flicker while scrolling. The dot size can be chosen too.
-- 筆・和風 (brush): drawn with a sumi ink brush on washi paper. Lines swell where the brush lands, end with a stop or a sweep, and wobble slightly like hand-drawn lines; rectangles are drawn one side at a time and overshoot a little at the corners. Thick lines such as walls are drawn bristle by bristle and run dry toward their ends. Fills are pale washes with slightly wavy edges, white becomes the paper color, and the paper's fibers and mottling lie over everything. Text uses a brush-style typeface (kaisho or kyokasho, otherwise mincho) with a slight ink bleed. The same line always gets the same brush shape, so nothing flickers while moving or scrolling.
+- 筆・和風 (brush): drawn with a sumi ink brush on washi paper. Lines are pressed where the brush lands, end with a firm stop or a tapering sweep, change width with the brush pressure along the way, and wobble and bow slightly like hand-drawn lines; rectangles are drawn one side at a time and overshoot a little at the corners. Thick lines such as walls (and slightly thinner ones too) are drawn bristle by bristle and run dry toward their ends. Within a stroke the ink is darker where the brush lands and lighter where it runs dry, and it bleeds slightly into the paper. Fills are pale washes with slightly wavy, slightly darker edges and some mottling, white becomes the paper color, and the paper's fibers and mottling lie over everything. Text uses a brush-style typeface (kaisho or kyokasho, otherwise mincho) with a slight ink bleed. The same line always gets the same brush shape, so nothing flickers while moving or scrolling.
 - 鉛筆 (pencil): a pencil sketch on white drawing paper. Each line is traced two or three times with small offsets, and ends overshoot or stop a little short. Thick lines such as walls are filled with fine strokes; fills are light colored pencil, with hatching that gets denser for darker colors (cross-hatching for the darkest). Text uses a handwriting-style kyokasho typeface.
 - マンガ (manga): black and white. Lines are black; fills become screentone dots that follow how dark the color is, and very dark colors become solid black. The tone is fixed to the plan, so the dots do not move while scrolling.
 - 設計図 (blueprint): pale lines on blueprint blue, with faint white fills and a drafting-style gothic typeface.
@@ -1386,6 +1394,8 @@ The same history as "更新履歴" in the app, newest first.
 
 - 50 templates: added a three-story house, a condominium, a share house, an old farmhouse, a samurai residence, a dormitory, a restaurant, a ramen shop, an izakaya, a hair salon, a bookstore, a nursery school, a gymnasium, a police box, a cinema, a temple, a campsite, a cruise ship, a sleeper train, a castle, an adventurers' inn, a wizard's tower, and a spaceship, with new groups for outdoors and vehicles and for fantasy and sci-fi
 - 17 2D styles: added watercolor, ink wash, crayon, pop, CAD, horror, photocopy, and retro game (four-green dots), and the style menu is now grouped by kind
+- The 2D style is now split into line art and background, chosen separately: for example, pencil lines on a chalkboard or neon lines on parchment (the background can also follow the line art)
+- Brush and ink-wash lines look more like a real brush: pressed starts and tapering sweeps, changing pressure, dry-brush streaks, darker and lighter ink within a stroke, a slight bleed, and mottled washes
 - New furniture: a grave, with the same base, upright stone, vases, and incense holder in 2D and 3D (used in the temple's graveyard)
 
 ### 2026-10-09
