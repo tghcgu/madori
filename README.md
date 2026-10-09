@@ -359,6 +359,9 @@ npm.cmd run dev
 | `npm test` | 家具・建具の形状、壁・床の幾何計算、保存データ保護の単体テスト（Node.js 22.6以上） |
 | `npm run test:e2e` | Playwrightによる編集・復旧・表示のブラウザ回帰テスト |
 | `npm run test:visual` | 全家具・建具の3D一覧を描画し、空白チェックと画像出力 |
+| `npm run compare -- [種類,…]` | 2Dの記号と3Dの真上図を並べた見比べ画像を`.codex/compare/`へ出力（種類を指定するとその種類だけ） |
+| `npm run changelog` | READMEの「更新履歴」「Changelog」を`src/changelog.ts`から書き直す |
+| `npm run check:deploy -- develop` | プレビュー（`develop`）が、いまのコミットのビルドになるまで待つ。`main`なら本番2か所 |
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
@@ -399,19 +402,25 @@ npm.cmd run preview
 
 ```text
 madori/
+├─ CLAUDE.md                 # 作業のきまり（Claude Code が毎回読む）
 ├─ .github/
 │  └─ workflows/
 │     └─ deploy.yml          # GitHub Pagesへの自動デプロイ
 ├─ docs/
+│  ├─ handover.md            # 引き継ぎ（新しいPCでの再開手順・外部サービス・コードの地図・経緯）
 │  └─ images/                # README用画像
 ├─ public/
 │  └─ google*.html           # Search Console確認ファイル
 ├─ scripts/
-│  └─ plan-edition.mjs       # ビルド後に間取り専用版（/plan/）を置く
+│  ├─ plan-edition.mjs       # ビルド後に間取り専用版（/plan/）を置く
+│  ├─ compare-2d-3d.mjs      # 2Dの記号と3Dの真上図の見比べ画像
+│  ├─ changelog-readme.mjs   # READMEの更新履歴を src/changelog.ts から書き直す
+│  └─ check-deploy.mjs       # 公開先がいまのコミットになったかを確かめる
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
 │  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆と和風）の描き方
+│  ├─ changelog.ts           # 更新履歴（アプリとREADMEで共通）
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
@@ -426,7 +435,7 @@ madori/
 ├─ package.json              # 依存関係とnpmスクリプト
 ├─ package-lock.json         # 依存関係の固定
 ├─ tsconfig.json             # TypeScript設定
-└─ vite.config.ts            # 配信先ごとのbase設定
+└─ vite.config.ts            # 配信先ごとのbase設定、ビルドしたコミットの番号
 ```
 
 ## データモデル
@@ -1035,6 +1044,9 @@ npm.cmd run dev
 | `npm test` | Unit tests for furniture, openings, wall/floor geometry, and storage recovery (Node.js 22.6+) |
 | `npm run test:e2e` | Playwright regression tests for editing, recovery, and rendering |
 | `npm run test:visual` | Render the full 3D object catalog, check for blank output, and capture images |
+| `npm run compare -- [kinds]` | Sheets comparing 2D symbols with 3D top views in `.codex/compare/` (optionally only the given kinds) |
+| `npm run changelog` | Rewrite the README update history from `src/changelog.ts` |
+| `npm run check:deploy -- develop` | Wait until the preview (`develop`) serves the current commit; `main` checks both production sites |
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
@@ -1075,15 +1087,27 @@ This is a static single-page application with no server API or database.
 
 ```text
 madori/
+├─ CLAUDE.md                 # Working rules (read by Claude Code at the start of every session)
 ├─ .github/
 │  └─ workflows/
 │     └─ deploy.yml          # GitHub Pages deployment
 ├─ docs/
+│  ├─ handover.md            # Handover notes in Japanese (setup on a new PC, services, code map, history)
 │  └─ images/                # README images
 ├─ public/
 │  └─ google*.html           # Search Console verification
+├─ scripts/
+│  ├─ plan-edition.mjs       # Places the plan-only edition (/plan/) after the build
+│  ├─ compare-2d-3d.mjs      # Side-by-side sheets of 2D symbols and 3D top views
+│  ├─ changelog-readme.mjs   # Rewrites the README changelog from src/changelog.ts
+│  └─ check-deploy.mjs       # Waits until a site serves the current commit
 ├─ src/
-│  ├─ main.ts                # 2D editor, state, 3D generation, persistence
+│  ├─ main.ts                # 2D editor, state, 3D generation, persistence, plan-only edition
+│  ├─ furniture-shapes.ts    # Shape data shared by 2D symbols and 3D models
+│  ├─ plan-style.ts          # 2D styles (dots, brush on washi)
+│  ├─ changelog.ts           # Update history shared by the app and the README
+│  ├─ colors.ts              # Color codes with transparency
+│  ├─ translucency.ts        # 3D materials for see-through colors
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
 │  ├─ furniture-models.ts    # Geometry and materials for 81 furniture types
 │  ├─ opening-models.ts      # Door, sliding door, and window geometry
@@ -1096,7 +1120,7 @@ madori/
 ├─ package.json              # Dependencies and npm scripts
 ├─ package-lock.json         # Locked dependency tree
 ├─ tsconfig.json             # TypeScript configuration
-└─ vite.config.ts            # Deployment-specific base path
+└─ vite.config.ts            # Deployment-specific base path and the build's commit ID
 ```
 
 ## Data Model

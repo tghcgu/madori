@@ -9,6 +9,9 @@
     "test:e2e": "node tests/editor.mjs",
     "test:visual": "node tests/furniture-visual.mjs",
     "build": "tsc && vite build && node scripts/plan-edition.mjs",
+    "compare": "node scripts/compare-2d-3d.mjs",
+    "changelog": "node --experimental-strip-types scripts/changelog-readme.mjs",
+    "check:deploy": "node scripts/check-deploy.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
