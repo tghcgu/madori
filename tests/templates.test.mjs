@@ -125,6 +125,29 @@ for (const key of keys.filter(hasTemplatePlan)) {
   });
 }
 
+// 上の階へ行く階段は、下の階と同じ場所にある（階をまたいで続く）
+for (const key of keys.filter(hasTemplatePlan)) {
+  test(`the stairs of the ${key} template line up from floor to floor`, () => {
+    const plan = build(key);
+    const stairs = plan.floors.map(floor => floor.entities
+      .filter(entity => entity.type === 'furniture' && ['stairs', 'stairsU', 'stairsSpiral'].includes(entity.kind))
+      .map(item => Object.values(visualBox(item)).map(Math.round).join()));
+    for (let i = 1; i < stairs.length; i += 1) {
+      assert.ok(stairs[i].some(box => stairs[i - 1].includes(box)), `floor ${i} has stairs over the stairs of floor ${i - 1}: ${stairs[i]} / ${stairs[i - 1]}`);
+    }
+    if (plan.floors.length > 1) {
+      const top = plan.floors[plan.floors.length - 1].id;
+      assert.ok(plan.roofs.some(roof => roof.floorId === top), 'the top floor has a roof');
+    }
+  });
+}
+
+test('templates of buildings that usually have more floors have them', () => {
+  const floors = key => build(key).floors.length;
+  for (const key of ['ryokan', 'hospital', 'library', 'police', 'museum', 'castle']) assert.ok(floors(key) >= 2, `${key} has an upper floor`);
+  for (const key of ['hotel', 'school']) assert.ok(floors(key) >= 3, `${key} has three floors`);
+});
+
 test('the mansion has a cellar under the ground floor, and opens on the ground floor', () => {
   const plan = build('westernMansion');
   assert.equal(plan.basements, 1);

@@ -260,8 +260,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 屋敷・宿 | 洋館 | 大広間・食堂・書斎のある二階建てと地下室（B1F） |
 | 屋敷・宿 | 武家屋敷 | 広間・書院・茶室と、池のある庭 |
 | 屋敷・宿 | 山荘・ペンション | 暖炉のラウンジと客室4つ。森とテラス |
-| 屋敷・宿 | 旅館 | 客室・宴会場・大浴場と中庭 |
-| 屋敷・宿 | ホテル | 廊下に客室が並ぶ1フロア |
+| 屋敷・宿 | 旅館 | 客室・宴会場・大浴場と中庭。2階にも客室と談話室 |
+| 屋敷・宿 | ホテル | 1階にロビーとレストラン、2・3階に客室（三階建て） |
 | 屋敷・宿 | 寮 | 個室が並ぶ二階建て。食堂・大浴場・洗濯室 |
 | お店 | カフェ | カウンターと客席、テラス席 |
 | お店 | レストラン | テーブル席・個室・厨房とワインセラー |
@@ -271,16 +271,16 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | お店 | 美容院 | 鏡の前の席・シャンプー台・待合 |
 | お店 | 本屋 | 本棚の列・平台・レジとカフェ |
 | お店 | コンビニ | 売り場・レジ・事務所と駐車場 |
-| 施設 | 病院 | 待合・診察室・病室・手術室 |
-| 施設 | 学校 | 教室3つ・職員室・保健室・昇降口 |
+| 施設 | 病院 | 1階に待合・診察室・手術室、2階に病棟 |
+| 施設 | 学校 | 3階建て。教室・職員室・保健室・理科室・音楽室・図書室・美術室 |
 | 施設 | 保育園 | 保育室・お昼寝の部屋・給食室と園庭 |
-| 施設 | 図書館 | 本棚と閲覧席、書庫 |
+| 施設 | 図書館 | 本棚と閲覧席・書庫、2階に学習室と郷土資料室 |
 | 施設 | 体育館 | 広いアリーナ・ステージ・更衣室・器具庫 |
 | 施設 | オフィス | 執務室・会議室・社長室 |
 | 施設 | 研究所 | 実験室・資料室・サーバー室 |
-| 施設 | 警察署 | 刑事課・取調室・留置場 |
+| 施設 | 警察署 | 刑事課・取調室・留置場、2階に道場と会議室 |
 | 施設 | 交番 | 小さな交番。机と奥の休憩室 |
-| 施設 | 美術館 | 展示室3つとショップ |
+| 施設 | 美術館 | 展示室5つ・ショップ・2階にカフェと収蔵庫 |
 | 施設 | 映画館 | スクリーンと客席・ロビー・映写室 |
 | 施設 | 教会 | 長椅子の並ぶ礼拝堂 |
 | 施設 | 神社 | 本殿・拝殿・社務所と参道 |
@@ -291,7 +291,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 屋外・乗り物 | キャンプ場 | テント・タープ・焚き火・バンガローと川 |
 | 屋外・乗り物 | 客船 | 客室・レストラン・プールデッキ・操舵室 |
 | 屋外・乗り物 | 寝台列車 | 個室の寝台車と食堂車の2両 |
-| ファンタジー・SF | 城 | 玉座の間・大広間・塔・兵舎と城門 |
+| ファンタジー・SF | 城 | 玉座の間・大広間・塔・兵舎と城門、2階に王の寝室と礼拝室 |
 | ファンタジー・SF | 冒険者の宿 | 酒場・暖炉・依頼の掲示板と2階の客室 |
 | ファンタジー・SF | 魔法使いの塔 | らせん階段でつながる書庫・研究室・寝室 |
 | ファンタジー・SF | 地下牢 | 牢屋・大広間・武器庫・宝物庫のダンジョン |
@@ -628,6 +628,7 @@ npm.cmd run dev
 
 - 雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました
 - 2Dの絵柄を17種類に。水彩・墨絵・クレヨン・ポップ・CAD・ホラー・コピー・レトロゲーム（緑の4色のドット）を追加し、絵柄のメニューを分類ごとに並べました
+- 雛形の旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります
 - 2Dの「絵柄」を、線画と背景に分けて選べるように。たとえば鉛筆の線画を黒板に、ネオンの線画を羊皮紙に描けます（背景は「おまかせ」で線画に合わせます）
 - 筆・和風と墨絵の線を、より筆らしく。入りの押さえと払いの強弱、筆圧の揺れ、かすれ、1本の中の墨の濃淡、にじみと、塗りのむらを付けました
 - 家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺の雛形の墓地にも使っています）
@@ -1028,8 +1029,8 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | Mansions and inns | Western mansion | Two stories with a great hall, dining room, and study, plus a cellar (B1F) |
 | Mansions and inns | Samurai residence | A hall, a study, a tea room, and a garden with a pond |
 | Mansions and inns | Lodge | A fireplace lounge and four guest rooms, with a terrace in the woods |
-| Mansions and inns | Ryokan | Guest rooms, a banquet hall, a large bath, and a courtyard |
-| Mansions and inns | Hotel | One floor of guest rooms along a corridor |
+| Mansions and inns | Ryokan | Guest rooms, a banquet hall, a large bath, and a courtyard, with more guest rooms and a lounge upstairs |
+| Mansions and inns | Hotel | A lobby and a restaurant on the first floor, and guest rooms on the second and third |
 | Mansions and inns | Dormitory | Two floors of private rooms with a dining hall, a large bath, and a laundry |
 | Shops | Cafe | A counter, tables, and terrace seats |
 | Shops | Restaurant | Tables, a private room, a kitchen, and a wine cellar |
@@ -1039,16 +1040,16 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | Shops | Hair salon | Styling chairs at mirrors, shampoo stations, and a waiting area |
 | Shops | Bookstore | Rows of shelves, display tables, a register, and a cafe |
 | Shops | Convenience store | Sales floor, register, office, and parking |
-| Facilities | Hospital | Waiting room, consulting rooms, wards, and an operating room |
-| Facilities | School | Three classrooms, a staff room, a nurse's office, and the entrance |
+| Facilities | Hospital | Waiting room, consulting rooms, and an operating room, with wards upstairs |
+| Facilities | School | Three floors: classrooms, a staff room, a nurse's office, a science room, a music room, a library, and an art room |
 | Facilities | Nursery school | A playroom, a nap room, a kitchen, and a playground |
-| Facilities | Library | Bookshelves, reading tables, and stacks |
+| Facilities | Library | Bookshelves, reading tables, and stacks, with a study room and a local history room upstairs |
 | Facilities | Gymnasium | A large arena, a stage, locker rooms, and an equipment room |
 | Facilities | Office | Open office, meeting room, and president's office |
 | Facilities | Laboratory | Labs, archive, and server room |
-| Facilities | Police station | Detectives' room, interrogation rooms, and cells |
+| Facilities | Police station | Detectives' room, interrogation rooms, and cells, with a dojo and a meeting room upstairs |
 | Facilities | Police box | A small koban with a desk and a back room |
-| Facilities | Art museum | Three galleries and a shop |
+| Facilities | Art museum | Five galleries, a shop, and upstairs a cafe and a storeroom |
 | Facilities | Cinema | A screen and seats, a lobby, and a projection room |
 | Facilities | Church | A chapel lined with pews |
 | Facilities | Shrine | Main hall, worship hall, shrine office, and approach |
@@ -1059,7 +1060,7 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 | Outdoors and vehicles | Campsite | Tents, a tarp, a campfire, a bungalow, and a river |
 | Outdoors and vehicles | Cruise ship | Cabins, a restaurant, a pool deck, and the bridge |
 | Outdoors and vehicles | Sleeper train | A sleeping car with private rooms, and a dining car |
-| Fantasy and sci-fi | Castle | Throne room, great hall, towers, barracks, and gatehouse |
+| Fantasy and sci-fi | Castle | Throne room, great hall, towers, barracks, and gatehouse, with the king's bedchamber and a chapel upstairs |
 | Fantasy and sci-fi | Adventurers' inn | A tavern with a fireplace and a quest board, and guest rooms upstairs |
 | Fantasy and sci-fi | Wizard's tower | A library, a laboratory, and a bedroom joined by a spiral staircase |
 | Fantasy and sci-fi | Dungeon | Cells, a great hall, an armory, and a treasure room |
@@ -1394,6 +1395,7 @@ The same history as "更新履歴" in the app, newest first.
 
 - 50 templates: added a three-story house, a condominium, a share house, an old farmhouse, a samurai residence, a dormitory, a restaurant, a ramen shop, an izakaya, a hair salon, a bookstore, a nursery school, a gymnasium, a police box, a cinema, a temple, a campsite, a cruise ship, a sleeper train, a castle, an adventurers' inn, a wizard's tower, and a spaceship, with new groups for outdoors and vehicles and for fantasy and sci-fi
 - 17 2D styles: added watercolor, ink wash, crayon, pop, CAD, horror, photocopy, and retro game (four-green dots), and the style menu is now grouped by kind
+- The ryokan, hotel, hospital, school, library, police station, art museum, and castle templates now have upper floors (the hotel and the school have three), with stairs in the same place on each floor
 - The 2D style is now split into line art and background, chosen separately: for example, pencil lines on a chalkboard or neon lines on parchment (the background can also follow the line art)
 - Brush and ink-wash lines look more like a real brush: pressed starts and tapering sweeps, changing pressure, dry-brush streaks, darker and lighter ink within a stroke, a slight bleed, and mottled washes
 - New furniture: a grave, with the same base, upright stone, vases, and incense holder in 2D and 3D (used in the temple's graveyard)
