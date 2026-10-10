@@ -11,6 +11,10 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-10",
     items: [
       {
+        ja: "3Dで拡大し続けると注視点の手前で止まっていた動きを修正。ホイールやピンチで窓・壁を越えて室内まで進めるようになり、逆方向で後退できます。室内の視点も再読み込み後に保ちます",
+        en: "Fixed 3D zoom stopping short of its orbit target. Keep scrolling or pinching to move through windows and walls into rooms, and reverse to move back. Interior camera views also survive reloads",
+      },
+      {
         ja: "Ctrl＋ドラッグの範囲選択、Rで選択全体を90度回転、矢印キーで移動、Ctrl＋Dで複製、Ctrl＋C／Vでコピー・貼り付け、Ctrl＋Aで階全体を選択に対応。取り消し後も残っている物の複数選択を保ちます",
         en: "Added Ctrl-drag box selection, R to rotate a group by 90 degrees, arrow-key movement, Ctrl+D duplication, Ctrl+C/V copy and paste, and Ctrl+A selection of the current floor. Undo keeps surviving items selected",
       },

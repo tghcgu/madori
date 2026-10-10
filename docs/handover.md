@@ -164,6 +164,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 - **3D**
   - `rebuildThree()` が状態から3Dの場面を作る（床、開口を抜いた壁、建具、家具、屋根）
   - カメラは `OrbitControls`。影と光は「3D」の見出しのあたり
+  - 近接時のズーム（2026-10-10）: `change` イベントで注視点が1m未満に近づいたら、カメラの位置・向きを保って視線の1m先へ送る。窓・壁の向こうまで前進でき、ホイールとピンチに共通。`minDistance` を下げるだけでは注視点を越えられない。`tests/camera-editor.mjs` が室内への進入・後退・視点保存を検証する（`node tests/camera-editor.mjs <URL>` で公開版でも確認できる）
 - **書き出し**
   - JSON
   - 画像は `exportPlanImages()` / `renderPlanImage()`（2D）と `exportThreeImage()`（3D）

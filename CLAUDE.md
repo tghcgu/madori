@@ -35,7 +35,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 | `npx playwright install chromium` | E2E・見比べ用のブラウザ。Windows は入っている Edge を使うので不要（ほかのOSだけ。`E2E_BROWSER_CHANNEL` で変えられる） |
 | `npm run dev` | 開発用サーバー（http://127.0.0.1:5173/） |
 | `npm test` | 単体テスト（Node の `--experimental-strip-types` で `src/*.ts` をそのまま読む） |
-| `npm run test:e2e` | 画面を動かすテスト（約5分。いまは `PASS:` の行が34本） |
+| `npm run test:e2e` | 画面を動かすテスト（約5分。いまは `PASS:` の行が36本） |
 | `npm run test:visual` | 3Dの家具の一覧画像（`.codex/furniture-quality/`） |
 | `npm run build` | 型チェック → ビルド → `/plan/` を作る |
 | `npm run compare -- [種類,…]` | 2Dの記号と3Dの真上図の見比べ画像（`.codex/compare/`） |

@@ -3,6 +3,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { verifySelection } from './selection-editor.mjs';
+import { verifyInteriorZoom } from './camera-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -414,7 +415,11 @@ try {
   await zoomWith('#planCanvas', 200, 90);
   assert.ok(await page.evaluate(() => window.__editorTest.planZoom()) < 0.01, '2D zooms far out');
   await zoomWith('#threeCanvas', -200, 40);
-  assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) < 0.5, '3D zooms far in');
+  assert.ok(await page.evaluate(() => window.__editorTest.cameraDistance()) < 1.01, '3D keeps a nearby focus point while zooming in');
+  const nearCamera = await page.evaluate(() => window.__editorTest.cameraPosition());
+  await zoomWith('#threeCanvas', -200, 10);
+  const advancedCamera = await page.evaluate(() => window.__editorTest.cameraPosition());
+  assert.ok(Math.hypot(...advancedCamera.map((value, i) => value - nearCamera[i])) > 1, '3D continues moving past the old focus point');
   // Right-drag still moves the camera a usable distance after zooming right up to a surface.
   const threeBox = await page.locator('#threeCanvas').boundingBox();
   const cameraBefore = await page.evaluate(() => window.__editorTest.cameraPosition());
@@ -1471,6 +1476,13 @@ try {
   assert.ok((await saved()).floors.flatMap(floor => floor.entities).some(entity => entity.name === '宝物庫'), 'loading a template can be undone');
   await page.context().close();
   console.log('PASS: templates: 50 in six groups, mansion with a cellar, castle, hospital, dungeon and cafe in 2D and 3D, and undo');
+
+  page = await open();
+  await verifyInteriorZoom(page, output);
+  await page.context().close();
+  page = await open(undefined, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await verifyInteriorZoom(page, output, true);
+  await page.context().close();
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);

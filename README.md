@@ -114,7 +114,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - `同時`、`2Dのみ`、`3Dのみ`の表示モード
 - `同時`表示では、2Dと3Dの境目をドラッグして広さを自由に変更（境目を選んで矢印キーでも5%ずつ動かせます。ダブルクリックで元の半分ずつに戻ります）。境目の位置はブラウザに記憶され、タブレットやスマホの上下表示でも使えます
 - マウスドラッグによる視点回転・移動
-- ホイールによるズーム（マウスのある場所に向かって、1cmの距離から100kmまでほぼ無限に寄ったり引いたりできます）
+- ホイールによるズーム（マウスのある場所に向かって進み、拡大し続けると窓や壁を越えて室内まで入れます。近づいても前進が止まらず、逆回転で後退できます。タッチ操作ではピンチに対応）
 - 右ドラッグの移動は、つかんだ物がマウスについてくる速さで動きます。すぐ目の前まで寄ったあとでも、止まったようにならず動かせます
 - 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
@@ -326,7 +326,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 2D | 四隅・端点をドラッグ | 部屋、家具、屋根、線要素のサイズ変更 |
 | 3D | 左ドラッグ | 「選択」で家具を移動。それ以外の場所では視点を回転 |
 | 3D | 右ドラッグ | 視点を平行移動 |
-| 3D | ホイール | 拡大・縮小 |
+| 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
 | 3D | クリック | 物体を選択。家具ツールでは編集中の階へ配置 |
 
 ### キーボードショートカット
@@ -642,6 +642,7 @@ npm.cmd run dev
 
 ### 2026年10月10日
 
+- 3Dで拡大し続けると注視点の手前で止まっていた動きを修正。ホイールやピンチで窓・壁を越えて室内まで進めるようになり、逆方向で後退できます。室内の視点も再読み込み後に保ちます
 - Ctrl＋ドラッグの範囲選択、Rで選択全体を90度回転、矢印キーで移動、Ctrl＋Dで複製、Ctrl＋C／Vでコピー・貼り付け、Ctrl＋Aで階全体を選択に対応。取り消し後も残っている物の複数選択を保ちます
 - Ctrl＋クリック（MacはCmd）で複数の物を選択・解除し、位置関係を保ったまま一括移動できるように。2Dで部屋・壁・家具・文字などをまとめて選び、3Dでは選択した家具をつかんでまとめて移動できます。固定した物は動かさず、一括固定・削除、1回の取り消しにも対応
 - 描くツールでも物をクリックすると選択でき、家具・文字・消去などのツールでは長押しで選択できます。Escで描画や移動をキャンセルして選択ツールへ戻り、家具の配置と移動はまとめて1回で取り消せます
@@ -907,7 +908,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Real-time conversion from the 2D plan using Three.js
 - Split, 2D-only, and 3D-only view modes
 - In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
-- Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer, almost without limit (from 1 cm to 100 km away). Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
+- Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer; keep scrolling to pass through windows and walls into rooms, and reverse to move back. Forward movement no longer stops near the orbit target. Pinch gestures work too. Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
 - 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
 - Optional shadows
@@ -1115,7 +1116,7 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 2D | Drag handles | Resize rooms, furniture, roofs, and line endpoints |
 | 3D | Left-drag | Move unlocked furniture with Select; orbit from other parts of the scene |
 | 3D | Right-drag | Pan the camera |
-| 3D | Mouse wheel | Zoom |
+| 3D | Mouse wheel | Zoom; keep zooming in to enter rooms, reverse to move back |
 | 3D | Click | Select an object, or place furniture on the active floor with a furniture tool |
 
 ### Keyboard
@@ -1429,6 +1430,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-10
 
+- Fixed 3D zoom stopping short of its orbit target. Keep scrolling or pinching to move through windows and walls into rooms, and reverse to move back. Interior camera views also survive reloads
 - Added Ctrl-drag box selection, R to rotate a group by 90 degrees, arrow-key movement, Ctrl+D duplication, Ctrl+C/V copy and paste, and Ctrl+A selection of the current floor. Undo keeps surviving items selected
 - Ctrl-click (Cmd on Mac) to add or remove items from a selection and move them together without changing their spacing. Select rooms, walls, furniture, text and more in 2D, or drag a selected piece of furniture in 3D to move the selection. Locked items stay put; batch locking, deletion and single-step undo are supported
 - Click an item to select it while using drawing tools, or hold to select while placing furniture, text or erasing. Escape cancels drawing or movement and returns to selection; placing and dragging a new piece of furniture is now one undo step

@@ -254,6 +254,7 @@ const MIN_PLAN_ZOOM = 0.0001;
 const MAX_PLAN_ZOOM = 10000;
 const MIN_CAMERA_DISTANCE = 0.01;
 const MAX_CAMERA_DISTANCE = 100000;
+const MIN_CAMERA_FOCUS_DISTANCE = 1;
 // 2Dの方眼の線の間隔が、画面上でこれより狭くならないように間隔を5倍ずつ変える
 const MIN_GRID_PIXELS = 10;
 // これより拡大したら、部屋の中にも方眼を薄く重ねる。白い部屋の中まで寄ったときも、動かしているのが分かるように
@@ -635,6 +636,10 @@ controls.zoomToCursor = true;
 controls.zoomSpeed = 2;
 controls.maxPolarAngle = Math.PI * 0.48;
 controls.addEventListener("change", () => {
+  // 注視点の手前で前進が止まらないよう、近づいたら視線の先へ送る。カメラの位置と向きは変えない。
+  if (camera.position.distanceToSquared(controls.target) < MIN_CAMERA_FOCUS_DISTANCE ** 2) {
+    camera.getWorldDirection(controls.target).multiplyScalar(MIN_CAMERA_FOCUS_DISTANCE).add(camera.position);
+  }
   threeNeedsRender = true;
   scheduleViewStateSave();
 });
