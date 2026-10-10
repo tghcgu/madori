@@ -23,9 +23,11 @@ import {
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
   PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
   type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
+  JAPANESE_KINDS, JAPANESE_MATERIALS, isJapaneseKind, japaneseParts,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
+import { translateSelection } from "./selection";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
@@ -40,7 +42,7 @@ type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
 type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
-type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "none";
+type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "marquee" | "none";
 type ViewMode = "split" | "plan" | "three";
 
 interface Point {
@@ -181,6 +183,12 @@ interface PointerState {
   path?: Point[];
   // 動かしている手首・足首（0 左手、1 右手、2 左足、3 右足）
   limb?: number;
+  // 押した所にあった物（描くツールでのクリック・どのツールでも長押しで選ぶ物）
+  pressedId?: string;
+  // 置くツールで、押した所に物があったとき: 置く・消すのは、指を離すか動かすまで待つ（長押しで選べるように）
+  pending?: "furniture" | "text" | "erase";
+  origins?: Entity[];
+  createdId?: string;
 }
 
 interface ThreeDrag {
@@ -191,6 +199,7 @@ interface ThreeDrag {
   planeY: number;
   created: boolean;
   moved: boolean;
+  origins?: Entity[];
 }
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -370,6 +379,7 @@ const OUTDOOR_WATER = "#dcebf2";
 
 // 家具は置く部屋ではなく種類で分ける。創作では部屋の種類が決まっていないことが多いため
 const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
+  { label: "和風の家具・設備", kinds: [...JAPANESE_KINDS] },
   { label: "椅子・ソファ", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "bench"] },
   { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"] },
   { label: "ベッド", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon", "crib"] },
@@ -391,6 +401,10 @@ const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
 
 // 検索で表記ゆれ（ひらがな・別名）を拾うための語。表示名と分類名は自動で検索対象になる
 const SEARCH_KEYWORDS: Record<string, string> = {
+  tatami: "たたみ 和室", zabuton: "ざぶとん 座蒲団 和室", chabudai: "座卓 ちゃぶだい 和室",
+  byobu: "びょうぶ 間仕切り", shojiScreen: "しょうじ ついたて 間仕切り", andon: "あんどん 照明 灯り",
+  stepTansu: "かいだんだんす 階段たんす 箪笥 収納", irori: "いろり 暖房 炉", hibachi: "ひばち 暖房",
+  engawa: "えんだい 縁側 えんがわ ベンチ", hinokiBath: "ひのきぶろ 檜 ヒノキ 浴槽 風呂", tsukubai: "蹲 つくばい 手水鉢 ちょうずばち 庭 和風",
   evidenceMarker: "ばんごう 番号 数字 すうじ 印 しるし マーカー 証拠 しょうこ 札 ふだ 事件 じけん 調査 ちょうさ 探索 TRPG",
   footprints: "あしあと 足 あし 靴 くつ 素足 はだし 跡 あと 痕跡 こんせき 事件 じけん TRPG",
   fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG 模型 もけい マネキン ポーズ",
@@ -574,6 +588,18 @@ let drag: PointerState = {
   originEntity: null,
   resizeCorner: null,
 };
+// ほかのツールのまま物を選ぶ。描くツールではクリックで、置くツールでは長押し（動かさずに押し続ける）で選ぶ
+const LONG_PRESS_MS = 450;
+// 押してから離すまでにこれより動かなければクリック（画面のpx）
+const CLICK_SLOP = 5;
+let longPressTimer = 0;
+let longPressPoint: Point | null = null;
+let pressRing: HTMLDivElement | null = null;
+let toolHint: HTMLDivElement | null = null;
+const multiSelection = new Set<string>();
+let selectionFloor = -1;
+// Ctrl+C でコピーした物。同じ階へ貼るたびに、少しずつずらして置く
+let clipboard: { floorId: string; entities: Entity[]; pastes: number } | null = null;
 let threePointerDown: Point | null = null;
 let threeDrag: ThreeDrag | null = null;
 let threeSceneCenter: Point = { x: 0, y: 0 };
@@ -800,7 +826,7 @@ function normalizeEntity(value: unknown): Entity {
         filled: entity.filled === true ? true : undefined,
       } : {}),
       height: FURNITURE_DEFS[entity.kind].height !== undefined && finite(entity.height)
-        ? clamp(Math.round(entity.height!), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
+        ? clamp(Math.round(entity.height!), isJapaneseKind(entity.kind) ? 1 : MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
         : undefined,
     };
   }
@@ -924,6 +950,7 @@ function setupUi(): void {
 
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => {
+      cancelPlanDrag();
       activeTool = button.dataset.tool as Tool;
       pathRedrawId = null;
       // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
@@ -1090,7 +1117,9 @@ function setupUi(): void {
   planCanvas.addEventListener("pointerdown", handlePointerDown);
   planCanvas.addEventListener("pointermove", handlePointerMove);
   planCanvas.addEventListener("pointerup", handlePointerUp);
-  planCanvas.addEventListener("pointercancel", handlePointerUp);
+  planCanvas.addEventListener("pointercancel", cancelPlanDrag);
+  planCanvas.addEventListener("lostpointercapture", cancelPlanDrag);
+  window.addEventListener("blur", cancelPlanDrag);
   planCanvas.addEventListener("wheel", handleWheel, { passive: false });
   planCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
   planCanvas.addEventListener("dblclick", handleDoubleClick);
@@ -1579,6 +1608,7 @@ function syncPlanCursor(): void {
     return;
   }
   planCanvas.style.cursor = activeTool === "select" ? "default" : activeTool === "erase" ? "not-allowed" : activeTool === "text" ? "text" : "crosshair";
+  syncToolHint();
 }
 
 function updateDimensionToggle(): void {
@@ -1952,7 +1982,171 @@ function saveViewState(): void {
   }
 }
 
+function selectedEntities(): Entity[] {
+  const primary = state.selectedId ? findEntity(state.selectedId) : undefined;
+  if (!primary || !multiSelection.has(primary.id) || selectionFloor !== state.activeFloor) {
+    multiSelection.clear();
+    selectionFloor = state.activeFloor;
+    if (primary) multiSelection.add(primary.id);
+  }
+  const visibleIds = new Set([...activeEntities(), ...(roofsOn2d() ? state.roofs : [])].map((item) => item.id));
+  return [...multiSelection].filter((id) => visibleIds.has(id)).map(findEntity).filter((item): item is Entity => Boolean(item));
+}
+
+function selectOnly(id: string | null): void {
+  multiSelection.clear();
+  state.selectedId = id;
+  selectionFloor = state.activeFloor;
+  if (id) multiSelection.add(id);
+}
+
+function toggleSelection(id: string): void {
+  selectedEntities();
+  if (multiSelection.has(id)) multiSelection.delete(id);
+  else multiSelection.add(id);
+  state.selectedId = [...multiSelection].slice(-1)[0] ?? null;
+  activeTool = "select";
+  pathRedrawId = null;
+  setActiveButton("[data-tool]", activeTool);
+  syncPlanCursor();
+  redrawAll();
+}
+
+// 物をまとめて選ぶ（最後の物を、寸法の欄などで扱う物にする）
+function selectMany(ids: string[]): void {
+  const unique = [...new Set(ids)].filter((id) => findEntity(id));
+  multiSelection.clear();
+  unique.forEach((id) => multiSelection.add(id));
+  state.selectedId = unique[unique.length - 1] ?? null;
+  selectionFloor = state.activeFloor;
+}
+
+// 上から見た物の外形の四角（回した家具は、回したあとの形）
+function entityBox(entity: Entity): Bounds {
+  if (entity.type === "furniture") {
+    const a = degreesToRadians(entity.rotation ?? 0);
+    const cos = Math.abs(Math.cos(a)), sin = Math.abs(Math.sin(a));
+    const w = entity.w * cos + entity.h * sin, h = entity.w * sin + entity.h * cos;
+    return { x: entity.x + entity.w / 2 - w / 2, y: entity.y + entity.h / 2 - h / 2, w, h };
+  }
+  if (entity.type === "room" || entity.type === "roof") return { x: entity.x, y: entity.y, w: entity.w, h: entity.h };
+  if (entity.type === "text") {
+    const { w, h } = measureTextLabel(entity);
+    return { x: entity.x - w / 2, y: entity.y - h / 2, w, h };
+  }
+  if (entity.type === "shape") return { x: entity.x - entity.r, y: entity.y - entity.r, w: entity.r * 2, h: entity.r * 2 };
+  return { x: Math.min(entity.x1, entity.x2), y: Math.min(entity.y1, entity.y2), w: Math.abs(entity.x2 - entity.x1), h: Math.abs(entity.y2 - entity.y1) };
+}
+
+// 四角の中にすっかり入っている物（いまの階の物と、2Dに出している屋根）
+function entitiesInRect(a: Point, b: Point): string[] {
+  const left = Math.min(a.x, b.x), right = Math.max(a.x, b.x), top = Math.min(a.y, b.y), bottom = Math.max(a.y, b.y);
+  return [...activeEntities(), ...(roofsOn2d() ? state.roofs : [])]
+    .filter((entity) => {
+      const box = entityBox(entity);
+      return box.x >= left && box.y >= top && box.x + box.w <= right && box.y + box.h <= bottom;
+    })
+    .map((entity) => entity.id);
+}
+
+// 物をずらす（グリッドに吸着させない）
+function translateEntity(entity: Entity, dx: number, dy: number): void {
+  if (isLinear(entity)) {
+    entity.x1 = Math.round(entity.x1 + dx);
+    entity.y1 = Math.round(entity.y1 + dy);
+    entity.x2 = Math.round(entity.x2 + dx);
+    entity.y2 = Math.round(entity.y2 + dy);
+    return;
+  }
+  entity.x = Math.round(entity.x + dx);
+  entity.y = Math.round(entity.y + dy);
+}
+
+// まとめて選んだ物を、全体の中心のまわりに90°回す（並び方はそのまま。固定した物は動かさない）
+function rotateSelection(entities: Entity[]): void {
+  const movable = entities.filter((entity) => !isLocked(entity));
+  if (!movable.length) return;
+  const boxes = movable.map(entityBox);
+  const left = Math.min(...boxes.map((box) => box.x)), right = Math.max(...boxes.map((box) => box.x + box.w));
+  const top = Math.min(...boxes.map((box) => box.y)), bottom = Math.max(...boxes.map((box) => box.y + box.h));
+  const gx = (left + right) / 2, gy = (top + bottom) / 2;
+  movable.forEach((entity, i) => {
+    const cx = boxes[i].x + boxes[i].w / 2, cy = boxes[i].y + boxes[i].h / 2;
+    rotateEntity(entity, 90);
+    const after = entityBox(entity);
+    translateEntity(entity, gx - (cy - gy) - (after.x + after.w / 2), gy + (cx - gx) - (after.y + after.h / 2));
+  });
+}
+
+// 物の写しを、いまの階に (dx, dy) ずらして置き、置いた物を選ぶ。屋根はいまの階の屋根にする
+function placeCopies(sources: Entity[], dx: number, dy: number): void {
+  const floor = state.floors[state.activeFloor];
+  const ids: string[] = [];
+  for (const source of sources) {
+    const copy = cloneEntity(source);
+    copy.id = newId(copy.type);
+    delete copy.locked;
+    translateEntity(copy, dx, dy);
+    if (copy.type === "roof") {
+      copy.floorId = floor.id;
+      state.roofs.push(copy);
+    } else activeEntities().push(copy);
+    ids.push(copy.id);
+  }
+  selectMany(ids);
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  syncPlanCursor();
+  commitState();
+  redrawAll();
+}
+
+// Ctrl+ドラッグで囲んでいる四角
+function drawMarquee(): void {
+  if (drag.dragMode !== "marquee") return;
+  if (deferOverlay(drawMarquee)) return;
+  const a = drag.startWorld, b = drag.currentWorld;
+  ctx.save();
+  ctx.fillStyle = "rgba(39, 117, 209, 0.08)";
+  ctx.strokeStyle = "#2775d1";
+  ctx.lineWidth = 1.2 / view.zoom;
+  ctx.setLineDash([5 / view.zoom, 4 / view.zoom]);
+  ctx.fillRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+  ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+  ctx.restore();
+}
+
+function moveSelection(origins: Entity[], dx: number, dy: number): void {
+  translateSelection(origins, findEntity, snap(dx), snap(dy));
+}
+
+function restoreOrigins(origins: Entity[]): void {
+  for (const origin of origins) {
+    const current = findEntity(origin.id);
+    if (!current) continue;
+    // 姿勢など、ドラッグ中に初めて付いたプロパティも取り除く。
+    for (const key of Object.keys(current)) Reflect.deleteProperty(current, key);
+    Object.assign(current, cloneEntity(origin));
+  }
+}
+
+function cancelPlanDrag(): void {
+  cancelLongPress();
+  const pointerId = drag.pointerId;
+  if (pointerId === null) return;
+  if (drag.createdId) removeEntityById(drag.createdId);
+  else restoreOrigins(drag.origins ?? (drag.originEntity ? [drag.originEntity] : []));
+  drag = { ...drag, pointerId: null, dragMode: "none", pending: undefined, path: undefined, origins: undefined, originEntity: null, createdId: undefined };
+  if (planCanvas.hasPointerCapture(pointerId)) planCanvas.releasePointerCapture(pointerId);
+  longPressPoint = null;
+  pendingTextFocus = false;
+  syncPlanCursor();
+  redrawAll();
+}
+
 function handlePointerDown(event: PointerEvent): void {
+  if (drag.pointerId !== null || (event.button !== 0 && event.button !== 2)) return;
+  cancelLongPress();
   if (event.button === 2) {
     event.preventDefault();
     planCanvas.setPointerCapture(event.pointerId);
@@ -1972,6 +2166,23 @@ function handlePointerDown(event: PointerEvent): void {
 
   const point = screenToWorld(event);
   const hit = hitTest(point);
+  if (event.ctrlKey || event.metaKey) {
+    // Ctrl（Mac は Cmd）: クリックで選ぶ物を足す・外す、ドラッグで囲んだ物をまとめて選ぶ
+    event.preventDefault();
+    planCanvas.setPointerCapture(event.pointerId);
+    drag = {
+      dragMode: "marquee",
+      pointerId: event.pointerId,
+      startScreen: { x: event.clientX, y: event.clientY },
+      startView: { x: view.x, y: view.y },
+      startWorld: point,
+      currentWorld: point,
+      originEntity: null,
+      resizeCorner: null,
+      pressedId: hit.entity?.id,
+    };
+    return;
+  }
   planCanvas.setPointerCapture(event.pointerId);
   drag.pointerId = event.pointerId;
   drag.startScreen = { x: event.clientX, y: event.clientY };
@@ -1980,24 +2191,31 @@ function handlePointerDown(event: PointerEvent): void {
   drag.currentWorld = point;
   drag.originEntity = hit.entity ? cloneEntity(hit.entity) : null;
   drag.resizeCorner = hit.corner;
+  drag.pending = undefined;
+  drag.origins = undefined;
+  drag.createdId = undefined;
+  // 選択ツール以外で物を押したら、長押しで選べるようにする
+  drag.pressedId = activeTool !== "select" && hit.entity ? hit.entity.id : undefined;
+  cancelLongPress();
+  if (drag.pressedId) startLongPress(event, drag.pressedId);
 
   if (activeTool === "erase") {
-    if (hit.entity && !isLocked(hit.entity)) {
-      removeEntityById(hit.entity.id);
-      if (state.selectedId === hit.entity.id) state.selectedId = null;
-      commitState();
-      redrawAll();
-    } else if (hit.entity) {
-      state.selectedId = hit.entity.id;
-      updateUi();
-      render2d();
-    }
+    // 消すのは指を離したとき（押し続けると、消さずに選ぶ）
     drag.dragMode = "none";
+    drag.pending = hit.entity ? "erase" : undefined;
     return;
   }
 
   if (activeTool === "select") {
-    state.selectedId = hit.entity?.id ?? null;
+    const members = selectedEntities();
+    if (hit.entity && members.length > 1 && members.some((item) => item.id === hit.entity!.id)) {
+      drag.origins = members.map(cloneEntity);
+      drag.dragMode = isLocked(hit.entity) ? "none" : "move";
+      drag.resizeCorner = null;
+      planCanvas.style.cursor = isLocked(hit.entity) ? "not-allowed" : "grabbing";
+      return;
+    }
+    selectOnly(hit.entity?.id ?? null);
     if (hit.entity && isLocked(hit.entity)) {
       drag.dragMode = "none";
       planCanvas.style.cursor = "not-allowed";
@@ -2021,20 +2239,14 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   if (activeTool === "text") {
-    // 既存の文字をクリックしたらそれを選び、何もない所なら新しく置く。どちらもすぐ入力できるよう選択ツールへ戻す
-    let target = hit.entity?.type === "text" ? hit.entity : null;
-    if (!target) {
-      target = { id: newId("text"), type: "text", text: "テキスト", x: Math.round(point.x), y: Math.round(point.y), size: DEFAULT_TEXT_SIZE, rotation: 0 };
-      activeEntities().push(target);
-      commitState();
-    }
-    state.selectedId = target.id;
-    activeTool = "select";
-    setActiveButton("[data-tool]", activeTool);
-    syncPlanCursor();
+    // 既存の文字をクリックしたらそれを選び、何もない所なら新しく置く。どちらもすぐ入力できるよう選択ツールへ戻す。
+    // ほかの物の上では、置くのは指を離したとき（押し続けると、その物を選ぶ）
     drag.dragMode = "none";
-    redrawAll();
-    pendingTextFocus = true;
+    if (hit.entity?.type === "text") {
+      cancelLongPress();
+      placeTextAt(point, hit.entity);
+    } else if (hit.entity) drag.pending = "text";
+    else placeTextAt(point, null);
     return;
   }
 
@@ -2050,28 +2262,189 @@ function handlePointerDown(event: PointerEvent): void {
   state.selectedId = null;
 
   if (activeTool === "furniture") {
-    const base = FURNITURE_DEFS[activeFurniture];
-    const entity: Furniture = {
-      id: newId("furniture"),
-      type: "furniture",
-      kind: activeFurniture,
-      x: snap(point.x - base.w / 2),
-      y: snap(point.y - base.h / 2),
-      w: base.w,
-      h: base.h,
-      rotation: 0,
-      ...newFurnitureDetails(activeFurniture),
-    };
-    activeEntities().push(entity);
-    state.selectedId = entity.id;
-    drag.originEntity = cloneEntity(entity);
-    drag.dragMode = "move";
-    commitState();
-    redrawAll();
+    // ほかの物の上では、置くのは動かし始めたときか指を離したとき（押し続けると、その物を選ぶ）
+    if (hit.entity) {
+      drag.dragMode = "none";
+      drag.pending = "furniture";
+      render2d();
+      return;
+    }
+    placeFurnitureAt(point);
     return;
   }
 
   render2d();
+}
+
+// 家具の一覧で選んでいる家具を、point を中心に置いて、そのままドラッグで動かせるようにする
+function placeFurnitureAt(point: Point): void {
+  const base = FURNITURE_DEFS[activeFurniture];
+  const entity: Furniture = {
+    id: newId("furniture"),
+    type: "furniture",
+    kind: activeFurniture,
+    x: snap(point.x - base.w / 2),
+    y: snap(point.y - base.h / 2),
+    w: base.w,
+    h: base.h,
+    rotation: 0,
+    ...newFurnitureDetails(activeFurniture),
+  };
+  activeEntities().push(entity);
+  selectOnly(entity.id);
+  drag.originEntity = cloneEntity(entity);
+  drag.dragMode = "move";
+  drag.pending = undefined;
+  drag.createdId = entity.id;
+  redrawAll();
+}
+
+// 文字を置く（target があればその文字を選ぶ）。すぐ入力できるよう選択ツールへ戻す
+function placeTextAt(point: Point, target: Entity | null): void {
+  if (!target) {
+    target = { id: newId("text"), type: "text", text: "テキスト", x: Math.round(point.x), y: Math.round(point.y), size: DEFAULT_TEXT_SIZE, rotation: 0 };
+    activeEntities().push(target);
+    drag.createdId = target.id;
+  }
+  selectOnly(target.id);
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  syncPlanCursor();
+  drag.dragMode = "none";
+  drag.pending = undefined;
+  redrawAll();
+  pendingTextFocus = true;
+}
+
+// ---- ほかのツールのまま物を選ぶ（クリック・長押し） ----
+
+// 押した物を選び、選択ツールに切り替える。holding なら押したまま動かせるようにする（長押しのあと、そのままドラッグで動かす）
+function selectFromOtherTool(entityId: string, holding: boolean): void {
+  const entity = findEntity(entityId);
+  if (!entity) return;
+  selectOnly(entityId);
+  activeTool = "select";
+  pathRedrawId = null;
+  setActiveButton("[data-tool]", activeTool);
+  drag.pending = undefined;
+  drag.path = undefined;
+  drag.resizeCorner = null;
+  if (holding && !isLocked(entity)) {
+    drag.originEntity = cloneEntity(entity);
+    drag.startWorld = longPressPoint ?? drag.startWorld;
+    drag.currentWorld = drag.startWorld;
+    drag.dragMode = "move";
+  } else drag.dragMode = "none";
+  syncPlanCursor();
+  updateUi();
+  render2d();
+}
+
+function startLongPress(event: PointerEvent, entityId: string): void {
+  const pointerId = event.pointerId;
+  longPressPoint = screenToWorld(event);
+  showPressRing(event.clientX, event.clientY);
+  longPressTimer = window.setTimeout(() => {
+    longPressTimer = 0;
+    hidePressRing();
+    if (drag.pointerId !== pointerId) return;
+    selectFromOtherTool(entityId, true);
+  }, LONG_PRESS_MS);
+}
+
+function cancelLongPress(): void {
+  if (longPressTimer) window.clearTimeout(longPressTimer);
+  longPressTimer = 0;
+  hidePressRing();
+}
+
+// 長押しの目印。押した所に、満ちていく輪を出す（すぐ離したときは出ないよう、少し待ってから見せる）
+function showPressRing(clientX: number, clientY: number): void {
+  const pane = planCanvas.parentElement;
+  if (!pane) return;
+  if (!pressRing) {
+    pressRing = document.createElement("div");
+    pressRing.className = "press-ring";
+    pressRing.setAttribute("aria-hidden", "true");
+    pressRing.innerHTML = `<svg viewBox="0 0 46 46"><circle class="track" cx="23" cy="23" r="19"></circle><circle class="fill" cx="23" cy="23" r="19"></circle></svg>`;
+    pane.appendChild(pressRing);
+  }
+  const rect = pane.getBoundingClientRect();
+  pressRing.style.left = `${clientX - rect.left}px`;
+  pressRing.style.top = `${clientY - rect.top}px`;
+  pressRing.style.setProperty("--press-ms", `${LONG_PRESS_MS}ms`);
+  pressRing.classList.remove("is-pressing");
+  // 描き直しを挟んで、満ちていく動きを最初から始める
+  void pressRing.offsetWidth;
+  pressRing.classList.add("is-pressing");
+}
+
+function hidePressRing(): void {
+  pressRing?.classList.remove("is-pressing");
+}
+
+// いまのツールでできることを、2Dの左下に小さく出す（選択ツールでは出さない）
+function syncToolHint(): void {
+  const pane = planCanvas.parentElement;
+  if (!pane) return;
+  if (!toolHint) {
+    toolHint = document.createElement("div");
+    toolHint.className = "tool-hint";
+    toolHint.id = "toolHint";
+    toolHint.setAttribute("role", "status");
+    pane.appendChild(toolHint);
+  }
+  const parts = toolHintParts();
+  toolHint.hidden = !parts;
+  if (!parts) return;
+  const html = parts.map((part, i) => (i === 0 ? `<strong>${escapeHtml(part)}</strong>` : `<span>${escapeHtml(part)}</span>`)).join("");
+  if (toolHint.innerHTML !== html) toolHint.innerHTML = html;
+}
+
+// 案内の中身。はじめはツールの名前（選択ツールでは、選んでいる物の数）
+function toolHintParts(): string[] | null {
+  if (activeTool !== "select") {
+    const action = toolAction();
+    const names: Record<Tool, string> = { select: "選択", room: "部屋", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
+    return action ? [names[activeTool], ...action, "Escで選択に戻る"] : null;
+  }
+  // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す（Ctrl のないスマホ・タブレットでは出さない）
+  if (window.matchMedia?.("(pointer: coarse)").matches) return null;
+  const count = selectedEntities().length;
+  if (count > 1) return [`${count}個を選択中`, "ドラッグでまとめて動かす", "Ctrl+クリックで足す・外す", "Escで選択を外す"];
+  if (count === 1) return ["選択中", "Ctrl+クリックで、ほかの物も選ぶ", "Ctrl+ドラッグで囲んで選ぶ"];
+  return null;
+}
+
+// ツールの使い方と、ほかの物の選び方（描くツールはクリック、置くツールは長押し）
+function toolAction(): [string, string] | null {
+  const click = "物をクリックで選ぶ";
+  const hold = "物を長押しで選ぶ";
+  switch (activeTool) {
+    case "select":
+      return null;
+    case "room":
+      return ["ドラッグで部屋を描く", click];
+    case "wall":
+      return ["ドラッグで壁を描く", click];
+    case "door":
+    case "slidingDoor":
+    case "window":
+    case "window2":
+      return ["壁に沿ってドラッグで置く", click];
+    case "circle":
+    case "arc":
+    case "polygon":
+      return ["ドラッグで図形の壁を描く", click];
+    case "furniture":
+      return [activeFurniture === "footprints" || activeFurniture === "brokenGlass" ? "なぞって置く" : "クリックで置く", hold];
+    case "text":
+      return ["クリックで文字を置く", hold];
+    case "paint":
+      return ["ドラッグで描く", hold];
+    case "erase":
+      return ["クリックで消す", hold];
+  }
 }
 
 function handlePointerMove(event: PointerEvent): void {
@@ -2087,12 +2460,33 @@ function handlePointerMove(event: PointerEvent): void {
   if (activeTool === "select" && drag.dragMode === "none") {
     planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed" : hover.corner === "label" || hover.corner?.startsWith("limb:") ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
   }
+  if (drag.pointerId === event.pointerId && (longPressTimer || drag.pending)) {
+    // 少しでも動かしたら長押しではない。置くのを待っていた家具は、ここで置いてそのまま動かす
+    const moved = Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y);
+    if (longPressTimer) longPressPoint = point;
+    if (moved > CLICK_SLOP) {
+      cancelLongPress();
+      if (drag.pending === "furniture") placeFurnitureAt(drag.startWorld);
+    }
+  }
 
   if (drag.pointerId !== event.pointerId || drag.dragMode === "none") {
     return;
   }
 
   drag.currentWorld = point;
+
+  if (drag.dragMode === "marquee") {
+    render2d();
+    return;
+  }
+
+  if (drag.dragMode === "move" && drag.origins) {
+    if (Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP) return;
+    moveSelection(drag.origins, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
+    redrawAll(false);
+    return;
+  }
 
   if (drag.dragMode === "path") {
     const last = drag.path?.[drag.path.length - 1];
@@ -2138,11 +2532,49 @@ function handlePointerMove(event: PointerEvent): void {
 
 function handlePointerUp(event: PointerEvent): void {
   if (drag.pointerId !== event.pointerId) return;
-  planCanvas.releasePointerCapture(event.pointerId);
 
   const end = drag.currentWorld;
   const start = drag.startWorld;
   const distanceMoved = Math.hypot(end.x - start.x, end.y - start.y);
+  // 長押しになる前に離した（クリック）
+  const clicked = Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
+  cancelLongPress();
+
+  // Ctrl+クリックは選ぶ物を足す・外す、Ctrl+ドラッグは囲んだ物を足す
+  if (drag.dragMode === "marquee") {
+    if (clicked) {
+      if (drag.pressedId) toggleSelection(drag.pressedId);
+    } else {
+      const inside = entitiesInRect(start, end);
+      if (inside.length) selectMany([...selectedEntities().map((item) => item.id), ...inside]);
+      activeTool = "select";
+      pathRedrawId = null;
+      setActiveButton("[data-tool]", activeTool);
+      updateUi();
+    }
+  }
+
+  // 置くツールで物の上を押していたとき: 長押しにならずに離したら、置く・消す
+  if (drag.pending === "furniture") placeFurnitureAt(start);
+  else if (drag.pending === "text") placeTextAt(start, null);
+  else if (drag.pending === "erase" && drag.pressedId) {
+    const target = findEntity(drag.pressedId);
+    if (target && !isLocked(target)) {
+      removeEntityById(target.id);
+      if (state.selectedId === target.id) state.selectedId = null;
+      commitState();
+    } else if (target) {
+      state.selectedId = target.id;
+      updateUi();
+    }
+  }
+  drag.pending = undefined;
+
+  // 描くツールで物をクリックしたら、その物を選んで選択ツールに切り替える
+  if (drag.dragMode === "draw" && clicked && drag.pressedId) {
+    selectFromOtherTool(drag.pressedId, false);
+    drag.dragMode = "none";
+  }
 
   if (drag.dragMode === "draw" && distanceMoved > 8) {
     if (activeTool === "room") addRoomFromDrag(start, end);
@@ -2164,7 +2596,9 @@ function handlePointerUp(event: PointerEvent): void {
     commitState();
   }
 
-  if ((drag.dragMode === "move" || drag.dragMode === "resize" || drag.dragMode === "label" || drag.dragMode === "pose") && drag.originEntity) {
+  if (drag.createdId || drag.origins?.some((origin) => JSON.stringify(findEntity(origin.id)) !== JSON.stringify(origin))) {
+    commitState();
+  } else if (!drag.origins && (drag.dragMode === "move" || drag.dragMode === "resize" || drag.dragMode === "label" || drag.dragMode === "pose") && drag.originEntity) {
     const current = findEntity(drag.originEntity.id);
     if (current && JSON.stringify(current) !== JSON.stringify(drag.originEntity)) {
       commitState();
@@ -2181,6 +2615,8 @@ function handlePointerUp(event: PointerEvent): void {
     originEntity: null,
     resizeCorner: null,
   };
+  longPressPoint = null;
+  if (planCanvas.hasPointerCapture(event.pointerId)) planCanvas.releasePointerCapture(event.pointerId);
   syncPlanCursor();
   redrawAll();
   // 置いた文字の入力欄へは、クリックを離して描き直した後に移る（先に移すと描き直しで外れる）
@@ -2191,9 +2627,10 @@ function handlePointerUp(event: PointerEvent): void {
 }
 
 function handleDoubleClick(event: MouseEvent): void {
+  if (event.ctrlKey || event.metaKey) return;
   const hit = hitTest(screenToWorld(event));
   if (!hit.entity) return;
-  state.selectedId = hit.entity.id;
+  selectOnly(hit.entity.id);
   activeTool = "select";
   setActiveButton("[data-tool]", activeTool);
   updateUi();
@@ -2201,9 +2638,11 @@ function handleDoubleClick(event: MouseEvent): void {
 }
 
 function handleThreePointerDown(event: PointerEvent): void {
-  // 右ドラッグ（またはShift・Ctrl＋左ドラッグ）の移動は、つかんだ物の奥行きに合わせた速さにする
-  if (!threeDrag && (event.button === 2 || (event.button === 0 && (event.shiftKey || event.ctrlKey || event.metaKey)))) {
+  // 右ドラッグ・Shift＋左ドラッグは視点移動。Ctrl/Cmd は複数選択に使う。
+  if (!threeDrag && (event.button === 2 || (event.button === 0 && event.shiftKey))) {
     anchorPanToPointer(event);
+    threePointerDown = null;
+    return;
   }
   if (event.button !== 0 || threeDrag) {
     threePointerDown = null;
@@ -2212,6 +2651,21 @@ function handleThreePointerDown(event: PointerEvent): void {
   threePointerDown = { x: event.clientX, y: event.clientY };
   const id = pickThreeEntity(event);
   const selected = id ? findEntity(id) : undefined;
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    threePointerDown = null;
+    if (id) {
+      const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === id));
+      if (floorIndex >= 0 && floorIndex !== state.activeFloor) {
+        selectOnly(null);
+        state.activeFloor = floorIndex;
+        fitPlanToCanvas();
+      }
+      toggleSelection(id);
+    }
+    return;
+  }
 
   if (activeTool === "erase") {
     event.stopImmediatePropagation();
@@ -2249,8 +2703,10 @@ function handleThreePointerDown(event: PointerEvent): void {
   threeCanvas.setPointerCapture(event.pointerId);
   state.activeFloor = floorIndex;
   if (created) activeEntities().push(furnitureItem);
-  state.selectedId = furnitureItem.id;
-  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, planeY, created, moved: false };
+  const members = selectedEntities();
+  const origins = !created && members.length > 1 && members.some((item) => item.id === furnitureItem.id) ? members.map(cloneEntity) : undefined;
+  if (!origins) selectOnly(furnitureItem.id);
+  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, origins, planeY, created, moved: false };
   threeCanvas.style.cursor = "grabbing";
   redrawAll();
 }
@@ -2298,7 +2754,8 @@ function handleThreePointerMove(event: PointerEvent): void {
   const point = threeFloorPoint(event, threeDrag.planeY);
   const entity = findEntity(threeDrag.origin.id);
   if (!point || !entity) return;
-  moveEntity(entity, threeDrag.origin, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
+  if (threeDrag.origins) moveSelection(threeDrag.origins, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
+  else moveEntity(entity, threeDrag.origin, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
   redrawAll();
 }
 
@@ -2310,8 +2767,8 @@ function finishThreeDrag(cancel = false): void {
   const current = findEntity(gesture.origin.id);
   if (cancel) {
     if (gesture.created) removeEntityById(gesture.origin.id);
-    else if (current) Object.assign(current, gesture.origin);
-  } else if (current && (gesture.created || JSON.stringify(current) !== JSON.stringify(gesture.origin))) {
+    else restoreOrigins(gesture.origins ?? [gesture.origin]);
+  } else if (gesture.origins ? gesture.origins.some((origin) => JSON.stringify(findEntity(origin.id)) !== JSON.stringify(origin)) : current && (gesture.created || JSON.stringify(current) !== JSON.stringify(gesture.origin))) {
     commitState();
   }
   controls.enabled = true;
@@ -2334,7 +2791,7 @@ function handleThreePointerUp(event: PointerEvent): void {
   threePointerDown = null;
   if (moved > 6 || activeTool === "furniture") return;
   const entityId = pickThreeEntity(event);
-  state.selectedId = entityId;
+  selectOnly(entityId);
   if (entityId) {
     const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === entityId));
     if (floorIndex >= 0 && floorIndex !== state.activeFloor) {
@@ -2369,21 +2826,98 @@ function handleKeyDown(event: KeyboardEvent): void {
     cancelThreeDrag();
     return;
   }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    const gesturing = drag.pointerId !== null;
+    cancelPlanDrag();
+    if (!gesturing && activeTool === "select") selectOnly(null);
+    activeTool = "select";
+    pathRedrawId = null;
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    redrawAll();
+    return;
+  }
+  // Ctrl+A でいまの階の物をぜんぶ選び、Ctrl+C・V で写し、Ctrl+D で複製する
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && ["a", "c", "v", "d"].includes(event.key.toLowerCase())) {
+    const key = event.key.toLowerCase();
+    const members = selectedEntities();
+    if (key === "a") {
+      event.preventDefault();
+      cancelPlanDrag();
+      selectMany([...activeEntities(), ...(roofsOn2d() ? state.roofs : [])].map((entity) => entity.id));
+      activeTool = "select";
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+      redrawAll();
+      return;
+    }
+    if (key === "c" && members.length) {
+      event.preventDefault();
+      clipboard = { floorId: state.floors[state.activeFloor].id, entities: members.map(cloneEntity), pastes: 0 };
+      return;
+    }
+    if (key === "v" && clipboard) {
+      event.preventDefault();
+      // 同じ階へ貼るときは、元の物と重ならないよう少しずつずらす。ほかの階へは同じ位置に貼る（上の階に同じ壁を作るときなど）
+      const sameFloor = clipboard.floorId === state.floors[state.activeFloor].id;
+      if (sameFloor) clipboard.pastes += 1;
+      const offset = sameFloor ? clipboard.pastes * GRID * 2 : 0;
+      placeCopies(clipboard.entities, offset, offset);
+      return;
+    }
+    if (key === "d" && members.length) {
+      event.preventDefault();
+      placeCopies(members, GRID * 2, GRID * 2);
+      return;
+    }
+  }
+  // 矢印キーで、選んでいる物を少しずつ動かす（Shift で大きく）
+  if (event.key.startsWith("Arrow") && !event.ctrlKey && !event.metaKey && !event.altKey && drag.pointerId === null) {
+    const members = selectedEntities().filter((entity) => !isLocked(entity));
+    const step = GRID * (event.shiftKey ? 5 : 1);
+    const dx = event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+    const dy = event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+    if (members.length && (dx || dy)) {
+      event.preventDefault();
+      moveSelection(members.map(cloneEntity), dx, dy);
+      commitState();
+      redrawAll();
+      return;
+    }
+  }
   if (threeDrag && (event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) cancelThreeDrag();
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
     event.preventDefault();
+    cancelPlanDrag();
     event.shiftKey ? redo() : undo();
     return;
   }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
     event.preventDefault();
+    cancelPlanDrag();
     redo();
     return;
   }
   if (!isEditing && event.key.toLowerCase() === "l" && state.selectedId) {
-    const selected = findEntity(state.selectedId);
-    if (selected) {
-      selected.locked = !selected.locked;
+    const members = selectedEntities();
+    if (members.length) {
+      const locked = !members.every(isLocked);
+      members.forEach((item) => { item.locked = locked; });
+      commitState();
+      redrawAll();
+    }
+    return;
+  }
+  if (!event.ctrlKey && !event.metaKey && (event.key === "Delete" || event.key === "Backspace")) {
+    event.preventDefault();
+    deleteSelection();
+    return;
+  }
+  if (selectedEntities().length > 1) {
+    // まとめて選んでいるときの R は、全体を90°回す
+    if (!event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "r") {
+      rotateSelection(selectedEntities());
       commitState();
       redrawAll();
     }
@@ -3079,6 +3613,8 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
   }
   drawLayer(entities.filter(isTextLabel), drawTextLabel);
   if (options.editing) {
+    if (selectedEntities().length > 1) drawMultiSelection();
+    drawMarquee();
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
     if (drag.dragMode === "path" && drag.path) {
@@ -3259,7 +3795,27 @@ function drawTranslucent(alpha: number, draw: () => void): void {
 }
 
 // 選んでいる要素の枠やつまみ（大きさや端を動かす所）
+function drawMultiSelection(): void {
+  if (deferOverlay(drawMultiSelection)) return;
+  ctx.save();
+  ctx.strokeStyle = "#2377db";
+  ctx.lineWidth = 2 / view.zoom;
+  ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+  for (const item of selectedEntities()) {
+    const bounds = getEntitiesBounds([item]);
+    if (!bounds) continue;
+    ctx.save();
+    ctx.translate(bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+    if (item.type === "furniture" || item.type === "text") ctx.rotate(degreesToRadians(item.rotation));
+    const padding = 4 / view.zoom;
+    ctx.strokeRect(-bounds.w / 2 - padding, -bounds.h / 2 - padding, bounds.w + padding * 2, bounds.h + padding * 2);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
 function drawSelectionMarks(entity: Entity): void {
+  if (selectedEntities().length > 1) return;
   if (entity.type === "room") {
     drawRoomLabelGuide(entity);
     if (!isLocked(entity)) drawResizeHandles(entity);
@@ -3374,6 +3930,7 @@ function drawRoom(room: Room): void {
 }
 
 function drawRoomLabelGuide(room: Room): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawRoomLabelGuide(room))) return;
   const bounds = getRoomLabelBounds(room);
   if (!bounds) return;
@@ -3391,6 +3948,7 @@ function drawWall2d(wallItem: LinearElement): void {
 }
 
 function drawLineHandles(entity: LinearElement): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawLineHandles(entity))) return;
   ctx.save();
   ctx.fillStyle = "#ffffff";
@@ -3664,6 +4222,27 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
 }
 
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture): void {
+  if (isJapaneseKind(kind)) {
+    for (const part of japaneseParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
+      ctx.save();
+      ctx.translate(part.x, part.y);
+      ctx.rotate(part.angle ?? 0);
+      const material = JAPANESE_MATERIALS[part.material];
+      ctx.fillStyle = material.tintable && item?.color ? solidColor(item.color) : material.color;
+      if (part.shape === "box") strokeRoundedRect(-part.w / 2, -part.d / 2, part.w, part.d, part.radius, true);
+      else if (part.shape === "ellipse") strokeEllipse(0, 0, part.w / 2, part.d / 2, true);
+      else {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, part.w / 2, part.d / 2, 0, 0, Math.PI * 2);
+        ctx.moveTo(part.w / 2 * (part.inner ?? 0.68), 0);
+        ctx.ellipse(0, 0, part.w / 2 * (part.inner ?? 0.68), part.d / 2 * (part.inner ?? 0.68), 0, 0, Math.PI * 2, true);
+        ctx.fill("evenodd");
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    return;
+  }
   const variant = symbol > 0 ? SYMBOL_VARIANTS[kind]?.[symbol - 1] : undefined;
   if (variant) {
     variant.draw(w, h, item);
@@ -4696,6 +5275,7 @@ function personHandleAt(item: Furniture, point: Point): number {
 
 // 手首・足首は白い丸、ひじ・ひざは小さな水色の丸、頭は中に点のある丸
 function drawPersonHandles(item: Furniture): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawPersonHandles(item))) return;
   ctx.save();
   ctx.strokeStyle = "#2775d1";
@@ -6268,6 +6848,7 @@ function drawShape2d(shape: Shape): void {
 }
 
 function drawShapeHandle(shape: Shape): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawShapeHandle(shape))) return;
   ctx.save();
   ctx.fillStyle = "#ffffff";
@@ -6334,6 +6915,7 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
 }
 
 function drawResizeHandles(entity: Room | Furniture | Roof): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawResizeHandles(entity))) return;
   const handles = [
     { x: entity.x, y: entity.y },
@@ -6382,6 +6964,7 @@ function drawTextLabel(label: TextLabel): void {
 }
 
 function drawTextSelection(label: TextLabel): void {
+  if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawTextSelection(label))) return;
   const { w, h } = measureTextLabel(label);
   const pad = 4 / view.zoom;
@@ -6827,7 +7410,7 @@ function markSelectable(object: THREE.Object3D, entityId: string): void {
 }
 
 function addSelectionBox(object: THREE.Object3D, entityId: string): void {
-  if (state.selectedId !== entityId) return;
+  if (!selectedEntities().some((item) => item.id === entityId)) return;
   const selected = findEntity(entityId);
   const helper = new THREE.BoxHelper(object, selected && isLocked(selected) ? 0x9b6714 : 0x2775d1);
   helper.userData.ignoreSelection = true;
@@ -6904,6 +7487,7 @@ function redrawAll(rebuild = true): void {
 }
 
 function updateUi(): void {
+  syncToolHint();
   scheduleViewStateSave();
   renderGhostFloorOptions();
   updateStats();
@@ -6930,7 +7514,46 @@ function updateStats(): void {
   threeStats.textContent = `${stories}・部材${totalParts}・屋根${state.roofs.length}`;
 }
 
+// まとめて選んだ物の内訳（「部屋・床 2・壁 5・家具 8」など）
+function describeSelection(entities: Entity[]): string {
+  const names: [string, Entity["type"]][] = [["部屋・床", "room"], ["壁", "wall"], ["ドア", "door"], ["窓", "window"], ["家具", "furniture"], ["図形の壁", "shape"], ["屋根", "roof"], ["文字", "text"]];
+  return names.map(([name, type]) => [name, entities.filter((entity) => entity.type === type).length] as const)
+    .filter(([, count]) => count > 0).map(([name, count]) => `${name} ${count}`).join("・");
+}
+
 function updatePropertiesPanel(): void {
+  const members = selectedEntities();
+  if (members.length > 1) {
+    const locked = members.filter(isLocked).length;
+    propertiesPanel.innerHTML = `<div class="property-grid">
+      <p class="selection-count">${members.length}件選択中${locked ? `（固定 ${locked}件）` : ""}</p>
+      <p class="empty-state">${escapeHtml(describeSelection(members))}。選んだ物のどれかをドラッグするとまとめて動き、矢印キーでも少しずつ動かせます。</p>
+      <label class="check"><input id="selectionLockedInput" type="checkbox" ${locked === members.length ? "checked" : ""} />配置を固定（L）</label>
+      <div class="two-col">
+        <button type="button" class="prop-button" id="selectionRotateButton" title="選択全体を90度回転（R）" ${locked === members.length ? "disabled" : ""}><i data-lucide="rotate-cw"></i>90°回転</button>
+        <button type="button" class="prop-button" id="selectionDuplicateButton" title="選択を複製（Ctrl / Cmd+D）"><i data-lucide="copy"></i>複製</button>
+      </div>
+      <button type="button" class="prop-button danger-button" id="selectionDeleteButton" ${locked === members.length ? "disabled" : ""}><i data-lucide="trash-2"></i>選択を削除（Delete）</button>
+      <button type="button" class="prop-button" id="selectionClearButton"><i data-lucide="x"></i>選択を解除（Esc）</button>
+    </div>`;
+    requiredElement("#selectionRotateButton").addEventListener("click", () => {
+      rotateSelection(members);
+      commitState();
+      redrawAll();
+    });
+    requiredElement("#selectionDuplicateButton").addEventListener("click", () => placeCopies(members, GRID * 2, GRID * 2));
+    const checkbox = requiredElement<HTMLInputElement>("#selectionLockedInput");
+    checkbox.indeterminate = locked > 0 && locked < members.length;
+    checkbox.addEventListener("change", () => {
+      members.forEach((item) => { item.locked = checkbox.checked; });
+      commitState();
+      redrawAll();
+    });
+    requiredElement("#selectionDeleteButton").addEventListener("click", deleteSelection);
+    requiredElement("#selectionClearButton").addEventListener("click", () => { selectOnly(null); redrawAll(); });
+    createIcons({ icons });
+    return;
+  }
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
   if (!selected && activeTool === "paint") {
     propertiesPanel.innerHTML = `<div class="property-grid">
@@ -7201,11 +7824,12 @@ function updatePropertiesPanel(): void {
       `</optgroup>`,
   ).join("");
   const defaultHeight = FURNITURE_DEFS[selectedFurniture.kind].height;
+  const minimumHeight = isJapaneseKind(selectedFurniture.kind) ? 1 : MIN_FURNITURE_HEIGHT;
   const markerRow = selectedFurniture.kind === "evidenceMarker"
     ? `<label>番号（印に書く文字。${MAX_MARKER_LABEL}文字まで）<input id="markerLabelInput" value="${escapeHtml(selectedFurniture.markerLabel ?? "")}" maxlength="${MAX_MARKER_LABEL}" autocomplete="off" /></label>`
     : "";
   const heightRow = defaultHeight !== undefined && !PLAN_EDITION
-    ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${MIN_FURNITURE_HEIGHT}" max="${MAX_FURNITURE_HEIGHT}" step="10" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
+    ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${minimumHeight}" max="${MAX_FURNITURE_HEIGHT}" step="${isJapaneseKind(selectedFurniture.kind) ? 1 : 10}" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
     : "";
   // 2Dの記号だけのデザインは、3Dが標準の形のままになることを名前に添える
   const only2d = FURNITURE_VARIANTS_2D_ONLY[selectedFurniture.kind] ?? [];
@@ -7262,7 +7886,7 @@ function updatePropertiesPanel(): void {
   if (selectedFurniture.kind === "footprints") bindFootprintEditor(selectedFurniture);
   if (selectedFurniture.kind === "brokenGlass") bindShardEditor(selectedFurniture);
   bindNumber("#furnitureHeightInput", (value) => {
-    const height = clamp(Math.round(value), MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT);
+    const height = clamp(Math.round(value), minimumHeight, MAX_FURNITURE_HEIGHT);
     if (height === defaultHeight) delete selectedFurniture.height;
     else selectedFurniture.height = height;
   });
@@ -7417,6 +8041,15 @@ function fitPlanToCanvas(): void {
   view.y = rect.height / 2 - (bounds.y + bounds.h / 2) * zoom;
 }
 
+function deleteSelection(): void {
+  const members = selectedEntities().filter((item) => !isLocked(item));
+  if (!members.length) return;
+  members.forEach((item) => removeEntityById(item.id));
+  selectOnly(null);
+  commitState();
+  redrawAll();
+}
+
 function commitState(): void {
   history = history.slice(0, historyIndex + 1);
   history.push(cloneState(state));
@@ -7430,6 +8063,7 @@ function commitState(): void {
 }
 
 function replaceState(next: PlanState, pushHistory: boolean): void {
+  multiSelection.clear();
   state = cloneState(next);
   // 別の間取りに入れ替えたときは、隠していた階や屋根をすべて表示に戻す
   hiddenFloorIds.clear();
@@ -7444,18 +8078,29 @@ function replaceState(next: PlanState, pushHistory: boolean): void {
 
 function undo(): void {
   if (historyIndex <= 0) return;
+  const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex -= 1;
   state = cloneState(history[historyIndex]);
+  restoreHistorySelection(ids, floorId);
   persistState();
   redrawAll();
 }
 
 function redo(): void {
   if (historyIndex >= history.length - 1) return;
+  const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex += 1;
   state = cloneState(history[historyIndex]);
+  restoreHistorySelection(ids, floorId);
   persistState();
   redrawAll();
+}
+
+function restoreHistorySelection(ids: string[], floorId: string): void {
+  multiSelection.clear();
+  if (floorId !== activeFloor().id || !ids.length) return;
+  const visible = new Set([...activeEntities(), ...state.roofs].map((item) => item.id));
+  selectMany(ids.filter((id) => visible.has(id)));
 }
 
 function persistState(): void {
@@ -7674,6 +8319,7 @@ function exportBounds(floorIndexes: number[]): Bounds | null {
 
 // 1つの階を、書き出し用のキャンバスの (left, top) から描く。選択の枠・ほかの階の透過・屋根・固定の印は描かない
 function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number, bounds: Bounds, left: number, top: number, ratio: number, zoom: number): void {
+  const selection = [...multiSelection], originalSelectionFloor = selectionFloor;
   const saved = { ctx, view: { ...view }, activeFloor: state.activeFloor, selectedId: state.selectedId, hideRoomNames };
   const width = (bounds.w + EXPORT_MARGIN * 2) * zoom;
   const height = (bounds.h + EXPORT_MARGIN * 2) * zoom;
@@ -7696,6 +8342,9 @@ function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number
     view = saved.view;
     state.activeFloor = saved.activeFloor;
     state.selectedId = saved.selectedId;
+    multiSelection.clear();
+    selection.forEach((id) => multiSelection.add(id));
+    selectionFloor = originalSelectionFloor;
     hideRoomNames = saved.hideRoomNames;
   }
 }

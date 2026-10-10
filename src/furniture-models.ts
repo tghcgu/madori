@@ -12,6 +12,7 @@ import {
   SPIRAL_POT_SCALE, spiralLeaves,
   CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, markerTextureSpan, personDesign, personLayout, personOutline, shardPieces,
   type PersonPart, type PersonPose, type StoneSlab,
+  isJapaneseKind, japaneseParts, JAPANESE_MATERIALS,
 } from "./furniture-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
@@ -375,6 +376,27 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
   // 高さを指定できる種類では、いちばん高い所がちょうどこの高さになるように作る
   const tall = clamp((item.height ?? FURNITURE_DEFS[item.kind].height ?? 100) / 100, 0.1, 30);
   const m = new Model(item.color3d ?? item.color);
+  if (isJapaneseKind(item.kind)) {
+    const height = clamp(item.height ?? FURNITURE_DEFS[item.kind].height!, 1, 3000);
+    for (const part of japaneseParts(item.kind, item.w, item.h, height)) {
+      const spec = JAPANESE_MATERIALS[part.material];
+      const material = m.material(`japanese-${part.material}`, Number.parseInt(spec.color.slice(1), 16), 0.72, 0, spec.tintable);
+      let mesh: THREE.Mesh;
+      if (part.shape === "box") {
+        mesh = m.box(part.w / 100, part.height / 100, part.d / 100, part.x / 100, (part.bottom + part.height / 2) / 100, part.y / 100, material, part.radius / 100);
+      } else if (part.shape === "ring") {
+        const inner = part.inner ?? 0.68, top = part.height / 100;
+        mesh = m.vessel([[inner, 0], [1, 0], [1, top], [inner, top], [inner, 0]], part.w / 200, part.d / 200, [part.x / 100, part.bottom / 100, part.y / 100], material);
+      } else {
+        mesh = m.cylinder(1, 1, part.height / 100, [part.x / 100, (part.bottom + part.height / 2) / 100, part.y / 100], material, 40);
+        mesh.scale.set(part.w / 200, 1, part.d / 200);
+      }
+      mesh.rotation.y = -(part.angle ?? 0);
+    }
+    m.reserveFootprint(w, d);
+    m.group.name = item.kind;
+    return m.finish(w, d, false, optimize);
+  }
   // 別デザインの番号。0は標準。範囲外の番号は標準として作る
   const variantCount = FURNITURE_VARIANTS[item.kind]?.length ?? 0;
   const only2d = FURNITURE_VARIANTS_2D_ONLY[item.kind] ?? [];

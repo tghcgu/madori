@@ -4,6 +4,150 @@
 
 export type Point2 = [number, number];
 
+// ---- 和風の家具・設備 ----
+// 上から見た輪郭と高さを共有し、低い部品から描くと2Dでも手前の部品に隠れる。
+export const JAPANESE_KINDS = ["tatami", "zabuton", "chabudai", "byobu", "shojiScreen", "andon", "stepTansu", "irori", "hibachi", "engawa", "hinokiBath", "tsukubai"] as const;
+export type JapaneseKind = typeof JAPANESE_KINDS[number];
+export const JAPANESE_MATERIALS = {
+  wood: { color: "#9b6741", tintable: true },
+  paleWood: { color: "#d7b782", tintable: true },
+  trim: { color: "#443c34", tintable: false },
+  straw: { color: "#b5ba83", tintable: true },
+  weave: { color: "#929d70", tintable: false },
+  border: { color: "#374d44", tintable: false },
+  cloth: { color: "#758aab", tintable: true },
+  seam: { color: "#57647a", tintable: false },
+  paper: { color: "#f3eedb", tintable: false },
+  gold: { color: "#c4aa67", tintable: true },
+  iron: { color: "#32383c", tintable: false },
+  ash: { color: "#b5b0a7", tintable: false },
+  coal: { color: "#6b3d31", tintable: false },
+  water: { color: "#83b4bb", tintable: false },
+  stone: { color: "#8b9590", tintable: true },
+  glaze: { color: "#4d7172", tintable: true },
+};
+export interface JapanesePart {
+  shape: "box" | "ellipse" | "ring";
+  x: number; y: number; bottom: number;
+  w: number; d: number; height: number;
+  material: keyof typeof JAPANESE_MATERIALS;
+  radius: number;
+  angle?: number;
+  inner?: number;
+}
+export function isJapaneseKind(kind: string): kind is JapaneseKind {
+  return (JAPANESE_KINDS as readonly string[]).includes(kind);
+}
+
+export function japaneseParts(kind: JapaneseKind, w: number, d: number, height: number): JapanesePart[] {
+  const parts: JapanesePart[] = [];
+  const box = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: JapanesePart["material"], radius = 0) => {
+    parts.push({ shape: "box", x: x * w, y: y * d, w: pw * w, d: pd * d, bottom: bottom * height, height: ph * height, material, radius: radius * Math.min(w, d, height) });
+  };
+  const ellipse = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: JapanesePart["material"]) => {
+    box(x, y, pw, pd, bottom, ph, material);
+    parts[parts.length - 1].shape = "ellipse";
+  };
+  const legs = (bottom: number, top: number, x = 0.39, y = 0.36) => {
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(sx * x, sy * y, 0.08, 0.12, bottom, top - bottom, "wood");
+  };
+  switch (kind) {
+    case "tatami":
+      box(0, 0, 1, 1, 0, 0.96, "straw");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 1, 0.96, 0.04, "border");
+      for (let i = 1; i < 40; i++) box(0, -0.5 + i / 40, 0.87, 0.003, 0.96, 0.03, "weave");
+      break;
+    case "zabuton":
+      box(0, 0, 1, 1, 0, 0.96, "cloth", 0.36);
+      box(0, 0, 0.92, 0.92, 0.87, 0.12, "seam", 0.28);
+      box(0, 0, 0.88, 0.88, 0.9, 0.1, "cloth", 0.24);
+      ellipse(0, 0, 0.025, 0.025, 0.99, 0.01, "seam");
+      break;
+    case "chabudai":
+      legs(0, 0.87, 0.25, 0.25);
+      ellipse(0, 0, 1, 1, 0.87, 0.12, "wood");
+      ellipse(0, 0, 0.94, 0.94, 0.99, 0.01, "paleWood");
+      break;
+    case "byobu":
+      for (let i = 0; i < 4; i++) {
+        const dx = w * 0.24, dy = d * 0.88 * (i % 2 ? -1 : 1);
+        const length = Math.hypot(dx, dy), thickness = Math.min(w * 0.012, d * 0.1);
+        const angle = Math.atan2(dy, dx), cx = (-0.36 + i * 0.24) * w;
+        parts.push({ shape: "box", x: cx, y: 0, w: length - thickness * 2, d: thickness * 0.85, bottom: height * 0.045, height: height * 0.91, material: "gold", radius: 0, angle });
+        // 枠を中空にし、内側の金紙を隠さない。
+        for (const bottom of [0, 0.955]) parts.push({ shape: "box", x: cx, y: 0, w: length, d: thickness, bottom: bottom * height, height: height * 0.045, material: "trim", radius: 0, angle });
+        for (const sign of [-1, 1]) {
+          const offset = sign * (length - thickness) / 2;
+          parts.push({ shape: "box", x: cx + Math.cos(angle) * offset, y: Math.sin(angle) * offset, w: thickness, d: thickness, bottom: 0, height, material: "trim", radius: 0, angle });
+        }
+      }
+      break;
+    case "shojiScreen":
+      for (const x of [-0.4, 0.4]) box(x, 0, 0.12, 1, 0, 0.035, "wood");
+      box(0, 0, 0.94, 0.09, 0.06, 0.92, "paper");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 0.16, 0.035, 0.965, "wood");
+      for (const z of [0.07, 0.99]) box(0, 0, 1, 0.16, z - 0.01, 0.02, "wood");
+      for (const x of [-0.28, -0.09, 0.09, 0.28]) box(x, -0.01, 0.014, 0.13, 0.08, 0.9, "paleWood");
+      for (let i = 1; i < 7; i++) box(0, -0.01, 0.94, 0.13, 0.08 + i * 0.9 / 7, 0.01, "paleWood");
+      break;
+    case "andon":
+      box(0, 0, 1, 1, 0, 0.08, "trim");
+      box(0, 0, 0.82, 0.82, 0.12, 0.82, "paper");
+      for (const x of [-0.43, 0.43]) for (const y of [-0.43, 0.43]) box(x, y, 0.08, 0.08, 0.08, 0.92, "wood");
+      for (const z of [0.1, 0.48, 0.95]) {
+        for (const y of [-0.43, 0.43]) box(0, y, 0.94, 0.05, z, 0.035, "wood");
+        for (const x of [-0.43, 0.43]) box(x, 0, 0.05, 0.94, z, 0.035, "wood");
+      }
+      break;
+    case "stepTansu":
+      for (let i = 0; i < 3; i++) {
+        const x = -1 / 3 + i / 3, top = 1 - i * 0.29;
+        box(x, -0.025, 1 / 3, 0.95, 0, top - 0.022, "wood");
+        box(x, -0.025, 1 / 3, 0.95, top - 0.022, 0.022, "trim");
+        for (let j = 0; j < 3 - i; j++) {
+          box(x, 0.46, 0.30, 0.025, 0.04 + j * 0.29, 0.26, "paleWood");
+          box(x, 0.4875, 0.08, 0.025, 0.15 + j * 0.29, 0.014, "iron");
+        }
+      }
+      break;
+    case "irori":
+      box(0, 0, 0.94, 0.94, 0, 0.7, "wood");
+      box(0, 0, 0.72, 0.72, 0.69, 0.02, "ash");
+      for (const y of [-0.425, 0.425]) box(0, y, 1, 0.15, 0.7, 0.15, "wood");
+      for (const x of [-0.425, 0.425]) box(x, 0, 0.15, 0.7, 0.7, 0.15, "wood");
+      for (const y of [-0.12, 0.12]) box(0, y, 0.40, 0.055, 0.71, 0.07, "coal");
+      ellipse(0, 0, 0.27, 0.27, 0.72, 0.24, "iron");
+      ellipse(0, 0, 0.08, 0.08, 0.96, 0.04, "trim");
+      break;
+    case "hibachi":
+    case "tsukubai": {
+      const basin = kind === "hibachi", material = basin ? "glaze" : "stone";
+      ellipse(0, 0, 0.75, 0.75, 0, 0.2, material);
+      ellipse(0, 0, 1, 1, 0.2, 0.6, material);
+      ellipse(0, 0, 1, 1, 0.8, 0.2, material);
+      parts[parts.length - 1].shape = "ring";
+      parts[parts.length - 1].inner = 0.68;
+      ellipse(0, 0, 0.69, 0.69, 0.83, 0.01, basin ? "ash" : "water");
+      if (basin) for (const x of [-0.14, 0, 0.14]) box(x, 0, 0.09, 0.27, 0.84, 0.08, "coal");
+      break;
+    }
+    case "engawa":
+      legs(0, 0.85);
+      for (let i = 0; i < 6; i++) box(0, -0.5 + (i + 0.5) / 6, 1, 0.157, 0.85, 0.15, "paleWood");
+      break;
+    case "hinokiBath":
+      box(0, 0, 0.98, 0.98, 0, 0.08, "paleWood");
+      box(0, 0, 0.84, 0.75, 0.59, 0.02, "water");
+      for (const y of [-0.45, 0.45]) {
+        box(0, y, 1, 0.1, 0.08, 0.92, "paleWood");
+        for (let i = 1; i < 16; i++) box(-0.5 + i / 16, y, 0.003, 0.101, 0.08, 0.919, "wood");
+      }
+      for (const x of [-0.465, 0.465]) box(x, 0, 0.07, 0.8, 0.08, 0.92, "paleWood");
+      break;
+  }
+  return parts.sort((a, b) => (a.bottom + a.height) - (b.bottom + b.height));
+}
+
 // ---- 岩 ----
 
 export interface RockShape {

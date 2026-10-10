@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
+import { verifySelection } from './selection-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -14,6 +15,8 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
     return `${code}\nwindow.__editorTest = {
       catalog: FURNITURE_DEFS,
       variants: FURNITURE_VARIANTS,
+      selection() { return selectedEntities().map(item => item.id); },
+      snapshot() { return cloneState(state); },
       roomLabelBounds(id) {
         const room = findEntity(id);
         return room?.type === 'room' ? getRoomLabelBounds(room) : null;
@@ -143,6 +146,7 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifySelection({ page, plan, importPlan, choose, planPoint, move, project, output });
 
   // Destructive reset and native text undo must not silently remove a plan.
   page.once('dialog', dialog => dialog.dismiss());

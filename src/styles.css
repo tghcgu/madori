@@ -1634,6 +1634,20 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+.property-grid .prop-button:has(svg) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+}
+
+.property-grid .prop-button > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
 .property-grid .prop-button.danger-button {
   border-color: rgba(212, 93, 76, 0.38);
   color: #a83f31;
@@ -1776,6 +1790,105 @@ select:focus-visible {
 #planCanvas {
   cursor: crosshair;
   background: #ffffff;
+  /* 長押しで選ぶとき、スマホで文字の選択や長押しのメニューが出ないように */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.plan-pane {
+  position: relative;
+}
+
+/* 長押しで選ぶときの目印。押した所で、輪が満ちていく */
+.press-ring {
+  position: absolute;
+  z-index: 6;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.press-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.press-ring .track {
+  fill: rgba(255, 255, 255, 0.72);
+  stroke: rgba(39, 117, 209, 0.2);
+  stroke-width: 4;
+}
+
+.press-ring .fill {
+  fill: none;
+  stroke: #2775d1;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+}
+
+.press-ring.is-pressing {
+  animation: press-show 1ms linear 110ms forwards;
+}
+
+.press-ring.is-pressing .fill {
+  animation: press-fill calc(var(--press-ms, 450ms) - 110ms) linear 110ms forwards;
+}
+
+@keyframes press-show {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes press-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* いまのツールでできること（選択ツール以外のとき、2Dの左下に出す） */
+.tool-hint {
+  position: absolute;
+  z-index: 5;
+  left: 10px;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(20, 30, 45, 0.08);
+}
+
+.tool-hint[hidden] {
+  display: none;
+}
+
+.tool-hint strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* まとめて選んでいるときの数 */
+.selection-count {
+  margin: 0;
+  color: #2775d1;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 #threeCanvas {

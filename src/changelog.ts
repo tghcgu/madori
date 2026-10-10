@@ -11,6 +11,22 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-10",
     items: [
       {
+        ja: "Ctrl＋ドラッグの範囲選択、Rで選択全体を90度回転、矢印キーで移動、Ctrl＋Dで複製、Ctrl＋C／Vでコピー・貼り付け、Ctrl＋Aで階全体を選択に対応。取り消し後も残っている物の複数選択を保ちます",
+        en: "Added Ctrl-drag box selection, R to rotate a group by 90 degrees, arrow-key movement, Ctrl+D duplication, Ctrl+C/V copy and paste, and Ctrl+A selection of the current floor. Undo keeps surviving items selected",
+      },
+      {
+        ja: "Ctrl＋クリック（MacはCmd）で複数の物を選択・解除し、位置関係を保ったまま一括移動できるように。2Dで部屋・壁・家具・文字などをまとめて選び、3Dでは選択した家具をつかんでまとめて移動できます。固定した物は動かさず、一括固定・削除、1回の取り消しにも対応",
+        en: "Ctrl-click (Cmd on Mac) to add or remove items from a selection and move them together without changing their spacing. Select rooms, walls, furniture, text and more in 2D, or drag a selected piece of furniture in 3D to move the selection. Locked items stay put; batch locking, deletion and single-step undo are supported",
+      },
+      {
+        ja: "描くツールでも物をクリックすると選択でき、家具・文字・消去などのツールでは長押しで選択できます。Escで描画や移動をキャンセルして選択ツールへ戻り、家具の配置と移動はまとめて1回で取り消せます",
+        en: "Click an item to select it while using drawing tools, or hold to select while placing furniture, text or erasing. Escape cancels drawing or movement and returns to selection; placing and dragging a new piece of furniture is now one undo step",
+      },
+      {
+        ja: "「和風の家具・設備」に12種類を追加。畳・座布団・ちゃぶ台・屏風・障子の衝立・行灯・階段箪笥・囲炉裏・火鉢・縁台・檜風呂・つくばいを、幅・奥行・高さ・色を変えて配置できます。2Dと3Dは共通の形データから描画します",
+        en: "12 Japanese furnishings: tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub and tsukubai basin. Width, depth, height and colors are editable, with shared geometry for 2D and 3D",
+      },
+      {
         ja: "雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました",
         en: "50 templates: added a three-story house, a condominium, a share house, an old farmhouse, a samurai residence, a dormitory, a restaurant, a ramen shop, an izakaya, a hair salon, a bookstore, a nursery school, a gymnasium, a police box, a cinema, a temple, a campsite, a cruise ship, a sleeper train, a castle, an adventurers' inn, a wizard's tower, and a spaceship, with new groups for outdoors and vehicles and for fantasy and sci-fi",
       },

@@ -204,6 +204,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 分類 | 収録要素 |
 | --- | --- |
 | 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
+| 和風の家具・設備 | 畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい |
 | 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、ベンチ |
 | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク |
 | ベッド | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド |
@@ -223,7 +224,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 各家具は2D用の平面記号と3Dモデルを持ちます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
-- 家具・設備82種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備94種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 和風の12種類は幅・奥行・高さをそれぞれ調整できます（高さ1cm〜30m）。2D記号と3Dモデルは同じ部品の位置・寸法を使っています。
 - 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯・キャットタワーは「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
 - 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています（番号の印に書く番号だけは別です）。
 - 「人」と「倒れた人」は、体の関節を自由に動かせる人の模型です。3Dはデッサン人形のような、一色で関節に玉のある落ち着いた形です。「選択中」の「姿勢」で立っている・うつぶせ・あおむけを切り替え、「ポーズの見本」（気をつけ・歩く・手を上げる・両手を広げる・指さす・座る・ひざをつく・しゃがむ・うつぶせ・手足を広げて・あおむけ）から始めて、「関節の角度」で胴（腰を前・横へ倒す、ねじる）、首（うなずく・かしげる・振り向く）、腕・脚ごとの開く・前後・ひじやひざの曲げ・曲げる向き・手首・足首を変えられます。2Dで選ぶと、手首・足首（白）、ひじ・ひざ（水色）、頭に丸いつまみが出ます。手首・足首をドラッグするとその所まで手足が届き（寝ているときは床の上で、立っているときは腕や脚の向きを変えて）、ひじ・ひざをドラッグすると腕・脚の付け根が回り、頭をドラッグすると腰から曲がります。「身長」で大きさを変えられ、立つと約170cm。座る・ひざをつく・しゃがむでは、いちばん低い所が床に着くように体が下がります。体は太さのある部品（両端の太さが違う丸い部品と関節の玉）の集まりで、3Dはその部品を立体に、2Dは同じ部品を真上から見た形（立った人は頭や肩の輪郭を重ねて）を描くので、どのポーズでも2Dと3Dが同じ形です。倒れた人は、手足を動かすまでは前からある形のままで、デザインの「標準」「手足を広げて」を選ぶといつでもその形に戻せます。「チョークの線」は今のポーズの輪郭になります
@@ -338,6 +340,13 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | `L` | 選択中の要素を固定・固定解除 |
 | `Delete` / `Backspace` | 選択中の要素を削除 |
 | `Ctrl + Z` / `Cmd + Z` | 元に戻す |
+| `Ctrl + クリック` / `Cmd + クリック` | 複数選択に追加・選択から解除 |
+| `Ctrl + ドラッグ` / `Cmd + ドラッグ` | 四角で囲んだ物を選択に追加 |
+| `Ctrl / Cmd + A` | 表示中の階の物をすべて選択 |
+| `Ctrl / Cmd + D` | 選択した物を複製 |
+| `Ctrl / Cmd + C` / `Ctrl / Cmd + V` | 選択した物をコピー・貼り付け |
+| 矢印キー / `Shift + 矢印キー` | 選択した物を20cm / 100cm移動 |
+| `Esc` | 操作をキャンセルして選択ツールへ。操作中でなければ選択を解除 |
 | `Ctrl + Y` / `Cmd + Shift + Z` | やり直す |
 
 入力欄や選択欄を編集中は、文字入力を妨げないよう一部のショートカットが無効になります。
@@ -351,6 +360,12 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 一部の項目が壊れている場合は、元データを退避して読み込める項目を復旧します。画面上部の「元データを書き出し」から、元のJSONをそのまま取得できます。容量不足などで退避できない場合は、元データを上書きしないよう自動保存を停止します。その場合、編集中の内容は通常の「書き出し」で保存してください。構文が壊れたJSONは自動復旧できませんが、元データの取得は可能です。
 
 「新規」は作成済みの要素がある場合に確認を表示します。確定した後もUndoで戻せます。名前などの入力中は、Ctrl / Cmd + Zは入力欄の文字だけを取り消します。
+
+複数選択した物の1つをドラッグすると、間隔を保ってまとめて移動します。固定した物はその場に残ります。「選択中」で一括固定・削除・選択解除ができ、移動や削除は1回のUndoで戻せます。3Dでは選択した家具をつかんで動かします。右ドラッグ／Shift＋左ドラッグは視点移動です。
+
+複数選択中のRキーは全体を中心のまわりに90度回転します。コピーはアプリ内だけで使うクリップボードです。同じ階への複製・貼り付けは40cmずらし、別の階への貼り付けは元の位置を保ちます。
+
+部屋・壁などを描くツールでも、物を短くクリックすると選択に戻れます。家具・文字の配置や消去のツールでは、物を約0.45秒長押しすると、配置・消去せずに選択できます。家具の配置とそのままのドラッグは1回のUndoで取り消せます。
 
 - 保存キー: `madori-quick-3d-plan`
 - 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）、2Dの絵柄とドットの大きさ、画像の書き出しの設定もブラウザへ保存
@@ -430,7 +445,7 @@ npm.cmd run dev
 
 ブラウザテストは独立したViteサーバーと一時ブラウザを起動するため、普段の保存データには触れません。Windowsではインストール済みのEdgeを使います。他のOSでは先に`npx playwright install chromium`を実行してください。`E2E_BROWSER_CHANNEL`でブラウザを変更できます。テスト画像は`.codex/regression/`へ出力します。
 
-家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全82種類のサイズ変更・回転・反転・色変更と保存を確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
+家具の単体テストでは標準・最小・横長・縦長の寸法、有限の頂点座標、設置範囲、部品を統合した前後の形状、材質別の色、テレビ画面比率を検証します。E2Eでは全94種類のサイズ変更・回転・反転・色変更と保存、および複数選択・一括移動・固定・キャンセル・Undoを確認します。3D一覧画像は`.codex/furniture-quality/`に出力されます。画像は自動の空白チェックに加え、形状や重なりを目視で確認してください。
 
 本番ビルド:
 
@@ -490,7 +505,8 @@ madori/
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
-│  ├─ furniture-models.ts    # 家具82種類の3D形状と材質
+│  ├─ furniture-models.ts    # 家具94種類の3D形状と材質
+│  ├─ selection.ts           # 複数の物の位置関係を保った移動
 │  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
@@ -626,6 +642,10 @@ npm.cmd run dev
 
 ### 2026年10月10日
 
+- Ctrl＋ドラッグの範囲選択、Rで選択全体を90度回転、矢印キーで移動、Ctrl＋Dで複製、Ctrl＋C／Vでコピー・貼り付け、Ctrl＋Aで階全体を選択に対応。取り消し後も残っている物の複数選択を保ちます
+- Ctrl＋クリック（MacはCmd）で複数の物を選択・解除し、位置関係を保ったまま一括移動できるように。2Dで部屋・壁・家具・文字などをまとめて選び、3Dでは選択した家具をつかんでまとめて移動できます。固定した物は動かさず、一括固定・削除、1回の取り消しにも対応
+- 描くツールでも物をクリックすると選択でき、家具・文字・消去などのツールでは長押しで選択できます。Escで描画や移動をキャンセルして選択ツールへ戻り、家具の配置と移動はまとめて1回で取り消せます
+- 「和風の家具・設備」に12種類を追加。畳・座布団・ちゃぶ台・屏風・障子の衝立・行灯・階段箪笥・囲炉裏・火鉢・縁台・檜風呂・つくばいを、幅・奥行・高さ・色を変えて配置できます。2Dと3Dは共通の形データから描画します
 - 雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました
 - 2Dの絵柄を17種類に。水彩・墨絵・クレヨン・ポップ・CAD・ホラー・コピー・レトロゲーム（緑の4色のドット）を追加し、絵柄のメニューを分類ごとに並べました
 - 雛形の旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります
@@ -973,6 +993,7 @@ The furniture and equipment palette lists frequently used openings and furniture
 | Category | Objects |
 | --- | --- |
 | Openings | Swing door, sliding door, window, divided window |
+| Japanese furnishings | Tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin |
 | Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bench |
 | Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk |
 | Beds | Single bed, semi-double bed, double bed, bunk bed, futon, crib |
@@ -998,7 +1019,8 @@ Each item has a dedicated 2D plan symbol and a generated 3D representation. Item
 - Choose 足跡 (footprints) and drag on the 2D plan to lay footprints along the drawn path, alternating left and right with the toes facing the walking direction (a click places a straight trail). The stride can be changed, and the path can be redrawn or straightened from Selection.
 - The investigation marks are meant for TRPG and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and shards look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
 - "破片" (shards, such as broken glass): choose it and drag on the 2D plan to scatter shards along the path (a click places the original cluster). Under Selection, change the spread and the amount (few, normal, many), redraw the path, or gather the shards into the cluster again. Without a color they are see-through glass; with a 2D/3D color they become solid shards of that color (pottery, wood and so on).
-- All 82 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- All 94 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- The 12 Japanese furnishings have independent width, depth and height settings (height: 1 cm to 30 m). Their 2D symbols and 3D models use the same part dimensions and positions.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
 - Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
@@ -1107,11 +1129,24 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | `L` | Lock or unlock the selected item |
 | `Delete` / `Backspace` | Delete the selected item |
 | `Ctrl + Z` / `Cmd + Z` | Undo |
+| `Ctrl + click` / `Cmd + click` | Add to or remove from a multi-selection |
+| `Ctrl + drag` / `Cmd + drag` | Add items fully inside a selection rectangle |
+| `Ctrl / Cmd + A` | Select all items on the current floor |
+| `Ctrl / Cmd + D` | Duplicate the selection |
+| `Ctrl / Cmd + C` / `Ctrl / Cmd + V` | Copy / paste the selection |
+| Arrow keys / `Shift + arrow keys` | Move the selection by 20 cm / 100 cm |
+| `Esc` | Cancel the gesture and return to selection; clear selection when idle |
 | `Ctrl + Y` / `Cmd + Shift + Z` | Redo |
 
 Some shortcuts are disabled while an input, select box, or editable field has focus.
 
 Furniture tools stay active after placement so you can place several items directly in 3D. Press Escape to cancel a placement or move. Completed gestures support Undo / Redo. Ctrl / Cmd + Z inside a text field uses native text undo, without undoing the plan. Drawing walls and floor regions still uses the 2D canvas.
+
+Drag one of the selected items to move the selection without changing its spacing. Locked items stay put. The Selection panel supports batch locking, deletion and clearing; each move or deletion takes one Undo step. In 3D, grab a selected piece of furniture to move the group. Right-drag or Shift+left-drag pans the camera.
+
+R rotates a multi-selection by 90 degrees around its center. Copy and paste use an app-local clipboard. Duplicating or pasting on the same floor offsets the copies by 40 cm; pasting on a different floor preserves their original positions.
+
+Click an existing item while drawing rooms or walls to select it. While placing furniture or text, or using the eraser, hold an item for about 0.45 seconds to select it without placing or deleting anything. Placing and dragging a new piece of furniture takes one Undo step.
 
 ## Persistence and File Transfer
 
@@ -1196,7 +1231,7 @@ npm.cmd run dev
 
 Browser tests start an isolated Vite server and browser context without touching your normal saved plans. Windows uses installed Edge. On other platforms, first run `npx playwright install chromium`. Set `E2E_BROWSER_CHANNEL` to override the browser. Screenshots are written to `.codex/regression/`.
 
-Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 82 types. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
+Furniture unit tests cover default, minimum, wide, and deep dimensions, finite vertices, footprints, geometry before/after batching, material colors, and TV aspect ratios. E2E tests exercise resizing, rotation, mirroring, color changes, and persistence for all 94 types, as well as multi-selection, group movement, locking, cancellation and undo. The 3D catalog is captured in `.codex/furniture-quality/`. Alongside automated blank-canvas checks, inspect these images for shape and overlap defects.
 
 Production build:
 
@@ -1256,7 +1291,8 @@ madori/
 │  ├─ colors.ts              # Color codes with transparency
 │  ├─ translucency.ts        # 3D materials for see-through colors
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
-│  ├─ furniture-models.ts    # Geometry and materials for 82 furniture types
+│  ├─ furniture-models.ts    # Geometry and materials for 94 furniture types
+│  ├─ selection.ts           # Group translation that preserves relative positions
 │  ├─ opening-models.ts      # Door, sliding door, and window geometry
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection
@@ -1393,6 +1429,10 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-10
 
+- Added Ctrl-drag box selection, R to rotate a group by 90 degrees, arrow-key movement, Ctrl+D duplication, Ctrl+C/V copy and paste, and Ctrl+A selection of the current floor. Undo keeps surviving items selected
+- Ctrl-click (Cmd on Mac) to add or remove items from a selection and move them together without changing their spacing. Select rooms, walls, furniture, text and more in 2D, or drag a selected piece of furniture in 3D to move the selection. Locked items stay put; batch locking, deletion and single-step undo are supported
+- Click an item to select it while using drawing tools, or hold to select while placing furniture, text or erasing. Escape cancels drawing or movement and returns to selection; placing and dragging a new piece of furniture is now one undo step
+- 12 Japanese furnishings: tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub and tsukubai basin. Width, depth, height and colors are editable, with shared geometry for 2D and 3D
 - 50 templates: added a three-story house, a condominium, a share house, an old farmhouse, a samurai residence, a dormitory, a restaurant, a ramen shop, an izakaya, a hair salon, a bookstore, a nursery school, a gymnasium, a police box, a cinema, a temple, a campsite, a cruise ship, a sleeper train, a castle, an adventurers' inn, a wizard's tower, and a spaceship, with new groups for outdoors and vehicles and for fantasy and sci-fi
 - 17 2D styles: added watercolor, ink wash, crayon, pop, CAD, horror, photocopy, and retro game (four-green dots), and the style menu is now grouped by kind
 - The ryokan, hotel, hospital, school, library, police station, art museum, and castle templates now have upper floors (the hotel and the school have three), with stairs in the same place on each floor

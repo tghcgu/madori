@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
 import {
   PERSON_HEIGHT, PERSON_PRESETS, bloodShape, evidenceMarkerShape, footprintPathTrail, footprintTrail, glassShards, markerTextSize, normalizePersonPose,
+  JAPANESE_KINDS, japaneseParts,
   partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights, shardMargin, shardPieces, shardTrail,
 } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
@@ -16,6 +17,22 @@ function dispose(group) {
   });
   materials.forEach(material => material.dispose());
 }
+
+test('Japanese furniture uses ordered shared parts with visible tatami borders above the base', () => {
+  for (const kind of JAPANESE_KINDS) {
+    const def = FURNITURE_DEFS[kind];
+    const parts = japaneseParts(kind, def.w, def.h, def.height);
+    assert.ok(parts.length > 1);
+    const tops = parts.map(part => part.bottom + part.height);
+    assert.deepEqual(tops, [...tops].sort((a, b) => a - b), kind);
+    assert.ok(parts.every(part => part.w > 0 && part.d > 0 && part.height > 0));
+  }
+  const parts = japaneseParts('tatami', 90, 180, 6);
+  const base = parts.find(part => part.material === 'straw');
+  for (const part of parts.filter(part => ['border', 'weave'].includes(part.material))) {
+    assert.ok(part.bottom + part.height > base.bottom + base.height);
+  }
+});
 
 // 標準と別デザイン（2Dの記号と同じ番号）のどちらも、同じ条件で確かめる
 const designs = Object.entries(FURNITURE_DEFS).flatMap(([kind, defaults]) =>

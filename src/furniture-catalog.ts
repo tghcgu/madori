@@ -1,4 +1,6 @@
 export type FurnitureKind =
+  | "tatami" | "zabuton" | "chabudai" | "byobu" | "shojiScreen" | "andon"
+  | "stepTansu" | "irori" | "hibachi" | "engawa" | "hinokiBath" | "tsukubai"
   | "sofa"
   | "sofaCorner"
   | "sideTable"
@@ -91,6 +93,18 @@ export interface FurnitureDef {
 }
 
 export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
+  tatami: { label: "畳（一畳）", w: 90, h: 180, height: 6 },
+  zabuton: { label: "座布団", w: 55, h: 59, height: 8 },
+  chabudai: { label: "ちゃぶ台", w: 90, h: 90, height: 33 },
+  byobu: { label: "屏風", w: 180, h: 45, height: 150 },
+  shojiScreen: { label: "障子の衝立", w: 100, h: 35, height: 160 },
+  andon: { label: "行灯", w: 32, h: 32, height: 65 },
+  stepTansu: { label: "階段箪笥", w: 150, h: 45, height: 150 },
+  irori: { label: "囲炉裏", w: 110, h: 110, height: 35 },
+  hibachi: { label: "火鉢", w: 45, h: 45, height: 32 },
+  engawa: { label: "縁台", w: 180, h: 60, height: 40 },
+  hinokiBath: { label: "檜風呂", w: 160, h: 85, height: 65 },
+  tsukubai: { label: "つくばい", w: 60, h: 60, height: 45 },
   sofaCorner: { label: "L字ソファ", w: 240, h: 160 },
   sideTable: { label: "サイドテーブル", w: 50, h: 50 },
   roundTable: { label: "丸テーブル", w: 100, h: 100 },
