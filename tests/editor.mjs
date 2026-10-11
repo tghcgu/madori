@@ -5,12 +5,14 @@ import { chromium } from 'playwright';
 import { verifySelection } from './selection-editor.mjs';
 import { verifyInteriorZoom } from './camera-editor.mjs';
 import { verifyStairs } from './stairs-editor.mjs';
+import { verifyEditingUpgrades } from './editing-upgrades.mjs';
+import { verifyTemplateFloors } from './template-floors-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
 await mkdir(output, { recursive: true });
 // Read-only geometry probes are added only by this isolated test server.
-const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plugins: [{
+const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host: '127.0.0.1', port: 0 }, plugins: [{
   name: 'editor-test-probes',
   transform(code, id) {
     if (!id.replaceAll('\\', '/').endsWith('/src/main.ts')) return;
@@ -19,6 +21,14 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       variants: FURNITURE_VARIANTS,
       selection() { return selectedEntities().map(item => item.id); },
       snapshot() { return cloneState(state); },
+      templateSnapshot(key) { return makeTemplate(key); },
+      textBounds(id) { return measureTextLabel(findEntity(id)); },
+      hit(x, y) { return hitTest({ x, y }).entity?.id ?? null; },
+      floorAt(id, x, y) {
+        const ray = new THREE.Raycaster(new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D, 100, (y-threeSceneCenter.y)*SCALE_3D), new THREE.Vector3(0,-1,0));
+        planGroup.updateMatrixWorld(true);
+        return ray.intersectObjects(planGroup.children.filter(o => o.userData.entityId === id && !o.userData.ignoreSelection), true).some(hit => hit.object.isMesh);
+      },
       incomingStairIds() { return incomingStairs(state.floors, state.activeFloor).map(item => item.id); },
       stairModelIds() { return planGroup.children.filter(o => !o.userData.ignoreSelection && isStair(findEntity(o.userData.entityId))).map(o => o.userData.entityId); },
       roomLabelBounds(id) {
@@ -59,6 +69,7 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       cameraPosition() {
         return camera.position.toArray();
       },
+      cameraPose() { return { position: camera.position.toArray(), target: controls.target.toArray() }; },
       materials(id) {
         const found = [];
         planGroup.traverse(o => {
@@ -140,7 +151,7 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
     localStorage.setItem(key, raw);
     sessionStorage.setItem('seeded', 'yes');
   }, { key, raw });
-  await target.goto(server.resolvedUrls.local[0]);
+  await target.goto(server.resolvedUrls.local[0], { waitUntil: 'domcontentloaded', timeout: 60000 });
   await target.waitForFunction(() => Boolean(window.__editorTest));
   return target;
 }
@@ -150,6 +161,9 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyEditingUpgrades({ page, importPlan, planPoint, project, move, change, output });
+  if (!process.argv.includes('--upgrades-only')) await verifyTemplateFloors({ page, choose, output, pixels });
+  if (!process.argv.includes('--upgrades-only') && !process.argv.includes('--templates-only')) {
   await verifyStairs({ page, importPlan, planPoint, output });
   await verifySelection({ page, plan, importPlan, choose, planPoint, move, project, output });
 
@@ -1292,6 +1306,7 @@ try {
   assert.equal(await page.locator('[data-furniture="table"]').getAttribute('aria-pressed'), 'true');
   await page.locator('[data-tool="select"]').click();
   point = await project(furniture.x + furniture.w/2, furniture.y + furniture.h/2, 0.42);
+  await page.mouse.dblclick(point.x, point.y);
   await page.mouse.move(point.x, point.y);
   await page.mouse.down();
   await page.mouse.move(point.x + 90, point.y + 40, { steps: 8 });
@@ -1520,7 +1535,10 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
+  assert.deepEqual(errors, []);
 } catch (error) {
+  if (errors.length) console.error('Browser errors:', errors);
   if (page && !page.isClosed()) await page.screenshot({ path: `${output}/failure.png`, fullPage: true }).catch(() => {});
   throw error;
 } finally {

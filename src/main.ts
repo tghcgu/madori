@@ -29,6 +29,9 @@ import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 import { translateSelection } from "./selection";
 import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
+import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
+import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
+import { openTemplateStairwells } from "./template-floors";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
@@ -64,6 +67,10 @@ interface Room {
   surface?: RoomSurface;
   labelOffsetX?: number;
   labelOffsetY?: number;
+  labelSize?: number;
+  writingMode?: WritingMode;
+  outline?: [number, number][];
+  holes?: [number, number][][];
   locked?: boolean;
 }
 
@@ -150,6 +157,7 @@ interface TextLabel {
   y: number;
   size: number;
   rotation: number;
+  writingMode?: WritingMode;
   color?: string;
   locked?: boolean;
 }
@@ -295,7 +303,6 @@ function isMobileOrTabletDevice(): boolean {
 
 const INK = "#000000";
 const TEXT_FONT = '"Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif';
-const TEXT_LINE_HEIGHT = 1.25;
 const DEFAULT_TEXT_SIZE = 24;
 const MAX_TEXT_LENGTH = 500;
 // 椅子の背もたれ・枕など、向きを示す部分の塗り
@@ -602,6 +609,7 @@ let selectionFloor = -1;
 let clipboard: { floorId: string; entities: Entity[]; pastes: number } | null = null;
 let threePointerDown: Point | null = null;
 let threeDrag: ThreeDrag | null = null;
+let threeMoveId: string | null = null;
 let threeSceneCenter: Point = { x: 0, y: 0 };
 let threeNeedsRender = true;
 let pendingCameraFrame = true;
@@ -627,7 +635,7 @@ const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 1000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;
+controls.screenSpacePanning = true;
 controls.minDistance = MIN_CAMERA_DISTANCE;
 controls.maxDistance = MAX_CAMERA_DISTANCE;
 // 奥まで寄れるよう、マウスのある場所に向かって拡大縮小する。1目盛りの倍率は2Dとほぼ同じ
@@ -809,6 +817,10 @@ function normalizeEntity(value: unknown): Entity {
         surface: isRoomSurface(entity.surface) ? entity.surface : "plain",
         labelOffsetX: finite(entity.labelOffsetX) ? entity.labelOffsetX : undefined,
         labelOffsetY: finite(entity.labelOffsetY) ? entity.labelOffsetY : undefined,
+        labelSize: finite(entity.labelSize) ? clamp(entity.labelSize!, 5, 500) : undefined,
+        writingMode: entity.writingMode === "vertical" ? "vertical" : undefined,
+        outline: normalizeOutline(entity.outline),
+        holes: normalizeFloorHoles(entity.holes, normalizeOutline(entity.outline)),
       };
     }
     if (!Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, entity.kind)) throw new Error("Unknown furniture kind");
@@ -855,6 +867,7 @@ function normalizeEntity(value: unknown): Entity {
       text: typeof entity.text === "string" ? entity.text.slice(0, MAX_TEXT_LENGTH) : "",
       x: entity.x, y: entity.y,
       size: finite(entity.size) ? clamp(entity.size, 5, 500) : DEFAULT_TEXT_SIZE,
+      writingMode: entity.writingMode === "vertical" ? "vertical" : undefined,
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       color: color(entity.color),
     };
@@ -982,7 +995,7 @@ function setupUi(): void {
   document.querySelectorAll<HTMLButtonElement>("[data-template]").forEach((button) => {
     button.addEventListener("click", () => {
       const key = button.dataset.template ?? "oneLdk";
-      if (!window.confirm("現在の間取りを雛形で置き換えます。実行しますか？")) {
+      if (!window.confirm("現在の間取りをテンプレートで置き換えます。実行しますか？")) {
         return;
       }
       replaceState(makeTemplate(key), true);
@@ -1130,8 +1143,17 @@ function setupUi(): void {
   threeCanvas.addEventListener("pointerdown", handleThreePointerDown, { capture: true });
   threeCanvas.addEventListener("pointermove", handleThreePointerMove);
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
+  threeCanvas.addEventListener("dblclick", handleThreeDoubleClick);
   threeCanvas.addEventListener("pointercancel", cancelThreeDrag);
   threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
+  window.addEventListener("blur", () => { cancelThreeDrag(); threeMoveId = null; syncThreeMoveMode(); });
+  document.querySelector("#threeMoveToggle")?.addEventListener("click", () => {
+    const selected = state.selectedId ? findEntity(state.selectedId) : undefined;
+    threeMoveId = !threeMoveId && selected?.type === "furniture" && !isLocked(selected) ? selected.id : null;
+    activeTool = "select";
+    setActiveButton("[data-tool]", activeTool);
+    syncThreeMoveMode();
+  });
   window.addEventListener("keydown", handleKeyDown);
 
   bindSplitDivider();
@@ -1511,6 +1533,7 @@ function renderRoofList(): void {
 function setActiveFloorIndex(index: number): void {
   if (index === state.activeFloor || index < 0 || index >= state.floors.length) return;
   state.activeFloor = index;
+  threeMoveId = null;
   state.selectedId = null;
   persistState();
   fitPlanToCanvas();
@@ -1998,6 +2021,7 @@ function selectedEntities(): Entity[] {
 }
 
 function selectOnly(id: string | null): void {
+  if (id !== threeMoveId) threeMoveId = null;
   multiSelection.clear();
   state.selectedId = id;
   selectionFloor = state.activeFloor;
@@ -2656,6 +2680,7 @@ function handleThreePointerDown(event: PointerEvent): void {
   const id = pickThreeEntity(event);
   const selected = id ? findEntity(id) : undefined;
   if (event.ctrlKey || event.metaKey) {
+    threeMoveId = null;
     event.preventDefault();
     event.stopImmediatePropagation();
     threePointerDown = null;
@@ -2691,7 +2716,8 @@ function handleThreePointerDown(event: PointerEvent): void {
     if (!point) return;
     const base = FURNITURE_DEFS[activeFurniture];
     furnitureItem = { id: newId("furniture"), type: "furniture", kind: activeFurniture, x: snap(point.x - base.w / 2), y: snap(point.y - base.h / 2), w: base.w, h: base.h, rotation: 0, ...newFurnitureDetails(activeFurniture) };
-  } else if (activeTool === "select" && selected?.type === "furniture" && !isLocked(selected)) {
+  } else if (activeTool === "select" && selected?.type === "furniture" && !isLocked(selected)
+    && threeMoveId && selectedEntities().some(item => item.id === threeMoveId) && selectedEntities().some(item => item.id === selected.id)) {
     furnitureItem = selected;
     floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === selected.id));
   } else {
@@ -2777,7 +2803,7 @@ function finishThreeDrag(cancel = false): void {
   }
   controls.enabled = true;
   if (threeCanvas.hasPointerCapture(gesture.pointerId)) threeCanvas.releasePointerCapture(gesture.pointerId);
-  threeCanvas.style.cursor = "grab";
+  syncThreeMoveMode();
   redrawAll();
 }
 
@@ -2795,7 +2821,7 @@ function handleThreePointerUp(event: PointerEvent): void {
   threePointerDown = null;
   if (moved > 6 || activeTool === "furniture") return;
   const entityId = pickThreeEntity(event);
-  selectOnly(entityId);
+  if (!entityId || !selectedEntities().some(item => item.id === entityId)) selectOnly(entityId);
   if (entityId) {
     const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === entityId));
     if (floorIndex >= 0 && floorIndex !== state.activeFloor) {
@@ -2808,6 +2834,27 @@ function handleThreePointerUp(event: PointerEvent): void {
   updateUi();
   render2d();
   rebuildThree();
+}
+
+function handleThreeDoubleClick(event: MouseEvent): void {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || threeDrag || activeTool !== "select") return;
+  const id = pickThreeEntity(event as PointerEvent), entity = id ? findEntity(id) : undefined;
+  if (entity?.type !== "furniture" || isLocked(entity)) return;
+  if (!selectedEntities().some(item => item.id === id)) selectOnly(id);
+  threeMoveId = id;
+  syncThreeMoveMode();
+}
+
+function syncThreeMoveMode(): void {
+  const members = selectedEntities();
+  if (threeMoveId && !members.some(item => item.id === threeMoveId && !isLocked(item))) threeMoveId = null;
+  const button = document.querySelector<HTMLButtonElement>("#threeMoveToggle");
+  if (button) {
+    button.disabled = !members.some(item => item.type === "furniture" && !isLocked(item));
+    button.classList.toggle("is-active", Boolean(threeMoveId));
+    button.setAttribute("aria-pressed", String(Boolean(threeMoveId)));
+  }
+  if (!threeDrag) threeCanvas.style.cursor = threeMoveId ? "move" : "grab";
 }
 
 function handleWheel(event: WheelEvent): void {
@@ -2828,10 +2875,14 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (isEditing) return;
   if (event.key === "Escape" && threeDrag) {
     cancelThreeDrag();
+    threeMoveId = null;
+    syncThreeMoveMode();
     return;
   }
   if (event.key === "Escape") {
     event.preventDefault();
+    threeMoveId = null;
+    syncThreeMoveMode();
     const gesturing = drag.pointerId !== null;
     cancelPlanDrag();
     if (!gesturing && activeTool === "select") selectOnly(null);
@@ -3047,6 +3098,47 @@ function polygonPoints(shape: Shape): Point[] {
   return points;
 }
 
+function reshapeRoom(room: Room, points: [number, number][]): boolean {
+  const outline = outlineFromPoints(points);
+  if (!outline) return false;
+  const holes = floorPolygon(room).slice(1).map(ring => ring.map(([x, y]): [number, number] => [(x - outline.x) / outline.w, (y - outline.y) / outline.h]));
+  try { outline.holes = normalizeFloorHoles(holes, outline.outline); }
+  catch { return false; }
+  const label = getRoomLabelPosition(room);
+  Object.assign(room, outline);
+  room.labelOffsetX = label.x - room.x;
+  room.labelOffsetY = label.y - room.y;
+  return true;
+}
+
+function floorHandles(room: Room): { key: string; x: number; y: number }[] {
+  const points = floorPoints(room);
+  return [
+    ...points.map(([x, y], i) => ({ key: `vertex:${i}`, x, y })),
+    ...(points.length >= MAX_FLOOR_VERTICES ? [] : points.map(([x, y], i) => {
+      const next = points[(i + 1) % points.length];
+      return { key: `edge:${i}`, x: (x + next[0]) / 2, y: (y + next[1]) / 2 };
+    })),
+  ];
+}
+
+function floorFromShape(shape: Shape): void {
+  let points: [number, number][];
+  if (shape.kind === "polygon") points = polygonPoints(shape).map(p => [p.x, p.y]);
+  else {
+    const start = shape.kind === "circle" ? 0 : shape.startAngle;
+    const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - start);
+    const count = Math.max(4, Math.ceil(sweep / (Math.PI * 2) * 64));
+    points = Array.from({ length: shape.kind === "circle" ? count : count + 1 }, (_, i) => [shape.x + shape.r * Math.cos(start + sweep * i / count), shape.y + shape.r * Math.sin(start + sweep * i / count)]);
+    if (shape.kind === "arc") points.unshift([shape.x, shape.y]);
+  }
+  const outline = outlineFromPoints(points);
+  if (!outline) return;
+  const floor: Room = { id: newId("room"), type: "room", name: "", color: SURFACE_DEFS[activeRoomSurface].color, surface: activeRoomSurface, ...outline };
+  activeEntities().push(floor);
+  selectOnly(floor.id);
+}
+
 function rotateEntity(entity: Entity, degrees: number): void {
   if (isLocked(entity)) return;
   if (entity.type === "furniture" || entity.type === "text") {
@@ -3065,7 +3157,7 @@ function rotateEntity(entity: Entity, degrees: number): void {
     return;
   }
   if (entity.type === "room") {
-    // 部屋は軸平行のみなので、角度によらず縦横を入れ替える90°回転にする
+    // 外枠の縦横を入れ替え、自由な床の頂点も同じ90度だけ回す。
     const cx = entity.x + entity.w / 2;
     const cy = entity.y + entity.h / 2;
     const newW = entity.h;
@@ -3074,6 +3166,8 @@ function rotateEntity(entity: Entity, degrees: number): void {
     entity.y = snap(cy - newH / 2);
     entity.w = newW;
     entity.h = newH;
+    if (entity.outline) entity.outline = entity.outline.map(([x, y]) => [1 - y, x]);
+    if (entity.holes) entity.holes = entity.holes.map(ring => ring.map(([x, y]) => [1 - y, x]));
     return;
   }
   if (isLinear(entity)) {
@@ -3157,6 +3251,16 @@ function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): 
 
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (isLocked(entity) || isLocked(origin)) return;
+  if (origin.type === "room" && entity.type === "room" && (corner.startsWith("vertex:") || corner.startsWith("edge:"))) {
+    const points = floorPoints(origin), index = Number(corner.split(":")[1]);
+    const next: [number, number] = [snap(point.x), snap(point.y)];
+    if (corner.startsWith("edge:")) {
+      if (points.length >= MAX_FLOOR_VERTICES) return;
+      points.splice(index + 1, 0, next);
+    } else points[index] = next;
+    reshapeRoom(entity, points);
+    return;
+  }
   if (origin.type === "room" && entity.type === "room") {
     let x1 = origin.x;
     let y1 = origin.y;
@@ -3619,6 +3723,8 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
   drawLayer(entities.filter(isTextLabel), drawTextLabel);
   if (options.editing) {
     if (selectedEntities().length > 1) drawMultiSelection();
+    const selectedFloor = activeEntities().find(entity => entity.id === state.selectedId);
+    if (selectedFloor?.type === "room" && selectedFloor.outline && !isLocked(selectedFloor)) drawResizeHandles(selectedFloor);
     drawMarquee();
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
@@ -3900,6 +4006,14 @@ function drawRoof2d(roofItem: Roof): void {
   if (selected && !isLocked(roofItem)) drawResizeHandles(roofItem);
 }
 
+function traceRoom(room: Room): void {
+  ctx.beginPath();
+  for (const points of floorPolygon(room)) {
+    points.forEach(([x, y], index) => index ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath();
+  }
+}
+
 function drawRoom(room: Room): void {
   const selected = state.selectedId === room.id;
   const surface = room.surface ?? "plain";
@@ -3910,25 +4024,28 @@ function drawRoom(room: Room): void {
   ctx.fillStyle = pattern ?? fill;
   ctx.strokeStyle = selected ? "#2775d1" : "#c3c9d2";
   ctx.lineWidth = selected ? 2.4 / view.zoom : 1.1 / view.zoom;
-  ctx.fillRect(room.x, room.y, room.w, room.h);
+  traceRoom(room);
+  ctx.fill("evenodd");
   if (selected) {
     ctx.fillStyle = "rgba(39,117,209,0.08)";
-    ctx.fillRect(room.x, room.y, room.w, room.h);
+    ctx.fill("evenodd");
   }
-  ctx.strokeRect(room.x, room.y, room.w, room.h);
+  ctx.stroke();
 
   const label = getRoomLabelPosition(room);
   ctx.fillStyle = INK;
-  ctx.textAlign = "left";
-  ctx.font = `${Math.max(12, 13 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-  ctx.textBaseline = "top";
+  const size = room.labelSize ?? Math.max(12, 13 / view.zoom);
+  const layout = measureLabel(room.name, size, room.writingMode);
+  ctx.font = `${size}px ${TEXT_FONT}`;
   const named = room.name.trim() !== "" && !hideRoomNames;
-  if (named) ctx.fillText(room.name, label.x, label.y);
+  if (named) paintLabel(layout, label.x, label.y);
   if (showDimensions) {
     // 名前がないときは、寸法を名前の位置へ詰める
     ctx.fillStyle = INK_SOFT;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
     ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + (named ? 20 : 0));
+    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + (named ? layout.h + 4 : 0));
   }
   if (selected) drawRoomLabelGuide(room);
   if (selected && !isLocked(room)) drawResizeHandles(room);
@@ -6926,7 +7043,7 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
 function drawResizeHandles(entity: Room | Furniture | Roof): void {
   if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawResizeHandles(entity))) return;
-  const handles = [
+  const handles = entity.type === "room" && entity.outline ? floorHandles(entity) : [
     { x: entity.x, y: entity.y },
     { x: entity.x + entity.w, y: entity.y },
     { x: entity.x, y: entity.y + entity.h },
@@ -6942,32 +7059,39 @@ function drawResizeHandles(entity: Room | Furniture | Roof): void {
   });
 }
 
-function textLines(label: TextLabel): string[] {
-  return label.text.split("\n");
+function measureLabel(text: string, size: number, mode: WritingMode = "horizontal"): TextLayout {
+  ctx.save();
+  ctx.font = styledFont(`${size}px ${TEXT_FONT}`, planStyle);
+  const layout = layoutText(text, size, mode, (line) => ctx.measureText(line).width);
+  ctx.restore();
+  return layout;
+}
+
+function paintLabel(layout: TextLayout, x: number, y: number): void {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const run of layout.runs) {
+    ctx.save();
+    ctx.translate(x + run.x, y + run.y);
+    if (run.rotate) ctx.rotate(Math.PI / 2);
+    ctx.fillText(run.text, 0, 0);
+    ctx.restore();
+  }
 }
 
 // 文字のまとまりの幅と高さ（ワールド座標）。フォントの大きさをそのまま cm として扱う
 function measureTextLabel(label: TextLabel): { w: number; h: number } {
-  ctx.save();
-  // 絵柄の書体で測る（筆やドットでは、書体が替わって文字の幅も変わる）
-  ctx.font = styledFont(`${label.size}px ${TEXT_FONT}`, planStyle);
-  const lines = textLines(label);
-  const w = Math.max(label.size * 0.6, ...lines.map((line) => ctx.measureText(line).width));
-  ctx.restore();
-  return { w, h: lines.length * label.size * TEXT_LINE_HEIGHT };
+  return measureLabel(label.text, label.size, label.writingMode);
 }
 
 function drawTextLabel(label: TextLabel): void {
-  const lines = textLines(label);
-  const lineHeight = label.size * TEXT_LINE_HEIGHT;
+  const layout = measureLabel(label.text, label.size, label.writingMode);
   ctx.save();
   ctx.translate(label.x, label.y);
   ctx.rotate(degreesToRadians(label.rotation));
   ctx.font = `${label.size}px ${TEXT_FONT}`;
   ctx.fillStyle = solidColor(label.color) ?? INK;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * lineHeight));
+  paintLabel(layout, -layout.w / 2, -layout.h / 2);
   ctx.restore();
   if (state.selectedId === label.id) drawTextSelection(label);
 }
@@ -7114,7 +7238,25 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
   const alpha = colorAlpha(roomItem.color3d ?? roomItem.color);
   const side = alpha < 1 ? translucentSlabMaterial(alpha) : slabMaterial;
   const group = new THREE.Group();
-  for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
+  if (roomItem.outline || roomItem.holes || laterRooms.some(room => room.outline || room.holes)) {
+    const polygons = visibleFloorPolygons(roomItem.outline || roomItem.holes ? roomItem : footprint(roomItem), laterRooms.map(room => room.outline || room.holes ? room : footprint(room)));
+    const top = ground ? 0.08 : yBase;
+    for (const polygon of polygons) {
+      const path = (ring: [number, number][]) => ring.map(([x, y]) => new THREE.Vector2((x - center.x) * SCALE_3D, -(y - center.y) * SCALE_3D));
+      const shape = new THREE.Shape(path(polygon[0]));
+      polygon.slice(1).forEach(ring => shape.holes.push(new THREE.Path(path(ring))));
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
+      const pos = geometry.getAttribute("position"), uv = geometry.getAttribute("uv");
+      for (let i = 0; i < pos.count; i++) uv.setXY(i, (pos.getX(i) / SCALE_3D + center.x - roomItem.x) / roomItem.w, 1 - (-pos.getY(i) / SCALE_3D + center.y - roomItem.y) / roomItem.h);
+      geometry.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geometry, [roomMaterial(roomItem, roomItem), side]);
+      mesh.position.y = top - thickness;
+      mesh.receiveShadow = true;
+      mesh.castShadow = floorIndex > 0 && alpha >= 1;
+      group.add(mesh);
+    }
+    if (polygons.length && roomItem.surface === "grass") addGrass3d(roomItem, roomItem, center, top, state.floors[floorIndex].entities, (x, y) => polygons.some(polygon => pointInPolygon(x, y, polygon)));
+  } else for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
     const geometry = new THREE.BoxGeometry(rect.w * SCALE_3D, thickness, rect.h * SCALE_3D);
     const mesh = new THREE.Mesh(geometry, [side, side, roomMaterial(roomItem, rect), side, side, side]);
     const pos = to3d(rect.x + rect.w / 2, rect.y + rect.h / 2, center);
@@ -7155,7 +7297,7 @@ function createGrassTuftGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number, entities: Entity[]): void {
+function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number, entities: Entity[], within?: (x: number, y: number) => boolean): void {
   const count = Math.min(GRASS_MAX_TUFTS, Math.round(((rect.w * rect.h) / 10000) * GRASS_TUFTS_PER_M2));
   if (count <= 0) return;
   const bare = entities.filter((entity): entity is Furniture => entity.type === "furniture" && GRASS_FREE_KINDS.includes(entity.kind));
@@ -7178,7 +7320,7 @@ function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number,
   let placed = 0;
   for (let i = 0; i < count; i += 1) {
     const x = rect.x + random() * rect.w, y = rect.y + random() * rect.h;
-    if (isBare(x, y)) continue;
+    if (isBare(x, y) || (within && !within(x, y))) continue;
     const position = to3d(x, y, center);
     placement.position.set(position.x, top, position.z);
     placement.rotation.set(0, random() * Math.PI * 2, 0);
@@ -7460,8 +7602,8 @@ function frameCamera(bounds: Bounds | null): void {
   const buildingHeight = (state.floors.length - basementCount()) * FLOOR_SPACING;
   const rect = threeCanvas.getBoundingClientRect();
   const aspect = rect.height > 0 ? rect.width / rect.height : 1;
-  const portraitScale = aspect < 1 ? 1 / Math.max(aspect, 0.45) : 1;
-  const distanceToFit = clamp(Math.max(size * 1.4 * portraitScale, buildingHeight * 2.2), 6, 30);
+  const portraitScale = aspect < 1 ? 1 / Math.max(aspect, 0.1) : 1;
+  const distanceToFit = clamp(Math.max(size * 1.4 * portraitScale, buildingHeight * 2.2), 6, MAX_CAMERA_DISTANCE / 2);
   camera.position.set(distanceToFit * 0.9, distanceToFit * 0.72, distanceToFit);
   controls.target.set(0, Math.min(buildingHeight * 0.32, 2.4), 0);
   controls.update();
@@ -7496,6 +7638,7 @@ function redrawAll(rebuild = true): void {
 }
 
 function updateUi(): void {
+  syncThreeMoveMode();
   syncToolHint();
   scheduleViewStateSave();
   renderGhostFloorOptions();
@@ -7627,6 +7770,18 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし（2Dに文字を出さない）" /></label>
+        <label>文字サイズ cm<input id="roomLabelSizeInput" type="number" min="5" max="500" step="1" value="${selected.labelSize ?? ""}" placeholder="自動" ${placementDisabled} /></label>
+        ${writingModeControl(selected.writingMode, placementDisabled)}
+        <label>床の形<select id="roomShapeInput" ${placementDisabled}>
+          <option value="rectangle" ${!selected.outline ? "selected" : ""}>長方形</option>
+          <option value="free" ${selected.outline ? "selected" : ""}>自由な形</option>
+          <option value="circle">円</option><option value="l">L字</option>
+        </select></label>
+        ${selected.outline ? `<div class="floor-vertices">
+          <label>頂点<select id="floorVertexInput" ${placementDisabled}>${selected.outline.map((_, i) => `<option value="${i}">${i + 1}</option>`).join("")}</select></label>
+          <div class="two-col"><label>X cm<input id="floorVertexX" type="number" step="20" ${placementDisabled} /></label><label>Y cm<input id="floorVertexY" type="number" step="20" ${placementDisabled} /></label></div>
+          <div class="two-col"><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺の中央に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="この頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
+        </div>` : ""}
         <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
         <div class="two-col">
           <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
@@ -7639,6 +7794,18 @@ function updatePropertiesPanel(): void {
     `;
     bindEntityLock(selected);
     bindInput("#roomNameInput", (value) => (selected.name = value));
+    bindInput("#roomLabelSizeInput", (value) => { selected.labelSize = value.trim() && Number.isFinite(Number(value)) ? clamp(Number(value), 5, 500) : undefined; });
+    bindWritingMode(selected);
+    bindSelect("#roomShapeInput", (value) => {
+      const previous = selected.outline;
+      if (value === "rectangle") selected.outline = undefined;
+      else if (value === "circle") selected.outline = Array.from({ length: 64 }, (_, i) => [0.5 + 0.5 * Math.cos(i * Math.PI / 32), 0.5 + 0.5 * Math.sin(i * Math.PI / 32)]);
+      else if (value === "l") selected.outline = [[0, 0], [1, 0], [1, 0.5], [0.5, 0.5], [0.5, 1], [0, 1]];
+      else selected.outline ??= [[0, 0], [1, 0], [1, 1], [0, 1]];
+      try { normalizeFloorHoles(selected.holes, selected.outline); }
+      catch { selected.outline = previous; }
+    });
+    bindFloorVertices(selected);
     bindSelect("#roomSurfaceInput", (value) => {
       if (!isRoomSurface(value)) return;
       selected.surface = value;
@@ -7728,6 +7895,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <label>文字（改行もできます）<textarea id="textContentInput" rows="3" maxlength="${MAX_TEXT_LENGTH}" ${placementDisabled}>${escapeHtml(label.text)}</textarea></label>
+        ${writingModeControl(label.writingMode, placementDisabled)}
         <div class="two-col">
           <label>大きさ cm<input id="textSizeInput" type="number" min="5" max="500" step="2" value="${label.size}" ${placementDisabled} /></label>
           <label>回転 °<input id="textRotationInput" type="number" step="5" value="${label.rotation}" ${placementDisabled} /></label>
@@ -7736,6 +7904,7 @@ function updatePropertiesPanel(): void {
       </div>
     `;
     bindEntityLock(label);
+    bindWritingMode(label);
     const content = propertiesPanel.querySelector<HTMLTextAreaElement>("#textContentInput");
     // 入力中はその場で描き直し、確定（欄から出る）したときに履歴へ積む。空にしたら文字ごと消す
     content?.addEventListener("input", () => {
@@ -7789,9 +7958,12 @@ function updatePropertiesPanel(): void {
         ${polygonRows}
         ${colorField("shapeColorInput", "色 2D", selectedShape.color ?? INK)}
         ${PLAN_EDITION ? "" : colorField("shapeColor3dInput", "色 3D", selectedShape.color3d ?? selectedShape.color ?? "#f4f1ec")}
+        <button type="button" class="prop-button" id="shapeFloorButton" ${placementDisabled}><i data-lucide="layers"></i>この図形に合わせて床を追加</button>
       </div>
     `;
     bindEntityLock(selectedShape);
+    bindButton("#shapeFloorButton", () => floorFromShape(selectedShape));
+    createIcons({ icons });
     bindSelect("#shapeKindInput", (value) => {
       selectedShape.kind = value as ShapeKind;
       if (selectedShape.kind === "circle") {
@@ -8083,6 +8255,7 @@ function commitState(): void {
 }
 
 function replaceState(next: PlanState, pushHistory: boolean): void {
+  threeMoveId = null;
   multiSelection.clear();
   state = cloneState(next);
   // 別の間取りに入れ替えたときは、隠していた階や屋根をすべて表示に戻す
@@ -8334,7 +8507,18 @@ function setupImageExport(): void {
 
 // 書き出す階の、物が入る範囲（屋根は含めない）
 function exportBounds(floorIndexes: number[]): Bounds | null {
-  return getEntitiesBounds(floorIndexes.flatMap((index) => [...state.floors[index].entities, ...incomingStairs(state.floors, index)]));
+  const entities = floorIndexes.flatMap((index) => [...state.floors[index].entities, ...incomingStairs(state.floors, index)]);
+  const bounds = getEntitiesBounds(entities);
+  if (!bounds || !imageExportSettings.names) return bounds;
+  // 大きくした部屋名が床からはみ出しても、画像の端で切らない。
+  for (const room of entities.filter(isRoom)) {
+    if (!room.labelSize || !room.name.trim()) continue;
+    const pos = getRoomLabelPosition(room), label = measureLabel(room.name, room.labelSize, room.writingMode);
+    const right = Math.max(bounds.x + bounds.w, pos.x + label.w), bottom = Math.max(bounds.y + bounds.h, pos.y + label.h + (showDimensions ? 20 : 0));
+    bounds.x = Math.min(bounds.x, pos.x); bounds.y = Math.min(bounds.y, pos.y);
+    bounds.w = right - bounds.x; bounds.h = bottom - bounds.y;
+  }
+  return bounds;
 }
 
 // 1つの階を、書き出し用のキャンバスの (left, top) から描く。選択の枠・ほかの階の透過・屋根・固定の印は描かない
@@ -8545,6 +8729,10 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
   const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && (entity.kind === "rug" || entity.kind === "paint") ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedPerson = entities.find((entity) => entity.id === state.selectedId);
+  if (selectedPerson?.type === "room" && selectedPerson.outline && !isLocked(selectedPerson)) {
+    const corner = getCornerHit(selectedPerson, point);
+    if (corner) return { entity: selectedPerson, corner };
+  }
   if (isPerson(selectedPerson) && !isLocked(selectedPerson)) {
     const limb = personHandleAt(selectedPerson, point);
     if (limb >= 0) return { entity: selectedPerson, corner: `limb:${limb}` };
@@ -8567,7 +8755,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     if (entity.type === "room") {
       const corner = getCornerHit(entity, point);
       if (corner) return { entity, corner };
-      if (point.x >= entity.x && point.x <= entity.x + entity.w && point.y >= entity.y && point.y <= entity.y + entity.h) {
+      if (pointInPolygon(point.x, point.y, floorPolygon(entity))) {
         return { entity, corner: null };
       }
     } else if (entity.type === "furniture" && entity.kind === "paint") {
@@ -8620,6 +8808,56 @@ function getLineEndpointHit(entity: LinearElement, point: Point): string | null 
   return null;
 }
 
+function bindFloorVertices(room: Room): void {
+  const select = propertiesPanel.querySelector<HTMLSelectElement>("#floorVertexInput");
+  if (!select) return;
+  const x = requiredElement<HTMLInputElement>("#floorVertexX"), y = requiredElement<HTMLInputElement>("#floorVertexY");
+  const remove = requiredElement<HTMLButtonElement>("#floorVertexRemove"), add = requiredElement<HTMLButtonElement>("#floorVertexAdd");
+  const sync = () => {
+    const point = floorPoints(room)[Number(select.value)];
+    x.value = String(Math.round(point[0])); y.value = String(Math.round(point[1]));
+    remove.disabled = isLocked(room) || room.outline!.length <= 3;
+    add.disabled = isLocked(room) || room.outline!.length >= MAX_FLOOR_VERTICES;
+  };
+  select.addEventListener("change", sync);
+  const change = () => {
+    if (isLocked(room)) return;
+    const points = floorPoints(room);
+    if (!x.value.trim() || !y.value.trim() || !Number.isFinite(x.valueAsNumber) || !Number.isFinite(y.valueAsNumber)) { sync(); return; }
+    points[Number(select.value)] = [x.valueAsNumber, y.valueAsNumber];
+    if (!reshapeRoom(room, points)) { sync(); return; }
+    commitState(); redrawAll();
+  };
+  x.addEventListener("change", change); y.addEventListener("change", change);
+  remove.addEventListener("click", () => {
+    if (isLocked(room) || room.outline!.length <= 3) return;
+    const points = floorPoints(room); points.splice(Number(select.value), 1);
+    if (reshapeRoom(room, points)) { commitState(); redrawAll(); }
+  });
+  add.addEventListener("click", () => {
+    if (isLocked(room) || room.outline!.length >= MAX_FLOOR_VERTICES) return;
+    const points = floorPoints(room), i = Number(select.value), a = points[i], b = points[(i + 1) % points.length];
+    points.splice(i + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+    if (reshapeRoom(room, points)) { commitState(); redrawAll(); }
+  });
+  sync(); createIcons({ icons });
+}
+
+function writingModeControl(mode: WritingMode | undefined, disabled: string): string {
+  return `<div class="segmented" role="group" aria-label="文字の方向">${(["horizontal", "vertical"] as const).map(value => `<button type="button" data-writing-mode="${value}" class="${(mode ?? "horizontal") === value ? "is-active" : ""}" aria-pressed="${(mode ?? "horizontal") === value}" ${disabled}>${value === "vertical" ? "縦書き" : "横書き"}</button>`).join("")}</div>`;
+}
+
+function bindWritingMode(entity: Room | TextLabel): void {
+  propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-writing-mode]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (isLocked(entity)) return;
+      entity.writingMode = button.dataset.writingMode === "vertical" ? "vertical" : undefined;
+      commitState();
+      redrawAll();
+    });
+  });
+}
+
 function getRoomLabelPosition(room: Room): Point {
   return {
     x: room.x + (room.labelOffsetX ?? 10),
@@ -8628,16 +8866,20 @@ function getRoomLabelPosition(room: Room): Point {
 }
 
 function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: number } | null {
-  const named = room.name.trim() !== "";
+  const named = room.name.trim() !== "" && !hideRoomNames;
   if (!named && !showDimensions) return null;
   const position = getRoomLabelPosition(room);
-  const nameWidth = named ? Math.max(36, room.name.length * 14) : 0;
-  const dimensionWidth = showDimensions ? 82 : 0;
+  const layout = measureLabel(room.name, room.labelSize ?? Math.max(12, 13 / view.zoom), room.writingMode);
+  ctx.save();
+  const dimSize = Math.max(10, 11 / view.zoom);
+  ctx.font = styledFont(`${dimSize}px ${TEXT_FONT}`, planStyle);
+  const dimensionWidth = showDimensions ? ctx.measureText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`).width : 0;
+  ctx.restore();
   return {
     x: position.x - 6,
     y: position.y - 5,
-    w: Math.max(nameWidth, dimensionWidth) + 12,
-    h: named && showDimensions ? 44 : 26,
+    w: Math.max(named ? layout.w : 0, dimensionWidth) + 12,
+    h: (named ? layout.h : 0) + (showDimensions ? dimSize + (named ? 4 : 0) : 0) + 10,
   };
 }
 
@@ -8649,6 +8891,10 @@ function isPointInRoomLabel(point: Point, room: Room): boolean {
 
 function getCornerHit(entity: Room | Furniture | Roof, point: Point): string | null {
   const size = 12 / view.zoom;
+  if (entity.type === "room" && entity.outline) {
+    if (entity.id !== state.selectedId) return null;
+    return floorHandles(entity).find(handle => Math.hypot(point.x - handle.x, point.y - handle.y) <= size)?.key ?? null;
+  }
   const corners = [
     { key: "nw", x: entity.x, y: entity.y },
     { key: "ne", x: entity.x + entity.w, y: entity.y },
@@ -8702,7 +8948,7 @@ function makeFloor(name: string, entities: Entity[]): Floor {
   return { id: newId("floor"), name, entities };
 }
 
-// 「サンプル」雛形: 作例プラン（書き出しJSONをそのまま収録）
+// 「サンプル」テンプレート: 作例プラン（書き出しJSONをそのまま収録）
 // 起動時（URLパラメータ経由）でも参照できるよう、巻き上げの効く関数宣言にしている
 function samplePlanData(): unknown {
   return {
@@ -8828,11 +9074,12 @@ function samplePlanData(): unknown {
 
 function makeTemplate(key: string): PlanState {
   const plan = buildTemplate(key);
+  if (!hasTemplatePlan(key)) openTemplateStairwells(plan.floors, () => newId("room"));
   plan.roofs.forEach((item) => { item.floorId ??= plan.floors[plan.floors.length - 1].id; });
   return plan;
 }
 
-// 左の「雛形」の一覧。種類ごとに見出しを付けて並べる
+// 左の「テンプレート」の一覧。種類ごとに見出しを付けて並べる
 function buildTemplateList(): void {
   const list = document.querySelector<HTMLDivElement>("#templateList");
   if (!list) return;
@@ -8845,7 +9092,7 @@ function buildTemplateList(): void {
 }
 
 function buildTemplate(key: string): PlanState {
-  // 家・病院・洋館などの雛形（src/templates.ts）
+  // 家・病院・洋館などのテンプレート（src/templates.ts）
   if (hasTemplatePlan(key)) {
     const plan = normalizePlan(templatePlan(key, newId, FURNITURE_DEFS));
     if (plan) return plan;
@@ -8967,22 +9214,22 @@ function buildTemplate(key: string): PlanState {
     return {
       floors: [
         makeFloor("1F", [
-          room("LDK", 0, 0, 460, 480, "#ffffff"),
+          room("LDK", 0, 0, 460, 600, "#ffffff"),
           room("水回り", 460, 0, 260, 240, "#fbfcfd"),
-          room("玄関", 460, 240, 260, 240, "#fcfbf9"),
+          room("玄関", 460, 240, 260, 360, "#fcfbf9"),
           wall(0, 0, 720, 0),
-          wall(720, 0, 720, 480),
-          wall(720, 480, 0, 480),
-          wall(0, 480, 0, 0),
-          wall(460, 0, 460, 480),
+          wall(720, 0, 720, 600),
+          wall(720, 600, 0, 600),
+          wall(0, 600, 0, 0),
+          wall(460, 0, 460, 600),
           wall(460, 240, 720, 240),
-          door(560, 480, 640, 480),
+          door(560, 600, 640, 600),
           door(460, 300, 460, 380),
           door(540, 240, 620, 240),
           windowLine(60, 0, 240, 0),
           windowLine(0, 140, 0, 320),
           windowLine(520, 0, 660, 0),
-          windowLine(60, 480, 220, 480),
+          windowLine(60, 600, 220, 600),
           furniture("kitchen", 40, 10),
           furniture("fridge", 300, 10),
           furniture("diningTable", 60, 120),
@@ -8999,25 +9246,25 @@ function buildTemplate(key: string): PlanState {
         makeFloor("2F", [
           room("寝室", 0, 0, 360, 280, "#ffffff"),
           room("洋室", 360, 0, 360, 280, "#fbfcfd"),
-          room("書斎", 0, 280, 240, 200, "#fcfbf9"),
-          room("ホール", 240, 280, 240, 200, "#fdfdfc"),
-          room("収納", 480, 280, 240, 200, "#fbfcfb"),
+          room("書斎", 0, 280, 240, 320, "#fcfbf9"),
+          { ...room("ホール", 240, 280, 240, 320, "#fdfdfc"), labelOffsetY: 240 },
+          room("収納", 480, 280, 240, 320, "#fbfcfb"),
           wall(0, 0, 720, 0),
-          wall(720, 0, 720, 480),
-          wall(720, 480, 0, 480),
-          wall(0, 480, 0, 0),
+          wall(720, 0, 720, 600),
+          wall(720, 600, 0, 600),
+          wall(0, 600, 0, 0),
           wall(360, 0, 360, 280),
           wall(0, 280, 720, 280),
-          wall(240, 280, 240, 480),
-          wall(480, 280, 480, 480),
+          wall(240, 280, 240, 600),
+          wall(480, 280, 480, 600),
           door(260, 280, 330, 280),
           door(390, 280, 460, 280),
-          door(240, 340, 240, 410),
-          door(480, 340, 480, 410),
+          door(240, 500, 240, 570),
+          door(480, 500, 480, 570),
           windowLine(60, 0, 240, 0),
           windowLine(440, 0, 620, 0),
-          windowLine(40, 480, 160, 480),
-          windowLine(540, 480, 660, 480),
+          windowLine(40, 600, 160, 600),
+          windowLine(540, 600, 660, 600),
           windowLine(0, 80, 0, 200),
           furniture("bedDouble", 60, 40),
           furniture("closet", 200, 10),
@@ -9032,7 +9279,7 @@ function buildTemplate(key: string): PlanState {
       ],
       activeFloor: 0,
       selectedId: null,
-      roofs: [roof("gable", -40, -40, 800, 560)],
+      roofs: [roof("gable", -40, -40, 800, 680)],
     };
   }
 

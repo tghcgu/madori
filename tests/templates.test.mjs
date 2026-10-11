@@ -3,8 +3,11 @@ import test from 'node:test';
 import { FURNITURE_DEFS } from '../src/furniture-catalog.ts';
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from '../src/templates.ts';
 import { incomingStairs, isStair } from '../src/stairs.ts';
+import { floorPolygon, pointInPolygon, normalizeOutline, normalizeFloorHoles, signedArea } from '../src/floor-outline.ts';
+import { stairFootprint } from '../src/template-floors.ts';
+import clipping from 'polygon-clipping';
 
-// main.ts で作る雛形（住まいの4種類と作例）
+// main.ts で作るテンプレート（住まいの4種類と作例）
 const IN_MAIN = ['studio', 'oneLdk', 'twoLdk', 'twoStory', 'sample'];
 const keys = TEMPLATE_GROUPS.flatMap(group => group.templates.map(template => template.key));
 
@@ -43,12 +46,12 @@ for (const key of keys.filter(hasTemplatePlan)) {
       const rooms = floor.entities.filter(entity => entity.type === 'room');
       const walls = floor.entities.filter(entity => entity.type === 'wall');
       assert.ok(rooms.length >= 1 && walls.length >= 4, `floor ${index} has rooms and walls`);
-      for (const room of rooms) assert.ok(room.w > 0 && room.h > 0);
-      // ドア・窓は、どれかの部屋の縁の上にある
-      const edges = rooms.flatMap(room => [
-        [room.x, room.y, room.x + room.w, room.y], [room.x, room.y + room.h, room.x + room.w, room.y + room.h],
-        [room.x, room.y, room.x, room.y + room.h], [room.x + room.w, room.y, room.x + room.w, room.y + room.h],
-      ]);
+      for (const room of rooms) {
+        assert.ok(room.w > 0 && room.h > 0);
+        normalizeFloorHoles(room.holes, normalizeOutline(room.outline));
+      }
+      // 円形の塔でも、建具の両端が実際の壁の上にある。
+      const edges = walls.map(wall => [Math.min(wall.x1, wall.x2), Math.min(wall.y1, wall.y2), Math.max(wall.x1, wall.x2), Math.max(wall.y1, wall.y2)]);
       for (const opening of floor.entities.filter(entity => entity.type === 'door' || entity.type === 'window')) {
         const { x1, y1, x2, y2 } = opening;
         const onEdge = edges.some(([ex1, ey1, ex2, ey2]) => (y1 === y2 && ey1 === ey2 && y1 === ey1 && Math.min(x1, x2) >= ex1 - 0.01 && Math.max(x1, x2) <= ex2 + 0.01)
@@ -62,14 +65,17 @@ for (const key of keys.filter(hasTemplatePlan)) {
         assert.ok([0, 90, 180, 270].includes(item.rotation), label);
         const box = visualBox(item);
         // 部屋か屋外の場所の中に置く
-        const inside = (x, y) => rooms.some(room => x >= room.x - 1 && x <= room.x + room.w + 1 && y >= room.y - 1 && y <= room.y + room.h + 1);
+        const inside = (x, y) => rooms.some(room => {
+          const polygon = floorPolygon(isStair(item) ? { ...room, holes: undefined } : room);
+          return pointInPolygon(x, y, polygon) || clipping.intersection(polygon, [[[x-.01,y-.01],[x+.01,y-.01],[x+.01,y+.01],[x-.01,y+.01]]]).length > 0;
+        });
         for (const [x, y] of [[box.x0, box.y0], [box.x1, box.y0], [box.x0, box.y1], [box.x1, box.y1]]) assert.ok(inside(x, y), `${label} is inside the plan`);
         // 壁を突き抜けない（壁に沿わせるのはよい）
         for (const wall of walls) {
           if (wall.y1 === wall.y2) {
             const crosses = box.y0 < wall.y1 - 1 && box.y1 > wall.y1 + 1 && box.x0 < Math.max(wall.x1, wall.x2) - 1 && box.x1 > Math.min(wall.x1, wall.x2) + 1;
             assert.ok(!crosses, `${label} does not cut through the wall at y=${wall.y1}`);
-          } else {
+          } else if (wall.x1 === wall.x2) {
             const crosses = box.x0 < wall.x1 - 1 && box.x1 > wall.x1 + 1 && box.y0 < Math.max(wall.y1, wall.y2) - 1 && box.y1 > Math.min(wall.y1, wall.y2) + 1;
             assert.ok(!crosses, `${label} does not cut through the wall at x=${wall.x1}`);
           }
@@ -133,6 +139,13 @@ for (const key of keys.filter(hasTemplatePlan)) {
     const stairs = plan.floors.map(floor => floor.entities.filter(isStair));
     for (let i = 1; i < plan.floors.length; i += 1) {
       assert.ok(stairs[i - 1].length > 0, `floor ${i} is reached from below`);
+      for (const room of plan.floors[i].entities.filter(item => item.type === 'room')) {
+        for (const stair of stairs[i - 1]) {
+          const overlap = clipping.intersection(floorPolygon(room), [stairFootprint(stair)]);
+          const area = overlap.reduce((sum, polygon) => sum + Math.abs(signedArea(polygon[0])) - polygon.slice(1).reduce((s, ring) => s + Math.abs(signedArea(ring)), 0), 0);
+          assert.ok(area < 0.01, `floor ${i} does not cover ${stair.kind} at ${stair.x},${stair.y}`);
+        }
+      }
     }
     if (plan.floors.length > 1) {
       const index = plan.floors.length - 1, top = plan.floors[index].id;
@@ -172,4 +185,32 @@ test('the apartment stairs arrive at the corridor landing without an upper slab 
   const corridor = upperRooms.find(room => room.x + room.w === landing.x && room.y <= landing.y && room.y + room.h >= landing.y + landing.h);
   assert.ok(corridor, 'the landing joins the corridor');
   assert.equal(plan.floors[1].entities.filter(isStair).length, 0, 'no onward flight into the roof');
+});
+
+test('wizard and castle towers share round floor and wall outlines on every floor', () => {
+  for (const key of ['wizardTower','castle']) {
+    const plan=build(key);
+    for (const floor of plan.floors) {
+      const towers=floor.entities.filter(e=>e.type==='room' && (key==='wizardTower'||e.name.includes('塔')));
+      assert.equal(towers.length,key==='wizardTower'?1:2);
+      for (const tower of towers) {
+        assert.ok(tower.outline.length>40,'a round perimeter, not a rectangular box');
+        assert.equal(tower.w,tower.h);
+        for (const [x,y] of tower.outline) assert.ok(Math.abs(Math.hypot(x-.5,y-.5)-.5)<1e-8,'vertices lie on the same circle');
+        const edges=floorPolygon(tower)[0];
+        for (let i=0;i<edges.length;i++) {
+          const a=edges[i],b=edges[(i+1)%edges.length];
+          assert.ok(floor.entities.some(w=>w.type==='wall'&&Math.hypot(w.x1-a[0],w.y1-a[1])<.01&&Math.hypot(w.x2-b[0],w.y2-b[1])<.01),'the wall follows the floor perimeter');
+        }
+      }
+    }
+  }
+});
+
+test('the three-story house has an unobstructed arrival hall before its third-floor bedroom', () => {
+  const floor=build('threeStory').floors[2];
+  for(const x of [405,440,475]) {
+    assert.ok(floor.entities.some(r=>r.type==='room'&&pointInPolygon(x,340,floorPolygon(r))));
+    assert.ok(!floor.entities.some(w=>w.type==='wall'&&w.y1===380&&w.y2===380&&Math.min(w.x1,w.x2)<x&&Math.max(w.x1,w.x2)>x));
+  }
 });

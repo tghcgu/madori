@@ -728,6 +728,7 @@ select:focus-visible {
 
 .pane-left {
   display: flex;
+  flex: 1 1 190px;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -736,6 +737,7 @@ select:focus-visible {
 
 .floor-tabs {
   display: inline-flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -746,7 +748,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  min-width: 64px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1294,7 +1296,7 @@ select:focus-visible {
   gap: 12px;
 }
 
-/* 雛形の種類ごとの見出しと、2列のボタン */
+/* テンプレートの種類ごとの見出しと、2列のボタン */
 .template-group {
   display: grid;
   gap: 6px;
@@ -1587,6 +1589,11 @@ select:focus-visible {
   font-size: 12px;
 }
 
+.floor-vertices {
+  display: grid;
+  gap: 8px;
+}
+
 .symbol-options {
   display: flex;
   flex-wrap: wrap;
@@ -1677,7 +1684,7 @@ select:focus-visible {
   display: grid;
   /* 上のボタンの列が長くなっても、2Dの欄の幅を超えて広がらないようにする */
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: 46px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   container: plan-pane / inline-size;
 }
 
@@ -1689,7 +1696,7 @@ select:focus-visible {
 }
 
 /* 境目を動かして2Dが細くなったら、ボタンを絵だけにして1行に収める */
-@container plan-pane (max-width: 540px) {
+@container plan-pane (max-width: 760px) {
   #planStats {
     display: none;
   }
@@ -1730,6 +1737,8 @@ select:focus-visible {
 
 .pane-bar {
   display: flex;
+  flex-wrap: wrap;
+  min-height: 46px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1740,6 +1749,7 @@ select:focus-visible {
 
 .pane-actions {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
 }

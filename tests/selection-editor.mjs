@@ -103,6 +103,7 @@ export async function verifySelection({ page, plan, importPlan, choose, planPoin
   await page.mouse.click(pb.x, pb.y);
   await page.keyboard.up('Control');
   assert.deepEqual((await ids()).sort(), ['a', 'b']);
+  await page.mouse.dblclick(pa.x, pa.y);
   await move(pa, 35, 20);
   const moved3d = await entities();
   assert.notEqual(moved3d[1].x + ',' + moved3d[1].y, a.x + ',' + a.y);

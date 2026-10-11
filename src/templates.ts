@@ -1,6 +1,7 @@
 import { isStair } from "./stairs.ts";
+import { openTemplateStairwells } from "./template-floors.ts";
 
-// 雛形（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
+// テンプレート（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
 // 壁は部屋の縁から自動で立てる（隣り合う部屋の縁は1本にまとめる）。家具の位置は、回したあとの見た目の左上で書く
 
@@ -93,7 +94,7 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
   },
 ];
 
-type Raw = Record<string, unknown>;
+type Raw = { id: string; type: string } & Record<string, unknown>;
 type Surface = "plain" | "wood" | "tile" | "stone" | "grass";
 export type TemplateIdPrefix = "room" | "wall" | "door" | "window" | "furniture" | "roof" | "floor";
 
@@ -150,6 +151,30 @@ function floorBuilder(id: string, newId: (prefix: TemplateIdPrefix) => string, s
     room(name: string, x: number, y: number, w: number, h: number, color = C.white, surface: Surface = "plain") {
       entities.push(roomData(name, x, y, w, h, color, surface));
       walled.push([x, y, w, h]);
+      return f;
+    },
+    // 円周上の建具は短い弦に置く。壁と床に同じ輪郭を使い、開口も通常の壁と同じ方法で抜く。
+    roundRoom(name: string, cx: number, cy: number, r: number, color: string, surface: Surface, gaps: { angle: number; width: number; type: "door" | "window" }[]) {
+      const openings = gaps.map(gap => ({ ...gap, a: gap.angle * Math.PI / 180, half: Math.asin(gap.width / (2 * r)) })).sort((a, b) => a.a - b.a);
+      const point = (a: number): [number, number] => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+      const points: [number, number][] = [];
+      const segment = (a: [number, number], b: [number, number]) => entities.push({ id: newId("wall"), type: "wall", x1: a[0], y1: a[1], x2: b[0], y2: b[1] });
+      for (let i = 0; i < openings.length; i++) {
+        const gap = openings[i], next = openings[(i + 1) % openings.length];
+        const a = point(gap.a - gap.half), b = point(gap.a + gap.half);
+        // 四方の建具を正確な水平・垂直にそろえる。
+        if (gap.angle % 180 === 0) b[0] = a[0]; else b[1] = a[1];
+        points.push(a, b);
+        f[gap.type](a[0], a[1], b[0], b[1]);
+        const start = gap.a + gap.half, end = next.a - next.half + (i === openings.length - 1 ? Math.PI * 2 : 0);
+        const count = Math.ceil((end - start) * r / 32);
+        for (let step = 1; step < count; step++) points.push(point(start + (end - start) * step / count));
+      }
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i], b = points[(i + 1) % points.length];
+        segment(a, b);
+      }
+      entities.push({ ...roomData(name, cx - r, cy - r, r * 2, r * 2, color, surface), outline: points.map(([x, y]) => [(x - cx + r) / (2 * r), (y - cy + r) / (2 * r)]) });
       return f;
     },
     // 壁のない所（庭・駐車場・外廊下・参道など）
@@ -266,7 +291,7 @@ function planBuilder(newId: (prefix: TemplateIdPrefix) => string, sizes: Record<
       roofs.push({ id: newId("roof"), type: "roof", kind, x, y, w, h, floorId: floor.id });
     },
     plan(basements = 0): TemplatePlan {
-      return {
+      const plan = {
         // 最上階には上り階段を重ねない。下階からの到着側は2Dで自動表示する。
         floors: floors.map((floor, index) => ({ id: floor.id, name: "", entities: floors.length > 1 && index === floors.length - 1 ? floor.entities.filter((item) => !isStair(item)) : floor.entities })),
         activeFloor: basements,
@@ -274,6 +299,8 @@ function planBuilder(newId: (prefix: TemplateIdPrefix) => string, sizes: Record<
         roofs,
         ...(basements ? { basements } : {}),
       };
+      openTemplateStairwells(plan.floors, () => newId("room"));
+      return plan;
     },
   };
 }
@@ -1754,12 +1781,14 @@ function threeStory(b: PlanBuilder): void {
     .item("toilet", 420, 925, { rot: 180 });
 
   const top = b.floor();
-  top.room("寝室", 0, 0, 500, 380, C.wood, "wood")
+  top.room("寝室", 0, 0, 500, 280, C.wood, "wood")
+    .room("", 0, 280, 500, 100, C.wood, "wood")
     .room("洋室", 0, 380, 300, 380, C.wood, "wood")
     .room("", 300, 380, 200, 380, C.wood, "wood")
     .room("納戸", 0, 760, 500, 240, C.warm)
+    .open(300, 380, 500, 380)
     .walls()
-    .door(310, 380, 380, 380)
+    .door(320, 280, 400, 280)
     .door(300, 600, 300, 680)
     .door(320, 760, 400, 760)
     .window(60, 0, 440, 0, true).window(0, 450, 0, 700).window(500, 100, 500, 300)
@@ -1767,7 +1796,7 @@ function threeStory(b: PlanBuilder): void {
     .item("bedDouble", 180, 20)
     .item("sideTable", 120, 30)
     .item("sideTable", 330, 30)
-    .item("wardrobe", 30, 335, { rot: 180 })
+    .item("wardrobe", 30, 230, { rot: 180 })
     .item("bed", 20, 540)
     .item("desk", 160, 390)
     .item("officeChair", 190, 455, { rot: 180 })
@@ -2564,23 +2593,37 @@ function sleeperTrain(b: PlanBuilder): void {
 // ---- ファンタジー・SF ----
 
 function castle(b: PlanBuilder): void {
+  const inset = 300 - Math.sqrt(300 ** 2 - 50 ** 2);
+  const towers = (floor: FloorBuilder, lowerDoors: boolean) => {
+    floor.roundRoom("北西の塔", 200, 300, 300, C.darkStone, "stone", [
+      { angle: 0, width: 100, type: "door" }, { angle: 180, width: 150, type: "window" },
+      ...(lowerDoors ? [{ angle: 90, width: 100, type: "door" as const }] : []),
+    ]).label(180, 90)
+      .roundRoom("北東の塔", 1800, 300, 300, C.darkStone, "stone", [
+        { angle: 180, width: 100, type: "door" }, { angle: 0, width: 150, type: "window" },
+        ...(lowerDoors ? [{ angle: 90, width: 100, type: "door" as const }] : []),
+      ]).label(180, 90)
+      .area("", 500 - inset, 250, inset, 100, "stone", C.darkStone)
+      .area("", 1500, 250, inset, 100, "stone", C.darkStone)
+      .open(500, 250, 500, 350).open(1500, 250, 1500, 350);
+    if (lowerDoors) floor.area("", 150, 600 - inset, 100, inset, "stone", C.darkStone)
+      .area("", 1750, 600 - inset, 100, inset, "stone", C.darkStone)
+      .open(150, 600, 250, 600).open(1750, 600, 1850, 600);
+  };
   const f = b.floor();
+  towers(f, true);
   f.area("前庭", 0, 1300, 2000, 400, "grass", C.grass)
-    .room("北西の塔", 0, 0, 500, 600, C.darkStone, "stone")
     .room("玉座の間", 500, 0, 1000, 800, C.stone, "stone")
-    .room("北東の塔", 1500, 0, 500, 600, C.darkStone, "stone")
     .room("兵舎", 0, 600, 500, 700, C.wood, "wood")
     .room("大広間", 500, 800, 1000, 500, C.wood, "wood")
     .room("厨房", 1500, 600, 500, 700, C.stone, "stone")
     .room("城門", 900, 1300, 200, 200, C.darkStone, "stone").label(10, 120)
     .walls()
-    .door(500, 250, 500, 350).door(1500, 250, 1500, 350)
-    .door(200, 600, 300, 600).door(1700, 600, 1800, 600)
     .door(950, 800, 1050, 800)
     .door(500, 1000, 500, 1100).door(1500, 1000, 1500, 1100)
     .door(950, 1300, 1050, 1300)
     .sliding(920, 1500, 1080, 1500)
-    .window(0, 200, 0, 400).window(2000, 200, 2000, 400).window(700, 0, 1300, 0, true)
+    .window(700, 0, 1300, 0, true)
     .window(0, 800, 0, 1100).window(2000, 1150, 2000, 1250)
     // 塔（らせん階段）
     .item("stairsSpiral", 180, 230).item("floorLamp", 60, 500)
@@ -2615,13 +2658,11 @@ function castle(b: PlanBuilder): void {
 
   // 2階: 塔と、王の寝室・礼拝室
   const upper = b.floor();
-  upper.room("北西の塔", 0, 0, 500, 600, C.darkStone, "stone")
-    .room("王の寝室", 500, 0, 500, 600, C.wood, "wood")
+  towers(upper, false);
+  upper.room("王の寝室", 500, 0, 500, 600, C.wood, "wood")
     .room("礼拝室", 1000, 0, 500, 600, C.stone, "stone")
-    .room("北東の塔", 1500, 0, 500, 600, C.darkStone, "stone")
     .walls()
-    .door(500, 250, 500, 350).door(1000, 250, 1000, 350).door(1500, 250, 1500, 350)
-    .window(0, 200, 0, 400).window(2000, 200, 2000, 400)
+    .door(1000, 250, 1000, 350)
     .window(600, 0, 900, 0, true).window(1100, 0, 1400, 0, true).window(600, 600, 900, 600, true).window(1100, 600, 1400, 600, true)
     .item("stairsSpiral", 180, 230).item("floorLamp", 60, 500)
     .item("stairsSpiral", 1680, 230).item("floorLamp", 1895, 500)
@@ -2633,8 +2674,8 @@ function castle(b: PlanBuilder): void {
     .item("cupboard", 1250, 10, { w: 200, h: 50, color: "#c9a227" })
     .item("floorLamp", 1190, 15).item("floorLamp", 1455, 15)
     .row("bench", 1100, 220, 3, 0, 110, { w: 300, h: 50 });
-  b.roof("hip", -30, -30, 560, 660, upper);
-  b.roof("hip", 1470, -30, 560, 660, upper);
+  b.roof("hip", -130, -30, 660, 660, upper);
+  b.roof("hip", 1470, -30, 660, 660, upper);
   b.roof("gable", 470, -30, 1060, 660, upper);
 }
 
@@ -2696,46 +2737,37 @@ function adventurersInn(b: PlanBuilder): void {
 }
 
 function wizardTower(b: PlanBuilder): void {
+  const windows = [{ angle: 0, width: 150, type: "window" as const }, { angle: 180, width: 150, type: "window" as const }, { angle: 270, width: 150, type: "window" as const }];
   const ground = b.floor();
-  ground.room("書庫", 0, 0, 700, 700, C.wood, "wood")
-    .walls()
-    .door(250, 700, 350, 700)
-    .window(700, 150, 700, 300).window(0, 620, 0, 680)
-    .item("stairsSpiral", 520, 520)
-    .row("shelf", 0, 100, 5, 0, 100, { rot: 270 })
-    .row("shelf", 120, 0, 5, 100, 0)
-    .item("rug", 180, 260, { w: 300, h: 200, color: "#5b3a6b" })
+  ground.roundRoom("書庫", 400, 400, 400, C.wood, "wood", [...windows, { angle: 90, width: 100, type: "door" }]).label(230, 140)
+    .item("stairsSpiral", 510, 430)
+    .row("shelf", 110, 230, 3, 0, 100, { rot: 270 })
+    .row("shelf", 230, 90, 4, 100, 0)
+    .item("rug", 220, 280, { w: 260, h: 200, color: "#5b3a6b" })
     .item("desk", 250, 300, { w: 140, h: 70 })
     .item("armchair", 280, 375, { rot: 180 })
     .item("floorLamp", 430, 290);
 
   const middle = b.floor();
-  middle.room("研究室", 0, 0, 700, 700, C.darkStone, "stone")
-    .walls()
-    .window(0, 150, 0, 260).window(300, 700, 450, 700)
-    .item("stairsSpiral", 520, 520)
-    .item("longTable", 100, 150, { w: 300, h: 80 })
-    .item("roundTable", 150, 400, { w: 100, h: 100, color: "#2f3436" })
-    .item("aquarium", 450, 10, { color: "#7fd1b9" })
-    .row("shelf", 0, 300, 2, 0, 100, { rot: 270 })
-    .item("fireplace", 655, 150, { rot: 90 })
-    .item("catTower", 420, 300);
+  middle.roundRoom("研究室", 400, 400, 400, C.darkStone, "stone", [...windows, { angle: 90, width: 150, type: "window" }]).label(230, 130)
+    .item("stairsSpiral", 510, 430)
+    .item("longTable", 190, 220, { w: 300, h: 80 })
+    .item("roundTable", 220, 420, { w: 100, h: 100, color: "#2f3436" })
+    .item("aquarium", 490, 120, { color: "#7fd1b9" })
+    .row("shelf", 100, 340, 2, 0, 100, { rot: 270 })
+    .item("fireplace", 670, 250, { rot: 90 })
+    .item("catTower", 400, 360);
 
   const top = b.floor();
-  top.room("寝室", 0, 0, 400, 700, C.wood, "wood")
-    .room("星見台", 400, 0, 300, 700, C.wood, "wood")
-    .walls()
-    .door(400, 300, 400, 380)
-    .window(100, 0, 300, 0).window(700, 60, 700, 300, true).window(450, 700, 650, 700, true)
-    .item("stairsSpiral", 520, 520)
-    .item("bed", 40, 60)
-    .item("wardrobe", 0, 400, { rot: 270 })
-    .item("desk", 180, 640, { rot: 180 })
-    .item("chair", 218, 590)
-    .item("floorLamp", 530, 120)
-    .item("armchair", 510, 220)
-    .item("roundTable", 430, 360, { w: 70, h: 70 });
-  b.roof("hip", -40, -40, 780, 780, top);
+  top.roundRoom("寝室・星見台", 400, 400, 400, C.wood, "wood", [...windows, { angle: 90, width: 150, type: "window" }]).label(220, 120)
+    .item("bed", 190, 210)
+    .item("wardrobe", 110, 450, { rot: 270 })
+    .item("desk", 290, 640, { rot: 180 })
+    .item("chair", 328, 590)
+    .item("floorLamp", 540, 190)
+    .item("armchair", 530, 270)
+    .item("roundTable", 420, 330, { w: 70, h: 70 });
+  b.roof("hip", -40, -40, 880, 880, top);
 }
 
 function spaceship(b: PlanBuilder): void {
@@ -2794,14 +2826,14 @@ const BUILDERS: Record<string, (b: PlanBuilder) => void> = {
   castle, adventurersInn, wizardTower, dungeon, spaceship,
 };
 
-// 地下の階がある雛形（下から数えた地下の階の数）
+// 地下の階があるテンプレート（下から数えた地下の階の数）
 const BASEMENTS: Record<string, number> = { westernMansion: 1 };
 
 export function hasTemplatePlan(key: string): boolean {
   return Object.prototype.hasOwnProperty.call(BUILDERS, key);
 }
 
-// 雛形の間取りのデータ。newId で要素の id を作り、sizes（家具の種類ごとの標準の大きさ）で家具の大きさを決める
+// テンプレートの間取りのデータ。newId で要素の id を作り、sizes（家具の種類ごとの標準の大きさ）で家具の大きさを決める
 export function templatePlan(key: string, newId: (prefix: TemplateIdPrefix) => string, sizes: Record<string, { w: number; h: number }>): TemplatePlan | null {
   const build = BUILDERS[key];
   if (!build) return null;

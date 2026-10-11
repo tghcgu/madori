@@ -8,14 +8,39 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-12",
+    items: [{
+      ja: "間取り見本の名称を「テンプレート」に統一。全50種類を階段の仕様に合わせて点検し、上階の床に階段の開口を設け、二階建て・三階建ての到着側の配置を修正。魔法使いの塔と城の塔は円形の壁・床に変更し、建具と家具も配置し直しました。保存済みの間取りは変更しません",
+      en: "Standardized the Japanese preset name as Template. Reviewed all 50 templates for the new stair behavior, added upper-floor stairwell openings and corrected arrival layouts in the two- and three-story houses. The wizard tower and castle towers now have circular walls and floors with repositioned openings and furniture. Existing saved plans are not changed",
+    }, {
+      ja: "同時表示や狭い画面で階のタブがつぶれて押せなくなる問題を修正。ボタンを早めにアイコン表示へ切り替え、必要な幅ではツールバーを折り返します",
+      en: "Fixed floor tabs collapsing and becoming unclickable in split view and narrow panes. Toolbar buttons switch to icons earlier, and the toolbar wraps when needed",
+    }, {
+      ja: "城などの大きなテンプレートを狭い3D表示に収める際、カメラの距離制限で建物の端が切れていた問題を修正",
+      en: "Fixed large templates such as the castle being cropped in narrow 3D views because the fit-to-view camera distance was capped",
+    }],
+  },
+  {
     date: "2026-10-11",
     items: [
       {
-        ja: "下階からつながる階段を、上階の2D図とPNGに下り向きの記号で自動表示。直階段・折返し・らせんに対応し、3Dには重複追加しません。雛形の最上階にあった余分な上り階段を修正し、既存の重複階段は選択欄の「下階の階段表示に切り替え」で取り消し可能な形で解消できます",
+        ja: "3Dの左ドラッグは通常は視点回転にし、家具をダブルクリックすると移動モードへ。空白クリック・Escで解除でき、固定・複数移動・取り消しにも対応。右ドラッグは画面に沿って上下左右へ動き、2階・3階へ視点の高さも変えられます",
+        en: "Left-drag in 3D now orbits by default; double-click furniture to enter move mode, and leave it with an empty-space click or Escape. Locks, group movement and undo still work. Right-drag now pans in the screen plane, including elevation for exploring upper floors",
+      },
+      {
+        ja: "部屋名の文字サイズを変更でき、部屋名と自由テキストを横書き・縦書きで切り替えられるように。縦書きの改行は右から左へ並び、選択・移動・PNG・保存にも反映します",
+        en: "Room labels now have editable font sizes. Room labels and free text support horizontal or vertical writing, with right-to-left columns for line breaks, matching selection bounds, dragging, PNG export and persistence",
+      },
+      {
+        ja: "床を円・L字・自由な多角形に変更でき、頂点や辺の中央をドラッグして形を編集できます。頂点の追加・削除・数値指定、図形の壁に合わせた床の追加にも対応し、2Dと3Dで同じ輪郭を使います。重なる床や凹んだ部分も正しく描画します",
+        en: "Floors can be circular, L-shaped or freeform polygons. Drag vertices or edge midpoints, add/remove vertices or edit their coordinates, and add a floor matching an existing shape wall. 2D and 3D share the outline, including concave cutouts and overlapping floors",
+      },
+      {
+        ja: "下階からつながる階段を、上階の2D図とPNGに下り向きの記号で自動表示。直階段・折返し・らせんに対応し、3Dには重複追加しません。テンプレートの最上階にあった余分な上り階段を修正し、既存の重複階段は選択欄の「下階の階段表示に切り替え」で取り消し可能な形で解消できます",
         en: "Stairs arriving from the floor below now appear automatically as descending symbols in the upper 2D plan and PNG exports, without extra 3D geometry. Supports straight, U-shaped and spiral stairs. Removed redundant top-floor flights from templates; existing duplicate stairs can be replaced with the lower-floor display using an undoable command in their properties",
       },
       {
-        ja: "アパートの雛形で外階段の上を2階の床がふさいでいた配置を修正。階段の到着側に踊り場と手すりを設け、2階の外廊下へつなげました",
+        ja: "アパートのテンプレートで外階段の上を2階の床がふさいでいた配置を修正。階段の到着側に踊り場と手すりを設け、2階の外廊下へつなげました",
         en: "Fixed the apartment template's upper slab covering its exterior stairs. The stairs now lead to a guarded landing connected to the upper corridor",
       },
     ],
@@ -44,7 +69,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         en: "12 Japanese furnishings: tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub and tsukubai basin. Width, depth, height and colors are editable, with shared geometry for 2D and 3D",
       },
       {
-        ja: "雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました",
+        ja: "テンプレートを50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました",
         en: "50 templates: added a three-story house, a condominium, a share house, an old farmhouse, a samurai residence, a dormitory, a restaurant, a ramen shop, an izakaya, a hair salon, a bookstore, a nursery school, a gymnasium, a police box, a cinema, a temple, a campsite, a cruise ship, a sleeper train, a castle, an adventurers' inn, a wizard's tower, and a spaceship, with new groups for outdoors and vehicles and for fantasy and sci-fi",
       },
       {
@@ -52,7 +77,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         en: "17 2D styles: added watercolor, ink wash, crayon, pop, CAD, horror, photocopy, and retro game (four-green dots), and the style menu is now grouped by kind",
       },
       {
-        ja: "雛形の旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります",
+        ja: "テンプレートの旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります",
         en: "The ryokan, hotel, hospital, school, library, police station, art museum, and castle templates now have upper floors (the hotel and the school have three), with stairs in the same place on each floor",
       },
       {
@@ -64,7 +89,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         en: "Brush and ink-wash lines look more like a real brush: pressed starts and tapering sweeps, changing pressure, dry-brush streaks, darker and lighter ink within a stroke, a slight bleed, and mottled washes",
       },
       {
-        ja: "家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺の雛形の墓地にも使っています）",
+        ja: "家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺のテンプレートの墓地にも使っています）",
         en: "New furniture: a grave, with the same base, upright stone, vases, and incense holder in 2D and 3D (used in the temple's graveyard)",
       },
     ],
@@ -73,7 +98,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-09",
     items: [
       {
-        ja: "雛形を27種類に増やし、住まい・屋敷と宿・お店・施設・屋外とそのほかに分けて並べました。平屋の日本家屋・アパート・洋館（地下室つき）・山荘・旅館・ホテル・カフェ・バー・コンビニ・病院・学校・オフィス・図書館・教会・神社・警察署・研究所・美術館・銭湯・公園・廃工場・地下牢を追加。どれも壁・ドア・窓・家具・床・屋根まで入っていて、2Dでも3Dでも見られます",
+        ja: "テンプレートを27種類に増やし、住まい・屋敷と宿・お店・施設・屋外とそのほかに分けて並べました。平屋の日本家屋・アパート・洋館（地下室つき）・山荘・旅館・ホテル・カフェ・バー・コンビニ・病院・学校・オフィス・図書館・教会・神社・警察署・研究所・美術館・銭湯・公園・廃工場・地下牢を追加。どれも壁・ドア・窓・家具・床・屋根まで入っていて、2Dでも3Dでも見られます",
         en: "27 templates in five groups: added a Japanese house, an apartment, a Western mansion with a cellar, a lodge, a ryokan, a hotel, a cafe, a bar, a convenience store, a hospital, a school, an office, a library, a church, a shrine, a police station, a laboratory, an art museum, a public bath, a park, an abandoned factory, and a dungeon, each with walls, doors, windows, furniture, floors, and roofs in 2D and 3D",
       },
       {
@@ -90,7 +115,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     date: "2026-10-07",
     items: [
       {
-        ja: "雛形「サンプル（作例）」を新しい作例に差し替え。二階建てになり、屋根・文字・芝生や石などの床・庭の木や灯籠・L字デスクや二段ベッドなどの家具も入っています",
+        ja: "テンプレート「サンプル（作例）」を新しい作例に差し替え。二階建てになり、屋根・文字・芝生や石などの床・庭の木や灯籠・L字デスクや二段ベッドなどの家具も入っています",
         en: "The Showcase template is now a newer, two-story plan with roofs, text, grass and stone floors, garden trees and a lantern, and more furniture such as an L-shaped desk and a bunk bed",
       },
     ],
@@ -240,7 +265,7 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [
       { ja: "家具を追加（壁掛け時計・ホールクロック・水槽など）。引き戸を追加", en: "More furniture (wall clock, grandfather clock, aquarium and more) and sliding doors" },
       { ja: "置いた物を動かないように固定できるように", en: "Lock items in place" },
-      { ja: "作例の雛形「サンプル」を追加", en: "A sample plan template" },
+      { ja: "作例のテンプレート「サンプル」を追加", en: "A sample plan template" },
       { ja: "Cloudflare Pages（madori-5yu.pages.dev）でも公開", en: "Also published on Cloudflare Pages (madori-5yu.pages.dev)" },
       {
         ja: "訪問数の把握に、Cookieを使わず個人を追跡しないアクセス計測を使うように（プライバシーの説明も更新）",
@@ -294,7 +319,7 @@ export const CHANGELOG: ChangelogEntry[] = [
         en: "First version: draw rooms, walls, doors, windows and furniture (sofa, bed, desk, table, kitchen, bath) in 2D and see them in 3D",
       },
       {
-        ja: "雛形（ワンルーム・1LDK・2LDK）、元に戻す・やり直す、ブラウザへの自動保存、ファイルへの書き出し・読み込み",
+        ja: "テンプレート（ワンルーム・1LDK・2LDK）、元に戻す・やり直す、ブラウザへの自動保存、ファイルへの書き出し・読み込み",
         en: "Templates (studio, 1LDK, 2LDK), undo and redo, automatic saving in the browser, and export and import as a file",
       },
       { ja: "2D・3D・同時の表示の切り替えと、右ドラッグでの2Dの移動", en: "2D, 3D and side-by-side views, and right-drag panning in 2D" },

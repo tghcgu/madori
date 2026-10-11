@@ -77,7 +77,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 5. 上部の「同時」「2D」「3D」で表示を切り替えます。
 6. 大切なプランは「書き出し」からJSONファイルとして保存します。
 
-インストールもログインも不要です。最初から用意されている間取りを編集するか、「雛形」から家・マンション・洋館・旅館・病院・学校・寺・城・宇宙船など50種類の間取りを読み込めます。
+インストールもログインも不要です。最初から用意されている間取りを編集するか、「テンプレート」から家・マンション・洋館・旅館・病院・学校・寺・城・宇宙船など50種類の間取りを読み込めます。
 
 ## 主な機能
 
@@ -91,6 +91,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 家具のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・洗濯機・トイレ・植物・ラグ・岩・外灯・花壇・フェンス・スツール・番号の印・足跡・倒れた人・血など43種類。観葉植物の「らせんの葉」は、ひとつ前の標準の3Dの形を残したもの）。2Dの記号と3Dの形が同じデザインに変わります（例: 丸い座面の椅子は3Dでも丸い座面と曲げ木の背もたれ、布団を折り返したベッドは3Dでも掛け布団の角が折れ、ガラス天板のテーブルは3Dでもガラス越しに下の棚が見える）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。「2Dの記号のみ」と書かれたデザイン（クローゼットの斜線など）は、3Dは標準の形のままです
 - 3Dを真上から見た形は、2Dの記号と同じになるように作っています。岩の輪郭と稜線、池の輪郭と石の位置、飛び石・花壇の花の並び、木目、ラグの柄、植物の葉の向きなどは、2Dと3Dが同じデータから作られます（冷蔵庫の雪の結晶や靴箱の靴のように、見分けるための図柄は2Dだけに描きます）
 - 部屋名を本文とは別にドラッグして自由配置
+- 部屋名の「文字サイズ cm」を変更できます（空欄で自動）。部屋名と自由テキストは「横書き」「縦書き」を切り替えられ、縦書きの改行は右から左へ列を増やします。保存・Undo/Redo・PNGにも反映されます
 - 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。ペンの色や太さはブラウザに記憶されます
 - 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
@@ -127,7 +128,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 屋根全体の一時表示・非表示
 - 3D上の物体をクリックして選択
 - 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
-- 「選択」ツールで固定されていない家具を直接ドラッグ移動。Escで中止、Undo / Redoに対応
+- 「選択」ツールで家具をダブルクリックすると移動モードになり、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動アイコンでも切り替え可能です。空白クリック・Escで解除し、移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
+- 右ドラッグ／Shift＋左ドラッグは、画面に沿った上下左右の平行移動です。上下ドラッグで高さも変わり、2階・3階の室内まで視点を持ち上げられます
 
 ### 複数階
 
@@ -244,11 +246,15 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
 
-### 雛形
+床を選択して「床の形」を円・L字・自由な形にすると、長方形以外の床も作れます。頂点をドラッグすると輪郭が変わり、辺の中央をドラッグすると頂点が増えます。「頂点」の欄では位置を数値で指定し、＋／−で追加・削除できます。図形の壁を選び「この図形に合わせて床を追加」を押すと、円・円弧（扇形）・多角形に合う床を追加します。元の壁は残ります。交差してしまう輪郭は受け付けず、配置固定・Undo/Redo・JSON保存にも対応します。
+
+### テンプレート
+
+階段のあるテンプレートは、上階の床に階段用の開口を設けています。最上階には余分な上り階段を置かず、下階からの階段を参照表示します。「魔法使いの塔」と「城」の塔は円形の壁・床です。これらは新しく読み込むテンプレートに適用され、保存済みの間取りは自動で変更しません。
 
 家・お店・施設・乗り物・ファンタジーなど50種類を、6つの分類に分けて並べています。どれも壁・ドア・窓・家具・床の模様・屋根まで入っていて、2Dでも3Dでもそのまま見られます（部屋の名前は家具に隠れない場所に置いています）。
 
-| 分類 | 雛形 | 内容 |
+| 分類 | テンプレート | 内容 |
 | --- | --- | --- |
 | 住まい | ワンルーム | 1部屋と水回りの小さな家 |
 | 住まい | 1LDK | LDKと寝室 |
@@ -302,14 +308,14 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | ファンタジー・SF | 宇宙船 | 操縦室・居室・食堂・医務室・機関室 |
 
 > [!WARNING]
-> 雛形を適用すると現在の間取りを置き換えます。確認ダイアログの内容を確認し、必要なプランは先に書き出してください。
+> テンプレートを適用すると現在の間取りを置き換えます。確認ダイアログの内容を確認し、必要なプランは先に書き出してください。
 
 ## 画面構成
 
 | エリア | 役割 |
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（間取り・3D）、新規作成 |
-| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、雛形 |
+| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、テンプレート |
 | 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・ドット・筆と和風など17種類）、透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
@@ -326,8 +332,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 2D | ホイール | 拡大・縮小 |
 | 2D | ダブルクリック | 要素を選択してプロパティを表示 |
 | 2D | 四隅・端点をドラッグ | 部屋、家具、屋根、線要素のサイズ変更 |
-| 3D | 左ドラッグ | 「選択」で家具を移動。それ以外の場所では視点を回転 |
-| 3D | 右ドラッグ | 視点を平行移動 |
+| 3D | 左ドラッグ | 視点回転。家具をダブルクリックして移動モードにすると家具移動 |
+| 3D | 右ドラッグ | 画面に沿って視点を上下左右へ平行移動（高さも変更） |
 | 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
 | 3D | クリック | 物体を選択。家具ツールでは編集中の階へ配置 |
 
@@ -371,7 +377,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 保存キー: `madori-quick-3d-plan`
 - 表示モード、2Dと3Dの境目の位置、寸法表示、影、光、透過表示（透かす階・色・濃さ）、2Dの絵柄とドットの大きさ、画像の書き出しの設定もブラウザへ保存
-- 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだデザインをそのまま戻します（表示モードを切り替えたとき、雛形・新規・読み込みのときは全体が入るように合わせ直します）
+- 再読み込みしたり開き直したりしても、2Dで見ていた場所と倍率、3Dのカメラの位置と向き、3Dで隠した階・屋根、2Dの屋根の表示、ツールパネルの開閉、左の一覧の開閉、家具ごとに選んだデザインをそのまま戻します（表示モードを切り替えたとき、テンプレート・新規・読み込みのときは全体が入るように合わせ直します）
 - 通常は再読み込みやブラウザ再起動後も復元
 - サイトデータ、Cookie、ストレージを削除すると消去
 - 別ブラウザ、別PC、別ドメインには自動同期されない
@@ -502,7 +508,7 @@ madori/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
 │  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆・鉛筆・水彩・マンガ・設計図・ホラーなど17種類）の描き方
-│  ├─ templates.ts           # 雛形（家・病院・洋館など）の分類と間取りのデータ
+│  ├─ templates.ts           # テンプレート（家・病院・洋館など）の分類と間取りのデータ
 │  ├─ changelog.ts           # 更新履歴（アプリとREADMEで共通）
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
@@ -642,10 +648,19 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年10月12日
+
+- 間取り見本の名称を「テンプレート」に統一。全50種類を階段の仕様に合わせて点検し、上階の床に階段の開口を設け、二階建て・三階建ての到着側の配置を修正。魔法使いの塔と城の塔は円形の壁・床に変更し、建具と家具も配置し直しました。保存済みの間取りは変更しません
+- 同時表示や狭い画面で階のタブがつぶれて押せなくなる問題を修正。ボタンを早めにアイコン表示へ切り替え、必要な幅ではツールバーを折り返します
+- 城などの大きなテンプレートを狭い3D表示に収める際、カメラの距離制限で建物の端が切れていた問題を修正
+
 ### 2026年10月11日
 
-- 下階からつながる階段を、上階の2D図とPNGに下り向きの記号で自動表示。直階段・折返し・らせんに対応し、3Dには重複追加しません。雛形の最上階にあった余分な上り階段を修正し、既存の重複階段は選択欄の「下階の階段表示に切り替え」で取り消し可能な形で解消できます
-- アパートの雛形で外階段の上を2階の床がふさいでいた配置を修正。階段の到着側に踊り場と手すりを設け、2階の外廊下へつなげました
+- 3Dの左ドラッグは通常は視点回転にし、家具をダブルクリックすると移動モードへ。空白クリック・Escで解除でき、固定・複数移動・取り消しにも対応。右ドラッグは画面に沿って上下左右へ動き、2階・3階へ視点の高さも変えられます
+- 部屋名の文字サイズを変更でき、部屋名と自由テキストを横書き・縦書きで切り替えられるように。縦書きの改行は右から左へ並び、選択・移動・PNG・保存にも反映します
+- 床を円・L字・自由な多角形に変更でき、頂点や辺の中央をドラッグして形を編集できます。頂点の追加・削除・数値指定、図形の壁に合わせた床の追加にも対応し、2Dと3Dで同じ輪郭を使います。重なる床や凹んだ部分も正しく描画します
+- 下階からつながる階段を、上階の2D図とPNGに下り向きの記号で自動表示。直階段・折返し・らせんに対応し、3Dには重複追加しません。テンプレートの最上階にあった余分な上り階段を修正し、既存の重複階段は選択欄の「下階の階段表示に切り替え」で取り消し可能な形で解消できます
+- アパートのテンプレートで外階段の上を2階の床がふさいでいた配置を修正。階段の到着側に踊り場と手すりを設け、2階の外廊下へつなげました
 
 ### 2026年10月10日
 
@@ -654,22 +669,22 @@ npm.cmd run dev
 - Ctrl＋クリック（MacはCmd）で複数の物を選択・解除し、位置関係を保ったまま一括移動できるように。2Dで部屋・壁・家具・文字などをまとめて選び、3Dでは選択した家具をつかんでまとめて移動できます。固定した物は動かさず、一括固定・削除、1回の取り消しにも対応
 - 描くツールでも物をクリックすると選択でき、家具・文字・消去などのツールでは長押しで選択できます。Escで描画や移動をキャンセルして選択ツールへ戻り、家具の配置と移動はまとめて1回で取り消せます
 - 「和風の家具・設備」に12種類を追加。畳・座布団・ちゃぶ台・屏風・障子の衝立・行灯・階段箪笥・囲炉裏・火鉢・縁台・檜風呂・つくばいを、幅・奥行・高さ・色を変えて配置できます。2Dと3Dは共通の形データから描画します
-- 雛形を50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました
+- テンプレートを50種類に。三階建て・マンション・シェアハウス・古民家・武家屋敷・寮・レストラン・ラーメン屋・居酒屋・美容院・本屋・保育園・体育館・交番・映画館・寺・キャンプ場・客船・寝台列車・城・冒険者の宿・魔法使いの塔・宇宙船を追加し、「屋外・乗り物」「ファンタジー・SF」の分類を足しました
 - 2Dの絵柄を17種類に。水彩・墨絵・クレヨン・ポップ・CAD・ホラー・コピー・レトロゲーム（緑の4色のドット）を追加し、絵柄のメニューを分類ごとに並べました
-- 雛形の旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります
+- テンプレートの旅館・ホテル・病院・学校・図書館・警察署・美術館・城に、上の階を足しました（ホテルと学校は三階建て）。階段は上と下の階で同じ場所にあります
 - 2Dの「絵柄」を、線画と背景に分けて選べるように。たとえば鉛筆の線画を黒板に、ネオンの線画を羊皮紙に描けます（背景は「おまかせ」で線画に合わせます）
 - 筆・和風と墨絵の線を、より筆らしく。入りの押さえと払いの強弱、筆圧の揺れ、かすれ、1本の中の墨の濃淡、にじみと、塗りのむらを付けました
-- 家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺の雛形の墓地にも使っています）
+- 家具に「墓石」を追加。2Dの記号と3Dの形は、台石・竿石・花立て・香炉が同じ配置です（寺のテンプレートの墓地にも使っています）
 
 ### 2026年10月9日
 
-- 雛形を27種類に増やし、住まい・屋敷と宿・お店・施設・屋外とそのほかに分けて並べました。平屋の日本家屋・アパート・洋館（地下室つき）・山荘・旅館・ホテル・カフェ・バー・コンビニ・病院・学校・オフィス・図書館・教会・神社・警察署・研究所・美術館・銭湯・公園・廃工場・地下牢を追加。どれも壁・ドア・窓・家具・床・屋根まで入っていて、2Dでも3Dでも見られます
+- テンプレートを27種類に増やし、住まい・屋敷と宿・お店・施設・屋外とそのほかに分けて並べました。平屋の日本家屋・アパート・洋館（地下室つき）・山荘・旅館・ホテル・カフェ・バー・コンビニ・病院・学校・オフィス・図書館・教会・神社・警察署・研究所・美術館・銭湯・公園・廃工場・地下牢を追加。どれも壁・ドア・窓・家具・床・屋根まで入っていて、2Dでも3Dでも見られます
 - 2Dの絵柄に、鉛筆・マンガ・設計図・古地図・黒板・ネオンの6種類を追加（全部で9種類）。絵柄のメニューには、それぞれの絵柄で描いた見本が並びます
 - 筆・和風の絵柄で、木や草などの床の模様の色が浮かないよう、和紙の色を薄く重ねるように
 
 ### 2026年10月7日
 
-- 雛形「サンプル（作例）」を新しい作例に差し替え。二階建てになり、屋根・文字・芝生や石などの床・庭の木や灯籠・L字デスクや二段ベッドなどの家具も入っています
+- テンプレート「サンプル（作例）」を新しい作例に差し替え。二階建てになり、屋根・文字・芝生や石などの床・庭の木や灯籠・L字デスクや二段ベッドなどの家具も入っています
 
 ### 2026年10月5日
 
@@ -766,7 +781,7 @@ npm.cmd run dev
 
 - 家具を追加（壁掛け時計・ホールクロック・水槽など）。引き戸を追加
 - 置いた物を動かないように固定できるように
-- 作例の雛形「サンプル」を追加
+- 作例のテンプレート「サンプル」を追加
 - Cloudflare Pages（madori-5yu.pages.dev）でも公開
 - 訪問数の把握に、Cookieを使わず個人を追跡しないアクセス計測を使うように（プライバシーの説明も更新）
 
@@ -800,7 +815,7 @@ npm.cmd run dev
 ### 2026年6月27日
 
 - 最初の版：部屋・壁・ドア・窓・家具（ソファ・ベッド・机・テーブル・キッチン・浴槽）を2Dで描くと、そのまま3Dで見られる
-- 雛形（ワンルーム・1LDK・2LDK）、元に戻す・やり直す、ブラウザへの自動保存、ファイルへの書き出し・読み込み
+- テンプレート（ワンルーム・1LDK・2LDK）、元に戻す・やり直す、ブラウザへの自動保存、ファイルへの書き出し・読み込み
 - 2D・3D・同時の表示の切り替えと、右ドラッグでの2Dの移動
 - 円と円弧の壁。ドア・窓が壁より優先されるように
 - 方眼に合わせた作図、ドアの開き方の描き方、3Dの閉じたドアと窓枠を改善
@@ -896,6 +911,8 @@ You can edit the starter plan immediately or load one of 50 templates, from hous
 - Seen from directly above, each 3D model matches its 2D symbol. Rock outlines and ridges, pond outlines and rim stones, stepping stone and flower layouts, wood grain, rug patterns, and plant leaf directions are generated from the same data for 2D and 3D (identifying marks such as the fridge snowflake or the shoes on the shoe cabinet appear only in 2D)
 - Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. The pen settings are remembered in the browser.
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
+- Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
+- Select a floor and change its shape to a circle, L or freeform polygon. Drag a vertex to reshape it, or an edge midpoint to add a vertex. Coordinates and add/remove controls are available in the properties. A shape wall also offers a command to add a matching floor while keeping the wall; arcs produce sector-shaped floors. Self-intersecting outlines are rejected. 2D and 3D share the same outline, including concave cutouts and overlap clipping
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
@@ -926,6 +943,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Per-floor visibility controls
 - Temporary roof visibility toggle
 - Click 3D objects to select and edit them
+- In Select mode, double-click furniture to enter move mode, then drag it (or its selected group). The move icon also toggles the mode. Click empty space or press Escape to leave; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
 
 ### Multiple floors
 
@@ -1042,6 +1060,8 @@ Choose a material under **床・地面** (floors and ground), then drag on the 2
 Rugs render below furniture. Adding a floor or rug afterward does not prevent selecting furniture placed on top.
 
 ### Templates
+
+Multi-floor templates include upper-floor stairwell openings and show arriving stairs without adding an extra flight above the top floor. The wizard tower and castle towers use circular walls and floors. These changes apply when loading a new template, not to existing saved plans.
 
 50 templates in 6 groups, from homes, shops, and facilities to vehicles and fantasy. Each one comes with walls, doors, windows, furniture, floor patterns, and roofs, ready to view in 2D and 3D (room names are placed where furniture does not hide them).
 
@@ -1437,8 +1457,17 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 
 The same history as "更新履歴" in the app, newest first.
 
+### 2026-10-12
+
+- Standardized the Japanese preset name as Template. Reviewed all 50 templates for the new stair behavior, added upper-floor stairwell openings and corrected arrival layouts in the two- and three-story houses. The wizard tower and castle towers now have circular walls and floors with repositioned openings and furniture. Existing saved plans are not changed
+- Fixed floor tabs collapsing and becoming unclickable in split view and narrow panes. Toolbar buttons switch to icons earlier, and the toolbar wraps when needed
+- Fixed large templates such as the castle being cropped in narrow 3D views because the fit-to-view camera distance was capped
+
 ### 2026-10-11
 
+- Left-drag in 3D now orbits by default; double-click furniture to enter move mode, and leave it with an empty-space click or Escape. Locks, group movement and undo still work. Right-drag now pans in the screen plane, including elevation for exploring upper floors
+- Room labels now have editable font sizes. Room labels and free text support horizontal or vertical writing, with right-to-left columns for line breaks, matching selection bounds, dragging, PNG export and persistence
+- Floors can be circular, L-shaped or freeform polygons. Drag vertices or edge midpoints, add/remove vertices or edit their coordinates, and add a floor matching an existing shape wall. 2D and 3D share the outline, including concave cutouts and overlapping floors
 - Stairs arriving from the floor below now appear automatically as descending symbols in the upper 2D plan and PNG exports, without extra 3D geometry. Supports straight, U-shaped and spiral stairs. Removed redundant top-floor flights from templates; existing duplicate stairs can be replaced with the lower-floor display using an undoable command in their properties
 - Fixed the apartment template's upper slab covering its exterior stairs. The stairs now lead to a guarded landing connected to the upper corridor
 
