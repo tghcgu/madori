@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { FURNITURE_DEFS } from '../src/furniture-catalog.ts';
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from '../src/templates.ts';
+import { incomingStairs, isStair } from '../src/stairs.ts';
 
 // main.ts で作る雛形（住まいの4種類と作例）
 const IN_MAIN = ['studio', 'oneLdk', 'twoLdk', 'twoStory', 'sample'];
@@ -125,18 +126,18 @@ for (const key of keys.filter(hasTemplatePlan)) {
   });
 }
 
-// 上の階へ行く階段は、下の階と同じ場所にある（階をまたいで続く）
+// 下階からの到着側は参照表示で補い、最上階に上り階段の実物を重ねない。
 for (const key of keys.filter(hasTemplatePlan)) {
-  test(`the stairs of the ${key} template line up from floor to floor`, () => {
+  test(`the ${key} template connects floors without stairs above its top floor`, () => {
     const plan = build(key);
-    const stairs = plan.floors.map(floor => floor.entities
-      .filter(entity => entity.type === 'furniture' && ['stairs', 'stairsU', 'stairsSpiral'].includes(entity.kind))
-      .map(item => Object.values(visualBox(item)).map(Math.round).join()));
-    for (let i = 1; i < stairs.length; i += 1) {
-      assert.ok(stairs[i].some(box => stairs[i - 1].includes(box)), `floor ${i} has stairs over the stairs of floor ${i - 1}: ${stairs[i]} / ${stairs[i - 1]}`);
+    const stairs = plan.floors.map(floor => floor.entities.filter(isStair));
+    for (let i = 1; i < plan.floors.length; i += 1) {
+      assert.ok(stairs[i - 1].length > 0, `floor ${i} is reached from below`);
     }
     if (plan.floors.length > 1) {
-      const top = plan.floors[plan.floors.length - 1].id;
+      const index = plan.floors.length - 1, top = plan.floors[index].id;
+      assert.equal(stairs[index].length, 0, 'no extra flight on the top floor');
+      assert.deepEqual(incomingStairs(plan.floors, index), stairs[index - 1], 'top plan shows the actual stairs arriving from below');
       assert.ok(plan.roofs.some(roof => roof.floorId === top), 'the top floor has a roof');
     }
   });
@@ -153,4 +154,22 @@ test('the mansion has a cellar under the ground floor, and opens on the ground f
   assert.equal(plan.basements, 1);
   assert.equal(plan.floors.length, 3);
   assert.equal(plan.activeFloor, 1);
+});
+
+test('the apartment stairs arrive at the corridor landing without an upper slab blocking the flight', () => {
+  const plan = build('apartment');
+  const stairs = plan.floors[0].entities.filter(isStair);
+  assert.equal(stairs.length, 1);
+  const stair = stairs[0], box = visualBox(stair);
+  assert.equal(stair.rotation, 180, 'the flight rises toward the corridor');
+  const upperRooms = plan.floors[1].entities.filter(entity => entity.type === 'room');
+  for (const room of upperRooms) {
+    const overlap = box.x0 < room.x + room.w && box.x1 > room.x && box.y0 < room.y + room.h && box.y1 > room.y;
+    assert.ok(!overlap, 'no upper slab covers the staircase');
+  }
+  const landing = upperRooms.find(room => room.y === box.y1 && room.x <= box.x0 && room.x + room.w >= box.x1);
+  assert.ok(landing && landing.h >= 100, 'a landing covers the entire arrival edge');
+  const corridor = upperRooms.find(room => room.x + room.w === landing.x && room.y <= landing.y && room.y + room.h >= landing.y + landing.h);
+  assert.ok(corridor, 'the landing joins the corridor');
+  assert.equal(plan.floors[1].entities.filter(isStair).length, 0, 'no onward flight into the roof');
 });

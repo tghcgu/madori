@@ -4,6 +4,7 @@ import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { verifySelection } from './selection-editor.mjs';
 import { verifyInteriorZoom } from './camera-editor.mjs';
+import { verifyStairs } from './stairs-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -18,6 +19,8 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 0 }, plug
       variants: FURNITURE_VARIANTS,
       selection() { return selectedEntities().map(item => item.id); },
       snapshot() { return cloneState(state); },
+      incomingStairIds() { return incomingStairs(state.floors, state.activeFloor).map(item => item.id); },
+      stairModelIds() { return planGroup.children.filter(o => !o.userData.ignoreSelection && isStair(findEntity(o.userData.entityId))).map(o => o.userData.entityId); },
       roomLabelBounds(id) {
         const room = findEntity(id);
         return room?.type === 'room' ? getRoomLabelBounds(room) : null;
@@ -147,6 +150,7 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyStairs({ page, importPlan, planPoint, output });
   await verifySelection({ page, plan, importPlan, choose, planPoint, move, project, output });
 
   // Destructive reset and native text undo must not silently remove a plan.

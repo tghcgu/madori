@@ -28,6 +28,7 @@ import {
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 import { translateSelection } from "./selection";
+import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
@@ -397,8 +398,6 @@ const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
 const MARK_FILLS: Partial<Record<FurnitureKind, string>> = { footprints: "#6b625a", bloodPool: "#a3201c", brokenGlass: "#dcedf4" };
 // 番号の印に書ける文字数
 const MAX_MARKER_LABEL = 4;
-// 階段は家具の種類分けに入れず、パレットでは床材や図形の壁と並べて下の方に置く
-const STAIR_KINDS: FurnitureKind[] = ["stairs", "stairsU", "stairsSpiral"];
 
 // 検索で表記ゆれ（ひらがな・別名）を拾うための語。表示名と分類名は自動で検索対象になる
 const SEARCH_KEYWORDS: Record<string, string> = {
@@ -3604,6 +3603,7 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
   }
   // 現在の階の部屋の塗りの上・線画の下に、ほかの階のゴーストを挟む
   if (options.ghost) drawFloorBelowGhost();
+  drawLayer(incomingStairs(state.floors, state.activeFloor), (item) => drawFurniture2d(item, true));
   drawLayer(entities.filter(isFurniture).filter((item) => item.kind === "rug" || item.kind === "paint"), drawFurniture2d);
   drawLayer(entities.filter((entity): entity is LinearElement => entity.type === "wall"), (wallItem) => {
     getVisibleWallSegments(wallItem, entities).forEach(drawWall2d);
@@ -3760,7 +3760,7 @@ function drawLayer<T extends Entity & { color?: string }>(items: T[], draw: (ite
     else groups.set(parsed.code, [item]);
   }
   groups.forEach((group, code) => {
-    drawTranslucent(colorAlpha(code), () => group.forEach(draw));
+    drawTranslucent(colorAlpha(code), () => group.forEach((item) => draw(item)));
     // 選んでいる物のつまみは、透明に近い色でも見失わないよう上から描き直す
     group.filter((item) => item.id === state.selectedId).forEach(drawSelectionMarks);
   });
@@ -4192,8 +4192,8 @@ function drawDrawerStack(x0: number, x1: number, y0: number, y1: number): void {
   for (const t of [1 / 6, 1 / 2, 5 / 6]) strokeLine(x0 + (x1 - x0) * 0.3, y0 + (y1 - y0) * t, x1 - (x1 - x0) * 0.3, y0 + (y1 - y0) * t);
 }
 
-function drawFurniture2d(furnitureItem: Furniture): void {
-  const selected = state.selectedId === furnitureItem.id;
+function drawFurniture2d(furnitureItem: Furniture, fromAbove = false): void {
+  const selected = !fromAbove && state.selectedId === furnitureItem.id;
   ctx.save();
   ctx.translate(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2);
   ctx.rotate((furnitureItem.rotation * Math.PI) / 180);
@@ -4203,7 +4203,7 @@ function drawFurniture2d(furnitureItem: Furniture): void {
   ctx.fillStyle = furnitureFill(furnitureItem);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h, furnitureItem.symbol ?? 0, furnitureItem);
+  drawFurnitureSymbol(furnitureItem.kind, furnitureItem.w, furnitureItem.h, furnitureItem.symbol ?? 0, furnitureItem, fromAbove);
   if (furnitureItem.kind === "evidenceMarker") drawMarkerLabel(furnitureItem);
   if (selected) {
     ctx.strokeStyle = "#2775d1";
@@ -4226,7 +4226,7 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
   return "#ffffff";
 }
 
-function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture): void {
+function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture, fromAbove = false): void {
   if (isJapaneseKind(kind)) {
     for (const part of japaneseParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
       ctx.save();
@@ -4722,16 +4722,18 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
         for (let y = -hh + 24; y < hh - 4; y += 24) {
           strokeLine(-hw, y, hw, y);
         }
-        strokeCircle(0, hh - 10, 3);
-        strokeLine(0, hh - 10, 0, -hh + 14);
-        strokeArrowHead(0, -hh + 14, -Math.PI / 2, 8);
+        const start = fromAbove ? -hh + 10 : hh - 10, end = fromAbove ? hh - 14 : -hh + 14;
+        strokeCircle(0, start, 3);
+        strokeLine(0, start, 0, end);
+        strokeArrowHead(0, end, (fromAbove ? 1 : -1) * Math.PI / 2, 8);
       } else {
         for (let x = -hw + 24; x < hw - 4; x += 24) {
           strokeLine(x, -hh, x, hh);
         }
-        strokeCircle(-hw + 10, 0, 3);
-        strokeLine(-hw + 10, 0, hw - 14, 0);
-        strokeArrowHead(hw - 14, 0, 0, 8);
+        const start = fromAbove ? hw - 10 : -hw + 10, end = fromAbove ? -hw + 14 : hw - 14;
+        strokeCircle(start, 0, 3);
+        strokeLine(start, 0, end, 0);
+        strokeArrowHead(end, 0, fromAbove ? Math.PI : 0, 8);
       }
       break;
     }
@@ -4747,13 +4749,14 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       }
       const ax = w * 0.25;
       const ay = -hh + landing + 8;
-      strokeCircle(ax, hh - 9, 3);
-      strokeLine(ax, hh - 9, ax, ay);
+      const startX = fromAbove ? -ax : ax;
+      strokeCircle(startX, hh - 9, 3);
+      strokeLine(startX, hh - 9, startX, ay);
       ctx.beginPath();
-      ctx.ellipse(0, ay, ax, Math.min(landing * 0.65, ax), 0, 0, Math.PI, true);
+      ctx.ellipse(0, ay, ax, Math.min(landing * 0.65, ax), 0, fromAbove ? Math.PI : 0, fromAbove ? 0 : Math.PI, !fromAbove);
       ctx.stroke();
-      strokeLine(-ax, ay, -ax, hh - 12);
-      strokeArrowHead(-ax, hh - 12, Math.PI / 2, 8);
+      strokeLine(-startX, ay, -startX, hh - 12);
+      strokeArrowHead(-startX, hh - 12, Math.PI / 2, 8);
       break;
     }
     case "stairsSpiral": {
@@ -4768,11 +4771,12 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
       ctx.fillStyle = String(ctx.strokeStyle);
       strokeCircle(0, 0, 2.5, true);
       ctx.fillStyle = "#ffffff";
+      const startAngle = fromAbove ? Math.PI * 1.75 : Math.PI * 0.5;
+      const endAngle = fromAbove ? Math.PI * 0.5 : Math.PI * 1.75;
       ctx.beginPath();
-      ctx.arc(0, 0, r * 0.55, Math.PI * 0.5, Math.PI * 1.75, false);
+      ctx.arc(0, 0, r * 0.55, startAngle, endAngle, fromAbove);
       ctx.stroke();
-      const endAngle = Math.PI * 1.75;
-      strokeArrowHead(Math.cos(endAngle) * r * 0.55, Math.sin(endAngle) * r * 0.55, endAngle + Math.PI / 2, 7);
+      strokeArrowHead(Math.cos(endAngle) * r * 0.55, Math.sin(endAngle) * r * 0.55, endAngle + (fromAbove ? -1 : 1) * Math.PI / 2, 7);
       ctx.restore();
       break;
     }
@@ -7829,6 +7833,7 @@ function updatePropertiesPanel(): void {
       `</optgroup>`,
   ).join("");
   const defaultHeight = FURNITURE_DEFS[selectedFurniture.kind].height;
+  const duplicateStair = isStair(selectedFurniture) && stairsBelow(state.floors, state.activeFloor).some((item) => sameStairPlacement(selectedFurniture, item));
   const minimumHeight = isJapaneseKind(selectedFurniture.kind) ? 1 : MIN_FURNITURE_HEIGHT;
   const markerRow = selectedFurniture.kind === "evidenceMarker"
     ? `<label>番号（印に書く文字。${MAX_MARKER_LABEL}文字まで）<input id="markerLabelInput" value="${escapeHtml(selectedFurniture.markerLabel ?? "")}" maxlength="${MAX_MARKER_LABEL}" autocomplete="off" /></label>`
@@ -7855,6 +7860,7 @@ function updatePropertiesPanel(): void {
       <label>種類
         <select id="furnitureKindInput" ${placementDisabled}>${kindOptions}</select>
       </label>
+      ${duplicateStair ? `<button type="button" class="prop-button" id="useLowerStairButton" title="この階の重複した階段を削除し、下階の階段を2Dに表示します。取り消し可能です" ${placementDisabled}><i data-lucide="arrow-down-to-line"></i>下階の階段表示に切り替え</button>` : ""}
       ${symbolPicker}
       <div class="two-col">
         <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" ${placementDisabled} /></label>
@@ -7872,6 +7878,15 @@ function updatePropertiesPanel(): void {
     </div>
   `;
   bindEntityLock(selectedFurniture);
+  propertiesPanel.querySelector<HTMLButtonElement>("#useLowerStairButton")?.addEventListener("click", () => {
+    if (isLocked(selectedFurniture) || !isStair(selectedFurniture)
+      || !stairsBelow(state.floors, state.activeFloor).some((item) => sameStairPlacement(selectedFurniture, item))) return;
+    removeEntityById(selectedFurniture.id);
+    selectOnly(null);
+    commitState();
+    redrawAll();
+  });
+  if (duplicateStair) createIcons({ icons });
   bindSelect("#furnitureKindInput", (value) => {
     const kind = value as FurnitureKind;
     const def = FURNITURE_DEFS[kind];
@@ -8030,7 +8045,7 @@ function getCanvasPixelRatio(): number {
 }
 
 function fitPlanToCanvas(): void {
-  const bounds = getEntitiesBounds([...activeEntities(), ...state.roofs]) ?? getGlobalBounds();
+  const bounds = getEntitiesBounds([...activeEntities(), ...incomingStairs(state.floors, state.activeFloor), ...state.roofs]) ?? getGlobalBounds();
   const rect = planCanvas.getBoundingClientRect();
   if (!bounds || rect.width === 0 || rect.height === 0) {
     view = { zoom: 1, x: rect.width / 2, y: rect.height / 2 };
@@ -8319,7 +8334,7 @@ function setupImageExport(): void {
 
 // 書き出す階の、物が入る範囲（屋根は含めない）
 function exportBounds(floorIndexes: number[]): Bounds | null {
-  return getEntitiesBounds(floorIndexes.flatMap((index) => state.floors[index].entities));
+  return getEntitiesBounds(floorIndexes.flatMap((index) => [...state.floors[index].entities, ...incomingStairs(state.floors, index)]));
 }
 
 // 1つの階を、書き出し用のキャンバスの (left, top) から描く。選択の枠・ほかの階の透過・屋根・固定の印は描かない
@@ -9011,7 +9026,6 @@ function buildTemplate(key: string): PlanState {
           furniture("shelf", 620, 180),
           furniture("desk", 40, 320),
           furniture("shelf", 40, 410),
-          furniture("stairsU", 270, 290),
           furniture("wardrobe", 520, 300),
           furniture("closet", 520, 400),
         ]),

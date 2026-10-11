@@ -1,3 +1,5 @@
+import { isStair } from "./stairs.ts";
+
 // 雛形（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
 // 壁は部屋の縁から自動で立てる（隣り合う部屋の縁は1本にまとめる）。家具の位置は、回したあとの見た目の左上で書く
@@ -265,7 +267,8 @@ function planBuilder(newId: (prefix: TemplateIdPrefix) => string, sizes: Record<
     },
     plan(basements = 0): TemplatePlan {
       return {
-        floors: floors.map((floor) => ({ id: floor.id, name: "", entities: floor.entities })),
+        // 最上階には上り階段を重ねない。下階からの到着側は2Dで自動表示する。
+        floors: floors.map((floor, index) => ({ id: floor.id, name: "", entities: floors.length > 1 && index === floors.length - 1 ? floor.entities.filter((item) => !isStair(item)) : floor.entities })),
         activeFloor: basements,
         selectedId: null,
         roofs,
@@ -390,21 +393,23 @@ function apartment(b: PlanBuilder): void {
   const first = b.floor();
   first.area("", 0, 720, 1020, 200, "stone", C.stone)
     .area("", 0, 600, 900, 120, "stone", C.stone)
-    .area("", 900, 380, 120, 340, "stone", C.stone);
+    .area("", 900, 320, 120, 400, "stone", C.stone);
   [0, 300, 600].forEach((ux) => unit(first, ux));
   first.walls();
   [0, 300, 600].forEach((ux) => furnish(first, ux));
-  first.item("stairs", 910, 420)
+  first.item("stairs", 910, 320, { rot: 180 })
     .row("bicycle", 40, 760, 3, 200, 0, { rot: 90 })
     .row("mailbox", 700, 740, 3, 50, 0);
   const second = b.floor();
+  // 階段の上は空け、上り切った所だけを外廊下につながる踊り場にする。
   second.area("", 0, 600, 900, 120, "stone", C.stone)
-    .area("", 900, 380, 120, 340, "stone", C.stone);
+    .area("", 900, 600, 120, 120, "stone", C.stone);
   [0, 300, 600].forEach((ux) => unit(second, ux));
   second.walls();
   [0, 300, 600].forEach((ux) => furnish(second, ux));
-  second.item("stairs", 910, 420)
-    .row("fence", 0, 702, 3, 300, 0, { w: 300, h: 15 });
+  second.row("fence", 0, 702, 3, 300, 0, { w: 300, h: 15 })
+    .item("fence", 900, 702, { w: 105, h: 15 })
+    .item("fence", 1005, 600, { w: 120, h: 15, rot: 90 });
   b.roof("gable", -40, -40, 980, 800, second);
 }
 
@@ -447,7 +452,6 @@ function westernMansion(b: PlanBuilder): void {
     .window(150, 1100, 450, 1100, true).window(1150, 1100, 1450, 1100)
     // 玄関ホール
     .item("stairsU", 650, 40, { w: 300, h: 300 })
-    .item("stairs", 880, 400)
     .item("grandfatherClock", 620, 380)
     .item("rug", 690, 720, { w: 160, h: 300, color: "#8e2a2a" })
     .item("plantLarge", 610, 1030)

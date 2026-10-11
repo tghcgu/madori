@@ -117,6 +117,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - ホイールによるズーム（マウスのある場所に向かって進み、拡大し続けると窓や壁を越えて室内まで入れます。近づいても前進が止まらず、逆回転で後退できます。タッチ操作ではピンチに対応）
 - 右ドラッグの移動は、つかんだ物がマウスについてくる速さで動きます。すぐ目の前まで寄ったあとでも、止まったようにならず動かせます
 - 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
+- 階段は出発する下の階に1つ配置すれば、到着する上の階の2D図とPNGにも下り向きの記号で自動表示します（下階の透過表示がオフでも表示）。上の階に同じ階段を複製する必要はありません。記号の位置・大きさは下階の階段に追従し、編集は下階で行います
+- すでに上下階へ同じ階段を重ねていた場合は、上階の階段を選択して「下階の階段表示に切り替え」を押すと、上階の実物だけを削除して下階の記号表示にできます。固定中は操作できず、取り消しにも対応します。上階からさらに上へ登る階段は、そのまま残せます
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
 - 影のON/OFF
 - 5段階の明るさ調整
@@ -640,6 +642,11 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年10月11日
+
+- 下階からつながる階段を、上階の2D図とPNGに下り向きの記号で自動表示。直階段・折返し・らせんに対応し、3Dには重複追加しません。雛形の最上階にあった余分な上り階段を修正し、既存の重複階段は選択欄の「下階の階段表示に切り替え」で取り消し可能な形で解消できます
+- アパートの雛形で外階段の上を2階の床がふさいでいた配置を修正。階段の到着側に踊り場と手すりを設け、2階の外廊下へつなげました
+
 ### 2026年10月10日
 
 - 3Dで拡大し続けると注視点の手前で止まっていた動きを修正。ホイールやピンチで窓・壁を越えて室内まで進めるようになり、逆方向で後退できます。室内の視点も再読み込み後に保ちます
@@ -910,6 +917,8 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
 - Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer; keep scrolling to pass through windows and walls into rooms, and reverse to move back. Forward movement no longer stops near the orbit target. Pinch gestures work too. Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
 - 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
+- Place a staircase once on its departure floor. Its arrival is shown automatically as a descending symbol in the next floor's 2D plan and PNG export, even with floor ghosting off. No extra 3D flight is created. The symbol follows edits to the original staircase; edit it on the lower floor
+- For an existing duplicate, select the upper flight and choose "下階の階段表示に切り替え" (use the lower-floor stair display). This removes only that upper flight, supports undo, and is disabled for locked stairs. Keep an upper flight when it intentionally leads to another floor
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
 - Optional shadows
 - Five light intensity levels
@@ -1427,6 +1436,11 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-11
+
+- Stairs arriving from the floor below now appear automatically as descending symbols in the upper 2D plan and PNG exports, without extra 3D geometry. Supports straight, U-shaped and spiral stairs. Removed redundant top-floor flights from templates; existing duplicate stairs can be replaced with the lower-floor display using an undoable command in their properties
+- Fixed the apartment template's upper slab covering its exterior stairs. The stairs now lead to a guarded landing connected to the upper corridor
 
 ### 2026-10-10
 
