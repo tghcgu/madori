@@ -1,5 +1,6 @@
 import { isStair } from "./stairs.ts";
 import { openTemplateStairwells } from "./template-floors.ts";
+import type { RoofKind } from "./roof-shapes.ts";
 
 // テンプレート（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
@@ -287,7 +288,7 @@ function planBuilder(newId: (prefix: TemplateIdPrefix) => string, sizes: Record<
       floors.push(floor);
       return floor;
     },
-    roof(kind: "gable" | "hip" | "flat", x: number, y: number, w: number, h: number, floor: FloorBuilder) {
+    roof(kind: RoofKind, x: number, y: number, w: number, h: number, floor: FloorBuilder) {
       roofs.push({ id: newId("roof"), type: "roof", kind, x, y, w, h, floorId: floor.id });
     },
     plan(basements = 0): TemplatePlan {
@@ -2674,8 +2675,8 @@ function castle(b: PlanBuilder): void {
     .item("cupboard", 1250, 10, { w: 200, h: 50, color: "#c9a227" })
     .item("floorLamp", 1190, 15).item("floorLamp", 1455, 15)
     .row("bench", 1100, 220, 3, 0, 110, { w: 300, h: 50 });
-  b.roof("hip", -130, -30, 660, 660, upper);
-  b.roof("hip", 1470, -30, 660, 660, upper);
+  b.roof("cone", -130, -30, 660, 660, upper);
+  b.roof("cone", 1470, -30, 660, 660, upper);
   b.roof("gable", 470, -30, 1060, 660, upper);
 }
 
@@ -2767,7 +2768,7 @@ function wizardTower(b: PlanBuilder): void {
     .item("floorLamp", 540, 190)
     .item("armchair", 530, 270)
     .item("roundTable", 420, 330, { w: 70, h: 70 });
-  b.roof("hip", -40, -40, 880, 880, top);
+  b.roof("cone", -40, -40, 880, 880, top);
 }
 
 function spaceship(b: PlanBuilder): void {

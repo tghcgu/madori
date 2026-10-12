@@ -1,6 +1,6 @@
 import { type FloorOutline, RECT_OUTLINE } from "./floor-outline.ts";
 
-export type FloorPreset = "rectangle" | "circle" | "l";
+export type FloorPreset = "rectangle" | "circle" | "ellipse" | "l";
 
 export function presetOutline(preset: FloorPreset): [number, number][] | undefined {
   if (preset === "rectangle") return undefined;
@@ -15,7 +15,7 @@ export function isEllipseFloor(floor: FloorOutline): boolean {
 }
 
 export function floorPreset(floor: FloorOutline): FloorPreset | "free" {
-  if (isEllipseFloor(floor)) return "circle";
+  if (isEllipseFloor(floor)) return Math.abs(floor.w - floor.h) < 0.01 ? "circle" : "ellipse";
   const points = floor.outline ?? RECT_OUTLINE;
   for (const preset of ["rectangle", "l"] as const) {
     const sample = presetOutline(preset) ?? RECT_OUTLINE;

@@ -189,8 +189,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 複数屋根
 
-- 切妻、寄棟、陸屋根を何枚でも追加
+- 切妻、寄棟、陸屋根、円すい、ドーム、正多角形を何枚でも追加
 - 屋根ごとに幅、奥行、位置を編集
+- 円すい・ドームは直径で一括変更、幅・奥行を別々に変えると楕円形に
+- 正多角形は3〜12辺、向き、外接円の直径で編集。角をドラッグしても正多角形を維持
+- 円すい・ドーム・正多角形は屋根の高さを10〜2000cmで指定（空欄なら寸法から自動計算）
 - 「設置階」を屋根ごとに指定。階を追加しても設置階は変わらず、対象階を隠すと屋根も非表示
 - 2D上でドラッグ移動
 - 四隅のハンドルでサイズ変更
@@ -201,6 +204,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 旧形式の1枚屋根データを自動移行
 
 部屋を選択してから屋根を追加すると、その部屋を覆う大きさで配置されます。部屋を選択していない状態で2枚目以降を追加すると、重なって見失わないよう右隣へ配置されます。
+
+円・楕円・多角形の壁を選択して丸い屋根や正多角形の屋根を追加すると、その図形を基準に配置します。正多角形の壁では辺の数と向きも引き継ぎます。「魔法使いの塔」と「城」の塔は円すい屋根になりました（保存済みの間取りは変更しません）。
 
 ### 家具・設備
 
@@ -222,8 +227,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、破片 |
 | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
 | 階段 | 直階段、折り返し階段、らせん階段 |
-| 図形の壁 | 円、円弧、三角形〜八角形 |
-| 屋根 | 切妻、寄棟、陸屋根 |
+| 図形の壁 | 円、楕円、円弧、三角形〜八角形 |
+| 屋根 | 切妻、寄棟、陸屋根、円すい、ドーム、正多角形 |
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
@@ -249,9 +254,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 「線で囲んで床を作成」を選び、2Dで角になる点を順にクリック（タップ）します。始点をもう一度押す・`Enter`・キャンバス上のチェックボタンで閉じると、その形の床ができます。`Shift`で最後の点から水平・垂直に、`Backspace`または戻るボタンで1点戻し、やり直しボタンで復元、`Esc`または×で中止できます。交差した輪郭は確定せず、理由を表示します。作図だけでは壁は作られません。
 
-既存の床は長方形・円・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
+既存の床は長方形・円・楕円・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
 
 円の壁・円形の床は、円周の4つのつまみ、直径の数値、＋／−、スライダーで中心を保って拡大縮小できます。円形床の幅・奥行を個別に変えると楕円になります。円弧・多角形の壁も外周のつまみと直径欄で変更できます。スライダー操作は1回のUndoで戻せます。図形の壁の「この図形に合わせて床を追加」は元の壁を残して円・円弧（扇形）・多角形に合う床を作ります。床の輪郭は2D・3D・PNG・JSONで共通です。
+
+楕円の壁は「図形の壁」の「楕円」を選び、2Dで四角を描くようにドラッグして配置します。既存の円でも「幅 cm」「奥行 cm」を別々に変えるだけで楕円になります。楕円の壁・床は左右のつまみで幅、上下のつまみで奥行だけを変更でき、中心は動きません。楕円の壁に合わせた床も追加できます。壁の形を「円」に戻すと縦横が同じになり、`R`で楕円の縦横を入れ替えられます。
 
 ### テンプレート
 
@@ -655,6 +662,8 @@ npm.cmd run dev
 
 ### 2026年10月12日
 
+- 円すい・ドーム・正多角形の屋根を追加。直径や幅・奥行、高さを調整でき、正多角形は3〜12辺と向きを選べます。2D・3Dで輪郭が一致し、魔法使いの塔と城の塔のテンプレートも円すい屋根に変更しました
+- 楕円の壁を直接描けるツールと楕円の床の見本を追加。円の幅・奥行を別々に変えて楕円にでき、楕円のつまみは縦横を独立して変更します。中心を保ったサイズ変更、図形に合う床や屋根の追加、取り消しと保存にも対応
 - 「線で囲んで床を作成」を追加。点を順につないで始点をクリック・Enter・完了ボタンで閉じると、同じ輪郭の床が2D・3Dにできます。作図中の1点戻し、キャンセル、Shiftで水平・垂直、交差した輪郭の検出に対応
 - 床の形を見本ボタンで選び、全体の拡大縮小と「輪郭を編集」を分離。キャンバスで選んだ頂点を保持し、辺の中央で点を追加、Deleteで削除、座標指定・矢印キーで調整できます。階段の開口を壊す変更は理由を表示して止めます
 - 円・円弧・多角形の壁と円形の床を、円周のつまみ・直径入力・スライダーでサイズ変更できるように。中心を保って拡大縮小し、円形床の通常選択では大量の頂点を出しません。スライダー操作は1回で取り消せます
@@ -921,8 +930,9 @@ You can edit the starter plan immediately or load one of 50 templates, from hous
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
-- Existing floors have rectangle, circle and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
+- Existing floors have rectangle, circle, ellipse and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
 - Circle walls and circular floors have four perimeter handles, an exact diameter field, increment/decrement buttons and a live slider. Resizing keeps the center fixed; a slider gesture is one undo step. Changing a circular floor's width and depth independently makes an ellipse. Arc and polygon walls also have radial size handles and a diameter control. Shape walls can add matching floors while keeping the wall; arcs produce sector floors. 2D, 3D, PNG and JSON share the same outline, including concave cutouts and overlap clipping
+- Draw an ellipse wall by choosing "楕円" under Shape walls and dragging a bounding rectangle. Alternatively, edit an existing circle's width and depth independently. Ellipse wall and floor handles change only their own axis while keeping the center fixed. Add a matching ellipse floor from the wall properties, switch the wall shape back to Circle to restore equal axes, or press R to swap the ellipse's axes
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
@@ -1011,8 +1021,11 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 ### Multiple editable roofs
 
-- Add any number of gable, hip, and flat roofs
+- Add any number of gable, hip, flat, cone, dome, and regular polygon roofs
 - Edit width, depth, and position for each roof
+- Resize cone and dome roofs by diameter, or set width and depth independently for an elliptical footprint
+- Regular polygon roofs support 3 to 12 sides, rotation and circumcircle diameter; corner resizing preserves regular sides
+- Set cone, dome and polygon roof rise from 10 to 2000 cm, or leave it blank to calculate it from the footprint
 - Assign each roof to a floor. Adding floors does not move existing roofs; hiding a floor also hides its roofs
 - Drag roofs on the 2D canvas
 - Resize roofs from corner handles
@@ -1023,6 +1036,8 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 - Automatically migrate legacy single-roof plans
 
 If a room is selected before adding a roof, the new roof is sized around that room. Additional roofs created without a selected room are placed beside the previous roof so they do not disappear underneath it.
+
+Round and polygon roofs can also be placed around a selected circle, ellipse or polygon wall. Polygon roofs inherit the wall's side count and orientation. The wizard tower and castle tower templates now use cone roofs; existing saved plans are unchanged.
 
 ### Included objects
 
@@ -1044,8 +1059,8 @@ The furniture and equipment palette lists frequently used openings and furniture
 | People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, shards |
 | Floors and ground | Plain, wood planks, tile, stone paving, grass |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
-| Shape walls | Circle, arc, triangle to octagon |
-| Roofs | Gable, hip, flat |
+| Shape walls | Circle, ellipse, arc, triangle to octagon |
+| Roofs | Gable, hip, flat, cone, dome, regular polygon |
 
 Type in the search box at the top of the palette to show only matching parts.
 
@@ -1469,6 +1484,8 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-12
 
+- Added cone, dome and regular polygon roofs with editable diameter, width/depth and rise. Polygon roofs support 3 to 12 sides and rotation, with matching 2D and 3D footprints. Wizard and castle tower templates now use cone roofs
+- Added an ellipse wall tool and ellipse floor preset. Change a circle's width and depth independently to make an ellipse; ellipse handles resize each axis separately while keeping the center fixed. Matching floors and roofs, undo and persistence are supported
 - Added a click-to-draw floor tool. Connect points and close the outline by clicking its start, pressing Enter or using the finish button to create matching 2D and 3D floors. Supports undoing draft points, cancellation, Shift-constrained horizontal/vertical segments and crossed-outline validation
 - Replaced the floor-shape dropdown with visual presets and separated whole-floor resizing from contour editing. Selected canvas vertices stay selected across edits; insert points at edge midpoints, delete them, or adjust coordinates and nudge with arrow keys. Changes that invalidate stairwell openings are blocked with feedback
 - Circle, arc and polygon walls and circular floors now resize through perimeter handles, diameter input and a live slider. Resizing keeps the center fixed, and selecting a circular floor no longer shows every polygon vertex. A slider gesture is a single undo step

@@ -563,11 +563,15 @@ select:focus-visible {
 
 .roof-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
 .roof-picker button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   min-height: 36px;
   padding: 8px 4px;
   border: 1px solid var(--line);
@@ -576,6 +580,8 @@ select:focus-visible {
   color: var(--ink);
   font-size: 12px;
 }
+
+.roof-picker svg { width: 16px; height: 16px; flex: 0 0 16px; }
 
 .roof-picker button:hover {
   border-color: var(--line-strong);
@@ -1595,7 +1601,7 @@ select:focus-visible {
 }
 
 .floor-draw-tool { width: 100%; min-height: 38px; margin-top: 8px; }
-.floor-shapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.floor-shapes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .floor-shapes button { height: 48px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 .floor-shapes button[aria-pressed="true"] { border-color: var(--accent); background: #e8f1fb; }
 .floor-shapes button:disabled { opacity: .45; cursor: not-allowed; }

@@ -4,8 +4,8 @@ import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline } from '.
 import { floorPolygon, normalizeOutline, outlineFromPoints, pointInPolygon } from '../src/floor-outline.ts';
 
 test('floor presets are valid, independent and detectable after persistence', () => {
-  for (const preset of ['rectangle', 'circle', 'l']) {
-    const floor = { x: 20, y: -80, w: 600, h: 400, outline: presetOutline(preset) };
+  for (const preset of ['rectangle', 'circle', 'ellipse', 'l']) {
+    const floor = { x: 20, y: -80, w: 600, h: preset === 'circle' ? 600 : 400, outline: presetOutline(preset) };
     normalizeOutline(floor.outline);
     assert.equal(floorPreset(JSON.parse(JSON.stringify(floor))), preset);
   }

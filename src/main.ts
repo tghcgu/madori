@@ -33,6 +33,7 @@ import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
 import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
 import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, type FloorPreset } from "./floor-editing";
+import { ROOF_LABELS, isRoofKind, isRadialRoof, roofOutline, roofSides, roofRise, regularRoofSize, radialRoofModel, type RoofKind } from "./roof-shapes";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
@@ -41,10 +42,9 @@ const PLAN_EDITION = document.documentElement.dataset.edition === "plan";
 const EDITION_NOTICE_KEY = "madori-quick-3d-plan-edition-notice";
 const ALPHA_NOTE_KEY = "madori-quick-3d-alpha-note";
 
-type Tool = "select" | "paint" | "room" | "floor" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
+type Tool = "select" | "paint" | "room" | "floor" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "ellipse" | "arc" | "polygon" | "text" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof" | "text";
-type ShapeKind = "circle" | "arc" | "polygon";
-type RoofKind = "gable" | "hip" | "flat";
+type ShapeKind = "circle" | "ellipse" | "arc" | "polygon";
 type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
 type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "marquee" | "none";
@@ -128,6 +128,7 @@ interface Shape {
   x: number;
   y: number;
   r: number;
+  ry?: number;
   startAngle: number;
   endAngle: number;
   sides?: number;
@@ -147,6 +148,9 @@ interface Roof {
   h: number;
   floorId?: string;
   locked?: boolean;
+  sides?: number;
+  rotation?: number;
+  rise?: number;
 }
 
 // 2Dの間取りだけに表示する自由な文字。x, y は文字のまとまりの中心
@@ -464,11 +468,6 @@ const SEARCH_KEYWORDS: Record<string, string> = {
 };
 
 const ROOM_COLORS = ["#ffffff", "#fdfdfc", "#fbfcfd", "#fcfbf9", "#fbfcfb", "#fdfcfd"];
-const ROOF_LABELS: Record<RoofKind, string> = {
-  gable: "切妻",
-  hip: "寄棟",
-  flat: "陸屋根",
-};
 
 // ---- 画像の書き出しの設定（起動時のメニューの組み立てでも使うので、ここで決める） ----
 
@@ -708,10 +707,6 @@ const viewState: SavedViewState = loadViewState();
 let viewStateReady = false;
 let viewStateTimer = 0;
 
-function isRoofKind(value: unknown): value is RoofKind {
-  return value === "gable" || value === "hip" || value === "flat";
-}
-
 function isLegacyRoofKind(value: unknown): value is LegacyRoofKind {
   return value === "none" || isRoofKind(value);
 }
@@ -732,6 +727,12 @@ function normalizeRoof(value: unknown): Roof | null {
     y,
     w: Math.max(GRID * 2, w),
     h: Math.max(GRID * 2, h),
+    ...(item.kind === "polygon" ? {
+      ...regularRoofSize({ x, y, w: Math.max(GRID * 2, w), h: Math.max(GRID * 2, h) }),
+      sides: roofSides(item.sides),
+      rotation: typeof item.rotation === "number" && Number.isFinite(item.rotation) ? ((item.rotation % 360) + 360) % 360 : 0,
+    } : {}),
+    rise: isRadialRoof(item.kind) && typeof item.rise === "number" && Number.isFinite(item.rise) ? clamp(item.rise, 10, 2000) : undefined,
     floorId: typeof item.floorId === "string" ? item.floorId : undefined,
     locked: item.locked === true ? true : undefined,
   };
@@ -855,11 +856,13 @@ function normalizeEntity(value: unknown): Entity {
     if (!finite(entity.x1, entity.y1, entity.x2, entity.y2)) throw new Error("Invalid line coordinates");
     return { ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d) };
   }
-  if (entity.type === "shape" && ["circle", "arc", "polygon"].includes(entity.kind)) {
+  if (entity.type === "shape" && ["circle", "ellipse", "arc", "polygon"].includes(entity.kind)) {
     if (!finite(entity.x, entity.y, entity.r) || entity.r <= 0) throw new Error("Invalid shape");
+    if (entity.kind === "ellipse" && entity.ry !== undefined && (!finite(entity.ry) || entity.ry <= 0)) throw new Error("Invalid ellipse");
     return {
       ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d),
       startAngle: finite(entity.startAngle) ? entity.startAngle : 0,
+      ry: entity.kind === "ellipse" ? entity.ry ?? entity.r : undefined,
       endAngle: finite(entity.endAngle) ? entity.endAngle : Math.PI * 2,
       sides: finite(entity.sides) ? clamp(Math.round(entity.sides!), 3, 12) : 6,
       rotation: finite(entity.rotation) ? entity.rotation : 0,
@@ -1235,6 +1238,7 @@ function buildFurniturePicker(): void {
   const shapes = createPaletteGroup("図形の壁", false, "図形 ずけい 壁 かべ");
   ([
     ["circle", 0, "円", "えん まる"],
+    ["ellipse", 0, "楕円", "だえん 丸 まる 長円"],
     ["arc", 0, "円弧", "えんこ カーブ"],
     ["poly3", 3, "三角形", "さんかく"],
     ["poly4", 4, "四角形", "しかく"],
@@ -1243,7 +1247,7 @@ function buildFurniturePicker(): void {
     ["poly8", 8, "八角形", "はっかく"],
   ] as [string, number, string, string][]).forEach(([key, sides, label, keywords]) => {
     const button = createPaletteButton(label, keywords, () => {
-      if (key === "circle" || key === "arc") {
+      if (key === "circle" || key === "ellipse" || key === "arc") {
         activeTool = key;
       } else {
         activeTool = "polygon";
@@ -1261,7 +1265,7 @@ function buildFurniturePicker(): void {
   // 屋根の欄はHTMLに固定で置いてあるので、検索用の語だけ付ける
   const roofCategory = requiredElement<HTMLDetailsElement>("#roofCategory");
   roofCategory.dataset.search = normalizeSearchText("屋根 やね");
-  const roofKeywords: Record<RoofKind, string> = { gable: "きりづま", hip: "よせむね", flat: "ろくやね りくやね フラット" };
+  const roofKeywords: Record<RoofKind, string> = { gable: "きりづま", hip: "よせむね", flat: "ろくやね りくやね フラット", cone: "えんすい 円形 丸 まる 塔", dome: "どーむ 円形 丸 まる 半球", polygon: "せいたかっけい 多角形 三角 四角 五角 六角 八角" };
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
     const kind = button.dataset.roofAdd as RoofKind;
     button.dataset.search = normalizeSearchText(`${ROOF_LABELS[kind]} ${roofKeywords[kind]}`);
@@ -1450,7 +1454,8 @@ function renderFloorVisibility(): void {
 function addRoof(kind: RoofKind): void {
   if (!isRoofKind(kind)) return;
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
-  const selectedBounds = selected?.type === "room" ? { x: selected.x, y: selected.y, w: selected.w, h: selected.h } : null;
+  const selectedBounds = selected?.type === "room" ? { x: selected.x, y: selected.y, w: selected.w, h: selected.h }
+    : selected?.type === "shape" && isRadialRoof(kind) ? { x: selected.x - selected.r, y: selected.y - shapeRadiusY(selected), w: selected.r * 2, h: shapeRadiusY(selected) * 2 } : null;
   const sourceBounds =
     selectedBounds ??
     getEntitiesBounds(activeEntities().filter(isRoom)) ??
@@ -1467,9 +1472,15 @@ function addRoof(kind: RoofKind): void {
     previousRoof?.w ?? defaultWidth,
     previousRoof?.h ?? defaultDepth,
   );
+  if (isRadialRoof(kind) && selectedBounds) Object.assign(item, { x: selectedBounds.x - overhang, y: selectedBounds.y - overhang, w: selectedBounds.w + overhang * 2, h: selectedBounds.h + overhang * 2 });
+  if (kind === "polygon") {
+    Object.assign(item, regularRoofSize(item));
+    item.sides = selected?.type === "shape" && selected.kind === "polygon" ? roofSides(selected.sides) : 6;
+    item.rotation = selected?.type === "shape" && selected.kind === "polygon" ? radiansToDegrees(selected.rotation ?? 0) : 0;
+  }
   item.floorId = activeFloor().id;
   state.roofs.push(item);
-  state.selectedId = item.id;
+  selectOnly(item.id);
   roofVisible3d = true;
   roofVisible2d = true;
   activeTool = "select";
@@ -2074,7 +2085,7 @@ function entityBox(entity: Entity): Bounds {
     const { w, h } = measureTextLabel(entity);
     return { x: entity.x - w / 2, y: entity.y - h / 2, w, h };
   }
-  if (entity.type === "shape") return { x: entity.x - entity.r, y: entity.y - entity.r, w: entity.r * 2, h: entity.r * 2 };
+  if (entity.type === "shape") return { x: entity.x - entity.r, y: entity.y - shapeRadiusY(entity), w: entity.r * 2, h: shapeRadiusY(entity) * 2 };
   return { x: Math.min(entity.x1, entity.x2), y: Math.min(entity.y1, entity.y2), w: Math.abs(entity.x2 - entity.x1), h: Math.abs(entity.y2 - entity.y1) };
 }
 
@@ -2456,7 +2467,7 @@ function toolHintParts(): string[] | null {
   if (floorEdit) return null;
   if (activeTool !== "select") {
     const action = toolAction();
-    const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
+    const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", ellipse: "楕円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
     return action ? [names[activeTool], ...action, "Escで選択に戻る"] : null;
   }
   // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す（Ctrl のないスマホ・タブレットでは出さない）
@@ -2485,6 +2496,7 @@ function toolAction(): [string, string] | null {
     case "window2":
       return ["壁に沿ってドラッグで置く", click];
     case "circle":
+    case "ellipse":
     case "arc":
     case "polygon":
       return ["ドラッグで図形の壁を描く", click];
@@ -2519,8 +2531,8 @@ function handlePointerMove(event: PointerEvent): void {
     planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed"
       : hover.corner?.startsWith("edge:") ? "copy"
       : hover.corner === "label" || hover.corner?.startsWith("limb:") || hover.corner?.startsWith("vertex:") ? "grab"
-      : hover.corner === "round:n" || hover.corner === "round:s" || (hover.entity?.type === "shape" && hover.entity.kind === "circle" && ["radius:1", "radius:3"].includes(hover.corner ?? "")) ? "ns-resize"
-      : hover.corner === "round:w" || hover.corner === "round:e" || (hover.entity?.type === "shape" && hover.entity.kind === "circle" && ["radius:0", "radius:2"].includes(hover.corner ?? "")) ? "ew-resize"
+      : hover.corner === "round:n" || hover.corner === "round:s" || (hover.entity?.type === "shape" && ["circle", "ellipse"].includes(hover.entity.kind) && ["radius:1", "radius:3"].includes(hover.corner ?? "")) ? "ns-resize"
+      : hover.corner === "round:w" || hover.corner === "round:e" || (hover.entity?.type === "shape" && ["circle", "ellipse"].includes(hover.entity.kind) && ["radius:0", "radius:2"].includes(hover.corner ?? "")) ? "ew-resize"
       : hover.corner ? "nwse-resize" : hover.entity?.id === floorEdit?.id ? "default" : hover.entity ? "move" : "default";
   }
   if (drag.pointerId === event.pointerId && (longPressTimer || drag.pending)) {
@@ -2655,6 +2667,7 @@ function handlePointerUp(event: PointerEvent): void {
     if (activeTool === "window") addLineFromDrag("window", start, end);
     if (activeTool === "window2") addLineFromDrag("window", start, end, true);
     if (activeTool === "circle") addShapeFromDrag("circle", start, end);
+    if (activeTool === "ellipse") addShapeFromDrag("ellipse", start, end);
     if (activeTool === "arc") addShapeFromDrag("arc", start, end);
     if (activeTool === "polygon") addShapeFromDrag("polygon", start, end);
     commitState();
@@ -3148,6 +3161,12 @@ function addShapeFromDrag(kind: ShapeKind, start: Point, end: Point): void {
     startAngle: kind === "arc" ? -Math.PI / 2 : 0,
     endAngle: kind === "arc" ? dragAngle : Math.PI * 2,
   };
+  if (kind === "ellipse") {
+    const x1 = snap(start.x), y1 = snap(start.y), x2 = snap(end.x), y2 = snap(end.y);
+    shape.x = (x1 + x2) / 2; shape.y = (y1 + y2) / 2;
+    shape.r = Math.max(GRID, Math.abs(x2 - x1) / 2);
+    shape.ry = Math.max(GRID, Math.abs(y2 - y1) / 2);
+  }
   if (kind === "polygon") {
     shape.sides = activePolygonSides;
     // 辺がドラッグ方向を向くようにする（四角形なら水平ドラッグで正方形の向きになる）
@@ -3330,17 +3349,24 @@ function removeFloorVertex(): void {
 function shapeHandles(shape: Shape): { key: string; x: number; y: number }[] {
   const angles = shape.kind === "arc" ? [shape.startAngle, shape.startAngle + normalizeAngle(shape.endAngle - shape.startAngle) / 2, shape.endAngle]
     : shape.kind === "polygon" ? polygonPoints(shape).map(p => Math.atan2(p.y - shape.y, p.x - shape.x)) : [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-  return angles.map((angle, i) => ({ key: `radius:${i}`, x: shape.x + shape.r * Math.cos(angle), y: shape.y + shape.r * Math.sin(angle) }));
+  return angles.map((angle, i) => ({ key: `radius:${i}`, ...shapePoint(shape, angle) }));
+}
+
+function shapeRadiusY(shape: Shape): number { return shape.kind === "ellipse" ? shape.ry ?? shape.r : shape.r; }
+
+function shapePoint(shape: Shape, angle: number): Point {
+  return { x: shape.x + shape.r * Math.cos(angle), y: shape.y + shapeRadiusY(shape) * Math.sin(angle) };
 }
 
 function floorFromShape(shape: Shape): void {
   let points: [number, number][];
   if (shape.kind === "polygon") points = polygonPoints(shape).map(p => [p.x, p.y]);
   else {
-    const start = shape.kind === "circle" ? 0 : shape.startAngle;
-    const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - start);
+    const closed = shape.kind !== "arc";
+    const start = closed ? 0 : shape.startAngle;
+    const sweep = closed ? Math.PI * 2 : normalizeAngle(shape.endAngle - start);
     const count = Math.max(4, Math.ceil(sweep / (Math.PI * 2) * 64));
-    points = Array.from({ length: shape.kind === "circle" ? count : count + 1 }, (_, i) => [shape.x + shape.r * Math.cos(start + sweep * i / count), shape.y + shape.r * Math.sin(start + sweep * i / count)]);
+    points = Array.from({ length: closed ? count : count + 1 }, (_, i) => { const p = shapePoint(shape, start + sweep * i / count); return [p.x, p.y]; });
     if (shape.kind === "arc") points.unshift([shape.x, shape.y]);
   }
   const outline = outlineFromPoints(points);
@@ -3357,6 +3383,7 @@ function rotateEntity(entity: Entity, degrees: number): void {
     return;
   }
   if (entity.type === "roof") {
+    if (entity.kind === "polygon") { entity.rotation = ((entity.rotation ?? 0) + degrees) % 360; return; }
     const cx = entity.x + entity.w / 2;
     const cy = entity.y + entity.h / 2;
     const newW = entity.h;
@@ -3400,6 +3427,7 @@ function rotateEntity(entity: Entity, degrees: number): void {
   }
   if (entity.type === "shape") {
     const rad = degreesToRadians(degrees);
+    if (entity.kind === "ellipse") { const ry = shapeRadiusY(entity); entity.ry = entity.r; entity.r = ry; return; }
     if (entity.kind === "polygon") {
       entity.rotation = (entity.rotation ?? 0) + rad;
       return;
@@ -3463,12 +3491,21 @@ function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): 
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (isLocked(entity) || isLocked(origin)) return;
   if (entity.type === "shape" && origin.type === "shape" && corner.startsWith("radius:")) {
+    if (origin.kind === "ellipse") {
+      if (Number(corner.slice(7)) % 2) entity.ry = Math.max(GRID, Math.round(Math.abs(point.y - origin.y)));
+      else entity.r = Math.max(GRID, Math.round(Math.abs(point.x - origin.x)));
+      return;
+    }
     entity.r = Math.max(GRID, Math.round(Math.hypot(point.x - origin.x, point.y - origin.y)));
     return;
   }
   if (entity.type === "room" && origin.type === "room" && corner.startsWith("round:")) {
     const vertical = corner.endsWith("n") || corner.endsWith("s");
     const radius = Math.abs(vertical ? point.y - origin.y - origin.h / 2 : point.x - origin.x - origin.w / 2);
+    if (Math.abs(origin.w - origin.h) >= 0.01) {
+      Object.assign(entity, centeredFloorSize(origin, vertical ? origin.w : Math.max(40, radius * 2), vertical ? Math.max(40, radius * 2) : origin.h));
+      return;
+    }
     const scale = Math.max(40 / Math.min(origin.w, origin.h), radius * 2 / (vertical ? origin.h : origin.w));
     Object.assign(entity, centeredFloorSize(origin, origin.w * scale, origin.h * scale));
     return;
@@ -3526,6 +3563,12 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
     entity.y = Math.min(y1, y2);
     entity.w = Math.max(GRID * 2, Math.abs(x2 - x1));
     entity.h = Math.max(GRID * 2, Math.abs(y2 - y1));
+    if (entity.kind === "polygon") {
+      const diameter = Math.max(entity.w, entity.h);
+      entity.x = corner.includes("w") ? origin.x + origin.w - diameter : origin.x;
+      entity.y = corner.includes("n") ? origin.y + origin.h - diameter : origin.y;
+      entity.w = diameter; entity.h = diameter;
+    }
   }
 
   if (isLinear(origin) && isLinear(entity) && (corner === "p1" || corner === "p2")) {
@@ -4182,12 +4225,20 @@ function drawRoof2d(roofItem: Roof): void {
   ctx.strokeStyle = selected ? "#2775d1" : "#657180";
   ctx.lineWidth = (selected ? 2.2 : 1.4) / view.zoom;
   ctx.setLineDash(selected ? [] : [7 / view.zoom, 5 / view.zoom]);
-  ctx.fillRect(roofItem.x, roofItem.y, roofItem.w, roofItem.h);
-  ctx.strokeRect(roofItem.x, roofItem.y, roofItem.w, roofItem.h);
+  const outline = roofOutline(roofItem);
+  ctx.beginPath();
+  outline.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.setLineDash([]);
 
   ctx.beginPath();
-  if (roofItem.kind === "flat") {
+  if (isRadialRoof(roofItem.kind)) {
+    if (roofItem.kind === "dome") {
+      for (const scale of [0.45, 0.8]) { ctx.moveTo(cx + roofItem.w / 2 * scale, cy); ctx.ellipse(cx, cy, roofItem.w / 2 * scale, roofItem.h / 2 * scale, 0, 0, Math.PI * 2); }
+    } else {
+      outline.forEach(([x, y], i) => { if (roofItem.kind === "polygon" || i % 8 === 0) { ctx.moveTo(cx, cy); ctx.lineTo(x, y); } });
+    }
+  } else if (roofItem.kind === "flat") {
     const edgeInset = Math.min(16 / view.zoom, roofItem.w / 4, roofItem.h / 4);
     ctx.rect(roofItem.x + edgeInset, roofItem.y + edgeInset, roofItem.w - edgeInset * 2, roofItem.h - edgeInset * 2);
   } else if (horizontal) {
@@ -7163,8 +7214,8 @@ function drawWagonCar(w: number, h: number): void {
 
 function traceShapePath(shape: Shape): void {
   ctx.beginPath();
-  if (shape.kind === "circle") {
-    ctx.arc(shape.x, shape.y, shape.r, 0, Math.PI * 2);
+  if (shape.kind === "circle" || shape.kind === "ellipse") {
+    ctx.ellipse(shape.x, shape.y, shape.r, shapeRadiusY(shape), 0, 0, Math.PI * 2);
   } else if (shape.kind === "arc") {
     ctx.arc(shape.x, shape.y, shape.r, shape.startAngle, shape.endAngle);
   } else {
@@ -7211,7 +7262,7 @@ function drawShapeHandle(shape: Shape): void {
   }
   strokeLine(shape.x - size, shape.y, shape.x + size, shape.y);
   strokeLine(shape.x, shape.y - size, shape.x, shape.y + size);
-  if (drag.dragMode === "resize" && drag.originEntity?.id === shape.id) drawSizeBadge(shape.x, shape.y, `直径 ${Math.round(shape.r * 20) / 10} cm`);
+  if (drag.dragMode === "resize" && drag.originEntity?.id === shape.id) drawSizeBadge(shape.x, shape.y, shape.kind === "ellipse" ? `${Math.round(shape.r * 2)} × ${Math.round(shapeRadiusY(shape) * 2)} cm` : `直径 ${Math.round(shape.r * 20) / 10} cm`);
   ctx.restore();
 }
 
@@ -7266,6 +7317,8 @@ function drawPreview(start: Point, current: Point): void {
     const h = Math.abs(current.y - start.y);
     ctx.fillRect(x, y, w, h);
     ctx.strokeRect(x, y, w, h);
+  } else if (activeTool === "ellipse") {
+    ctx.beginPath(); ctx.ellipse((start.x + current.x) / 2, (start.y + current.y) / 2, Math.max(1, Math.abs(current.x - start.x) / 2), Math.max(1, Math.abs(current.y - start.y) / 2), 0, 0, Math.PI * 2); ctx.stroke();
   } else if (activeTool === "circle" || activeTool === "arc" || activeTool === "polygon") {
     const r = Math.max(1, Math.hypot(current.x - start.x, current.y - start.y));
     ctx.beginPath();
@@ -7700,19 +7753,17 @@ function addShapeWall3d(shape: Shape, center: Point, yBase: number, withCap = tr
     });
     return;
   }
-  const start = shape.kind === "circle" ? 0 : shape.startAngle;
-  const sweep = shape.kind === "circle" ? Math.PI * 2 : normalizeAngle(shape.endAngle - shape.startAngle);
-  const segmentCount = Math.max(12, Math.ceil((shape.r * sweep) / 24));
+  const start = shape.kind === "arc" ? shape.startAngle : 0;
+  const sweep = shape.kind === "arc" ? normalizeAngle(shape.endAngle - shape.startAngle) : Math.PI * 2;
+  const segmentCount = Math.min(2048, Math.max(12, Math.ceil((Math.max(shape.r, shapeRadiusY(shape)) * sweep) / 24)));
   for (let index = 0; index < segmentCount; index += 1) {
     const a1 = start + (sweep * index) / segmentCount;
     const a2 = start + (sweep * (index + 1)) / segmentCount;
+    const p1 = shapePoint(shape, a1), p2 = shapePoint(shape, a2);
     const segment: LinearElement = {
       id: shape.id,
       type: "wall",
-      x1: shape.x + Math.cos(a1) * shape.r,
-      y1: shape.y + Math.sin(a1) * shape.r,
-      x2: shape.x + Math.cos(a2) * shape.r,
-      y2: shape.y + Math.sin(a2) * shape.r,
+      x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
       color: shape.color,
       color3d: shape.color3d,
     };
@@ -7793,6 +7844,16 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   const depth = roofItem.h * SCALE_3D;
   const pos = to3d(roofItem.x + roofItem.w / 2, roofItem.y + roofItem.h / 2, center);
   const topY = floorBaseY(topIndex) + WALL_HEIGHT + 0.06;
+
+  if (isRadialRoof(roofItem.kind)) {
+    const model = radialRoofModel(roofItem, roofMaterial);
+    model.scale.setScalar(SCALE_3D);
+    model.position.set(pos.x, topY, pos.z);
+    markSelectable(model, roofItem.id);
+    planGroup.add(model);
+    addSelectionBox(model, roofItem.id);
+    return;
+  }
 
   if (roofItem.kind === "flat") {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roofMaterial);
@@ -7878,7 +7939,12 @@ function addSubtleGrid(bounds: Bounds | null, center: Point): void {
 
 function frameCamera(bounds: Bounds | null): void {
   const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 7;
-  const buildingHeight = (state.floors.length - basementCount()) * FLOOR_SPACING;
+  let buildingHeight = (state.floors.length - basementCount()) * FLOOR_SPACING;
+  // 高さを指定できる屋根は、実際に表示中のモデルの先端まで収める。
+  const radialIds = new Set(state.roofs.filter(roof => isRadialRoof(roof.kind)).map(roof => roof.id));
+  for (const object of planGroup.children) {
+    if (radialIds.has(object.userData.entityId) && !object.userData.ignoreSelection) buildingHeight = Math.max(buildingHeight, new THREE.Box3().setFromObject(object).max.y);
+  }
   const rect = threeCanvas.getBoundingClientRect();
   const aspect = rect.height > 0 ? rect.width / rect.height : 1;
   const portraitScale = aspect < 1 ? 1 / Math.max(aspect, 0.1) : 1;
@@ -8016,6 +8082,8 @@ function updatePropertiesPanel(): void {
 
   if (selected.type === "roof") {
     const roofIndex = state.roofs.findIndex((item) => item.id === selected.id);
+    const radial = isRadialRoof(selected.kind), polygon = selected.kind === "polygon";
+    const diameter = radial && Math.abs(selected.w - selected.h) < 0.01;
     propertiesPanel.innerHTML = `
       <div class="property-grid">
         ${lockRow}
@@ -8023,20 +8091,21 @@ function updatePropertiesPanel(): void {
         <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${floor.name}</option>`).join("")}</select></label>
         <label>種類
           <select id="roofKindInput" ${placementDisabled}>
-            <option value="gable" ${selected.kind === "gable" ? "selected" : ""}>切妻</option>
-            <option value="hip" ${selected.kind === "hip" ? "selected" : ""}>寄棟</option>
-            <option value="flat" ${selected.kind === "flat" ? "selected" : ""}>陸屋根</option>
+            ${Object.entries(ROOF_LABELS).map(([kind, label]) => `<option value="${kind}" ${selected.kind === kind ? "selected" : ""}>${label}</option>`).join("")}
           </select>
         </label>
-        <div class="two-col">
-          <label>幅 cm<input id="roofWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
-          <label>奥行 cm<input id="roofHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
-        </div>
+        ${polygon ? `<div class="two-col"><label>辺の数<input id="roofSidesInput" type="number" min="3" max="12" step="1" value="${roofSides(selected.sides)}" ${placementDisabled} /></label><label>向き °<input id="roofRotationInput" type="number" step="1" value="${selected.rotation ?? 0}" ${placementDisabled} /></label></div>` : ""}
+        ${diameter ? diameterControl("roof", selected.w, placementDisabled, polygon ? "外接円の直径 cm" : "直径 cm") : ""}
+        ${polygon ? "" : `<div class="two-col">
+          <label>幅 cm<input id="roofWInput" type="number" min="40" step="${radial ? 1 : 20}" value="${selected.w}" ${placementDisabled} /></label>
+          <label>奥行 cm<input id="roofHInput" type="number" min="40" step="${radial ? 1 : 20}" value="${selected.h}" ${placementDisabled} /></label>
+        </div>`}
+        ${radial ? `<label>屋根の高さ cm<input id="roofRiseInput" type="number" min="10" max="2000" step="1" value="${selected.rise ?? ""}" placeholder="自動（${Math.round(roofRise(selected))}）" ${placementDisabled} /></label>` : ""}
         <div class="two-col">
           <label>位置 X<input id="roofXInput" type="number" step="20" value="${selected.x}" ${placementDisabled} /></label>
           <label>位置 Y<input id="roofYInput" type="number" step="20" value="${selected.y}" ${placementDisabled} /></label>
         </div>
-        <button type="button" class="prop-button" id="roofRotateButton" ${placementDisabled}>幅と奥行を入れ替える（Rキー）</button>
+        <button type="button" class="prop-button" id="roofRotateButton" ${placementDisabled}><i data-lucide="rotate-cw"></i>${polygon ? "90°回転" : "幅と奥行を入れ替える"}</button>
         <button type="button" class="prop-button danger-button" id="roofDeleteButton" ${placementDisabled}>この屋根を削除</button>
       </div>
     `;
@@ -8044,9 +8113,17 @@ function updatePropertiesPanel(): void {
     bindSelect("#roofFloorInput", (value) => {
       if (state.floors.some((floor) => floor.id === value)) selected.floorId = value;
     });
-    bindSelect("#roofKindInput", (value) => (selected.kind = value as RoofKind));
-    bindNumber("#roofWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
-    bindNumber("#roofHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
+    bindSelect("#roofKindInput", (value) => {
+      if (!isRoofKind(value)) return;
+      selected.kind = value;
+      if (value === "polygon") { Object.assign(selected, regularRoofSize(selected)); selected.sides = roofSides(selected.sides); selected.rotation ??= 0; }
+    });
+    if (diameter) bindDiameter("roof", selected, () => selected.w, value => Object.assign(selected, regularRoofSize(selected, value)));
+    bindNumber("#roofWInput", value => { const w = Math.max(GRID * 2, radial ? value : snap(value)); if (radial) Object.assign(selected, centeredFloorSize(selected, w, selected.h)); else selected.w = w; });
+    bindNumber("#roofHInput", value => { const h = Math.max(GRID * 2, radial ? value : snap(value)); if (radial) Object.assign(selected, centeredFloorSize(selected, selected.w, h)); else selected.h = h; });
+    bindNumber("#roofSidesInput", value => { selected.sides = roofSides(value); });
+    bindNumber("#roofRotationInput", value => { selected.rotation = ((value % 360) + 360) % 360; });
+    bindInput("#roofRiseInput", value => { selected.rise = value.trim() && Number.isFinite(Number(value)) ? clamp(Number(value), 10, 2000) : undefined; });
     bindNumber("#roofXInput", (value) => (selected.x = snap(value)));
     bindNumber("#roofYInput", (value) => (selected.y = snap(value)));
     bindButton("#roofRotateButton", () => rotateEntity(selected, 90));
@@ -8054,6 +8131,7 @@ function updatePropertiesPanel(): void {
       removeEntityById(selected.id);
       state.selectedId = null;
     });
+    createIcons({ icons });
     return;
   }
 
@@ -8064,7 +8142,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <div class="floor-shapes" role="group" aria-label="床の形">
-          ${(["rectangle", "circle", "l"] as FloorPreset[]).map(preset => `<button type="button" data-floor-preset="${preset}" title="${preset === "rectangle" ? "長方形" : preset === "circle" ? "円・楕円" : "L字"}の床に変更" aria-label="${preset === "rectangle" ? "長方形" : preset === "circle" ? "円" : "L字"}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`).join("")}
+          ${(["rectangle", "circle", "ellipse", "l"] as FloorPreset[]).map(preset => { const label = { rectangle: "長方形", circle: "円", ellipse: "楕円", l: "L字" }[preset]; return `<button type="button" data-floor-preset="${preset}" title="${label}の床に変更" aria-label="${label}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`; }).join("")}
         </div>
         <button type="button" class="prop-button" id="floorEditToggle" aria-pressed="${editing}" ${placementDisabled}><i data-lucide="${editing ? "check" : "square-pen"}"></i>${editing ? "輪郭の編集を完了" : "輪郭を編集"}</button>
         ${editing && floorEdit?.vertex != null ? `<div class="floor-vertices"><div class="vertex-heading"><span>頂点 ${floorEdit.vertex + 1}</span><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="選択した頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
@@ -8097,8 +8175,8 @@ function updatePropertiesPanel(): void {
       selected.color3d = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color3d ?? selected.color));
       selected.color = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color));
     });
-    bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, value)));
-    bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, value)));
+    bindNumber("#roomWInput", value => { const w = Math.max(GRID * 2, value); if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, w, selected.h)); else selected.w = w; });
+    bindNumber("#roomHInput", value => { const h = Math.max(GRID * 2, value); if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, selected.w, h)); else selected.h = h; });
     bindColor("#roomColorInput", (value) => (selected.color = value ?? SURFACE_DEFS[selected.surface ?? "plain"].color));
     bindColor("#roomColor3dInput", (value) => (selected.color3d = value));
     bindButton("#roomRotateButton", () => rotateEntity(selected, 90));
@@ -8233,11 +8311,13 @@ function updatePropertiesPanel(): void {
         <label>種類
           <select id="shapeKindInput" ${placementDisabled}>
             <option value="circle" ${selectedShape.kind === "circle" ? "selected" : ""}>円</option>
+            <option value="ellipse" ${selectedShape.kind === "ellipse" ? "selected" : ""}>楕円</option>
             <option value="arc" ${selectedShape.kind === "arc" ? "selected" : ""}>円弧</option>
             <option value="polygon" ${selectedShape.kind === "polygon" ? "selected" : ""}>多角形</option>
           </select>
         </label>
-        ${diameterControl("shape", selectedShape.r * 2, placementDisabled)}
+        ${selectedShape.kind !== "ellipse" ? diameterControl("shape", selectedShape.r * 2, placementDisabled) : ""}
+        ${selectedShape.kind === "circle" || selectedShape.kind === "ellipse" ? `<div class="two-col"><label>幅 cm<input id="shapeWInput" type="number" min="40" step="1" value="${selectedShape.r * 2}" ${placementDisabled} /></label><label>奥行 cm<input id="shapeHInput" type="number" min="40" step="1" value="${shapeRadiusY(selectedShape) * 2}" ${placementDisabled} /></label></div>` : ""}
         ${arcRows}
         ${polygonRows}
         ${colorField("shapeColorInput", "色 2D", selectedShape.color ?? INK)}
@@ -8250,7 +8330,9 @@ function updatePropertiesPanel(): void {
     createIcons({ icons });
     bindSelect("#shapeKindInput", (value) => {
       selectedShape.kind = value as ShapeKind;
+      if (selectedShape.kind === "ellipse") selectedShape.ry ??= Math.max(GRID, selectedShape.r * 0.6);
       if (selectedShape.kind === "circle") {
+        selectedShape.ry = undefined;
         selectedShape.startAngle = 0;
         selectedShape.endAngle = Math.PI * 2;
       }
@@ -8259,7 +8341,15 @@ function updatePropertiesPanel(): void {
         selectedShape.rotation = selectedShape.rotation ?? 0;
       }
     });
-    bindDiameter("shape", selectedShape, () => selectedShape.r * 2, value => { selectedShape.r = value / 2; });
+    if (selectedShape.kind !== "ellipse") bindDiameter("shape", selectedShape, () => selectedShape.r * 2, value => { selectedShape.r = value / 2; });
+    const setAxes = (w: number, h: number) => {
+      selectedShape.r = Math.max(GRID, w / 2);
+      const ry = Math.max(GRID, h / 2);
+      selectedShape.kind = Math.abs(selectedShape.r - ry) < 0.001 ? "circle" : "ellipse";
+      selectedShape.ry = selectedShape.kind === "ellipse" ? ry : undefined;
+    };
+    bindNumber("#shapeWInput", value => setAxes(value, shapeRadiusY(selectedShape) * 2));
+    bindNumber("#shapeHInput", value => setAxes(selectedShape.r * 2, value));
     bindNumber("#shapeStartInput", (value) => (selectedShape.startAngle = degreesToRadians(value)));
     bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
     bindNumber("#shapeSidesInput", (value) => (selectedShape.sides = clamp(Math.round(value), 3, 12)));
@@ -9144,7 +9234,8 @@ function bindFloorShapeControls(room: Room): void {
     button.addEventListener("click", () => {
       if (isLocked(room)) return;
       const outline = presetOutline(preset);
-      const size = preset === "circle" ? centeredFloorSize(room, Math.min(room.w, room.h), Math.min(room.w, room.h)) : { x: room.x, y: room.y, w: room.w, h: room.h };
+      const size = preset === "circle" ? centeredFloorSize(room, Math.min(room.w, room.h), Math.min(room.w, room.h))
+        : preset === "ellipse" ? centeredFloorSize(room, room.w, Math.abs(room.w - room.h) < 0.01 ? Math.max(40, room.h * 0.6) : room.h) : { x: room.x, y: room.y, w: room.w, h: room.h };
       const holes = floorPolygon(room).slice(1).map(ring => ring.map(([x, y]): [number, number] => [(x - size.x) / size.w, (y - size.y) / size.h]));
       let normalizedHoles: Room["holes"];
       try { normalizedHoles = normalizeFloorHoles(holes, outline); }
@@ -9171,10 +9262,10 @@ function bindFloorShapeControls(room: Room): void {
   createIcons({ icons });
 }
 
-function diameterControl(prefix: string, diameter: number, disabled: string): string {
+function diameterControl(prefix: string, diameter: number, disabled: string, label = "直径 cm"): string {
   const value = Math.round(diameter * 10) / 10;
   const max = Math.ceil(Math.max(2000, diameter * 2) / 100) * 100;
-  return `<div class="diameter-control"><label for="${prefix}DiameterInput">直径 cm</label><div class="diameter-row">
+  return `<div class="diameter-control"><label for="${prefix}DiameterInput">${label}</label><div class="diameter-row">
     <button type="button" id="${prefix}DiameterMinus" title="直径を10cm小さく" aria-label="直径を10cm小さく" ${disabled}><i data-lucide="minus"></i></button>
     <input id="${prefix}DiameterInput" type="number" min="40" step="1" value="${value}" ${disabled} />
     <button type="button" id="${prefix}DiameterPlus" title="直径を10cm大きく" aria-label="直径を10cm大きく" ${disabled}><i data-lucide="plus"></i></button></div>
@@ -9192,6 +9283,19 @@ function bindDiameter(prefix: string, entity: Entity, get: () => number, set: (v
       requiredElement<HTMLInputElement>("#roomWInput").value = String(Math.round(entity.w * 10) / 10);
       requiredElement<HTMLInputElement>("#roomHInput").value = String(Math.round(entity.h * 10) / 10);
     }
+    if (entity.type === "shape") {
+      const w = propertiesPanel.querySelector<HTMLInputElement>("#shapeWInput"), h = propertiesPanel.querySelector<HTMLInputElement>("#shapeHInput");
+      if (w) w.value = String(entity.r * 2);
+      if (h) h.value = String(shapeRadiusY(entity) * 2);
+    }
+    if (entity.type === "roof") {
+      const w = propertiesPanel.querySelector<HTMLInputElement>("#roofWInput"), h = propertiesPanel.querySelector<HTMLInputElement>("#roofHInput");
+      if (w) w.value = String(entity.w);
+      if (h) h.value = String(entity.h);
+      requiredElement<HTMLInputElement>("#roofXInput").value = String(entity.x);
+      requiredElement<HTMLInputElement>("#roofYInput").value = String(entity.y);
+      requiredElement<HTMLInputElement>("#roofRiseInput").placeholder = `自動（${Math.round(roofRise(entity))}）`;
+    }
   };
   const apply = (value: number) => {
     if (isLocked(entity) || !Number.isFinite(value)) return;
@@ -9200,6 +9304,7 @@ function bindDiameter(prefix: string, entity: Entity, get: () => number, set: (v
   const finish = () => {
     // 入力欄を作り直すと、フォーカスや直後のボタンクリックが失われる。描画はapplyで更新済み。
     if (JSON.stringify(original) !== JSON.stringify(entity)) commitState(false);
+    if (entity.type === "roof") renderRoofList();
     original = cloneEntity(entity);
   };
   number.addEventListener("change", () => {
@@ -9281,18 +9386,15 @@ function getCornerHit(entity: Room | Furniture | Roof, point: Point): string | n
 
 function isPointNearRoofEdge(point: Point, roofItem: Roof): boolean {
   const tolerance = 12 / view.zoom;
-  const withinX = point.x >= roofItem.x - tolerance && point.x <= roofItem.x + roofItem.w + tolerance;
-  const withinY = point.y >= roofItem.y - tolerance && point.y <= roofItem.y + roofItem.h + tolerance;
-  if (!withinX || !withinY) return false;
-  const nearLeft = Math.abs(point.x - roofItem.x) <= tolerance;
-  const nearRight = Math.abs(point.x - (roofItem.x + roofItem.w)) <= tolerance;
-  const nearTop = Math.abs(point.y - roofItem.y) <= tolerance;
-  const nearBottom = Math.abs(point.y - (roofItem.y + roofItem.h)) <= tolerance;
-  return nearLeft || nearRight || nearTop || nearBottom;
+  const points = roofOutline(roofItem);
+  return points.some(([x, y], i) => {
+    const next = points[(i + 1) % points.length];
+    return distanceToSegment(point, { x, y }, { x: next[0], y: next[1] }) <= tolerance;
+  });
 }
 
 function isPointInRoof(point: Point, roofItem: Roof): boolean {
-  return point.x >= roofItem.x && point.x <= roofItem.x + roofItem.w && point.y >= roofItem.y && point.y <= roofItem.y + roofItem.h;
+  return pointInPolygon(point.x, point.y, [roofOutline(roofItem)]);
 }
 
 function constrainLine(start: Point, end: Point): Point {
@@ -9825,9 +9927,9 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
       maxY = Math.max(maxY, entity.y + h / 2);
     } else if (entity.type === "shape") {
       minX = Math.min(minX, entity.x - entity.r);
-      minY = Math.min(minY, entity.y - entity.r);
+      minY = Math.min(minY, entity.y - shapeRadiusY(entity));
       maxX = Math.max(maxX, entity.x + entity.r);
-      maxY = Math.max(maxY, entity.y + entity.r);
+      maxY = Math.max(maxY, entity.y + shapeRadiusY(entity));
     } else {
       minX = Math.min(minX, entity.x1, entity.x2);
       minY = Math.min(minY, entity.y1, entity.y2);
@@ -9924,6 +10026,11 @@ function distanceToSegment(point: Point, start: Point, end: Point): number {
 
 function isPointNearShape(point: Point, shape: Shape): boolean {
   const threshold = Math.max(10 / view.zoom, 6);
+  if (shape.kind === "ellipse") {
+    const count = Math.min(2048, Math.max(64, Math.ceil(Math.max(shape.r, shapeRadiusY(shape)) * Math.PI / 12)));
+    for (let i = 0; i < count; i++) if (distanceToSegment(point, shapePoint(shape, i * Math.PI * 2 / count), shapePoint(shape, (i + 1) * Math.PI * 2 / count)) < threshold) return true;
+    return false;
+  }
   if (shape.kind === "polygon") {
     const points = polygonPoints(shape);
     return points.some((vertex, index) => distanceToSegment(point, vertex, points[(index + 1) % points.length]) < threshold);

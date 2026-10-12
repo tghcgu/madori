@@ -10,6 +10,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-12",
     items: [{
+      ja: "円すい・ドーム・正多角形の屋根を追加。直径や幅・奥行、高さを調整でき、正多角形は3〜12辺と向きを選べます。2D・3Dで輪郭が一致し、魔法使いの塔と城の塔のテンプレートも円すい屋根に変更しました",
+      en: "Added cone, dome and regular polygon roofs with editable diameter, width/depth and rise. Polygon roofs support 3 to 12 sides and rotation, with matching 2D and 3D footprints. Wizard and castle tower templates now use cone roofs",
+    }, {
+      ja: "楕円の壁を直接描けるツールと楕円の床の見本を追加。円の幅・奥行を別々に変えて楕円にでき、楕円のつまみは縦横を独立して変更します。中心を保ったサイズ変更、図形に合う床や屋根の追加、取り消しと保存にも対応",
+      en: "Added an ellipse wall tool and ellipse floor preset. Change a circle's width and depth independently to make an ellipse; ellipse handles resize each axis separately while keeping the center fixed. Matching floors and roofs, undo and persistence are supported",
+    }, {
       ja: "「線で囲んで床を作成」を追加。点を順につないで始点をクリック・Enter・完了ボタンで閉じると、同じ輪郭の床が2D・3Dにできます。作図中の1点戻し、キャンセル、Shiftで水平・垂直、交差した輪郭の検出に対応",
       en: "Added a click-to-draw floor tool. Connect points and close the outline by clicking its start, pressing Enter or using the finish button to create matching 2D and 3D floors. Supports undoing draft points, cancellation, Shift-constrained horizontal/vertical segments and crossed-outline validation",
     }, {
