@@ -42,11 +42,12 @@ export async function verifyEditingUpgrades({ page, importPlan, planPoint, proje
 
   await importPlan(plan([{ ...room, name: '' }]));
   await click(100, 100);
-  await page.locator('#roomShapeInput').selectOption('l');
+  await page.locator('[data-floor-preset="l"]').click();
   assert.equal((await item('floor')).outline.length, 6);
   assert.equal(await page.evaluate(() => window.__editorTest.hit(500, 450)), null, 'the cutout is not selectable floor');
   assert.equal(await page.evaluate(() => window.__editorTest.floorAt('floor', 500, 450)), false, '3D has the same cutout');
   assert.equal(await page.evaluate(() => window.__editorTest.floorAt('floor', 100, 450)), true);
+  await page.locator('#floorEditToggle').click();
   const corner = await planPoint(300, 250);
   await move(corner, -25, 0);
   const changed = await item('floor');
@@ -58,10 +59,10 @@ export async function verifyEditingUpgrades({ page, importPlan, planPoint, proje
   await page.locator('#floorVertexRemove').click();
   assert.equal((await item('floor')).outline.length, 6);
   await page.locator('#entityLockedInput').check();
-  assert.equal(await page.locator('#roomShapeInput').isDisabled(), true);
-  assert.equal(await page.locator('#floorVertexAdd').isDisabled(), true);
+  assert.equal(await page.locator('[data-floor-preset="l"]').isDisabled(), true);
+  assert.equal(await page.locator('#floorEditToggle').isDisabled(), true);
   await page.locator('#entityLockedInput').uncheck();
-  await page.locator('#roomShapeInput').selectOption('circle');
+  await page.locator('[data-floor-preset="circle"]').click();
   assert.equal((await item('floor')).outline.length, 64);
   assert.equal(await page.evaluate(() => window.__editorTest.floorAt('floor', 10, 10)), false);
   await page.reload();

@@ -10,6 +10,15 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-12",
     items: [{
+      ja: "「線で囲んで床を作成」を追加。点を順につないで始点をクリック・Enter・完了ボタンで閉じると、同じ輪郭の床が2D・3Dにできます。作図中の1点戻し、キャンセル、Shiftで水平・垂直、交差した輪郭の検出に対応",
+      en: "Added a click-to-draw floor tool. Connect points and close the outline by clicking its start, pressing Enter or using the finish button to create matching 2D and 3D floors. Supports undoing draft points, cancellation, Shift-constrained horizontal/vertical segments and crossed-outline validation",
+    }, {
+      ja: "床の形を見本ボタンで選び、全体の拡大縮小と「輪郭を編集」を分離。キャンバスで選んだ頂点を保持し、辺の中央で点を追加、Deleteで削除、座標指定・矢印キーで調整できます。階段の開口を壊す変更は理由を表示して止めます",
+      en: "Replaced the floor-shape dropdown with visual presets and separated whole-floor resizing from contour editing. Selected canvas vertices stay selected across edits; insert points at edge midpoints, delete them, or adjust coordinates and nudge with arrow keys. Changes that invalidate stairwell openings are blocked with feedback",
+    }, {
+      ja: "円・円弧・多角形の壁と円形の床を、円周のつまみ・直径入力・スライダーでサイズ変更できるように。中心を保って拡大縮小し、円形床の通常選択では大量の頂点を出しません。スライダー操作は1回で取り消せます",
+      en: "Circle, arc and polygon walls and circular floors now resize through perimeter handles, diameter input and a live slider. Resizing keeps the center fixed, and selecting a circular floor no longer shows every polygon vertex. A slider gesture is a single undo step",
+    }, {
       ja: "間取り見本の名称を「テンプレート」に統一。全50種類を階段の仕様に合わせて点検し、上階の床に階段の開口を設け、二階建て・三階建ての到着側の配置を修正。魔法使いの塔と城の塔は円形の壁・床に変更し、建具と家具も配置し直しました。保存済みの間取りは変更しません",
       en: "Standardized the Japanese preset name as Template. Reviewed all 50 templates for the new stair behavior, added upper-floor stairwell openings and corrected arrival layouts in the two- and three-story houses. The wizard tower and castle towers now have circular walls and floors with repositioned openings and furniture. Existing saved plans are not changed",
     }, {

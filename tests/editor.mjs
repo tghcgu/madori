@@ -7,6 +7,7 @@ import { verifyInteriorZoom } from './camera-editor.mjs';
 import { verifyStairs } from './stairs-editor.mjs';
 import { verifyEditingUpgrades } from './editing-upgrades.mjs';
 import { verifyTemplateFloors } from './template-floors-editor.mjs';
+import { verifyFloorUi } from './floor-ui-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -156,15 +157,28 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
   return target;
 }
 
+async function freshPage() {
+  await page.context().close();
+  page = await open();
+}
+
 try {
   browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyFloorUi({ page, importPlan, planPoint, move, change, output, pixels });
+  if (!process.argv.includes('--floor-ui-only')) {
+  await freshPage();
   await verifyEditingUpgrades({ page, importPlan, planPoint, project, move, change, output });
-  if (!process.argv.includes('--upgrades-only')) await verifyTemplateFloors({ page, choose, output, pixels });
+  if (!process.argv.includes('--upgrades-only')) {
+    await freshPage();
+    await verifyTemplateFloors({ page, choose, output, pixels });
+  }
   if (!process.argv.includes('--upgrades-only') && !process.argv.includes('--templates-only')) {
+  await freshPage();
   await verifyStairs({ page, importPlan, planPoint, output });
+  await freshPage();
   await verifySelection({ page, plan, importPlan, choose, planPoint, move, project, output });
 
   // Destructive reset and native text undo must not silently remove a plan.
@@ -226,7 +240,8 @@ try {
   const unnamedPlan = JSON.parse(Buffer.concat(unnamedChunks).toString());
   assert.equal(unnamedPlan.floors[0].entities[0].name, '');
   await importPlan(unnamedPlan);
-  await page.reload();
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal((await saved()).floors[0].entities[0].name, '');
   assert.equal(await page.locator('#recoveryNotice').isVisible(), false);
   point = await planPoint(50, 50);
@@ -1536,10 +1551,12 @@ try {
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
   }
+  }
   assert.deepEqual(errors, []);
 } catch (error) {
+  console.error('E2E failure:', error);
   if (errors.length) console.error('Browser errors:', errors);
-  if (page && !page.isClosed()) await page.screenshot({ path: `${output}/failure.png`, fullPage: true }).catch(() => {});
+  if (page && !page.isClosed()) await page.screenshot({ path: `${output}/failure.png`, fullPage: true, timeout: 5000 }).catch(() => {});
   throw error;
 } finally {
   await browser?.close();

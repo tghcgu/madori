@@ -1594,6 +1594,31 @@ select:focus-visible {
   gap: 8px;
 }
 
+.floor-draw-tool { width: 100%; min-height: 38px; margin-top: 8px; }
+.floor-shapes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.floor-shapes button { height: 48px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.floor-shapes button[aria-pressed="true"] { border-color: var(--accent); background: #e8f1fb; }
+.floor-shapes button:disabled { opacity: .45; cursor: not-allowed; }
+.floor-shapes canvas { display: block; width: 100%; height: 36px; object-fit: contain; }
+.vertex-heading { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.vertex-heading span { flex: 1; }
+.vertex-heading button { width: 32px; flex: 0 0 32px; }
+.diameter-control { display: grid; gap: 6px; }
+.diameter-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 6px; }
+.diameter-row input { text-align: center; font-variant-numeric: tabular-nums; }
+.diameter-row button, .floor-toolbar button { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); cursor: pointer; }
+.diameter-row button:hover, .floor-toolbar button:hover { background: #e8f1fb; border-color: var(--accent); }
+.diameter-row svg, .floor-toolbar svg { width: 17px; height: 17px; }
+.property-grid .diameter-control input[type="range"] { min-height: 26px; margin: 0; padding: 0; border: 0; accent-color: var(--accent); }
+.floor-toolbar { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); z-index: 5; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; box-shadow: 0 2px 8px #17293b15; }
+.floor-toolbar[hidden] { display: none; }
+.floor-toolbar-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.floor-toolbar strong { font-size: 12px; padding: 0 4px; }
+.floor-toolbar span { color: var(--muted); margin-right: 8px; font-variant-numeric: tabular-nums; }
+.floor-toolbar button { width: 34px; height: 34px; }
+.floor-toolbar button:disabled { opacity: .35; cursor: not-allowed; }
+.floor-error { max-width: 280px; padding: 8px 4px 2px; color: #a83f31; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
 .symbol-options {
   display: flex;
   flex-wrap: wrap;

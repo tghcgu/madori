@@ -84,6 +84,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 ### 2D間取り編集
 
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
+- 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成
 - 開き戸、引き戸、通常窓、中央区切り付き窓を配置
 - 円、円弧、多角形を壁として3D化
@@ -246,7 +247,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
 
-床を選択して「床の形」を円・L字・自由な形にすると、長方形以外の床も作れます。頂点をドラッグすると輪郭が変わり、辺の中央をドラッグすると頂点が増えます。「頂点」の欄では位置を数値で指定し、＋／−で追加・削除できます。図形の壁を選び「この図形に合わせて床を追加」を押すと、円・円弧（扇形）・多角形に合う床を追加します。元の壁は残ります。交差してしまう輪郭は受け付けず、配置固定・Undo/Redo・JSON保存にも対応します。
+「線で囲んで床を作成」を選び、2Dで角になる点を順にクリック（タップ）します。始点をもう一度押す・`Enter`・キャンバス上のチェックボタンで閉じると、その形の床ができます。`Shift`で最後の点から水平・垂直に、`Backspace`または戻るボタンで1点戻し、やり直しボタンで復元、`Esc`または×で中止できます。交差した輪郭は確定せず、理由を表示します。作図だけでは壁は作られません。
+
+既存の床は長方形・円・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
+
+円の壁・円形の床は、円周の4つのつまみ、直径の数値、＋／−、スライダーで中心を保って拡大縮小できます。円形床の幅・奥行を個別に変えると楕円になります。円弧・多角形の壁も外周のつまみと直径欄で変更できます。スライダー操作は1回のUndoで戻せます。図形の壁の「この図形に合わせて床を追加」は元の壁を残して円・円弧（扇形）・多角形に合う床を作ります。床の輪郭は2D・3D・PNG・JSONで共通です。
 
 ### テンプレート
 
@@ -650,6 +655,9 @@ npm.cmd run dev
 
 ### 2026年10月12日
 
+- 「線で囲んで床を作成」を追加。点を順につないで始点をクリック・Enter・完了ボタンで閉じると、同じ輪郭の床が2D・3Dにできます。作図中の1点戻し、キャンセル、Shiftで水平・垂直、交差した輪郭の検出に対応
+- 床の形を見本ボタンで選び、全体の拡大縮小と「輪郭を編集」を分離。キャンバスで選んだ頂点を保持し、辺の中央で点を追加、Deleteで削除、座標指定・矢印キーで調整できます。階段の開口を壊す変更は理由を表示して止めます
+- 円・円弧・多角形の壁と円形の床を、円周のつまみ・直径入力・スライダーでサイズ変更できるように。中心を保って拡大縮小し、円形床の通常選択では大量の頂点を出しません。スライダー操作は1回で取り消せます
 - 間取り見本の名称を「テンプレート」に統一。全50種類を階段の仕様に合わせて点検し、上階の床に階段の開口を設け、二階建て・三階建ての到着側の配置を修正。魔法使いの塔と城の塔は円形の壁・床に変更し、建具と家具も配置し直しました。保存済みの間取りは変更しません
 - 同時表示や狭い画面で階のタブがつぶれて押せなくなる問題を修正。ボタンを早めにアイコン表示へ切り替え、必要な幅ではツールバーを折り返します
 - 城などの大きなテンプレートを狭い3D表示に収める際、カメラの距離制限で建物の端が切れていた問題を修正
@@ -912,7 +920,9 @@ You can edit the starter plan immediately or load one of 50 templates, from hous
 - Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. The pen settings are remembered in the browser.
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
-- Select a floor and change its shape to a circle, L or freeform polygon. Drag a vertex to reshape it, or an edge midpoint to add a vertex. Coordinates and add/remove controls are available in the properties. A shape wall also offers a command to add a matching floor while keeping the wall; arcs produce sector-shaped floors. Self-intersecting outlines are rejected. 2D and 3D share the same outline, including concave cutouts and overlap clipping
+- Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
+- Existing floors have rectangle, circle and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
+- Circle walls and circular floors have four perimeter handles, an exact diameter field, increment/decrement buttons and a live slider. Resizing keeps the center fixed; a slider gesture is one undo step. Changing a circular floor's width and depth independently makes an ellipse. Arc and polygon walls also have radial size handles and a diameter control. Shape walls can add matching floors while keeping the wall; arcs produce sector floors. 2D, 3D, PNG and JSON share the same outline, including concave cutouts and overlap clipping
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
@@ -1459,6 +1469,9 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-12
 
+- Added a click-to-draw floor tool. Connect points and close the outline by clicking its start, pressing Enter or using the finish button to create matching 2D and 3D floors. Supports undoing draft points, cancellation, Shift-constrained horizontal/vertical segments and crossed-outline validation
+- Replaced the floor-shape dropdown with visual presets and separated whole-floor resizing from contour editing. Selected canvas vertices stay selected across edits; insert points at edge midpoints, delete them, or adjust coordinates and nudge with arrow keys. Changes that invalidate stairwell openings are blocked with feedback
+- Circle, arc and polygon walls and circular floors now resize through perimeter handles, diameter input and a live slider. Resizing keeps the center fixed, and selecting a circular floor no longer shows every polygon vertex. A slider gesture is a single undo step
 - Standardized the Japanese preset name as Template. Reviewed all 50 templates for the new stair behavior, added upper-floor stairwell openings and corrected arrival layouts in the two- and three-story houses. The wizard tower and castle towers now have circular walls and floors with repositioned openings and furniture. Existing saved plans are not changed
 - Fixed floor tabs collapsing and becoming unclickable in split view and narrow panes. Toolbar buttons switch to icons earlier, and the toolbar wraps when needed
 - Fixed large templates such as the castle being cropped in narrow 3D views because the fit-to-view camera distance was capped

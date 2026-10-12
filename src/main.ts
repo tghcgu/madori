@@ -32,6 +32,7 @@ import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow }
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
 import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
+import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, type FloorPreset } from "./floor-editing";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
 // 間取りのデータは本体と同じ所に保存するので、どちらで開いても同じ間取りを続けて編集できる
@@ -40,7 +41,7 @@ const PLAN_EDITION = document.documentElement.dataset.edition === "plan";
 const EDITION_NOTICE_KEY = "madori-quick-3d-plan-edition-notice";
 const ALPHA_NOTE_KEY = "madori-quick-3d-alpha-note";
 
-type Tool = "select" | "paint" | "room" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
+type Tool = "select" | "paint" | "room" | "floor" | "wall" | "door" | "slidingDoor" | "window" | "window2" | "furniture" | "circle" | "arc" | "polygon" | "text" | "erase";
 type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | "roof" | "text";
 type ShapeKind = "circle" | "arc" | "polygon";
 type RoofKind = "gable" | "hip" | "flat";
@@ -509,6 +510,10 @@ let activeFurniture: FurnitureKind = "sofa";
 // 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（見ていた場所などと一緒にブラウザへ保存）
 const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
+let floorDraft: { floorId: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
+let floorEdit: { id: string; vertex: number | null } | null = null;
+let floorEditError = "";
+let floorToolbar: HTMLDivElement | null = null;
 let activePolygonSides = 6;
 // 間取り専用版はいつも2Dだけ（表示の切り替えは本体の設定として残す）
 let viewMode: ViewMode = PLAN_EDITION ? "plan" : loadViewMode();
@@ -969,9 +974,13 @@ function setupUi(): void {
     button.addEventListener("click", () => {
       cancelPlanDrag();
       activeTool = button.dataset.tool as Tool;
+      floorDraft = null;
+      floorEdit = null;
+      floorEditError = "";
       pathRedrawId = null;
       // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
-      if (activeTool === "paint") state.selectedId = null;
+      if (activeTool === "paint" || activeTool === "floor") selectOnly(null);
+      if (activeTool === "floor" && viewMode === "three") applyViewMode("split");
       updatePropertiesPanel();
       render2d();
       if (activeTool === "room") activeRoomSurface = "plain";
@@ -1204,7 +1213,8 @@ function buildFurniturePicker(): void {
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
-      activeTool = "room";
+      if (activeTool !== "floor") activeTool = "room";
+      if (activeTool === "floor") updatePropertiesPanel();
       setActiveButton("[data-surface]", surface);
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
@@ -1628,7 +1638,8 @@ function setActiveButton(selector: string, value: string): void {
 }
 
 function syncPlanCursor(): void {
-  setActiveButton("[data-surface]", activeTool === "room" ? activeRoomSurface : "");
+  syncFloorEditing();
+  setActiveButton("[data-surface]", activeTool === "room" || activeTool === "floor" ? activeRoomSurface : "");
   setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
   if (drag.dragMode === "pan") {
     planCanvas.style.cursor = "grabbing";
@@ -2021,6 +2032,7 @@ function selectedEntities(): Entity[] {
 }
 
 function selectOnly(id: string | null): void {
+  if (id !== floorEdit?.id) { floorEdit = null; floorEditError = ""; }
   if (id !== threeMoveId) threeMoveId = null;
   multiSelection.clear();
   state.selectedId = id;
@@ -2193,6 +2205,12 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   const point = screenToWorld(event);
+  if (activeTool === "floor") {
+    event.preventDefault();
+    planCanvas.setPointerCapture(event.pointerId);
+    drag = { ...drag, pointerId: event.pointerId, dragMode: "none", startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, currentWorld: point, originEntity: null, resizeCorner: null, pressedId: undefined, pending: undefined, createdId: undefined, origins: undefined };
+    return;
+  }
   const hit = hitTest(point);
   if (event.ctrlKey || event.metaKey) {
     // Ctrl（Mac は Cmd）: クリックで選ぶ物を足す・外す、ドラッグで囲んだ物をまとめて選ぶ
@@ -2244,6 +2262,8 @@ function handlePointerDown(event: PointerEvent): void {
       return;
     }
     selectOnly(hit.entity?.id ?? null);
+    if (floorEdit && hit.entity?.id === floorEdit.id && hit.corner?.startsWith("vertex:")) floorEdit.vertex = Number(hit.corner.slice(7));
+    if (floorEdit && hit.entity?.id === floorEdit.id && hit.corner?.startsWith("edge:")) floorEdit.vertex = Number(hit.corner.slice(5)) + 1;
     if (hit.entity && isLocked(hit.entity)) {
       drag.dragMode = "none";
       planCanvas.style.cursor = "not-allowed";
@@ -2254,8 +2274,10 @@ function handlePointerDown(event: PointerEvent): void {
       drag.dragMode = "pose";
       drag.limb = beginPersonPose(hit.entity, Number(hit.corner.slice(5)), point);
       planCanvas.style.cursor = "grabbing";
-    } else if (hit.entity && hit.corner && (isResizable(hit.entity) || isLinear(hit.entity))) {
+    } else if (hit.entity && hit.corner && (isResizable(hit.entity) || isLinear(hit.entity) || hit.entity.type === "shape")) {
       drag.dragMode = "resize";
+    } else if (hit.entity?.id === floorEdit?.id) {
+      drag.dragMode = "none";
     } else if (hit.entity) {
       drag.dragMode = "move";
     } else {
@@ -2431,9 +2453,10 @@ function syncToolHint(): void {
 
 // 案内の中身。はじめはツールの名前（選択ツールでは、選んでいる物の数）
 function toolHintParts(): string[] | null {
+  if (floorEdit) return null;
   if (activeTool !== "select") {
     const action = toolAction();
-    const names: Record<Tool, string> = { select: "選択", room: "部屋", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
+    const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
     return action ? [names[activeTool], ...action, "Escで選択に戻る"] : null;
   }
   // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す（Ctrl のないスマホ・タブレットでは出さない）
@@ -2450,6 +2473,7 @@ function toolAction(): [string, string] | null {
   const hold = "物を長押しで選ぶ";
   switch (activeTool) {
     case "select":
+    case "floor":
       return null;
     case "room":
       return ["ドラッグで部屋を描く", click];
@@ -2484,9 +2508,20 @@ function handlePointerMove(event: PointerEvent): void {
   }
 
   const point = screenToWorld(event);
+  if (activeTool === "floor") {
+    if (floorDraft) floorDraft.hover = draftFloorPoint(point, event.shiftKey);
+    drag.currentWorld = point;
+    render2d();
+    return;
+  }
   const hover = hitTest(point);
   if (activeTool === "select" && drag.dragMode === "none") {
-    planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed" : hover.corner === "label" || hover.corner?.startsWith("limb:") ? "grab" : hover.corner ? "nwse-resize" : hover.entity ? "move" : "default";
+    planCanvas.style.cursor = hover.entity && isLocked(hover.entity) ? "not-allowed"
+      : hover.corner?.startsWith("edge:") ? "copy"
+      : hover.corner === "label" || hover.corner?.startsWith("limb:") || hover.corner?.startsWith("vertex:") ? "grab"
+      : hover.corner === "round:n" || hover.corner === "round:s" || (hover.entity?.type === "shape" && hover.entity.kind === "circle" && ["radius:1", "radius:3"].includes(hover.corner ?? "")) ? "ns-resize"
+      : hover.corner === "round:w" || hover.corner === "round:e" || (hover.entity?.type === "shape" && hover.entity.kind === "circle" && ["radius:0", "radius:2"].includes(hover.corner ?? "")) ? "ew-resize"
+      : hover.corner ? "nwse-resize" : hover.entity?.id === floorEdit?.id ? "default" : hover.entity ? "move" : "default";
   }
   if (drag.pointerId === event.pointerId && (longPressTimer || drag.pending)) {
     // 少しでも動かしたら長押しではない。置くのを待っていた家具は、ここで置いてそのまま動かす
@@ -2542,6 +2577,7 @@ function handlePointerMove(event: PointerEvent): void {
     }
     if (drag.dragMode === "resize" && drag.resizeCorner) {
       resizeEntity(entity, drag.originEntity, drag.resizeCorner, point);
+      if (entity.type === "room" || entity.type === "shape") scheduleThreeRefresh();
     }
     redrawAll(false);
     return;
@@ -2567,6 +2603,7 @@ function handlePointerUp(event: PointerEvent): void {
   // 長押しになる前に離した（クリック）
   const clicked = Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
   cancelLongPress();
+  if (activeTool === "floor" && drag.dragMode !== "pan") addDraftFloorPoint(screenToWorld(event), event.shiftKey);
 
   // Ctrl+クリックは選ぶ物を足す・外す、Ctrl+ドラッグは囲んだ物を足す
   if (drag.dragMode === "marquee") {
@@ -2597,6 +2634,12 @@ function handlePointerUp(event: PointerEvent): void {
     }
   }
   drag.pending = undefined;
+
+  if (clicked && drag.dragMode === "resize" && drag.originEntity?.type === "room" && drag.resizeCorner?.startsWith("edge:")) {
+    const entity = findEntity(drag.originEntity.id);
+    const handle = floorHandles(drag.originEntity).find(h => h.key === drag.resizeCorner);
+    if (entity && handle) resizeEntity(entity, drag.originEntity, drag.resizeCorner, handle);
+  }
 
   // 描くツールで物をクリックしたら、その物を選んで選択ツールに切り替える
   if (drag.dragMode === "draw" && clicked && drag.pressedId) {
@@ -2655,6 +2698,7 @@ function handlePointerUp(event: PointerEvent): void {
 }
 
 function handleDoubleClick(event: MouseEvent): void {
+  if (activeTool === "floor") { finishFloorDraft(); return; }
   if (event.ctrlKey || event.metaKey) return;
   const hit = hitTest(screenToWorld(event));
   if (!hit.entity) return;
@@ -2873,6 +2917,30 @@ function handleKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT" || target?.tagName === "TEXTAREA" || Boolean(target?.isContentEditable);
   if (isEditing) return;
+  if (activeTool === "floor") {
+    if (event.key === "Enter") { event.preventDefault(); finishFloorDraft(); return; }
+    if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) { event.preventDefault(); redoFloorPoint(); return; }
+    if (event.key === "Backspace" || event.key === "Delete" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z")) {
+      event.preventDefault(); undoFloorPoint(); return;
+    }
+  }
+  if (floorEdit && event.key === "Escape" && drag.pointerId === null) {
+    event.preventDefault(); floorEdit = null; floorEditError = ""; redrawAll(false); return;
+  }
+  if (floorEdit && !event.ctrlKey && !event.metaKey && (event.key === "Delete" || event.key === "Backspace")) {
+    event.preventDefault(); removeFloorVertex(); return;
+  }
+  if (floorEdit && !event.ctrlKey && !event.metaKey && event.key.startsWith("Arrow")) {
+    event.preventDefault();
+    const room = findEntity(floorEdit.id);
+    if (room?.type === "room" && !isLocked(room) && floorEdit.vertex !== null) {
+      const points = floorPoints(room), p = points[floorEdit.vertex], step = event.shiftKey ? GRID : 1;
+      p[0] += event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+      p[1] += event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+      if (updateFloorVertex(room, points)) { commitState(); redrawAll(); }
+    }
+    return;
+  }
   if (event.key === "Escape" && threeDrag) {
     cancelThreeDrag();
     threeMoveId = null;
@@ -2885,6 +2953,8 @@ function handleKeyDown(event: KeyboardEvent): void {
     syncThreeMoveMode();
     const gesturing = drag.pointerId !== null;
     cancelPlanDrag();
+    floorDraft = null;
+    floorEditError = "";
     if (!gesturing && activeTool === "select") selectOnly(null);
     activeTool = "select";
     pathRedrawId = null;
@@ -3112,6 +3182,18 @@ function reshapeRoom(room: Room, points: [number, number][]): boolean {
 }
 
 function floorHandles(room: Room): { key: string; x: number; y: number }[] {
+  if (floorEdit?.id !== room.id) {
+    if (isEllipseFloor(room)) return [
+      { key: "round:e", x: room.x + room.w, y: room.y + room.h / 2 },
+      { key: "round:s", x: room.x + room.w / 2, y: room.y + room.h },
+      { key: "round:w", x: room.x, y: room.y + room.h / 2 },
+      { key: "round:n", x: room.x + room.w / 2, y: room.y },
+    ];
+    return [
+      { key: "nw", x: room.x, y: room.y }, { key: "ne", x: room.x + room.w, y: room.y },
+      { key: "sw", x: room.x, y: room.y + room.h }, { key: "se", x: room.x + room.w, y: room.y + room.h },
+    ];
+  }
   const points = floorPoints(room);
   return [
     ...points.map(([x, y], i) => ({ key: `vertex:${i}`, x, y })),
@@ -3120,6 +3202,135 @@ function floorHandles(room: Room): { key: string; x: number; y: number }[] {
       return { key: `edge:${i}`, x: (x + next[0]) / 2, y: (y + next[1]) / 2 };
     })),
   ];
+}
+
+function syncFloorEditing(): void {
+  if (floorDraft && (activeTool !== "floor" || floorDraft.floorId !== activeFloor().id)) { floorDraft = null; floorEditError = ""; }
+  const room = floorEdit ? findEntity(floorEdit.id) : null;
+  if (floorEdit && (activeTool !== "select" || room?.type !== "room" || state.selectedId !== room.id || selectedEntities().length !== 1 || isLocked(room))) {
+    floorEdit = null;
+    floorEditError = "";
+  }
+  if (floorEdit && room?.type === "room" && floorEdit.vertex !== null) floorEdit.vertex = Math.min(floorEdit.vertex, floorPoints(room).length - 1);
+  syncFloorToolbar();
+}
+
+function draftFloorPoint(point: Point, orthogonal = false): Point {
+  const p = { x: snap(point.x), y: snap(point.y) };
+  const last = floorDraft?.points[floorDraft.points.length - 1];
+  if (orthogonal && last) {
+    if (Math.abs(p.x - last[0]) >= Math.abs(p.y - last[1])) p.y = last[1];
+    else p.x = last[0];
+  }
+  return p;
+}
+
+function addDraftFloorPoint(point: Point, orthogonal: boolean): void {
+  floorDraft ??= { floorId: activeFloor().id, points: [], undone: [], hover: null };
+  const points = floorDraft.points, first = points[0], last = points[points.length - 1];
+  if (points.length >= 3 && Math.hypot(point.x - first[0], point.y - first[1]) <= 14 / view.zoom) { finishFloorDraft(); return; }
+  const p = draftFloorPoint(point, orthogonal);
+  if (last && last[0] === p.x && last[1] === p.y) return;
+  if (points.length >= MAX_FLOOR_VERTICES) { floorEditError = `頂点は${MAX_FLOOR_VERTICES}個までです`; syncFloorToolbar(); return; }
+  points.push([p.x, p.y]);
+  floorDraft.undone = [];
+  floorDraft.hover = p;
+  floorEditError = "";
+  syncFloorToolbar();
+}
+
+function undoFloorPoint(): void {
+  const point = floorDraft?.points.pop();
+  if (point) floorDraft!.undone.push(point);
+  floorEditError = "";
+  syncFloorToolbar();
+  render2d();
+}
+
+function redoFloorPoint(): void {
+  const point = floorDraft?.undone.pop();
+  if (point) floorDraft!.points.push(point);
+  floorEditError = "";
+  syncFloorToolbar();
+  render2d();
+}
+
+function finishFloorDraft(): void {
+  if (!floorDraft || floorDraft.points.length < 3) {
+    floorEditError = "床には3点以上必要です";
+    syncFloorToolbar();
+    return;
+  }
+  const outline = outlineFromPoints(floorDraft.points);
+  if (!outline) { floorEditError = "線が交差しているか、床の面積がありません"; syncFloorToolbar(); return; }
+  const room: Room = { id: newId("room"), type: "room", name: "", color: SURFACE_DEFS[activeRoomSurface].color, surface: activeRoomSurface, ...outline };
+  activeEntities().push(room);
+  floorDraft = null;
+  activeTool = "select";
+  selectOnly(room.id);
+  floorEdit = { id: room.id, vertex: null };
+  setActiveButton("[data-tool]", activeTool);
+  syncPlanCursor();
+  commitState();
+  redrawAll();
+}
+
+function syncFloorToolbar(): void {
+  syncHistoryButtons();
+  const pane = planCanvas.parentElement;
+  if (!pane) return;
+  if (!floorToolbar) {
+    floorToolbar = document.createElement("div");
+    floorToolbar.className = "floor-toolbar";
+    floorToolbar.id = "floorToolbar";
+    pane.appendChild(floorToolbar);
+  }
+  const drawing = activeTool === "floor";
+  floorToolbar.hidden = !drawing && !floorEdit && !floorEditError;
+  if (floorToolbar.hidden) return;
+  floorToolbar.style.top = `${planCanvas.offsetTop + 10}px`;
+  const button = (id: string, icon: string, label: string, disabled = false) => `<button type="button" id="${id}" title="${label}" aria-label="${label}" ${disabled ? "disabled" : ""}><i data-lucide="${icon}"></i></button>`;
+  const room = floorEdit ? findEntity(floorEdit.id) : state.selectedId ? findEntity(state.selectedId) : null;
+  const count = drawing ? floorDraft?.points.length ?? 0 : room?.type === "room" ? floorPoints(room).length : 0;
+  // ドラッグの描き直しでフォーカス中のボタンを取り替えない。
+  const html = `<div class="floor-toolbar-row"><strong>${drawing ? "床の作図" : "床の輪郭"}</strong><span>${count}点</span>${drawing
+    ? button("floorDraftUndo", "undo-2", "1点戻す（Backspace）", count === 0) + button("floorDraftRedo", "redo-2", "頂点をやり直す（Ctrl+Y）", !floorDraft?.undone.length) + button("floorDraftFinish", "check", "閉じて床を作成（Enter）", count < 3) + button("floorDraftCancel", "x", "作図を中止（Esc）")
+    : (floorEdit ? button("floorPointDelete", "minus", "選択した頂点を削除（Delete）", count <= 3 || floorEdit.vertex === null) + button("floorEditDone", "check", "輪郭の編集を完了（Esc）") : button("floorErrorClose", "x", "閉じる"))}</div>${floorEditError ? `<div class="floor-error" role="alert">${escapeHtml(floorEditError)}</div>` : ""}`;
+  if (floorToolbar.dataset.markup === html) return;
+  floorToolbar.dataset.markup = html;
+  floorToolbar.innerHTML = html;
+  floorToolbar.querySelector("#floorDraftUndo")?.addEventListener("click", undoFloorPoint);
+  floorToolbar.querySelector("#floorDraftRedo")?.addEventListener("click", redoFloorPoint);
+  floorToolbar.querySelector("#floorDraftFinish")?.addEventListener("click", finishFloorDraft);
+  floorToolbar.querySelector("#floorDraftCancel")?.addEventListener("click", () => {
+    floorDraft = null; floorEditError = ""; activeTool = "select"; setActiveButton("[data-tool]", activeTool); syncPlanCursor(); redrawAll(false);
+  });
+  floorToolbar.querySelector("#floorPointDelete")?.addEventListener("click", removeFloorVertex);
+  floorToolbar.querySelector("#floorEditDone")?.addEventListener("click", () => { floorEdit = null; floorEditError = ""; redrawAll(false); });
+  floorToolbar.querySelector("#floorErrorClose")?.addEventListener("click", () => { floorEditError = ""; syncFloorToolbar(); });
+  createIcons({ icons });
+}
+
+function updateFloorVertex(room: Room, points: [number, number][]): boolean {
+  const ok = reshapeRoom(room, points);
+  floorEditError = ok ? "" : "変更できません。輪郭の交差や階段の開口との重なりを確認してください";
+  syncFloorToolbar();
+  return ok;
+}
+
+function removeFloorVertex(): void {
+  const room = floorEdit ? findEntity(floorEdit.id) : null;
+  if (room?.type !== "room" || isLocked(room) || floorEdit?.vertex == null) return;
+  const points = floorPoints(room);
+  if (points.length <= 3) return;
+  points.splice(floorEdit.vertex, 1);
+  if (updateFloorVertex(room, points)) { floorEdit.vertex = Math.min(floorEdit.vertex, points.length - 1); commitState(); redrawAll(); }
+}
+
+function shapeHandles(shape: Shape): { key: string; x: number; y: number }[] {
+  const angles = shape.kind === "arc" ? [shape.startAngle, shape.startAngle + normalizeAngle(shape.endAngle - shape.startAngle) / 2, shape.endAngle]
+    : shape.kind === "polygon" ? polygonPoints(shape).map(p => Math.atan2(p.y - shape.y, p.x - shape.x)) : [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+  return angles.map((angle, i) => ({ key: `radius:${i}`, x: shape.x + shape.r * Math.cos(angle), y: shape.y + shape.r * Math.sin(angle) }));
 }
 
 function floorFromShape(shape: Shape): void {
@@ -3251,6 +3462,17 @@ function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): 
 
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (isLocked(entity) || isLocked(origin)) return;
+  if (entity.type === "shape" && origin.type === "shape" && corner.startsWith("radius:")) {
+    entity.r = Math.max(GRID, Math.round(Math.hypot(point.x - origin.x, point.y - origin.y)));
+    return;
+  }
+  if (entity.type === "room" && origin.type === "room" && corner.startsWith("round:")) {
+    const vertical = corner.endsWith("n") || corner.endsWith("s");
+    const radius = Math.abs(vertical ? point.y - origin.y - origin.h / 2 : point.x - origin.x - origin.w / 2);
+    const scale = Math.max(40 / Math.min(origin.w, origin.h), radius * 2 / (vertical ? origin.h : origin.w));
+    Object.assign(entity, centeredFloorSize(origin, origin.w * scale, origin.h * scale));
+    return;
+  }
   if (origin.type === "room" && entity.type === "room" && (corner.startsWith("vertex:") || corner.startsWith("edge:"))) {
     const points = floorPoints(origin), index = Number(corner.split(":")[1]);
     const next: [number, number] = [snap(point.x), snap(point.y)];
@@ -3258,7 +3480,7 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
       if (points.length >= MAX_FLOOR_VERTICES) return;
       points.splice(index + 1, 0, next);
     } else points[index] = next;
-    reshapeRoom(entity, points);
+    if (updateFloorVertex(entity, points) && floorEdit) floorEdit.vertex = corner.startsWith("edge:") ? index + 1 : index;
     return;
   }
   if (origin.type === "room" && entity.type === "room") {
@@ -3321,6 +3543,7 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
 }
 
 function render2d(): void {
+  syncFloorEditing();
   const { width, height } = resizePlanCanvas();
   const ratio = getCanvasPixelRatio();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -3724,7 +3947,9 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
   if (options.editing) {
     if (selectedEntities().length > 1) drawMultiSelection();
     const selectedFloor = activeEntities().find(entity => entity.id === state.selectedId);
-    if (selectedFloor?.type === "room" && selectedFloor.outline && !isLocked(selectedFloor)) drawResizeHandles(selectedFloor);
+    if (selectedFloor?.type === "room" && !isLocked(selectedFloor)) drawResizeHandles(selectedFloor);
+    if (selectedFloor?.type === "shape" && !isLocked(selectedFloor)) drawShapeHandle(selectedFloor);
+    if (activeTool === "floor" && floorDraft) drawFloorDraft();
     drawMarquee();
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
@@ -6980,9 +7205,50 @@ function drawShapeHandle(shape: Shape): void {
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
   ctx.lineWidth = 2 / view.zoom;
-  const size = 8 / view.zoom;
-  ctx.fillRect(shape.x - size / 2, shape.y - size / 2, size, size);
-  ctx.strokeRect(shape.x - size / 2, shape.y - size / 2, size, size);
+  const size = 5 / view.zoom;
+  for (const handle of shapeHandles(shape)) {
+    ctx.beginPath(); ctx.arc(handle.x, handle.y, size, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  strokeLine(shape.x - size, shape.y, shape.x + size, shape.y);
+  strokeLine(shape.x, shape.y - size, shape.x, shape.y + size);
+  if (drag.dragMode === "resize" && drag.originEntity?.id === shape.id) drawSizeBadge(shape.x, shape.y, `直径 ${Math.round(shape.r * 20) / 10} cm`);
+  ctx.restore();
+}
+
+function drawSizeBadge(x: number, y: number, text: string): void {
+  ctx.save();
+  ctx.font = `12px ${TEXT_FONT}`;
+  ctx.translate(x, y); ctx.scale(1 / view.zoom, 1 / view.zoom);
+  const w = ctx.measureText(text).width + 16;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(-w / 2, -32, w, 24);
+  ctx.fillStyle = "#1659a9";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(text, 0, -20);
+  ctx.restore();
+}
+
+function drawFloorDraft(): void {
+  if (!floorDraft?.points.length) return;
+  if (deferOverlay(drawFloorDraft)) return;
+  const points = floorDraft.points, hover = floorDraft.hover;
+  const closing = points.length >= 3 && hover && Math.hypot(hover.x - points[0][0], hover.y - points[0][1]) <= 14 / view.zoom;
+  ctx.save();
+  ctx.lineWidth = 2 / view.zoom;
+  ctx.strokeStyle = "#2775d1";
+  ctx.fillStyle = "rgba(39,117,209,.12)";
+  ctx.beginPath();
+  points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+  if (hover) ctx.lineTo(closing ? points[0][0] : hover.x, closing ? points[0][1] : hover.y);
+  ctx.fill(); ctx.stroke();
+  ctx.setLineDash([5 / view.zoom, 5 / view.zoom]);
+  ctx.lineTo(points[0][0], points[0][1]); ctx.stroke(); ctx.setLineDash([]);
+  points.forEach(([x, y], i) => {
+    ctx.beginPath(); ctx.arc(x, y, (i === 0 ? 7 : 4) / view.zoom, 0, Math.PI * 2);
+    ctx.fillStyle = i === 0 && closing ? "#2775d1" : "#ffffff"; ctx.fill(); ctx.stroke();
+  });
+  const last = points[points.length - 1];
+  if (hover && !closing && (hover.x !== last[0] || hover.y !== last[1])) drawSizeBadge((hover.x + last[0]) / 2, (hover.y + last[1]) / 2, `${Math.round(Math.hypot(hover.x - last[0], hover.y - last[1]))} cm`);
   ctx.restore();
 }
 
@@ -7043,20 +7309,33 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
 function drawResizeHandles(entity: Room | Furniture | Roof): void {
   if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawResizeHandles(entity))) return;
-  const handles = entity.type === "room" && entity.outline ? floorHandles(entity) : [
-    { x: entity.x, y: entity.y },
-    { x: entity.x + entity.w, y: entity.y },
-    { x: entity.x, y: entity.y + entity.h },
-    { x: entity.x + entity.w, y: entity.y + entity.h },
+  const handles = entity.type === "room" ? floorHandles(entity) : [
+    { key: "nw", x: entity.x, y: entity.y },
+    { key: "ne", x: entity.x + entity.w, y: entity.y },
+    { key: "sw", x: entity.x, y: entity.y + entity.h },
+    { key: "se", x: entity.x + entity.w, y: entity.y + entity.h },
   ];
+  ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
   ctx.lineWidth = 2 / view.zoom;
   const size = 8 / view.zoom;
   handles.forEach((handle) => {
+    const edge = handle.key.startsWith("edge:");
+    const vertex = floorEdit?.id === entity.id && handle.key === `vertex:${floorEdit.vertex}`;
+    ctx.fillStyle = vertex ? "#2775d1" : "#ffffff";
+    if (edge || handle.key.startsWith("round:") || handle.key.startsWith("vertex:")) {
+      ctx.beginPath(); ctx.arc(handle.x, handle.y, (vertex ? 7 : edge ? 4 : 5) / view.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      if (edge) {
+        strokeLine(handle.x - 2 / view.zoom, handle.y, handle.x + 2 / view.zoom, handle.y);
+        strokeLine(handle.x, handle.y - 2 / view.zoom, handle.x, handle.y + 2 / view.zoom);
+      }
+      return;
+    }
     ctx.fillRect(handle.x - size / 2, handle.y - size / 2, size, size);
     ctx.strokeRect(handle.x - size / 2, handle.y - size / 2, size, size);
   });
+  ctx.restore();
 }
 
 function measureLabel(text: string, size: number, mode: WritingMode = "horizontal"): TextLayout {
@@ -7638,6 +7917,7 @@ function redrawAll(rebuild = true): void {
 }
 
 function updateUi(): void {
+  syncFloorEditing();
   syncThreeMoveMode();
   syncToolHint();
   scheduleViewStateSave();
@@ -7648,8 +7928,12 @@ function updateUi(): void {
   renderFloorVisibility();
   renderRoofList();
   updateRoofToggle2d();
-  document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", historyIndex <= 0);
-  document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", historyIndex >= history.length - 1);
+  syncHistoryButtons();
+}
+
+function syncHistoryButtons(): void {
+  document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", activeTool === "floor" ? !floorDraft?.points.length : historyIndex <= 0);
+  document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", activeTool === "floor" ? !floorDraft?.undone.length : historyIndex >= history.length - 1);
 }
 
 function updateStats(): void {
@@ -7674,6 +7958,14 @@ function describeSelection(entities: Entity[]): string {
 }
 
 function updatePropertiesPanel(): void {
+  if (activeTool === "floor") {
+    propertiesPanel.innerHTML = `<div class="property-grid"><label>床材<select id="draftSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map(surface => `<option value="${surface}" ${surface === activeRoomSurface ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label></div>`;
+    requiredElement<HTMLSelectElement>("#draftSurfaceInput").addEventListener("change", event => {
+      activeRoomSurface = (event.target as HTMLSelectElement).value as RoomSurface;
+      syncPlanCursor();
+    });
+    return;
+  }
   const members = selectedEntities();
   if (members.length > 1) {
     const locked = members.filter(isLocked).length;
@@ -7766,27 +8058,26 @@ function updatePropertiesPanel(): void {
   }
 
   if (selected.type === "room") {
+    const editing = floorEdit?.id === selected.id;
+    const round = isEllipseFloor(selected) && Math.abs(selected.w - selected.h) < 0.01;
     propertiesPanel.innerHTML = `
       <div class="property-grid">
         ${lockRow}
-        <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし（2Dに文字を出さない）" /></label>
+        <div class="floor-shapes" role="group" aria-label="床の形">
+          ${(["rectangle", "circle", "l"] as FloorPreset[]).map(preset => `<button type="button" data-floor-preset="${preset}" title="${preset === "rectangle" ? "長方形" : preset === "circle" ? "円・楕円" : "L字"}の床に変更" aria-label="${preset === "rectangle" ? "長方形" : preset === "circle" ? "円" : "L字"}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`).join("")}
+        </div>
+        <button type="button" class="prop-button" id="floorEditToggle" aria-pressed="${editing}" ${placementDisabled}><i data-lucide="${editing ? "check" : "square-pen"}"></i>${editing ? "輪郭の編集を完了" : "輪郭を編集"}</button>
+        ${editing && floorEdit?.vertex != null ? `<div class="floor-vertices"><div class="vertex-heading"><span>頂点 ${floorEdit.vertex + 1}</span><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="選択した頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
+          <div class="two-col"><label>X cm<input id="floorVertexX" type="number" step="1" ${placementDisabled} /></label><label>Y cm<input id="floorVertexY" type="number" step="1" ${placementDisabled} /></label></div></div>` : ""}
+        ${round && !editing ? diameterControl("floor", selected.w, placementDisabled) : ""}
+        <div class="two-col">
+          <label>幅 cm<input id="roomWInput" type="number" min="40" step="1" value="${Math.round(selected.w * 10) / 10}" ${placementDisabled} /></label>
+          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="1" value="${Math.round(selected.h * 10) / 10}" ${placementDisabled} /></label>
+        </div>
+        <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
+        <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし" /></label>
         <label>文字サイズ cm<input id="roomLabelSizeInput" type="number" min="5" max="500" step="1" value="${selected.labelSize ?? ""}" placeholder="自動" ${placementDisabled} /></label>
         ${writingModeControl(selected.writingMode, placementDisabled)}
-        <label>床の形<select id="roomShapeInput" ${placementDisabled}>
-          <option value="rectangle" ${!selected.outline ? "selected" : ""}>長方形</option>
-          <option value="free" ${selected.outline ? "selected" : ""}>自由な形</option>
-          <option value="circle">円</option><option value="l">L字</option>
-        </select></label>
-        ${selected.outline ? `<div class="floor-vertices">
-          <label>頂点<select id="floorVertexInput" ${placementDisabled}>${selected.outline.map((_, i) => `<option value="${i}">${i + 1}</option>`).join("")}</select></label>
-          <div class="two-col"><label>X cm<input id="floorVertexX" type="number" step="20" ${placementDisabled} /></label><label>Y cm<input id="floorVertexY" type="number" step="20" ${placementDisabled} /></label></div>
-          <div class="two-col"><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺の中央に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="この頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
-        </div>` : ""}
-        <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
-        <div class="two-col">
-          <label>幅 cm<input id="roomWInput" type="number" min="40" step="20" value="${selected.w}" ${placementDisabled} /></label>
-          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="20" value="${selected.h}" ${placementDisabled} /></label>
-        </div>
         ${colorField("roomColorInput", "色 2D", selected.color)}
         ${PLAN_EDITION ? "" : colorField("roomColor3dInput", "色 3D", selected.color3d ?? selected.color)}
         <button type="button" class="prop-button" id="roomRotateButton" ${placementDisabled}>90°回転（Rキー）</button>
@@ -7796,15 +8087,8 @@ function updatePropertiesPanel(): void {
     bindInput("#roomNameInput", (value) => (selected.name = value));
     bindInput("#roomLabelSizeInput", (value) => { selected.labelSize = value.trim() && Number.isFinite(Number(value)) ? clamp(Number(value), 5, 500) : undefined; });
     bindWritingMode(selected);
-    bindSelect("#roomShapeInput", (value) => {
-      const previous = selected.outline;
-      if (value === "rectangle") selected.outline = undefined;
-      else if (value === "circle") selected.outline = Array.from({ length: 64 }, (_, i) => [0.5 + 0.5 * Math.cos(i * Math.PI / 32), 0.5 + 0.5 * Math.sin(i * Math.PI / 32)]);
-      else if (value === "l") selected.outline = [[0, 0], [1, 0], [1, 0.5], [0.5, 0.5], [0.5, 1], [0, 1]];
-      else selected.outline ??= [[0, 0], [1, 0], [1, 1], [0, 1]];
-      try { normalizeFloorHoles(selected.holes, selected.outline); }
-      catch { selected.outline = previous; }
-    });
+    bindFloorShapeControls(selected);
+    if (round && !editing) bindDiameter("floor", selected, () => selected.w, value => Object.assign(selected, centeredFloorSize(selected, value, value)));
     bindFloorVertices(selected);
     bindSelect("#roomSurfaceInput", (value) => {
       if (!isRoomSurface(value)) return;
@@ -7813,8 +8097,8 @@ function updatePropertiesPanel(): void {
       selected.color3d = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color3d ?? selected.color));
       selected.color = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color));
     });
-    bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, snap(value))));
-    bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, snap(value))));
+    bindNumber("#roomWInput", (value) => (selected.w = Math.max(GRID * 2, value)));
+    bindNumber("#roomHInput", (value) => (selected.h = Math.max(GRID * 2, value)));
     bindColor("#roomColorInput", (value) => (selected.color = value ?? SURFACE_DEFS[selected.surface ?? "plain"].color));
     bindColor("#roomColor3dInput", (value) => (selected.color3d = value));
     bindButton("#roomRotateButton", () => rotateEntity(selected, 90));
@@ -7953,7 +8237,7 @@ function updatePropertiesPanel(): void {
             <option value="polygon" ${selectedShape.kind === "polygon" ? "selected" : ""}>多角形</option>
           </select>
         </label>
-        <label>半径 cm<input id="shapeRadiusInput" type="number" min="20" step="20" value="${selectedShape.r}" ${placementDisabled} /></label>
+        ${diameterControl("shape", selectedShape.r * 2, placementDisabled)}
         ${arcRows}
         ${polygonRows}
         ${colorField("shapeColorInput", "色 2D", selectedShape.color ?? INK)}
@@ -7975,7 +8259,7 @@ function updatePropertiesPanel(): void {
         selectedShape.rotation = selectedShape.rotation ?? 0;
       }
     });
-    bindNumber("#shapeRadiusInput", (value) => (selectedShape.r = Math.max(GRID, snap(value))));
+    bindDiameter("shape", selectedShape, () => selectedShape.r * 2, value => { selectedShape.r = value / 2; });
     bindNumber("#shapeStartInput", (value) => (selectedShape.startAngle = degreesToRadians(value)));
     bindNumber("#shapeEndInput", (value) => (selectedShape.endAngle = degreesToRadians(value)));
     bindNumber("#shapeSidesInput", (value) => (selectedShape.sides = clamp(Math.round(value), 3, 12)));
@@ -8242,7 +8526,7 @@ function deleteSelection(): void {
   redrawAll();
 }
 
-function commitState(): void {
+function commitState(refreshUi = true): void {
   history = history.slice(0, historyIndex + 1);
   history.push(cloneState(state));
   if (history.length > HISTORY_LIMIT) {
@@ -8251,10 +8535,14 @@ function commitState(): void {
     historyIndex += 1;
   }
   persistState();
-  updateUi();
+  if (refreshUi) updateUi();
+  else syncHistoryButtons();
 }
 
 function replaceState(next: PlanState, pushHistory: boolean): void {
+  floorDraft = null;
+  floorEdit = null;
+  floorEditError = "";
   threeMoveId = null;
   multiSelection.clear();
   state = cloneState(next);
@@ -8270,6 +8558,7 @@ function replaceState(next: PlanState, pushHistory: boolean): void {
 }
 
 function undo(): void {
+  if (activeTool === "floor") { undoFloorPoint(); return; }
   if (historyIndex <= 0) return;
   const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex -= 1;
@@ -8280,6 +8569,7 @@ function undo(): void {
 }
 
 function redo(): void {
+  if (activeTool === "floor") { redoFloorPoint(); return; }
   if (historyIndex >= history.length - 1) return;
   const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex += 1;
@@ -8729,9 +9019,15 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
   const layer = (entity: Entity): number => entity.type === "text" ? 7 : entity.type === "room" ? 0 : entity.type === "furniture" && (entity.kind === "rug" || entity.kind === "paint") ? 1 : entity.type === "wall" ? 2 : entity.type === "window" ? 3 : entity.type === "door" ? 4 : entity.type === "furniture" ? 5 : 6;
   const entities = [...activeEntities()].sort((a, b) => layer(a) - layer(b));
   const selectedPerson = entities.find((entity) => entity.id === state.selectedId);
-  if (selectedPerson?.type === "room" && selectedPerson.outline && !isLocked(selectedPerson)) {
+  if (selectedPerson?.type === "room" && !isLocked(selectedPerson)) {
     const corner = getCornerHit(selectedPerson, point);
     if (corner) return { entity: selectedPerson, corner };
+    if (floorEdit?.id === selectedPerson.id && pointInPolygon(point.x, point.y, floorPolygon(selectedPerson))) return { entity: selectedPerson, corner: null };
+  }
+  if (selectedPerson?.type === "shape" && !isLocked(selectedPerson) && selectedEntities().length === 1) {
+    const handle = shapeHandles(selectedPerson).find(p => Math.hypot(p.x - point.x, p.y - point.y) <= 12 / view.zoom);
+    if (handle) return { entity: selectedPerson, corner: handle.key };
+    if (Math.hypot(selectedPerson.x - point.x, selectedPerson.y - point.y) <= 12 / view.zoom) return { entity: selectedPerson, corner: null };
   }
   if (isPerson(selectedPerson) && !isLocked(selectedPerson)) {
     const limb = personHandleAt(selectedPerson, point);
@@ -8809,38 +9105,116 @@ function getLineEndpointHit(entity: LinearElement, point: Point): string | null 
 }
 
 function bindFloorVertices(room: Room): void {
-  const select = propertiesPanel.querySelector<HTMLSelectElement>("#floorVertexInput");
-  if (!select) return;
+  if (floorEdit?.id !== room.id || floorEdit.vertex === null) return;
+  const index = floorEdit.vertex;
   const x = requiredElement<HTMLInputElement>("#floorVertexX"), y = requiredElement<HTMLInputElement>("#floorVertexY");
   const remove = requiredElement<HTMLButtonElement>("#floorVertexRemove"), add = requiredElement<HTMLButtonElement>("#floorVertexAdd");
   const sync = () => {
-    const point = floorPoints(room)[Number(select.value)];
+    const point = floorPoints(room)[index];
     x.value = String(Math.round(point[0])); y.value = String(Math.round(point[1]));
-    remove.disabled = isLocked(room) || room.outline!.length <= 3;
-    add.disabled = isLocked(room) || room.outline!.length >= MAX_FLOOR_VERTICES;
+    remove.disabled = isLocked(room) || floorPoints(room).length <= 3;
+    add.disabled = isLocked(room) || floorPoints(room).length >= MAX_FLOOR_VERTICES;
   };
-  select.addEventListener("change", sync);
   const change = () => {
     if (isLocked(room)) return;
     const points = floorPoints(room);
     if (!x.value.trim() || !y.value.trim() || !Number.isFinite(x.valueAsNumber) || !Number.isFinite(y.valueAsNumber)) { sync(); return; }
-    points[Number(select.value)] = [x.valueAsNumber, y.valueAsNumber];
-    if (!reshapeRoom(room, points)) { sync(); return; }
+    points[index] = [x.valueAsNumber, y.valueAsNumber];
+    if (!updateFloorVertex(room, points)) { sync(); return; }
     commitState(); redrawAll();
   };
   x.addEventListener("change", change); y.addEventListener("change", change);
-  remove.addEventListener("click", () => {
-    if (isLocked(room) || room.outline!.length <= 3) return;
-    const points = floorPoints(room); points.splice(Number(select.value), 1);
-    if (reshapeRoom(room, points)) { commitState(); redrawAll(); }
-  });
+  remove.addEventListener("click", removeFloorVertex);
   add.addEventListener("click", () => {
-    if (isLocked(room) || room.outline!.length >= MAX_FLOOR_VERTICES) return;
-    const points = floorPoints(room), i = Number(select.value), a = points[i], b = points[(i + 1) % points.length];
+    if (isLocked(room) || floorPoints(room).length >= MAX_FLOOR_VERTICES) return;
+    const points = floorPoints(room), i = index, a = points[i], b = points[(i + 1) % points.length];
     points.splice(i + 1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
-    if (reshapeRoom(room, points)) { commitState(); redrawAll(); }
+    if (updateFloorVertex(room, points)) { floorEdit!.vertex = i + 1; commitState(); redrawAll(); }
   });
   sync(); createIcons({ icons });
+}
+
+function bindFloorShapeControls(room: Room): void {
+  propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-floor-preset]").forEach(button => {
+    const preset = button.dataset.floorPreset as FloorPreset;
+    const canvas = button.querySelector("canvas")!, g = canvas.getContext("2d")!;
+    const points = presetOutline(preset) ?? [[0, 0], [1, 0], [1, 1], [0, 1]];
+    g.fillStyle = "#dceaf7"; g.strokeStyle = "#315575"; g.lineWidth = 3;
+    g.beginPath(); points.forEach(([x, y], i) => i ? g.lineTo((preset === "circle" ? 22 : 12) + x * (preset === "circle" ? 44 : 64), 10 + y * 44) : g.moveTo((preset === "circle" ? 22 : 12) + x * (preset === "circle" ? 44 : 64), 10 + y * 44)); g.closePath(); g.fill(); g.stroke();
+    button.addEventListener("click", () => {
+      if (isLocked(room)) return;
+      const outline = presetOutline(preset);
+      const size = preset === "circle" ? centeredFloorSize(room, Math.min(room.w, room.h), Math.min(room.w, room.h)) : { x: room.x, y: room.y, w: room.w, h: room.h };
+      const holes = floorPolygon(room).slice(1).map(ring => ring.map(([x, y]): [number, number] => [(x - size.x) / size.w, (y - size.y) / size.h]));
+      let normalizedHoles: Room["holes"];
+      try { normalizedHoles = normalizeFloorHoles(holes, outline); }
+      catch { floorEditError = "階段などの開口が床の外に出るため、この形には変更できません"; syncFloorToolbar(); return; }
+      const label = getRoomLabelPosition(room);
+      Object.assign(room, size);
+      room.outline = outline;
+      room.holes = normalizedHoles;
+      room.labelOffsetX = label.x - room.x;
+      room.labelOffsetY = label.y - room.y;
+      floorEdit = null; floorEditError = "";
+      commitState(); redrawAll();
+    });
+  });
+  requiredElement("#floorEditToggle").addEventListener("click", () => {
+    if (isLocked(room)) return;
+    floorEdit = floorEdit?.id === room.id ? null : { id: room.id, vertex: null };
+    activeTool = "select";
+    if (floorEdit && viewMode === "three") applyViewMode("split");
+    floorEditError = "";
+    setActiveButton("[data-tool]", activeTool);
+    redrawAll(false);
+  });
+  createIcons({ icons });
+}
+
+function diameterControl(prefix: string, diameter: number, disabled: string): string {
+  const value = Math.round(diameter * 10) / 10;
+  const max = Math.ceil(Math.max(2000, diameter * 2) / 100) * 100;
+  return `<div class="diameter-control"><label for="${prefix}DiameterInput">直径 cm</label><div class="diameter-row">
+    <button type="button" id="${prefix}DiameterMinus" title="直径を10cm小さく" aria-label="直径を10cm小さく" ${disabled}><i data-lucide="minus"></i></button>
+    <input id="${prefix}DiameterInput" type="number" min="40" step="1" value="${value}" ${disabled} />
+    <button type="button" id="${prefix}DiameterPlus" title="直径を10cm大きく" aria-label="直径を10cm大きく" ${disabled}><i data-lucide="plus"></i></button></div>
+    <input id="${prefix}DiameterRange" type="range" min="40" max="${max}" step="10" value="${value}" aria-label="直径" ${disabled} /></div>`;
+}
+
+function bindDiameter(prefix: string, entity: Entity, get: () => number, set: (value: number) => void): void {
+  const number = requiredElement<HTMLInputElement>(`#${prefix}DiameterInput`);
+  const range = requiredElement<HTMLInputElement>(`#${prefix}DiameterRange`);
+  let original = cloneEntity(entity);
+  const sync = () => {
+    if (get() > Number(range.max)) range.max = String(Math.ceil(get() * 2 / 100) * 100);
+    number.value = String(Math.round(get() * 10) / 10); range.value = String(get());
+    if (entity.type === "room") {
+      requiredElement<HTMLInputElement>("#roomWInput").value = String(Math.round(entity.w * 10) / 10);
+      requiredElement<HTMLInputElement>("#roomHInput").value = String(Math.round(entity.h * 10) / 10);
+    }
+  };
+  const apply = (value: number) => {
+    if (isLocked(entity) || !Number.isFinite(value)) return;
+    set(Math.max(40, value)); sync(); render2d(); scheduleThreeRefresh();
+  };
+  const finish = () => {
+    // 入力欄を作り直すと、フォーカスや直後のボタンクリックが失われる。描画はapplyで更新済み。
+    if (JSON.stringify(original) !== JSON.stringify(entity)) commitState(false);
+    original = cloneEntity(entity);
+  };
+  number.addEventListener("change", () => {
+    if (!number.value.trim() || !Number.isFinite(number.valueAsNumber)) { sync(); return; }
+    apply(number.valueAsNumber); finish();
+  });
+  range.addEventListener("pointerdown", () => { original = cloneEntity(entity); });
+  range.addEventListener("input", () => apply(range.valueAsNumber));
+  range.addEventListener("change", finish);
+  const cancel = () => { Object.assign(entity, cloneEntity(original)); sync(); render2d(); scheduleThreeRefresh(); };
+  range.addEventListener("pointercancel", cancel);
+  range.addEventListener("keydown", event => { if (event.key === "Escape") { event.preventDefault(); cancel(); range.blur(); } });
+  for (const [suffix, delta] of [["Minus", -10], ["Plus", 10]] as const) {
+    requiredElement(`#${prefix}Diameter${suffix}`).addEventListener("click", () => { apply(get() + delta); finish(); });
+  }
 }
 
 function writingModeControl(mode: WritingMode | undefined, disabled: string): string {
@@ -8891,8 +9265,8 @@ function isPointInRoomLabel(point: Point, room: Room): boolean {
 
 function getCornerHit(entity: Room | Furniture | Roof, point: Point): string | null {
   const size = 12 / view.zoom;
-  if (entity.type === "room" && entity.outline) {
-    if (entity.id !== state.selectedId) return null;
+  if (entity.type === "room" && (entity.outline || floorEdit?.id === entity.id)) {
+    if (entity.id !== state.selectedId || selectedEntities().length > 1) return null;
     return floorHandles(entity).find(handle => Math.hypot(point.x - handle.x, point.y - handle.y) <= size)?.key ?? null;
   }
   const corners = [
