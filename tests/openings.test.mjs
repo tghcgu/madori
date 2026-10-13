@@ -85,3 +85,73 @@ test('doors and windows with a color code alpha become translucent, opaque codes
     } finally { dispose(solid); dispose(seeThrough); }
   }
 });
+
+// ---- 両開きドア・門扉と、和風の引き戸（障子・襖・格子戸・板戸） ----
+import { DOOR_STYLES, doorStyleInfo, isDoorStyle, panelBars, slidingPanels } from '../src/opening-shapes.ts';
+
+test('every door style builds a closed door that stays inside the opening, at small and large widths', () => {
+  for (const { value } of DOOR_STYLES) {
+    for (const length of [0.3, 0.9, 1.8, 3.6]) {
+      for (const flip of [false, true]) {
+        const group = buildOpeningModel({ type: 'door', doorStyle: value, length, flip });
+        try {
+          const box = bounds(group);
+          assert.ok(box.min.y >= 0.08 - 1e-6 && box.max.y <= 2.1 + 1e-6, `${value} ${length}: height`);
+          assert.ok(box.max.x - box.min.x <= length + 0.1, `${value} ${length}: width`);
+          assert.ok(box.max.z - box.min.z <= 0.2, `${value} ${length}: depth`);
+          group.traverse(object => {
+            if (!object.geometry) return;
+            assert.ok(object.geometry.getAttribute('position').array.every(Number.isFinite), `${value}: finite`);
+          });
+        } finally { dispose(group); }
+      }
+    }
+  }
+});
+
+test('Japanese sliding doors stand on separate tracks in the same order as the 2D symbol, with four panels for wide shoji and fusuma', () => {
+  // 板の真ん中にある部品（障子・格子戸は腰板、襖・板戸は板そのもの）で、板の位置とレールを調べる
+  const names = { shoji: 'shoji-knee', fusuma: 'fusuma-panel', koshi: 'koshi-knee', itado: 'itado-panel' };
+  for (const [style, name] of Object.entries(names)) {
+    for (const flip of [false, true]) {
+      for (const length of [1.6, 3.6]) {
+        const group = buildOpeningModel({ type: 'door', doorStyle: style, length, flip });
+        const panels = slidingPanels(style, length * 100);
+        assert.equal(panels.length, length >= 2.4 && (style === 'shoji' || style === 'fusuma') ? 4 : 2);
+        // 板ごとに、レールの側（z の符号）が2Dの並びと同じ
+        const parts = group.children.filter(part => part.name === name);
+        for (const panel of panels) {
+          const near = parts.filter(part => Math.abs(part.position.x / (length - Math.min(length * 0.09, 0.045)) - panel.center) < 0.01);
+          assert.equal(near.length, 1, `${style}: one panel at ${panel.center}`);
+          for (const part of near) assert.equal(Math.sign(part.position.z), panel.track * (flip ? -1 : 1), `${style}: track of the panel at ${panel.center}`);
+        }
+        dispose(group);
+      }
+    }
+  }
+});
+
+test('sliding panels cover the whole opening and overlap a little; bars stay inside their panel', () => {
+  for (const style of ['shoji', 'fusuma', 'koshi', 'itado']) {
+    for (const length of [60, 160, 240, 400]) {
+      const panels = slidingPanels(style, length);
+      assert.ok(Math.abs(panels[0].center - panels[0].width / 2 + 0.5) < 0.03, 'starts at the jamb');
+      assert.ok(Math.abs(panels.at(-1).center + panels.at(-1).width / 2 - 0.5) < 0.03, 'ends at the other jamb');
+      for (let i = 1; i < panels.length; i += 1) assert.ok(panels[i - 1].center + panels[i - 1].width / 2 > panels[i].center - panels[i].width / 2, 'neighbors overlap');
+      // 2枚は奥と手前、4枚は外の2枚が奥で中の2枚が手前（引き違いの4枚建て）
+      assert.deepEqual(panels.map(panel => panel.track), panels.length === 4 ? [-1, 1, 1, -1] : [-1, 1]);
+      for (const bar of panelBars(style, length / panels.length)) assert.ok(bar > -0.5 && bar < 0.5);
+    }
+  }
+  assert.ok(panelBars('koshi', 80).length > panelBars('shoji', 80).length, 'the lattice door has more bars than shoji');
+  assert.deepEqual(panelBars('fusuma', 80), []);
+});
+
+test('door style names: every style has a label and keywords, and unknown styles are plain doors', () => {
+  assert.deepEqual(DOOR_STYLES.map(style => style.value), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate']);
+  for (const style of DOOR_STYLES) assert.ok(style.label && style.keywords, style.value);
+  assert.equal(isDoorStyle('shoji'), true);
+  assert.equal(isDoorStyle('hidden'), false);
+  assert.equal(doorStyleInfo(undefined).value, 'swing');
+  assert.deepEqual(DOOR_STYLES.filter(style => style.japanese).map(style => style.value), ['shoji', 'fusuma', 'koshi', 'itado', 'gate']);
+});

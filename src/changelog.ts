@@ -10,6 +10,18 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-13",
     items: [{
+      ja: "ドアに「両開きドア」と和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）を追加。2Dの記号と3Dの形は、同じ戸の並びと組子・格子の位置から作ります。2.4m以上の障子・襖は引き違いの4枚建てになり、置いたあとも「扉の種類」で変えられます。日本家屋・旅館・武家屋敷・古民家・寺・神社・居酒屋・銭湯のテンプレートも、障子・襖・格子戸・板戸に変えました",
+      en: "New door types: double doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door) and gates. 2D symbols and 3D models share the same panel layout and bar positions, shoji and fusuma 2.4 m or wider become four sliding panels, and the type can be changed after placing. The Japanese house, ryokan, samurai residence, old farmhouse, temple, shrine, izakaya and public bath templates now use these fittings",
+    }, {
+      ja: "家具・設備の一覧の分類を見直し。「和風」に障子・襖などのドアと座椅子・こたつ・石灯籠なども集め、「キッチン」と「浴室・トイレ・洗面」を分け、「照明・インテリア」などに整理。探しやすいよう、同じ物を複数の分類に重ねて出します",
+      en: "Reorganized the furniture palette: the Japanese group now gathers shoji, fusuma and other doors along with the floor chair, kotatsu and stone lantern; the kitchen and the bath, toilet and washroom are separate; and lighting and decor are grouped. Some items appear in several groups to make them easier to find",
+    }, {
+      ja: "3Dで家具を1回クリックしたときは、ダブルクリックで選べることを案内するように。スマホ・タブレットでは家具を長押しすると選ばれ、そのまま指を動かすと家具を動かせます",
+      en: "A single click on furniture in 3D now explains that a double-click selects it. On phones and tablets, a long press selects furniture and moving the finger drags it",
+    }, {
+      ja: "テンプレート「サンプル（作例）」に残っていた、試し書きの文字（「あああ…」）を消しました",
+      en: "Removed leftover test text (a long row of the same character) from the Showcase template",
+    }, {
       ja: "3Dの家具選択をダブルクリックに変更。1回クリックや長押しでは選択を変えず、通常のドラッグは視点回転のままです。固定した家具の選択、別の階への切り替え、Ctrl／Cmdでの複数選択にも対応。2Dの1回クリックでの選択は変わりません",
       en: "Furniture selection in 3D now requires a double-click. Single clicks and holds leave the selection unchanged, while normal dragging still orbits the camera. Locked furniture remains selectable, selecting an upper-floor item switches floors, and Ctrl/Cmd group selection is preserved. Single-click selection in 2D is unchanged",
     }, {

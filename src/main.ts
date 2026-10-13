@@ -5,7 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
-import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
+import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { CHANGELOG, changelogDate } from "./changelog";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
@@ -23,10 +23,13 @@ import {
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
   PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
   type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
-  JAPANESE_KINDS, JAPANESE_MATERIALS, isJapaneseKind, japaneseParts,
+  JAPANESE_MATERIALS, isJapaneseKind, japaneseParts,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
+import {
+  DOOR_COLORS, DOOR_STYLES, doorStyleInfo, doubleLeaves, gateSlats, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset, type DoorStyle,
+} from "./opening-shapes";
 import { translateSelection } from "./selection";
 import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
@@ -86,7 +89,8 @@ interface LinearElement {
   color3d?: string;
   flip?: boolean;
   mullion?: boolean;
-  doorStyle?: "swing" | "sliding";
+  // ドアの種類（開き戸のときは持たない）
+  doorStyle?: DoorStyle;
   locked?: boolean;
 }
 
@@ -391,20 +395,6 @@ const OUTDOOR_STONE = "#e6e4de";
 const OUTDOOR_SOIL = "#efe5d6";
 const OUTDOOR_WATER = "#dcebf2";
 
-// 家具は置く部屋ではなく種類で分ける。創作では部屋の種類が決まっていないことが多いため
-const FURNITURE_CATEGORIES: { label: string; kinds: FurnitureKind[] }[] = [
-  { label: "和風の家具・設備", kinds: [...JAPANESE_KINDS] },
-  { label: "椅子・ソファ", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "bench"] },
-  { label: "テーブル・机", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"] },
-  { label: "ベッド", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon", "crib"] },
-  { label: "収納・棚", kinds: ["closet", "wardrobe", "shelf", "cupboard", "shoeCabinet", "coatStand"] },
-  { label: "家電", kinds: ["fridge", "washer", "tv", "airConditioner"] },
-  { label: "キッチン・水回り", kinds: ["kitchen", "kitchenL", "kitchenIsland", "bath", "unitBath", "shower", "toilet", "washbasin"] },
-  { label: "インテリア", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"] },
-  { label: "屋外・庭", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "grave", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"] },
-  { label: "乗り物", kinds: ["car", "motorcycle", "bicycle"] },
-  { label: "人・事件・調査", kinds: ["person", "fallenPerson", "footprints", "evidenceMarker", "bloodPool", "brokenGlass"] },
-];
 
 // 床に付いた跡（足跡・血）は、2Dの色をそのまま跡の塗りにする。色を決めていないときの塗り
 const MARK_FILLS: Partial<Record<FurnitureKind, string>> = { footprints: "#6b625a", bloodPool: "#a3201c", brokenGlass: "#dcedf4" };
@@ -506,6 +496,8 @@ const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
 
 let activeTool: Tool = "select";
 let activeFurniture: FurnitureKind = "sofa";
+// 一覧で選んでいるドアの種類（ドア・両開きドア・引き戸・障子・襖など）
+let activeDoorStyle: DoorStyle = "swing";
 // 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（見ていた場所などと一緒にブラウザへ保存）
 const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
@@ -670,6 +662,9 @@ sunLight.shadow.camera.left = -14;
 sunLight.shadow.camera.right = 14;
 sunLight.shadow.camera.top = 14;
 sunLight.shadow.camera.bottom = -14;
+// 影の地図の細かさが足りない所で、面が自分の影を縞模様に落とさないようにする（屋根の斜面などに出ていた）
+sunLight.shadow.bias = -0.0004;
+sunLight.shadow.normalBias = 0.04;
 scene.add(sunLight);
 
 const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
@@ -854,7 +849,10 @@ function normalizeEntity(value: unknown): Entity {
   }
   if (entity.type === "wall" || entity.type === "door" || entity.type === "window") {
     if (!finite(entity.x1, entity.y1, entity.x2, entity.y2)) throw new Error("Invalid line coordinates");
-    return { ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d) };
+    const line = { ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d) } as LinearElement;
+    // ドアの種類は知っている物だけ。開き戸（ふつうのドア）は持たない
+    if (line.type !== "door" || !isDoorStyle(line.doorStyle) || line.doorStyle === "swing") delete line.doorStyle;
+    return line;
   }
   if (entity.type === "shape" && ["circle", "ellipse", "arc", "polygon"].includes(entity.kind)) {
     if (!finite(entity.x, entity.y, entity.r) || entity.r <= 0) throw new Error("Invalid shape");
@@ -1155,6 +1153,7 @@ function setupUi(): void {
   threeCanvas.addEventListener("pointerdown", handleThreePointerDown, { capture: true });
   threeCanvas.addEventListener("pointermove", handleThreePointerMove);
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
+  for (const type of ["pointermove", "pointerup", "pointercancel"] as const) threeCanvas.addEventListener(type, trackThreeLongPress);
   threeCanvas.addEventListener("dblclick", handleThreeDoubleClick);
   threeCanvas.addEventListener("pointercancel", cancelThreeDrag);
   threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
@@ -1189,10 +1188,9 @@ function buildFurniturePicker(): void {
   furniturePicker.innerHTML = "";
 
   // よく使う建具と家具を上に、床材・階段・図形の壁は下に置く。屋根はHTML側で最後に並ぶ
-  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ");
+  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ 和風 わふう");
+  DOOR_STYLES.forEach((style) => fittings.items.appendChild(createDoorStyleButton(style.value)));
   ([
-    ["door", "ドア", "とびら 扉 開き戸"],
-    ["slidingDoor", "引き戸", "ひきど 扉 スライド"],
     ["window", "窓", "まど"],
     ["window2", "窓（区切付き）", "まど"],
   ] as [Tool, string, string][]).forEach(([tool, label, keywords]) => {
@@ -1206,9 +1204,11 @@ function buildFurniturePicker(): void {
   });
   furniturePicker.appendChild(fittings.details);
 
-  FURNITURE_CATEGORIES.forEach((category, categoryIndex) => {
-    const group = createPaletteGroup(category.label, categoryIndex === 0);
-    category.kinds.forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
+  FURNITURE_GROUPS.forEach((category, categoryIndex) => {
+    const group = createPaletteGroup(category.label, categoryIndex === 0, category.keywords);
+    // 和風の欄には、障子・襖などのドアも並べる（建具の欄と重ねて出す）
+    category.doorStyles?.forEach((style) => group.items.appendChild(createDoorStyleButton(style)));
+    [...category.kinds, ...(category.also ?? [])].forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
     furniturePicker.appendChild(group.details);
   });
 
@@ -1293,6 +1293,20 @@ function createPaletteButton(label: string, keywords: string, onClick: () => voi
   button.textContent = label;
   button.dataset.search = normalizeSearchText(`${label} ${keywords}`);
   button.addEventListener("click", onClick);
+  return button;
+}
+
+// ドアの種類のボタン。押すとドアのツールになり、2Dで壁に沿ってドラッグすると、その種類のドアを置く
+function createDoorStyleButton(style: DoorStyle): HTMLButtonElement {
+  const info = doorStyleInfo(style);
+  const button = createPaletteButton(info.label, info.keywords, () => {
+    activeTool = "door";
+    activeDoorStyle = style;
+    pathRedrawId = null;
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+  });
+  button.dataset.doorStyle = style;
   return button;
 }
 
@@ -1644,7 +1658,7 @@ function removeActiveFloor(): void {
 function setActiveButton(selector: string, value: string): void {
   document.querySelectorAll<HTMLButtonElement>(selector).forEach((button) => {
     const dataValue =
-      button.dataset.surface ?? button.dataset.shape ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
+      button.dataset.surface ?? button.dataset.shape ?? button.dataset.doorStyle ?? button.dataset.tool ?? button.dataset.furniture ?? button.dataset.viewMode;
     button.classList.toggle("is-active", dataValue === value);
     button.setAttribute("aria-pressed", String(dataValue === value));
   });
@@ -1654,6 +1668,7 @@ function syncPlanCursor(): void {
   syncFloorEditing();
   setActiveButton("[data-surface]", activeTool === "room" || activeTool === "floor" ? activeRoomSurface : "");
   setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
+  setActiveButton("[data-door-style]", activeTool === "door" ? activeDoorStyle : activeTool === "slidingDoor" ? "sliding" : "");
   if (drag.dragMode === "pan") {
     planCanvas.style.cursor = "grabbing";
     return;
@@ -2422,16 +2437,15 @@ function cancelLongPress(): void {
 }
 
 // 長押しの目印。押した所に、満ちていく輪を出す（すぐ離したときは出ないよう、少し待ってから見せる）
-function showPressRing(clientX: number, clientY: number): void {
-  const pane = planCanvas.parentElement;
+function showPressRing(clientX: number, clientY: number, pane: HTMLElement | null = planCanvas.parentElement): void {
   if (!pane) return;
   if (!pressRing) {
     pressRing = document.createElement("div");
     pressRing.className = "press-ring";
     pressRing.setAttribute("aria-hidden", "true");
     pressRing.innerHTML = `<svg viewBox="0 0 46 46"><circle class="track" cx="23" cy="23" r="19"></circle><circle class="fill" cx="23" cy="23" r="19"></circle></svg>`;
-    pane.appendChild(pressRing);
   }
+  if (pressRing.parentElement !== pane) pane.appendChild(pressRing);
   const rect = pane.getBoundingClientRect();
   pressRing.style.left = `${clientX - rect.left}px`;
   pressRing.style.top = `${clientY - rect.top}px`;
@@ -2469,7 +2483,7 @@ function toolHintParts(): string[] | null {
   if (floorEdit) return null;
   if (activeTool !== "select") {
     const action = toolAction();
-    const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: "ドア", slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", ellipse: "楕円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
+    const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: doorStyleInfo(activeDoorStyle).label, slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", ellipse: "楕円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
     return action ? [names[activeTool], ...action, "Escで選択に戻る"] : null;
   }
   // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す（Ctrl のないスマホ・タブレットでは出さない）
@@ -2664,7 +2678,7 @@ function handlePointerUp(event: PointerEvent): void {
   if (drag.dragMode === "draw" && distanceMoved > 8) {
     if (activeTool === "room") addRoomFromDrag(start, end);
     if (activeTool === "wall") addLineFromDrag("wall", start, end);
-    if (activeTool === "door") addLineFromDrag("door", start, end);
+    if (activeTool === "door") addLineFromDrag("door", start, end, false, activeDoorStyle);
     if (activeTool === "slidingDoor") addLineFromDrag("door", start, end, false, "sliding");
     if (activeTool === "window") addLineFromDrag("window", start, end);
     if (activeTool === "window2") addLineFromDrag("window", start, end, true);
@@ -2725,6 +2739,8 @@ function handleDoubleClick(event: MouseEvent): void {
 }
 
 function handleThreePointerDown(event: PointerEvent): void {
+  // 2本目の指（ピンチでの拡大縮小など）が触れたら、長押しで家具をつかむのはやめる
+  if (threeLongPress && event.pointerId !== threeLongPress.pointerId) cancelThreeLongPress();
   // 右ドラッグ・Shift＋左ドラッグは視点移動。Ctrl/Cmd は複数選択に使う。
   if (!threeDrag && (event.button === 2 || (event.button === 0 && event.shiftKey))) {
     anchorPanToPointer(event);
@@ -2738,6 +2754,10 @@ function handleThreePointerDown(event: PointerEvent): void {
   threePointerDown = { x: event.clientX, y: event.clientY };
   const id = pickThreeEntity(event);
   const selected = id ? findEntity(id) : undefined;
+  // タッチの長押しで家具を選ぶ（指を動かせば、ふつうに視点が回る）
+  if (event.pointerType !== "mouse" && activeTool === "select" && selected?.type === "furniture" && !event.ctrlKey && !event.metaKey && !threeMoveId) {
+    startThreeLongPress(event, selected.id);
+  }
   if (event.ctrlKey || event.metaKey) {
     threeMoveId = null;
     event.preventDefault();
@@ -2870,6 +2890,83 @@ function cancelThreeDrag(): void {
   finishThreeDrag(true);
 }
 
+// 3D: タッチ（指・ペン）で家具を長押ししたら、選んで、そのまま指を動かすと家具が動く（マウスはダブルクリックで選ぶ）
+let threeLongPress: { timer: number; pointerId: number; x: number; y: number; id: string; last: PointerEvent } | null = null;
+
+function startThreeLongPress(event: PointerEvent, id: string): void {
+  cancelThreeLongPress();
+  showPressRing(event.clientX, event.clientY, threeCanvas.parentElement);
+  threeLongPress = {
+    timer: window.setTimeout(() => {
+      const press = threeLongPress;
+      threeLongPress = null;
+      hidePressRing();
+      const entity = press ? findEntity(press.id) : undefined;
+      if (!press || entity?.type !== "furniture") return;
+      selectThreeEntity(press.id);
+      threeMoveId = isLocked(entity) ? null : press.id;
+      syncThreeMoveMode();
+      if (threeMoveId) beginThreeMove(press.last, entity, state.floors.findIndex((floor) => floor.entities.some((item) => item.id === entity.id)));
+    }, LONG_PRESS_MS),
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    id,
+    last: event,
+  };
+}
+
+function cancelThreeLongPress(): void {
+  if (!threeLongPress) return;
+  window.clearTimeout(threeLongPress.timer);
+  threeLongPress = null;
+  hidePressRing();
+}
+
+function trackThreeLongPress(event: PointerEvent): void {
+  if (!threeLongPress || event.pointerId !== threeLongPress.pointerId) return;
+  threeLongPress.last = event;
+  if (event.type !== "pointermove" || Math.hypot(event.clientX - threeLongPress.x, event.clientY - threeLongPress.y) > 8) cancelThreeLongPress();
+}
+
+// 家具を3Dでつかんで動かし始める（まとめて選んでいる家具なら、まとめて動かす）
+function beginThreeMove(event: PointerEvent, furnitureItem: Furniture, floorIndex: number): void {
+  const planeY = floorBaseY(floorIndex) + floorTopOffset(floorIndex);
+  const point = threeFloorPoint(event, planeY);
+  if (!point) return;
+  controls.enabled = false;
+  if (!threeCanvas.hasPointerCapture(event.pointerId)) threeCanvas.setPointerCapture(event.pointerId);
+  state.activeFloor = floorIndex;
+  const members = selectedEntities();
+  const origins = members.length > 1 && members.some((item) => item.id === furnitureItem.id) ? members.map(cloneEntity) : undefined;
+  if (!origins) selectOnly(furnitureItem.id);
+  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, origins, planeY, created: false, moved: false };
+  threeCanvas.style.cursor = "grabbing";
+  redrawAll();
+}
+
+// 3Dの案内（家具を1回クリックしたときに、選び方を少しのあいだ出す）
+let threeHint: HTMLDivElement | null = null;
+let threeHintTimer = 0;
+
+function showThreeHint(text: string): void {
+  const pane = threeCanvas.parentElement;
+  if (!pane) return;
+  if (!threeHint) {
+    threeHint = document.createElement("div");
+    threeHint.className = "tool-hint three-hint";
+    threeHint.id = "threeHint";
+    threeHint.setAttribute("role", "status");
+    pane.appendChild(threeHint);
+  }
+  threeHint.textContent = text;
+  threeHint.hidden = false;
+  window.clearTimeout(threeHintTimer);
+  threeHintTimer = window.setTimeout(() => {
+    if (threeHint) threeHint.hidden = true;
+  }, 3200);
+}
+
 function handleThreePointerUp(event: PointerEvent): void {
   if (threeDrag) {
     if (event.pointerId === threeDrag.pointerId) finishThreeDrag();
@@ -2880,8 +2977,13 @@ function handleThreePointerUp(event: PointerEvent): void {
   threePointerDown = null;
   if (moved > 6 || activeTool === "furniture") return;
   const entityId = pickThreeEntity(event);
-  // 家具の上で視点を操作しても選択が変わらないよう、選択はダブルクリックで行う。
-  if (entityId && findEntity(entityId)?.type === "furniture") return;
+  // 家具の上で視点を操作しても選択が変わらないよう、選択はダブルクリックで行う。1回クリックしたときは、選び方を案内する
+  if (entityId && findEntity(entityId)?.type === "furniture") {
+    if (!selectedEntities().some((item) => item.id === entityId) && activeTool === "select" && event.pointerType === "mouse") {
+      showThreeHint("家具はダブルクリックで選べます。選んだ家具は、そのままドラッグで動かせます");
+    }
+    return;
+  }
   selectThreeEntity(entityId);
 }
 
@@ -3151,7 +3253,7 @@ function addLineFromDrag(
     y2: snappedEnd.y,
   };
   if (type === "window" && mullion) line.mullion = true;
-  if (type === "door" && doorStyle === "sliding") line.doorStyle = "sliding";
+  if (type === "door" && doorStyle && doorStyle !== "swing") line.doorStyle = doorStyle;
   activeEntities().push(line);
   state.selectedId = line.id;
 }
@@ -4420,6 +4522,14 @@ function drawDoor2d(door: LinearElement): void {
     drawSlidingDoor2d(door);
     return;
   }
+  if (door.doorStyle === "double" || door.doorStyle === "gate") {
+    drawDoubleDoor2d(door, door.doorStyle);
+    return;
+  }
+  if (door.doorStyle) {
+    drawJapaneseSlidingDoor2d(door, door.doorStyle);
+    return;
+  }
   ctx.save();
   const selected = state.selectedId === door.id;
   const length = Math.max(distance(door), GRID);
@@ -4447,6 +4557,109 @@ function drawDoor2d(door: LinearElement): void {
     ctx.arc(door.x1, door.y1, length, leafAngle, angle, false);
   }
   ctx.stroke();
+  ctx.restore();
+  if (selected && !isLocked(door)) drawLineHandles(door);
+}
+
+// 両開きドア・門扉: 両端のつりもとから、半分ずつの扉が同じ側へ開く（開いた扉と、開く道すじの円弧）。
+// 門扉の扉は、縦の板を並べた細い四角で描く（板の数と位置は3Dと同じ）
+function drawDoubleDoor2d(door: LinearElement, style: "double" | "gate"): void {
+  const selected = state.selectedId === door.id;
+  const length = Math.max(distance(door), GRID);
+  const a = Math.atan2(door.y2 - door.y1, door.x2 - door.x1);
+  const side = door.flip ? 1 : -1;
+  const open = a + (side * Math.PI) / 2;
+  ctx.save();
+  ctx.lineCap = "butt";
+  ctx.strokeStyle = selected ? "#2775d1" : solidColor(door.color) ?? INK;
+  for (const leaf of doubleLeaves()) {
+    const hinge = leaf.hinge < 0 ? { x: door.x1, y: door.y1 } : { x: door.x2, y: door.y2 };
+    const closed = leaf.hinge < 0 ? a : a + Math.PI;
+    const leafLength = length * leaf.width;
+    const tip = { x: hinge.x + Math.cos(open) * leafLength, y: hinge.y + Math.sin(open) * leafLength };
+    if (style === "gate") {
+      // 開いた扉を、厚み4cmの細い四角と、縦の板の継ぎ目で描く
+      const nx = Math.cos(closed) * 2, ny = Math.sin(closed) * 2;
+      ctx.fillStyle = "#ffffff";
+      ctx.lineWidth = (selected ? 2.2 : 1.2) / view.zoom;
+      ctx.beginPath();
+      ctx.moveTo(hinge.x - nx, hinge.y - ny);
+      ctx.lineTo(tip.x - nx, tip.y - ny);
+      ctx.lineTo(tip.x + nx, tip.y + ny);
+      ctx.lineTo(hinge.x + nx, hinge.y + ny);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      const slats = gateSlats(leafLength);
+      for (let i = 1; i < slats.positions.length; i += 1) {
+        const t = (slats.positions[i - 1] + slats.positions[i]) / 2 + 0.5;
+        const px = hinge.x + Math.cos(open) * leafLength * t, py = hinge.y + Math.sin(open) * leafLength * t;
+        ctx.moveTo(px - nx, py - ny);
+        ctx.lineTo(px + nx, py + ny);
+      }
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = (selected ? 3 : 1.8) / view.zoom;
+      ctx.beginPath();
+      ctx.moveTo(hinge.x, hinge.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.stroke();
+    }
+    // 開く道すじ（閉じた向きから開いた向きまでの4分の1の円）
+    const [from, to] = leaf.hinge < 0 ? (side > 0 ? [closed, open] : [open, closed]) : side > 0 ? [open, closed] : [closed, open];
+    ctx.lineWidth = (selected ? 2 : 1.2) / view.zoom;
+    ctx.beginPath();
+    ctx.arc(hinge.x, hinge.y, leafLength, from, to, false);
+    ctx.stroke();
+  }
+  ctx.restore();
+  if (selected && !isLocked(door)) drawLineHandles(door);
+}
+
+// 障子・襖・格子戸・板戸: 敷居の上に並ぶ戸を、真上から見た形で描く（板の並び・桟の位置は3Dと同じ）
+const SLIDING_PANEL_FILLS: Partial<Record<DoorStyle, string>> = { shoji: "#ffffff", fusuma: "#d9ceb7", koshi: "#f3eee5", itado: "#c4ad8d" };
+
+function drawJapaneseSlidingDoor2d(door: LinearElement, style: DoorStyle): void {
+  const selected = state.selectedId === door.id;
+  const length = Math.max(distance(door), GRID);
+  const mid = midpoint(door);
+  const depth = WALL_THICKNESS_2D;
+  const flip = door.flip ? -1 : 1;
+  const stroke = selected ? "#2775d1" : solidColor(door.color) ?? INK;
+  // 柱の間（3Dと同じく、両端の柱の分を除いた幅に戸を並べる）
+  const clear = length - Math.min(length * 0.09, 4.5);
+  // 戸の厚みは3Dと同じ。ただし2Dで見分けられるよう、3.2cmより薄くはしない
+  const thickness = Math.max(panelThickness(style), 3.2);
+  const offset = trackOffset(style);
+  ctx.save();
+  ctx.translate(mid.x, mid.y);
+  ctx.rotate(lineAngle(door));
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(-length / 2, -depth / 2, length, depth);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = (selected ? 2.2 : 1.2) / view.zoom;
+  ctx.strokeRect(-length / 2, -depth / 2, length, depth);
+  ctx.lineWidth = (selected ? 1.6 : 1) / view.zoom;
+  for (const panel of slidingPanels(style, length)) {
+    const pw = panel.width * clear, x = panel.center * clear, y = panel.track * flip * offset;
+    ctx.fillStyle = SLIDING_PANEL_FILLS[style] ?? "#ffffff";
+    ctx.fillRect(x - pw / 2, y - thickness / 2, pw, thickness);
+    ctx.strokeRect(x - pw / 2, y - thickness / 2, pw, thickness);
+    // 縦の桟（障子の組子・格子戸の格子）は、戸の厚みを横切る短い線に見える
+    ctx.beginPath();
+    for (const bar of panelBars(style, pw)) {
+      ctx.moveTo(x + bar * pw, y - thickness / 2);
+      ctx.lineTo(x + bar * pw, y + thickness / 2);
+    }
+    ctx.stroke();
+    // 襖の黒い縁は、両端を塗りつぶす
+    if (style === "fusuma") {
+      ctx.fillStyle = stroke;
+      const rim = Math.min(2, pw * 0.05);
+      for (const s2 of [-1, 1]) ctx.fillRect(x + s2 * (pw / 2) - (s2 > 0 ? rim : 0), y - thickness / 2, rim, thickness);
+    }
+  }
   ctx.restore();
   if (selected && !isLocked(door)) drawLineHandles(door);
 }
@@ -8206,15 +8419,15 @@ function updatePropertiesPanel(): void {
   }
 
   if (isLinear(selected)) {
-    const slidingDoor = selected.type === "door" && selected.doorStyle === "sliding";
-    const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? (slidingDoor ? "引き戸" : "ドア") : "窓";
-    const default3d = selected.type === "wall" ? "#f4f1ec" : selected.type === "door" ? "#99683d" : "#dfe5ea";
+    const doorInfo = doorStyleInfo(selected.doorStyle);
+    const slidingDoor = selected.type === "door" && doorInfo.sliding;
+    const typeLabel = selected.type === "wall" ? "壁" : selected.type === "door" ? doorInfo.label : "窓";
+    const default3d = selected.type === "wall" ? "#f4f1ec" : selected.type === "door" ? DOOR_COLORS[doorInfo.value] : "#dfe5ea";
     const doorStyleRow =
       selected.type === "door"
         ? `<label>扉の種類
-            <select id="doorStyleInput">
-              <option value="swing" ${slidingDoor ? "" : "selected"}>開き戸</option>
-              <option value="sliding" ${slidingDoor ? "selected" : ""}>引き戸</option>
+            <select id="doorStyleInput" ${placementDisabled}>
+              ${DOOR_STYLES.map((style) => `<option value="${style.value}" ${style.value === doorInfo.value ? "selected" : ""}>${escapeHtml(style.label)}</option>`).join("")}
             </select>
           </label>`
         : "";
@@ -8255,7 +8468,10 @@ function updatePropertiesPanel(): void {
     });
     bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
     bindButton("#lineRotateButton", () => rotateEntity(selected, 90));
-    bindSelect("#doorStyleInput", (value) => (selected.doorStyle = value as LinearElement["doorStyle"]));
+    bindSelect("#doorStyleInput", (value) => {
+      if (!isDoorStyle(value) || value === "swing") delete selected.doorStyle;
+      else selected.doorStyle = value;
+    });
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
@@ -8392,7 +8608,7 @@ function updatePropertiesPanel(): void {
     bindPaintControls(selectedFurniture);
     return;
   }
-  const kindOptions = [...FURNITURE_CATEGORIES, { label: "階段", kinds: STAIR_KINDS }].map(
+  const kindOptions = [...FURNITURE_GROUPS, { label: "階段", kinds: STAIR_KINDS }].map(
     (category) =>
       `<optgroup label="${category.label}">` +
       category.kinds
@@ -9550,7 +9766,6 @@ function samplePlanData(): unknown {
         { id: "furniture-de2af0b0-6c91-46a7-83ca-6bc9d7c2eb2c", type: "furniture", kind: "bath", x: 760, y: 1820, w: 200, h: 160, rotation: 0, symbol: 1 },
         { id: "furniture-d3d08739-809b-4a54-901a-197e28bb071f", type: "furniture", kind: "unitBath", x: 660, y: 1560, w: 340, h: 200, rotation: 0 },
         { id: "furniture-6e69e1bb-08cf-4701-9acd-aae3e4094fc6", type: "furniture", kind: "bunkBed", x: -640, y: 880, w: 100, h: 210, rotation: 0 },
-        { id: "text-638b764e-0728-4b47-b44a-8025b9d61744", type: "text", text: "あああああああああああああ", x: 619, y: -1309, size: 69, rotation: 0 },
         { id: "furniture-bcef726e-0a1c-40e4-83be-6cac9ff92b60", type: "furniture", kind: "kitchen", x: -480, y: 380, w: 240, h: 65, rotation: 0 },
         { id: "furniture-bdc44cbc-6e33-4202-8524-8545e2ff5343", type: "furniture", kind: "kitchen", x: -1060, y: 220, w: 240, h: 65, rotation: 0 },
         { id: "room-4199d766-10e4-4293-9ea2-fa1cc649904c", type: "room", name: "", x: -780, y: 1400, w: 240, h: 120, color: "#83ab57", surface: "grass" },

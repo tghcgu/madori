@@ -1,3 +1,5 @@
+import type { DoorStyle } from "./opening-shapes.ts";
+
 export type FurnitureKind =
   | "tatami" | "zabuton" | "chabudai" | "byobu" | "shojiScreen" | "andon"
   | "stepTansu" | "irori" | "hibachi" | "engawa" | "hinokiBath" | "tsukubai"
@@ -244,3 +246,35 @@ export const FURNITURE_VARIANTS: Partial<Record<FurnitureKind, string[]>> = {
 export const FURNITURE_VARIANTS_2D_ONLY: Partial<Record<FurnitureKind, number[]>> = {
   closet: [3],
 };
+
+// 家具の一覧の分類。kinds はその分類の物で、どの種類も、どれか1つの分類の kinds に入る（「種類」の選択欄はこの並び）。
+// also は、ほかの分類にも重ねて出す物（探しやすいように。座布団は「和風」にも「椅子・ソファ」にも出す）。
+// doorStyles は、その分類にも出すドアの種類（和風の欄の障子・襖など）。階段は別の欄、ペンの線は一覧に出さない
+export interface FurnitureGroup {
+  label: string;
+  keywords?: string;
+  kinds: FurnitureKind[];
+  also?: FurnitureKind[];
+  doorStyles?: DoorStyle[];
+}
+
+export const FURNITURE_GROUPS: FurnitureGroup[] = [
+  {
+    label: "和風（和室・和の設備）",
+    keywords: "わふう 和 和室 わしつ 日本 にほん 和の",
+    kinds: ["tatami", "zabuton", "chabudai", "byobu", "shojiScreen", "andon", "stepTansu", "irori", "hibachi", "engawa", "hinokiBath", "tsukubai"],
+    also: ["zaisu", "kotatsu", "futon", "stoneLantern", "steppingStones", "pond", "grave"],
+    doorStyles: ["shoji", "fusuma", "koshi", "itado", "gate"],
+  },
+  { label: "椅子・ソファ", keywords: "いす すわる", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "bench"], also: ["zabuton", "engawa"] },
+  { label: "テーブル・机", keywords: "つくえ てーぶる", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"], also: ["chabudai"] },
+  { label: "ベッド・寝具", keywords: "べっど しんぐ ねる 寝る", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon", "crib"] },
+  { label: "収納・棚", keywords: "しゅうのう たな", kinds: ["closet", "wardrobe", "shelf", "cupboard", "shoeCabinet", "coatStand"], also: ["stepTansu"] },
+  { label: "キッチン", keywords: "きっちん だいどころ 台所", kinds: ["kitchen", "kitchenL", "kitchenIsland"], also: ["fridge", "cupboard"] },
+  { label: "浴室・トイレ・洗面", keywords: "よくしつ ふろ 風呂 といれ せんめん 水回り みずまわり", kinds: ["bath", "unitBath", "shower", "toilet", "washbasin"], also: ["washer", "hinokiBath"] },
+  { label: "家電", keywords: "かでん", kinds: ["fridge", "washer", "tv", "airConditioner"] },
+  { label: "照明・インテリア", keywords: "しょうめい あかり いんてりあ 飾り かざり", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower"], also: ["andon", "byobu", "shojiScreen", "irori", "hibachi"] },
+  { label: "屋外・庭", keywords: "おくがい にわ そと 外", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "gardenLight", "stoneLantern", "grave", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing"], also: ["tsukubai", "engawa"], doorStyles: ["gate"] },
+  { label: "乗り物", keywords: "のりもの くるま", kinds: ["car", "motorcycle", "bicycle"] },
+  { label: "人・事件・調査", keywords: "ひと じけん ちょうさ TRPG", kinds: ["person", "fallenPerson", "footprints", "evidenceMarker", "bloodPool", "brokenGlass"] },
+];

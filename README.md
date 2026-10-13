@@ -86,7 +86,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成
-- 開き戸、引き戸、通常窓、中央区切り付き窓を配置
+- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
 - 家具のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・洗濯機・トイレ・植物・ラグ・岩・外灯・花壇・フェンス・スツール・番号の印・足跡・倒れた人・血など43種類。観葉植物の「らせんの葉」は、ひとつ前の標準の3Dの形を残したもの）。2Dの記号と3Dの形が同じデザインに変わります（例: 丸い座面の椅子は3Dでも丸い座面と曲げ木の背もたれ、布団を折り返したベッドは3Dでも掛け布団の角が折れ、ガラス天板のテーブルは3Dでもガラス越しに下の棚が見える）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。「2Dの記号のみ」と書かれたデザイン（クローゼットの斜線など）は、3Dは標準の形のままです
@@ -118,7 +118,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - マウスドラッグによる視点回転・移動
 - ホイールによるズーム（マウスのある場所に向かって進み、拡大し続けると窓や壁を越えて室内まで入れます。近づいても前進が止まらず、逆回転で後退できます。タッチ操作ではピンチに対応）
 - 右ドラッグの移動は、つかんだ物がマウスについてくる速さで動きます。すぐ目の前まで寄ったあとでも、止まったようにならず動かせます
-- 壁、床、ドア、引き戸、窓、家具、設備、階段、屋根を立体化
+- 壁、床、ドア、引き戸、障子・襖などの和風の建具、窓、家具、設備、階段、屋根を立体化
 - 階段は出発する下の階に1つ配置すれば、到着する上の階の2D図とPNGにも下り向きの記号で自動表示します（下階の透過表示がオフでも表示）。上の階に同じ階段を複製する必要はありません。記号の位置・大きさは下階の階段に追従し、編集は下階で行います
 - すでに上下階へ同じ階段を重ねていた場合は、上階の階段を選択して「下階の階段表示に切り替え」を押すと、上階の実物だけを削除して下階の記号表示にできます。固定中は操作できず、取り消しにも対応します。上階からさらに上へ登る階段は、そのまま残せます
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
@@ -209,20 +209,21 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 家具・設備
 
-左パネルの「家具・設備」は、よく使う建具と家具を上に、床材・階段・図形の壁・屋根を下に並べています。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。
+左パネルの「家具・設備」は、よく使う建具と家具を上に、床材・階段・図形の壁・屋根を下に並べています。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。探しやすいように、いくつかの物は複数の分類に重ねて出します（たとえば座布団は「和風」と「椅子・ソファ」の両方、障子や襖は「建具」と「和風」の両方）。下の表の（）の中が、ほかの分類にも出している物です。
 
 | 分類 | 収録要素 |
 | --- | --- |
-| 建具 | 開き戸、引き戸、窓、中央区切り付き窓 |
-| 和風の家具・設備 | 畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい |
-| 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、ベンチ |
-| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク |
-| ベッド | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド |
-| 収納・棚 | クローゼット、タンス、棚・本棚、食器棚、靴箱、コートハンガー |
+| 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、窓、中央区切り付き窓 |
+| 和風（和室・和の設備） | 障子、襖、格子戸（玄関戸）、板戸、門扉、畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい（座椅子、こたつ、布団、石灯籠、飛び石、池、墓石） |
+| 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、ベンチ（座布団、縁台） |
+| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク（ちゃぶ台） |
+| ベッド・寝具 | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド |
+| 収納・棚 | クローゼット、タンス、棚・本棚、食器棚、靴箱、コートハンガー（階段箪笥） |
+| キッチン | キッチン、L型キッチン、アイランドキッチン（冷蔵庫、食器棚） |
+| 浴室・トイレ・洗面 | 浴槽、ユニットバス、シャワー、トイレ、洗面台（洗濯機、檜風呂） |
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン |
-| キッチン・水回り | キッチン、L型キッチン、アイランドキッチン、浴槽、ユニットバス、シャワー、トイレ、洗面台 |
-| インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー |
-| 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、フェンス、外灯、石灯籠、墓石、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ |
+| 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー（行灯、屏風、障子の衝立、囲炉裏、火鉢） |
+| 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、フェンス、外灯、石灯籠、墓石、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ（門扉、つくばい、縁台） |
 | 乗り物 | 車、バイク、自転車 |
 | 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、破片 |
 | 床・地面 | 標準、フローリング、タイル、石の床、草地・芝生 |
@@ -245,6 +246,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
 - 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
 - 開き戸は3Dでは閉じた状態です。引き戸は別々のレールに配置した2枚の扉、窓は枠・サッシ・ガラス・取っ手で表現します。
+- 和風の建具は、障子が組子の格子と和紙と腰板、襖が黒い縁と引き手、格子戸（玄関戸）が細かい縦格子とすりガラスと腰板、板戸が縦板の継ぎ目と裏の横桟です。2.4m以上の広い障子・襖は、引き違いの4枚建て（外の2枚が奥、中の2枚が手前のレール）になります。2Dの記号は、3Dと同じ板の並び・組子や格子の位置を、真上から見た形で描きます（障子は白い戸に組子の線、襖は塗った戸と黒い縁、格子戸は細かい線、板戸は木の色）
+- 両開きドアと門扉は、両端のつりもとから半分ずつの扉が同じ側へ開きます。門扉は縦の板を間をあけて並べた扉で、2Dでは板の継ぎ目を描きます
 - 幅・奥行は3Dの設置範囲にも反映され、回転・反転後も保持されます。既存の保存JSONはそのまま利用できます。
 - 不透明な部品は材質ごとにまとめて描画し、細部を増やした際の描画負荷を抑えています。実製品を再現したCADモデルではありません。
 
@@ -530,7 +533,8 @@ madori/
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
 │  ├─ furniture-models.ts    # 家具94種類の3D形状と材質
 │  ├─ selection.ts           # 複数の物の位置関係を保った移動
-│  ├─ opening-models.ts      # ドア・引き戸・窓の3D形状
+│  ├─ opening-models.ts      # ドア・引き戸・和風の建具・窓の3D形状
+│  ├─ opening-shapes.ts      # ドアの種類と、2Dと3Dで共通の戸の並び・組子や格子の位置
 │  ├─ geometry.ts            # 斜め壁の開口、床領域の分割
 │  ├─ persistence.ts         # 自動保存データの復旧と原本保護
 │  ├─ surfaces.ts            # 床材と模様
@@ -665,6 +669,10 @@ npm.cmd run dev
 
 ### 2026年10月13日
 
+- ドアに「両開きドア」と和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）を追加。2Dの記号と3Dの形は、同じ戸の並びと組子・格子の位置から作ります。2.4m以上の障子・襖は引き違いの4枚建てになり、置いたあとも「扉の種類」で変えられます。日本家屋・旅館・武家屋敷・古民家・寺・神社・居酒屋・銭湯のテンプレートも、障子・襖・格子戸・板戸に変えました
+- 家具・設備の一覧の分類を見直し。「和風」に障子・襖などのドアと座椅子・こたつ・石灯籠なども集め、「キッチン」と「浴室・トイレ・洗面」を分け、「照明・インテリア」などに整理。探しやすいよう、同じ物を複数の分類に重ねて出します
+- 3Dで家具を1回クリックしたときは、ダブルクリックで選べることを案内するように。スマホ・タブレットでは家具を長押しすると選ばれ、そのまま指を動かすと家具を動かせます
+- テンプレート「サンプル（作例）」に残っていた、試し書きの文字（「あああ…」）を消しました
 - 3Dの家具選択をダブルクリックに変更。1回クリックや長押しでは選択を変えず、通常のドラッグは視点回転のままです。固定した家具の選択、別の階への切り替え、Ctrl／Cmdでの複数選択にも対応。2Dの1回クリックでの選択は変わりません
 - 正多角形の床を追加。床の形の見本から選び、3〜12辺・向き・外接円の直径を調整できます。つまみや幅・奥行の変更でも辺の長さをそろえて拡大縮小し、階段の開口を保護します。輪郭の自由編集、同じ辺数・向きの屋根の追加、保存・取り消しにも対応
 
@@ -928,7 +936,7 @@ You can edit the starter plan immediately or load one of 50 templates, from hous
 
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls
-- Add swing doors, sliding doors, windows, and divided windows
+- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, windows, and divided windows. The door type can be changed later under Selection
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
 - Drag room labels independently from room geometry
@@ -962,7 +970,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Split, 2D-only, and 3D-only view modes
 - In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
 - Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer; keep scrolling to pass through windows and walls into rooms, and reverse to move back. Forward movement no longer stops near the orbit target. Pinch gestures work too. Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
-- 3D walls, floors, doors, sliding doors, windows, furniture, equipment, stairs, and roofs
+- 3D walls, floors, doors, sliding doors, Japanese fittings such as shoji and fusuma, windows, furniture, equipment, stairs, and roofs
 - Place a staircase once on its departure floor. Its arrival is shown automatically as a descending symbol in the next floor's 2D plan and PNG export, even with floor ghosting off. No extra 3D flight is created. The symbol follows edits to the original staircase; edit it on the lower floor
 - For an existing duplicate, select the upper flight and choose "下階の階段表示に切り替え" (use the lower-floor stair display). This removes only that upper flight, supports undo, and is disabled for locked stairs. Keep an upper flight when it intentionally leads to another floor
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
@@ -1050,20 +1058,21 @@ Round and polygon roofs can also be placed around a selected circle, ellipse or 
 
 ### Included objects
 
-The furniture and equipment palette lists frequently used openings and furniture first, followed by floors, stairs, shape walls, and roofs. Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types.
+The furniture and equipment palette lists frequently used openings and furniture first, followed by floors, stairs, shape walls, and roofs. Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types. To make things easier to find, some items appear in more than one group (for example, the zabuton is in both Japanese and Seating, and shoji and fusuma are in both Openings and Japanese); those are listed in parentheses below.
 
 | Category | Objects |
 | --- | --- |
-| Openings | Swing door, sliding door, window, divided window |
-| Japanese furnishings | Tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin |
-| Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bench |
-| Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk |
-| Beds | Single bed, semi-double bed, double bed, bunk bed, futon, crib |
-| Storage | Closet, wardrobe, shelf, cupboard, shoe cabinet, coat stand |
+| Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, window, divided window |
+| Japanese | Shoji, fusuma, lattice entrance door, plank door, gate, tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin (floor chair, kotatsu, futon, stone lantern, stepping stones, pond, grave) |
+| Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bench (zabuton, veranda bench) |
+| Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk (chabudai) |
+| Beds and bedding | Single bed, semi-double bed, double bed, bunk bed, futon, crib |
+| Storage | Closet, wardrobe, shelf, cupboard, shoe cabinet, coat stand (stepped chest) |
+| Kitchen | Kitchen unit, L-shaped kitchen, island kitchen (refrigerator, cupboard) |
+| Bath, toilet and washroom | Bathtub, unit bath, shower, toilet, washbasin (washing machine, hinoki bathtub) |
 | Appliances | Refrigerator, washing machine, TV stand, air conditioner |
-| Kitchen and bathroom | Kitchen unit, L-shaped kitchen, island kitchen, bathtub, unit bath, shower, toilet, washbasin |
-| Decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower |
-| Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, fence, garden light, stone lantern, grave, mailbox, shed, dog house, parasol, clothes drying stand, swing |
+| Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower (andon lantern, folding screen, shoji partition, irori hearth, hibachi) |
+| Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, fence, garden light, stone lantern, grave, mailbox, shed, dog house, parasol, clothes drying stand, swing (gate, tsukubai basin, veranda bench) |
 | Vehicles | Car, motorcycle, bicycle |
 | People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, shards |
 | Floors and ground | Plain, wood planks, tile, stone paving, grass |
@@ -1086,6 +1095,8 @@ Each item has a dedicated 2D plan symbol and a generated 3D representation. Item
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
 - Swing doors stay closed in 3D. Sliding doors use two panels on separate tracks; windows include frames, sashes, glazing, and handles.
+- Japanese fittings: shoji have a kumiko lattice, paper and a kick panel; fusuma have black rims and recessed pulls; the lattice entrance door has fine vertical bars over frosted glass and a kick panel; the plank door shows board joints and battens. Shoji and fusuma 2.4 m or wider become four sliding panels (the outer two on the back track, the middle two in front). Their 2D symbols draw the same panel layout and bar positions seen from above (white shoji with kumiko lines, filled fusuma with black rims, fine lines for the lattice door, wood color for the plank door).
+- Double doors and gates open half a door each from both jambs to the same side. The gate is made of spaced vertical boards, and its 2D symbol shows the board joints.
 - The 3D footprint follows the specified width and depth, including rotation and mirroring. Existing saved JSON files remain compatible.
 - Opaque parts are batched by material to limit drawing overhead. These are simplified layout models, not CAD replicas of real products.
 
@@ -1358,7 +1369,8 @@ madori/
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
 │  ├─ furniture-models.ts    # Geometry and materials for 94 furniture types
 │  ├─ selection.ts           # Group translation that preserves relative positions
-│  ├─ opening-models.ts      # Door, sliding door, and window geometry
+│  ├─ opening-models.ts      # Door, sliding door, Japanese fitting, and window geometry
+│  ├─ opening-shapes.ts      # Door types and the panel layout and bar positions shared by 2D and 3D
 │  ├─ geometry.ts            # Diagonal wall openings and floor subdivision
 │  ├─ persistence.ts         # Autosave recovery and original-data protection
 │  ├─ surfaces.ts            # Floor materials and textures
@@ -1494,6 +1506,10 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-13
 
+- New door types: double doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door) and gates. 2D symbols and 3D models share the same panel layout and bar positions, shoji and fusuma 2.4 m or wider become four sliding panels, and the type can be changed after placing. The Japanese house, ryokan, samurai residence, old farmhouse, temple, shrine, izakaya and public bath templates now use these fittings
+- Reorganized the furniture palette: the Japanese group now gathers shoji, fusuma and other doors along with the floor chair, kotatsu and stone lantern; the kitchen and the bath, toilet and washroom are separate; and lighting and decor are grouped. Some items appear in several groups to make them easier to find
+- A single click on furniture in 3D now explains that a double-click selects it. On phones and tablets, a long press selects furniture and moving the finger drags it
+- Removed leftover test text (a long row of the same character) from the Showcase template
 - Furniture selection in 3D now requires a double-click. Single clicks and holds leave the selection unchanged, while normal dragging still orbits the camera. Locked furniture remains selectable, selecting an upper-floor item switches floors, and Ctrl/Cmd group selection is preserved. Single-click selection in 2D is unchanged
 - Added regular polygon floors with a visual preset, 3 to 12 sides, rotation and circumcircle diameter. Handles and dimension fields scale proportionally to preserve equal sides, and shape changes protect stairwell holes. Supports freeform contour editing, matching polygon roofs, persistence and undo
 

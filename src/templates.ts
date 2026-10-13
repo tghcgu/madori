@@ -1,6 +1,7 @@
 import { isStair } from "./stairs.ts";
 import { openTemplateStairwells } from "./template-floors.ts";
 import type { RoofKind } from "./roof-shapes.ts";
+import type { DoorStyle } from "./opening-shapes.ts";
 
 // テンプレート（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
@@ -194,16 +195,30 @@ function floorBuilder(id: string, newId: (prefix: TemplateIdPrefix) => string, s
       openings.push([x1, y1, x2, y2]);
       return f;
     },
-    door(x1: number, y1: number, x2: number, y2: number, options: { flip?: boolean; sliding?: boolean } = {}) {
+    door(x1: number, y1: number, x2: number, y2: number, options: { flip?: boolean; sliding?: boolean; style?: DoorStyle } = {}) {
+      const style = options.style ?? (options.sliding ? "sliding" : undefined);
       entities.push({
         id: newId("door"), type: "door", x1, y1, x2, y2,
         ...(options.flip ? { flip: true } : {}),
-        ...(options.sliding ? { doorStyle: "sliding" } : {}),
+        ...(style && style !== "swing" ? { doorStyle: style } : {}),
       });
       return f;
     },
     sliding(x1: number, y1: number, x2: number, y2: number) {
       return f.door(x1, y1, x2, y2, { sliding: true });
+    },
+    // 和風の建具: 障子・襖・格子戸（玄関戸）・板戸
+    shoji(x1: number, y1: number, x2: number, y2: number) {
+      return f.door(x1, y1, x2, y2, { style: "shoji" });
+    },
+    fusuma(x1: number, y1: number, x2: number, y2: number) {
+      return f.door(x1, y1, x2, y2, { style: "fusuma" });
+    },
+    koshi(x1: number, y1: number, x2: number, y2: number) {
+      return f.door(x1, y1, x2, y2, { style: "koshi" });
+    },
+    itado(x1: number, y1: number, x2: number, y2: number) {
+      return f.door(x1, y1, x2, y2, { style: "itado" });
     },
     window(x1: number, y1: number, x2: number, y2: number, mullion = false) {
       entities.push({ id: newId("window"), type: "window", x1, y1, x2, y2, ...(mullion ? { mullion: true } : {}) });
@@ -326,23 +341,23 @@ function japaneseHouse(b: PlanBuilder): void {
     .room("寝室", 540, 540, 360, 360, C.tatami).label(190, 15)
     .room("次の間", 900, 540, 270, 360, C.tatami)
     .walls()
-    .sliding(60, 900, 180, 900)
-    .sliding(90, 450, 180, 450)
-    .sliding(270, 460, 270, 530)
-    .sliding(270, 150, 270, 300)
-    .sliding(720, 100, 720, 350)
-    .sliding(400, 450, 490, 450)
-    .sliding(900, 450, 990, 450)
-    .sliding(1170, 60, 1170, 390)
-    .sliding(1170, 600, 1170, 840)
-    .sliding(1170, 460, 1170, 530)
+    .koshi(60, 900, 180, 900)
+    .itado(90, 450, 180, 450)
+    .shoji(270, 460, 270, 530)
+    .shoji(270, 150, 270, 300)
+    .fusuma(720, 100, 720, 350)
+    .shoji(400, 450, 490, 450)
+    .shoji(900, 450, 990, 450)
+    .shoji(1170, 60, 1170, 390)
+    .shoji(1170, 600, 1170, 840)
+    .shoji(1170, 460, 1170, 530)
     .door(320, 540, 400, 540)
     .sliding(320, 720, 400, 720)
     .door(460, 540, 530, 540)
-    .sliding(540, 760, 540, 840)
-    .sliding(620, 540, 710, 540)
-    .sliding(900, 600, 900, 840)
-    .sliding(960, 540, 1050, 540)
+    .fusuma(540, 760, 540, 840)
+    .fusuma(620, 540, 710, 540)
+    .fusuma(900, 600, 900, 840)
+    .fusuma(960, 540, 1050, 540)
     .window(60, 0, 210, 0)
     .window(330, 0, 660, 0, true)
     .window(780, 0, 1110, 0, true)
@@ -676,14 +691,14 @@ function ryokan(b: PlanBuilder): void {
     .open(400, 350, 500, 350).open(900, 350, 1000, 350).open(400, 650, 500, 650).open(900, 650, 1000, 650)
     .open(410, 750, 590, 750)
     .walls()
-    .sliding(120, 1000, 280, 1000)
-    .sliding(400, 660, 400, 740)
+    .koshi(120, 1000, 280, 1000)
+    .shoji(400, 660, 400, 740)
     .sliding(400, 500, 400, 580)
     .sliding(150, 450, 250, 450)
-    .sliding(500, 250, 580, 250)
-    .sliding(800, 250, 880, 250)
-    .sliding(1000, 260, 1000, 340)
-    .sliding(1000, 660, 1000, 740)
+    .fusuma(500, 250, 580, 250)
+    .fusuma(800, 250, 880, 250)
+    .fusuma(1000, 260, 1000, 340)
+    .fusuma(1000, 660, 1000, 740)
     .door(850, 750, 930, 750)
     .window(520, 350, 880, 350, true).window(520, 650, 880, 650, true)
     .window(500, 370, 500, 630, true).window(900, 370, 900, 630, true)
@@ -752,13 +767,13 @@ function ryokan(b: PlanBuilder): void {
     .open(400, 350, 500, 350).open(900, 350, 1000, 350).open(400, 650, 500, 650).open(900, 650, 1000, 650)
     .open(410, 750, 590, 750)
     .walls()
-    .sliding(400, 260, 400, 340)
-    .sliding(400, 500, 400, 580)
-    .sliding(400, 665, 400, 745)
-    .sliding(500, 250, 580, 250)
-    .sliding(800, 250, 880, 250)
-    .sliding(1000, 260, 1000, 340)
-    .sliding(1000, 660, 1000, 740)
+    .fusuma(400, 260, 400, 340)
+    .fusuma(400, 500, 400, 580)
+    .fusuma(400, 665, 400, 745)
+    .fusuma(500, 250, 580, 250)
+    .fusuma(800, 250, 880, 250)
+    .fusuma(1000, 260, 1000, 340)
+    .fusuma(1000, 660, 1000, 740)
     .door(850, 750, 930, 750)
     .window(520, 350, 880, 350, true).window(520, 650, 880, 650, true)
     .window(500, 370, 500, 630, true).window(900, 370, 900, 630, true)
@@ -1360,10 +1375,10 @@ function shrine(b: PlanBuilder): void {
     .room("拝殿", 500, 450, 600, 300, C.wood, "wood")
     .room("社務所", 1150, 1250, 400, 350, C.wood, "wood").label(20, 110)
     .walls()
-    .sliding(700, 750, 900, 750)
-    .sliding(760, 360, 840, 360)
-    .sliding(760, 450, 840, 450)
-    .sliding(1150, 1400, 1150, 1480)
+    .koshi(700, 750, 900, 750)
+    .koshi(760, 360, 840, 360)
+    .koshi(760, 450, 840, 450)
+    .koshi(1150, 1400, 1150, 1480)
     .window(1200, 1600, 1500, 1600)
     .window(500, 520, 500, 680).window(1100, 520, 1100, 680)
     .item("shoeCabinet", 740, 690, { w: 120, h: 50, color: "#7a4a2a" })
@@ -1600,7 +1615,7 @@ function bathhouse(b: PlanBuilder): void {
     .room("番台", 400, 700, 400, 300, C.wood, "wood")
     .open(450, 700, 750, 700)
     .walls()
-    .sliding(520, 1000, 680, 1000)
+    .koshi(520, 1000, 680, 1000)
     .sliding(400, 780, 400, 860)
     .sliding(800, 780, 800, 860)
     .sliding(150, 500, 270, 500)
@@ -1946,13 +1961,13 @@ function oldFarmhouse(b: PlanBuilder): void {
     .room("蔵", 1450, 650, 350, 300, C.darkStone, "stone").label(20, 120)
     .open(400, 60, 400, 400)
     .walls()
-    .sliding(80, 540, 280, 540)
-    .sliding(400, 470, 400, 520)
-    .sliding(800, 100, 800, 350)
-    .sliding(1250, 100, 1250, 350)
-    .sliding(450, 450, 750, 450)
-    .sliding(850, 450, 1200, 450)
-    .sliding(1300, 450, 1650, 450)
+    .itado(80, 540, 280, 540)
+    .itado(400, 470, 400, 520)
+    .fusuma(800, 100, 800, 350)
+    .fusuma(1250, 100, 1250, 350)
+    .shoji(450, 450, 750, 450)
+    .shoji(850, 450, 1200, 450)
+    .shoji(1300, 450, 1650, 450)
     .door(1740, 450, 1820, 450)
     .door(1740, 250, 1820, 250)
     .door(1580, 950, 1670, 950)
@@ -2007,16 +2022,16 @@ function samuraiHouse(b: PlanBuilder): void {
     .open(300, 500, 300, 590)
     .open(300, 590, 1650, 590)
     .walls()
-    .sliding(0, 380, 0, 520)
-    .sliding(60, 300, 200, 300)
-    .sliding(300, 80, 300, 220)
-    .sliding(300, 330, 300, 470)
-    .sliding(900, 80, 900, 420)
-    .sliding(1350, 80, 1350, 220)
-    .sliding(1400, 300, 1500, 300)
-    .sliding(350, 500, 850, 500)
-    .sliding(950, 500, 1300, 500)
-    .sliding(1400, 500, 1600, 500)
+    .koshi(0, 380, 0, 520)
+    .itado(60, 300, 200, 300)
+    .fusuma(300, 80, 300, 220)
+    .fusuma(300, 330, 300, 470)
+    .fusuma(900, 80, 900, 420)
+    .shoji(1350, 80, 1350, 220)
+    .fusuma(1400, 300, 1500, 300)
+    .shoji(350, 500, 850, 500)
+    .shoji(950, 500, 1300, 500)
+    .shoji(1400, 500, 1600, 500)
     .window(0, 40, 0, 160).window(30, 0, 270, 0)
     .window(380, 0, 820, 0, true).window(980, 0, 1270, 0).window(1650, 60, 1650, 240)
     // 台所・玄関
@@ -2210,10 +2225,10 @@ function izakaya(b: PlanBuilder): void {
     .room("倉庫", 850, 550, 150, 300, C.warm).label(10, 120)
     .open(650, 60, 650, 490)
     .walls()
-    .sliding(60, 0, 200, 0)
+    .koshi(60, 0, 200, 0)
     .door(30, 550, 110, 550)
-    .sliding(200, 550, 500, 550)
-    .sliding(570, 550, 640, 550)
+    .shoji(200, 550, 500, 550)
+    .fusuma(570, 550, 640, 550)
     .door(880, 550, 960, 550)
     .window(0, 100, 0, 450).window(300, 0, 600, 0).window(1000, 100, 1000, 450)
     // カウンター
@@ -2443,7 +2458,7 @@ function temple(b: PlanBuilder): void {
     .room("本堂", 650, 150, 700, 500, C.wood, "wood")
     .room("庫裏", 1450, 150, 450, 500, C.tatami)
     .walls()
-    .sliding(750, 650, 1250, 650)
+    .shoji(750, 650, 1250, 650)
     .door(1500, 650, 1590, 650)
     .window(650, 250, 650, 550).window(1350, 250, 1350, 550).window(1900, 250, 1900, 550).window(1500, 150, 1850, 150)
     // 本堂

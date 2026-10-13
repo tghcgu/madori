@@ -12,6 +12,8 @@ import { verifyRoofShapes } from './roof-editor.mjs';
 import { verifyEllipses } from './ellipse-editor.mjs';
 import { verifyPolygonFloors } from './polygon-floor-editor.mjs';
 import { verifyThreeSelection } from './three-selection-editor.mjs';
+import { verifyDoors } from './doors-editor.mjs';
+import { verifyThreePress } from './three-press-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -25,6 +27,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       catalog: FURNITURE_DEFS,
       variants: FURNITURE_VARIANTS,
       selection() { return selectedEntities().map(item => item.id); },
+      openingNames(id) { return planGroup.children.filter(object => object.userData.entityId === id).map(object => object.name); },
       snapshot() { return cloneState(state); },
       templateSnapshot(key) { return makeTemplate(key); },
       textBounds(id) { return measureTextLabel(findEntity(id)); },
@@ -110,7 +113,8 @@ async function change(selector, value) {
   await page.locator(selector).press('Tab');
 }
 async function choose(selector) {
-  const button = page.locator(selector);
+  // 一覧では同じ物がいくつかの分類に重ねて並ぶので、はじめの1つを押す
+  const button = page.locator(selector).first();
   const details = button.locator('xpath=ancestor::details');
   if (await details.count() && await details.getAttribute('open') === null) await details.locator('summary').click();
   await button.click();
@@ -171,6 +175,10 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyDoors({ page, importPlan, choose, planPoint, move, saved, output });
+  await verifyThreePress({ open, plan, project });
+  if (!process.argv.includes('--doors-only')) {
+  await freshPage();
   await verifyThreeSelection({ page, importPlan, project, planPoint, move, pixels, output });
   if (!process.argv.includes('--three-selection-only')) {
   await freshPage();
@@ -501,7 +509,7 @@ try {
   await page.locator('#floorVisibility button').filter({ hasText: /^2F$/ }).click();
   await page.locator('#floorVisibility button').filter({ hasText: /^屋根/ }).click();
   await page.locator('#roofToggle2d').click();
-  const bedGroup = page.locator('.palette-group').filter({ has: page.locator('summary', { hasText: /^ベッド$/ }) });
+  const bedGroup = page.locator('.palette-group').filter({ has: page.locator('summary', { hasText: /^ベッド・寝具$/ }) });
   const bedWasOpen = await bedGroup.evaluate(details => details.open);
   await bedGroup.locator('summary').click();
   await page.locator('#panelToggle').click();
@@ -1565,6 +1573,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

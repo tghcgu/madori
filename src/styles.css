@@ -1919,6 +1919,12 @@ select:focus-visible {
   display: none;
 }
 
+/* 3Dの案内は、3Dの欄の左下に少しのあいだ出す */
+.three-hint {
+  bottom: 12px;
+  left: 12px;
+}
+
 .tool-hint strong {
   color: var(--ink);
   font-weight: 700;
