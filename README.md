@@ -127,7 +127,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 8方位と真上から選べる光の向き
 - 階ごとの表示・非表示
 - 屋根全体の一時表示・非表示
-- 3D上の物体をクリックして選択
+- 3D上の家具はダブルクリックで選択。1回クリックや長押しでは選択を変えません。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。家具以外は1回クリックで選択します
 - 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
 - 「選択」ツールで家具をダブルクリックすると移動モードになり、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動アイコンでも切り替え可能です。空白クリック・Escで解除し、移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
 - 右ドラッグ／Shift＋左ドラッグは、画面に沿った上下左右の平行移動です。上下ドラッグで高さも変わり、2階・3階の室内まで視点を持ち上げられます
@@ -349,7 +349,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 3D | 左ドラッグ | 視点回転。家具をダブルクリックして移動モードにすると家具移動 |
 | 3D | 右ドラッグ | 画面に沿って視点を上下左右へ平行移動（高さも変更） |
 | 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
-| 3D | クリック | 物体を選択。家具ツールでは編集中の階へ配置 |
+| 3D | ダブルクリック | 家具を選択し、固定されていなければ移動モードへ |
+| 3D | クリック | 家具以外を選択。家具ツールでは編集中の階へ配置 |
 
 ### キーボードショートカット
 
@@ -664,6 +665,7 @@ npm.cmd run dev
 
 ### 2026年10月13日
 
+- 3Dの家具選択をダブルクリックに変更。1回クリックや長押しでは選択を変えず、通常のドラッグは視点回転のままです。固定した家具の選択、別の階への切り替え、Ctrl／Cmdでの複数選択にも対応。2Dの1回クリックでの選択は変わりません
 - 正多角形の床を追加。床の形の見本から選び、3〜12辺・向き・外接円の直径を調整できます。つまみや幅・奥行の変更でも辺の長さをそろえて拡大縮小し、階段の開口を保護します。輪郭の自由編集、同じ辺数・向きの屋根の追加、保存・取り消しにも対応
 
 ### 2026年10月12日
@@ -969,7 +971,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Eight compass directions plus overhead lighting
 - Per-floor visibility controls
 - Temporary roof visibility toggle
-- Click 3D objects to select and edit them
+- Double-click furniture in 3D to select and edit it; a single click or hold does not change the selection. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Other objects use a single click
 - In Select mode, double-click furniture to enter move mode, then drag it (or its selected group). The move icon also toggles the mode. Click empty space or press Escape to leave; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
 
 ### Multiple floors
@@ -1175,10 +1177,11 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 2D | Mouse wheel | Zoom |
 | 2D | Double-click | Select an item and show its properties |
 | 2D | Drag handles | Resize rooms, furniture, roofs, and line endpoints |
-| 3D | Left-drag | Move unlocked furniture with Select; orbit from other parts of the scene |
-| 3D | Right-drag | Pan the camera |
+| 3D | Left-drag | Orbit by default, including over furniture; move selected furniture after entering move mode |
+| 3D | Right-drag | Pan along the screen, including camera elevation |
 | 3D | Mouse wheel | Zoom; keep zooming in to enter rooms, reverse to move back |
-| 3D | Click | Select an object, or place furniture on the active floor with a furniture tool |
+| 3D | Double-click | Select furniture and enter move mode unless locked |
+| 3D | Click | Select non-furniture objects, or place furniture on the active floor with a furniture tool |
 
 ### Keyboard
 
@@ -1491,6 +1494,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-13
 
+- Furniture selection in 3D now requires a double-click. Single clicks and holds leave the selection unchanged, while normal dragging still orbits the camera. Locked furniture remains selectable, selecting an upper-floor item switches floors, and Ctrl/Cmd group selection is preserved. Single-click selection in 2D is unchanged
 - Added regular polygon floors with a visual preset, 3 to 12 sides, rotation and circumcircle diameter. Handles and dimension fields scale proportionally to preserve equal sides, and shape changes protect stairwell holes. Supports freeform contour editing, matching polygon roofs, persistence and undo
 
 ### 2026-10-12

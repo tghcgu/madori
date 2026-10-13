@@ -2829,7 +2829,7 @@ function threeFloorPoint(event: PointerEvent, y: number): Point | null {
   return point ? { x: point.x / SCALE_3D + threeSceneCenter.x, y: point.z / SCALE_3D + threeSceneCenter.y } : null;
 }
 
-function pickThreeEntity(event: PointerEvent): string | null {
+function pickThreeEntity(event: MouseEvent): string | null {
   setThreeRay(event);
   planGroup.updateMatrixWorld(true);
   const hits = raycaster.intersectObjects(planGroup.children, true);
@@ -2880,6 +2880,12 @@ function handleThreePointerUp(event: PointerEvent): void {
   threePointerDown = null;
   if (moved > 6 || activeTool === "furniture") return;
   const entityId = pickThreeEntity(event);
+  // 家具の上で視点を操作しても選択が変わらないよう、選択はダブルクリックで行う。
+  if (entityId && findEntity(entityId)?.type === "furniture") return;
+  selectThreeEntity(entityId);
+}
+
+function selectThreeEntity(entityId: string | null): void {
   if (!entityId || !selectedEntities().some(item => item.id === entityId)) selectOnly(entityId);
   if (entityId) {
     const floorIndex = state.floors.findIndex((floor) => floor.entities.some((entity) => entity.id === entityId));
@@ -2896,11 +2902,11 @@ function handleThreePointerUp(event: PointerEvent): void {
 }
 
 function handleThreeDoubleClick(event: MouseEvent): void {
-  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || threeDrag || activeTool !== "select") return;
-  const id = pickThreeEntity(event as PointerEvent), entity = id ? findEntity(id) : undefined;
-  if (entity?.type !== "furniture" || isLocked(entity)) return;
-  if (!selectedEntities().some(item => item.id === id)) selectOnly(id);
-  threeMoveId = id;
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || threeDrag || activeTool === "furniture" || activeTool === "erase") return;
+  const id = pickThreeEntity(event), entity = id ? findEntity(id) : undefined;
+  if (entity?.type !== "furniture") return;
+  selectThreeEntity(id);
+  threeMoveId = isLocked(entity) ? null : id;
   syncThreeMoveMode();
 }
 

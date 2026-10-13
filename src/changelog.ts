@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-13",
     items: [{
+      ja: "3Dの家具選択をダブルクリックに変更。1回クリックや長押しでは選択を変えず、通常のドラッグは視点回転のままです。固定した家具の選択、別の階への切り替え、Ctrl／Cmdでの複数選択にも対応。2Dの1回クリックでの選択は変わりません",
+      en: "Furniture selection in 3D now requires a double-click. Single clicks and holds leave the selection unchanged, while normal dragging still orbits the camera. Locked furniture remains selectable, selecting an upper-floor item switches floors, and Ctrl/Cmd group selection is preserved. Single-click selection in 2D is unchanged",
+    }, {
       ja: "正多角形の床を追加。床の形の見本から選び、3〜12辺・向き・外接円の直径を調整できます。つまみや幅・奥行の変更でも辺の長さをそろえて拡大縮小し、階段の開口を保護します。輪郭の自由編集、同じ辺数・向きの屋根の追加、保存・取り消しにも対応",
       en: "Added regular polygon floors with a visual preset, 3 to 12 sides, rotation and circumcircle diameter. Handles and dimension fields scale proportionally to preserve equal sides, and shape changes protect stairwell holes. Supports freeform contour editing, matching polygon roofs, persistence and undo",
     }],
