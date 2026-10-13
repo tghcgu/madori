@@ -4,11 +4,41 @@
 
 export type Point2 = [number, number];
 
-// ---- 和風の家具・設備 ----
-// 上から見た輪郭と高さを共有し、低い部品から描くと2Dでも手前の部品に隠れる。
-export const JAPANESE_KINDS = ["tatami", "zabuton", "chabudai", "byobu", "shojiScreen", "andon", "stepTansu", "irori", "hibachi", "engawa", "hinokiBath", "tsukubai"] as const;
+// ---- 部品で組む家具・設備（和風の家具・鳥居・学校やお店の設備・遊具など） ----
+// 部品（箱・円柱・輪・横倒しの円柱・楕円体・傾けた板）の上から見た形と高さを共有する。
+// 2Dは低い部品から順に描くので、3Dを真上から見たときと同じく、高い部品が上に重なる。
+export const JAPANESE_KINDS = [
+  "tatami", "zabuton", "chabudai", "byobu", "shojiScreen", "andon", "stepTansu", "irori", "hibachi", "engawa", "hinokiBath", "tsukubai",
+  "butsudan", "kamidana", "tokonoma", "kamado", "washikiToilet", "chochin", "takegaki", "ido", "torii", "komainu", "saisenBako", "chozubachi",
+] as const;
+export const PART_KINDS = [
+  ...JAPANESE_KINDS,
+  "blackboard", "whiteboard", "lectern", "schoolDesk", "locker", "copier", "partition", "safe", "fireExtinguisher",
+  "counter", "showcase", "displayShelf", "vendingMachine", "signboard", "barStool",
+  "hospitalBed", "ivStand", "wheelchair", "examCouch",
+  "slide", "jungleGym", "ironBar", "sandbox", "vaultingBox", "pingPongTable", "poolTable", "drumKit", "stage",
+  "fountain", "statue", "campfire", "tent", "westernGrave",
+  "trafficCone", "utilityPole", "busStop", "phoneBooth", "manhole", "drum", "bus",
+  "cardboard", "acOutdoor", "fan", "stove", "curtain",
+  "treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier",
+] as const;
 export type JapaneseKind = typeof JAPANESE_KINDS[number];
-export const JAPANESE_MATERIALS = {
+export type PartKind = typeof PART_KINDS[number];
+// 壁に掛ける・天井から吊るす物。3Dでも床まで下ろさず、部品の高さのまま置く
+export const MOUNTED_PART_KINDS: readonly PartKind[] = ["kamidana", "chochin", "blackboard"];
+
+export interface PartMaterial {
+  color: string;
+  // 家具の色を決めたとき、この色に変わる部品か
+  tintable: boolean;
+  roughness?: number;
+  metalness?: number;
+  // ガラス・網など、透けて見える部品の濃さ
+  opacity?: number;
+  // 炎・明かりなど、自分で光る部品
+  glow?: boolean;
+}
+const MATERIALS = {
   wood: { color: "#9b6741", tintable: true },
   paleWood: { color: "#d7b782", tintable: true },
   trim: { color: "#443c34", tintable: false },
@@ -25,32 +55,140 @@ export const JAPANESE_MATERIALS = {
   water: { color: "#83b4bb", tintable: false },
   stone: { color: "#8b9590", tintable: true },
   glaze: { color: "#4d7172", tintable: true },
+  vermilion: { color: "#c8452f", tintable: true },
+  leaf: { color: "#4f7a3a", tintable: false },
+  ceramic: { color: "#f1f1ec", tintable: true, roughness: 0.25 },
+  plaster: { color: "#ece6d8", tintable: true, roughness: 0.9 },
+  metal: { color: "#a9b1b6", tintable: false, roughness: 0.35, metalness: 0.5 },
+  dark: { color: "#3c4146", tintable: true, roughness: 0.5, metalness: 0.2 },
+  darkSteel: { color: "#4b5157", tintable: false, roughness: 0.45, metalness: 0.3 },
+  black: { color: "#232629", tintable: false, roughness: 0.6 },
+  glass: { color: "#c4e0ea", tintable: false, opacity: 0.25 },
+  net: { color: "#ffffff", tintable: false, opacity: 0.45 },
+  screen: { color: "#24313b", tintable: false, roughness: 0.2 },
+  chalkboard: { color: "#2e5946", tintable: false, roughness: 0.85 },
+  board: { color: "#f6f7f5", tintable: false, roughness: 0.4 },
+  enamel: { color: "#e4e7e6", tintable: true, roughness: 0.35 },
+  paint: { color: "#5b7f9c", tintable: true, roughness: 0.45, metalness: 0.15 },
+  red: { color: "#c63a32", tintable: true, roughness: 0.4 },
+  orange: { color: "#ef7b22", tintable: true, roughness: 0.6 },
+  yellow: { color: "#f2c230", tintable: true, roughness: 0.5 },
+  blue: { color: "#2f6db5", tintable: true, roughness: 0.45 },
+  felt: { color: "#2e7d4f", tintable: true, roughness: 1 },
+  tableBlue: { color: "#245b8c", tintable: true, roughness: 0.5 },
+  leather: { color: "#5b3a2e", tintable: true, roughness: 0.6 },
+  velvet: { color: "#8d2534", tintable: true, roughness: 0.95 },
+  vinyl: { color: "#8fb7c9", tintable: true, roughness: 0.5 },
+  linen: { color: "#f4f2ec", tintable: false, roughness: 0.95 },
+  flame: { color: "#ff8a24", tintable: false, glow: true },
+  flameCore: { color: "#ffd75e", tintable: false, glow: true },
+  ember: { color: "#ff6a1f", tintable: false, glow: true },
+  lantern: { color: "#d9382c", tintable: true, glow: true },
+  sand: { color: "#e2cf9f", tintable: false, roughness: 1 },
+  concrete: { color: "#b9b9b2", tintable: true, roughness: 0.95 },
+  granite: { color: "#8e9290", tintable: false, roughness: 0.9 },
+  statue: { color: "#c9c6bd", tintable: true, roughness: 0.85 },
+  bamboo: { color: "#a9b866", tintable: true },
+  rope: { color: "#d2bd84", tintable: false },
+  cardboard: { color: "#c49a63", tintable: true, roughness: 0.95 },
+  tape: { color: "#d8c08f", tintable: false, roughness: 0.4 },
+  goodsA: { color: "#d9573b", tintable: false },
+  goodsB: { color: "#3f7fbf", tintable: false },
+  goodsC: { color: "#e8c34a", tintable: false },
+  goodsD: { color: "#5aa36b", tintable: false },
+  drumShell: { color: "#b8322f", tintable: true, roughness: 0.3, metalness: 0.2 },
+  busBody: { color: "#f2f0e8", tintable: true, roughness: 0.4 },
+  busStripe: { color: "#3b7dd8", tintable: false },
+  busRoof: { color: "#c9cdd0", tintable: false },
+  grille: { color: "#5a5f63", tintable: false, roughness: 0.5, metalness: 0.3 },
+  fanBlade: { color: "#9ccbe0", tintable: false },
+  tent: { color: "#e07b39", tintable: true, roughness: 0.8 },
+  groundSheet: { color: "#4c5a6e", tintable: false },
+  phoneRoof: { color: "#6d9a62", tintable: true },
+  phone: { color: "#7aa36f", tintable: false },
+  waterJet: { color: "#d6eef8", tintable: false, opacity: 0.7 },
 };
-export interface JapanesePart {
-  shape: "box" | "ellipse" | "ring";
+export type PartMaterialName = keyof typeof MATERIALS;
+export const PART_MATERIALS: Record<PartMaterialName, PartMaterial> = MATERIALS;
+
+// 部品1つ。x, y は上から見た中心（家具の中心から cm）、bottom は床からの高さ cm。
+// box: 箱（radius で角を丸める）/ ellipse: 縦の円柱（taper で上の太さを変える。1より小さいと上が細い）/ ring: 縦の輪（inner は穴の大きさ）
+// disc: 横倒しの円柱（軸は x。w が長さ、d と height が直径）/ sphere: 楕円体
+// tilt のある箱は、x軸のまわりに傾けた板（w が幅、d が斜めの長さ、height が厚さ。正なら手前 = y の正の側へ下がる）
+export interface FurniturePart {
+  shape: "box" | "ellipse" | "ring" | "disc" | "sphere";
   x: number; y: number; bottom: number;
   w: number; d: number; height: number;
-  material: keyof typeof JAPANESE_MATERIALS;
+  material: PartMaterialName;
   radius: number;
+  // 上から見た向き（ラジアン）
   angle?: number;
   inner?: number;
+  taper?: number;
+  tilt?: number;
+}
+type PartShape = FurniturePart["shape"];
+type PartExtra = Partial<Pick<FurniturePart, "radius" | "angle" | "inner" | "taper" | "tilt">>;
+
+export function isPartKind(kind: string): kind is PartKind {
+  return (PART_KINDS as readonly string[]).includes(kind);
 }
 export function isJapaneseKind(kind: string): kind is JapaneseKind {
   return (JAPANESE_KINDS as readonly string[]).includes(kind);
 }
+export function isMountedPartKind(kind: string): boolean {
+  return (MOUNTED_PART_KINDS as readonly string[]).includes(kind);
+}
+// 部品の高さの幅（傾けた板は、傾けたあとの上下の幅）
+export function partRise(part: FurniturePart): number {
+  return part.tilt ? part.d * Math.abs(Math.sin(part.tilt)) + part.height * Math.abs(Math.cos(part.tilt)) : part.height;
+}
+// 部品の上から見た奥行（傾けた板は、傾けたあとの奥行）
+export function partSpan(part: FurniturePart): number {
+  return part.tilt ? part.d * Math.abs(Math.cos(part.tilt)) + part.height * Math.abs(Math.sin(part.tilt)) : part.d;
+}
+export function furniturePartTop(part: FurniturePart): number {
+  return part.bottom + partRise(part);
+}
 
-export function japaneseParts(kind: JapaneseKind, w: number, d: number, height: number): JapanesePart[] {
-  const parts: JapanesePart[] = [];
-  const box = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: JapanesePart["material"], radius = 0) => {
-    parts.push({ shape: "box", x: x * w, y: y * d, w: pw * w, d: pd * d, bottom: bottom * height, height: ph * height, material, radius: radius * Math.min(w, d, height) });
+export function furnitureParts(kind: PartKind, w: number, d: number, height: number): FurniturePart[] {
+  const parts: FurniturePart[] = [];
+  // 幅・奥行・高さに対する割合で書く部品
+  const at = (shape: PartShape, x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, extra: PartExtra = {}) => {
+    parts.push({ shape, x: x * w, y: y * d, w: pw * w, d: pd * d, bottom: bottom * height, height: ph * height, material, radius: 0, ...extra });
   };
-  const ellipse = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: JapanesePart["material"]) => {
-    box(x, y, pw, pd, bottom, ph, material);
-    parts[parts.length - 1].shape = "ellipse";
+  // cm で書く部品（向きを回す部品や、大きさに合わせて数を変える部品）
+  const cm = (shape: PartShape, x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, extra: PartExtra = {}) => {
+    parts.push({ shape, x, y, w: pw, d: pd, bottom, height: ph, material, radius: 0, ...extra });
+  };
+  const box = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, radius = 0) => {
+    at("box", x, y, pw, pd, bottom, ph, material, { radius: radius * Math.min(w, d, height) });
+  };
+  const ellipse = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, taper?: number) => {
+    at("ellipse", x, y, pw, pd, bottom, ph, material, taper === undefined ? {} : { taper });
+  };
+  const ring = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, inner: number) => {
+    at("ring", x, y, pw, pd, bottom, ph, material, { inner });
+  };
+  const disc = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName) => at("disc", x, y, pw, pd, bottom, ph, material);
+  const sphere = (x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName) => at("sphere", x, y, pw, pd, bottom, ph, material);
+  // 傾けた板。中心の高さ center と傾き tilt、長さ length から、上下の範囲を決めて置く（cm）
+  const tilted = (x: number, y: number, width: number, length: number, thickness: number, center: number, tilt: number, material: PartMaterialName) => {
+    const rise = length * Math.abs(Math.sin(tilt)) + thickness * Math.abs(Math.cos(tilt));
+    cm("box", x, y, width, length, center - rise / 2, thickness, material, { tilt });
+  };
+  // 上から見て奥行 span、高さ rise の範囲にちょうど収まる傾けた板（cm）。toward が正なら手前へ下がる
+  const slab = (x: number, y: number, width: number, span: number, bottom: number, rise: number, thickness: number, material: PartMaterialName, toward = 1) => {
+    let tilt = Math.atan2(rise, span);
+    for (let i = 0; i < 12; i += 1) tilt = Math.atan2(Math.max(0.1, rise - thickness * Math.cos(tilt)), Math.max(0.1, span - thickness * Math.sin(tilt)));
+    const length = Math.hypot(Math.max(0.1, rise - thickness * Math.cos(tilt)), Math.max(0.1, span - thickness * Math.sin(tilt)));
+    tilted(x, y, width, length, thickness, bottom + rise / 2, toward * tilt, material);
+    return { tilt: toward * tilt, length, center: bottom + rise / 2 };
   };
   const legs = (bottom: number, top: number, x = 0.39, y = 0.36) => {
     for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(sx * x, sy * y, 0.08, 0.12, bottom, top - bottom, "wood");
   };
+  const goods = ["goodsA", "goodsB", "goodsC", "goodsD"] as const;
   switch (kind) {
     case "tatami":
       box(0, 0, 1, 1, 0, 0.96, "straw");
@@ -124,9 +262,7 @@ export function japaneseParts(kind: JapaneseKind, w: number, d: number, height: 
       const basin = kind === "hibachi", material = basin ? "glaze" : "stone";
       ellipse(0, 0, 0.75, 0.75, 0, 0.2, material);
       ellipse(0, 0, 1, 1, 0.2, 0.6, material);
-      ellipse(0, 0, 1, 1, 0.8, 0.2, material);
-      parts[parts.length - 1].shape = "ring";
-      parts[parts.length - 1].inner = 0.68;
+      ring(0, 0, 1, 1, 0.8, 0.2, material, 0.68);
       ellipse(0, 0, 0.69, 0.69, 0.83, 0.01, basin ? "ash" : "water");
       if (basin) for (const x of [-0.14, 0, 0.14]) box(x, 0, 0.09, 0.27, 0.84, 0.08, "coal");
       break;
@@ -144,8 +280,634 @@ export function japaneseParts(kind: JapaneseKind, w: number, d: number, height: 
       }
       for (const x of [-0.465, 0.465]) box(x, 0, 0.07, 0.8, 0.08, 0.92, "paleWood");
       break;
+    case "butsudan":
+      // 仏壇: 箱の上に黒塗りの台輪。正面は開いた内陣（奥が黒、手前に金の宮殿）
+      box(0, -0.02, 1, 0.96, 0, 0.94, "wood");
+      box(0, 0.465, 0.78, 0.05, 0.3, 0.56, "trim");
+      box(0, 0.49, 0.36, 0.02, 0.42, 0.3, "gold");
+      box(0, 0.47, 0.86, 0.06, 0.88, 0.06, "gold");
+      box(0, -0.03, 0.94, 0.9, 0.94, 0.06, "trim");
+      break;
+    case "kamidana":
+      // 神棚: 壁に付けた棚板の上に宮形。手前にしめ縄と紙垂、両脇に榊
+      for (const x of [-0.4, 0.4]) box(x, -0.05, 0.05, 0.9, 0.72, 0.06, "paleWood");
+      box(0, 0, 1, 1, 0.78, 0.025, "paleWood");
+      for (const x of [-0.4, 0.4]) {
+        ellipse(x, 0.2, 0.07, 0.18, 0.805, 0.06, "ceramic");
+        sphere(x, 0.2, 0.11, 0.3, 0.86, 0.07, "leaf");
+      }
+      for (const x of [-0.25, 0, 0.25]) box(x, 0.48, 0.04, 0.02, 0.85, 0.08, "paper");
+      box(0, 0.47, 0.9, 0.06, 0.93, 0.03, "straw");
+      box(0, -0.1, 0.6, 0.6, 0.805, 0.12, "paleWood");
+      box(0, -0.1, 0.72, 0.8, 0.925, 0.04, "paleWood");
+      box(0, -0.1, 0.6, 0.12, 0.965, 0.035, "paleWood");
+      break;
+    case "tokonoma":
+      // 床の間: 一段高い床板、奥の壁に掛け軸、手前の角に床柱、上に落とし掛け。床板に生け花
+      box(0, 0, 1, 1, 0, 0.06, "wood");
+      box(0, 0.02, 0.96, 0.92, 0.06, 0.005, "paleWood");
+      box(0, -0.47, 0.32, 0.05, 0.285, 0.015, "trim");
+      box(0, -0.47, 0.28, 0.04, 0.3, 0.55, "paper");
+      box(0, -0.445, 0.1, 0.01, 0.5, 0.18, "trim");
+      ellipse(-0.25, -0.1, 0.08, 0.18, 0.065, 0.12, "glaze");
+      sphere(-0.25, -0.1, 0.16, 0.34, 0.15, 0.14, "leaf");
+      box(0, 0.45, 1, 0.06, 0.82, 0.06, "wood");
+      box(0.475, 0.44, 0.05, 0.12, 0, 1, "wood");
+      break;
+    case "kamado":
+      // かまど: しっくいの台に釜を2つ。釜には木のふた、手前に焚き口
+      box(0, -0.01, 1, 0.98, 0, 0.9, "plaster");
+      for (const x of [-0.25, 0.25]) {
+        box(x, 0.49, 0.16, 0.02, 0.12, 0.28, "coal");
+        ring(x, -0.05, 0.42, 0.84, 0.9, 0.04, "iron", 0.82);
+        ellipse(x, -0.05, 0.34, 0.68, 0.86, 0.1, "iron");
+        ellipse(x, -0.05, 0.3, 0.6, 0.96, 0.025, "wood");
+        box(x, -0.05, 0.2, 0.06, 0.985, 0.015, "paleWood");
+      }
+      break;
+    case "washikiToilet":
+      // 和式トイレ: 床に据えた細長い便器と、前の金隠し。奥に洗浄管
+      ring(0, 0.08, 0.84, 0.8, 0, 0.18, "ceramic", 0.8);
+      ellipse(0, 0.12, 0.5, 0.42, 0, 0.06, "water");
+      box(0, -0.36, 0.78, 0.24, 0, 1, "ceramic", 0.05);
+      ellipse(0, -0.48, 0.14, 0.04, 0.3, 0.7, "metal");
+      break;
+    case "chochin":
+      // 提灯（赤提灯）: 天井から吊るした胴。上下に黒い輪
+      ellipse(0, 0, 0.6, 0.6, 0.69, 0.025, "trim");
+      ellipse(0, 0, 1, 1, 0.7, 0.06, "lantern", 1 / 0.78);
+      ellipse(0, 0, 1, 1, 0.76, 0.13, "lantern");
+      ellipse(0, 0, 1, 1, 0.89, 0.06, "lantern", 0.78);
+      ellipse(0, 0, 0.6, 0.6, 0.935, 0.025, "trim");
+      ellipse(0, 0, 0.06, 0.06, 0.96, 0.04, "trim");
+      break;
+    case "takegaki": {
+      // 四つ目垣: 竹の柱を等しい間をあけて立て、横に竹を4段渡す
+      const count = Math.max(2, Math.round(w / 30));
+      for (let i = 0; i <= count; i++) {
+        const end = i === 0 || i === count, size = Math.min(end ? 4 : 3, d * 0.4, w / (count + 1));
+        cm("ellipse", -w / 2 + size / 2 + (i / count) * (w - size), 0, size, size, 0, end ? height : height * 0.92, "bamboo");
+      }
+      const rail = Math.min(3, d * 0.25);
+      for (const level of [0.2, 0.45, 0.7, 0.88]) cm("disc", 0, rail, w, rail, level * height, rail, "bamboo");
+      break;
+    }
+    case "ido":
+      // 井戸: 石の井筒と水面、つるべを吊る2本の柱と横木と滑車、桶
+      ellipse(0, 0, 0.62, 0.62, 0.1, 0.01, "water");
+      ring(0, 0, 0.8, 0.8, 0, 0.3, "stone", 0.8);
+      ellipse(0, 0.07, 0.18, 0.18, 0.32, 0.1, "wood", 1.15);
+      ellipse(0, 0.07, 0.01, 0.01, 0.42, 0.38, "rope");
+      disc(0, 0.04, 0.06, 0.18, 0.8, 0.096, "iron");
+      box(0, 0, 1, 0.06, 0.93, 0.04, "wood");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 0.06, 0, 1, "wood");
+      break;
+    case "torii":
+      // 明神鳥居: 黒い亀腹の上に朱の柱。貫・額束・島木・笠木を重ね、笠木の上は黒く塗る
+      for (const sx of [-1, 1]) {
+        ellipse(sx * 0.36, 0, 0.14, 0.84, 0, 0.04, "trim");
+        ellipse(sx * 0.36, 0, 0.1, 0.6, 0.04, 0.76, "vermilion");
+      }
+      box(0, 0, 0.94, 0.28, 0.6, 0.055, "vermilion");
+      box(0, 0, 0.035, 0.22, 0.655, 0.145, "vermilion");
+      box(0, 0.15, 0.12, 0.08, 0.68, 0.1, "trim");
+      box(0, 0, 0.86, 0.42, 0.8, 0.08, "vermilion");
+      box(0, 0, 1, 0.58, 0.88, 0.08, "vermilion");
+      box(0, 0, 0.98, 0.42, 0.96, 0.04, "trim");
+      break;
+    case "komainu":
+      // 狛犬: 石の台座に座る獅子。胴・前脚・たてがみの頭・鼻先・ふさふさの尾を楕円体で表す
+      box(0, 0, 1, 1, 0, 0.4, "granite");
+      box(0, 0, 0.9, 0.9, 0.4, 0.04, "granite");
+      sphere(0, -0.36, 0.4, 0.2, 0.56, 0.2, "statue");
+      box(0, 0.2, 0.36, 0.18, 0.44, 0.26, "statue");
+      sphere(0, -0.08, 0.6, 0.6, 0.42, 0.3, "statue");
+      sphere(0, 0.3, 0.3, 0.16, 0.72, 0.14, "statue");
+      sphere(0, 0.12, 0.62, 0.42, 0.62, 0.38, "statue");
+      break;
+    case "saisenBako":
+      // 賽銭箱: 木の箱の上に、斜めの桟を並べた投入口。手前の板に金の飾り
+      box(0, -0.02, 1, 0.96, 0, 0.86, "wood");
+      box(0, 0.48, 0.24, 0.04, 0.3, 0.3, "gold");
+      for (let i = 0; i < 8; i++) box(0, -0.35 + i * 0.1, 0.86, 0.05, 0.84, 0.08, "paleWood");
+      for (const y of [-0.45, 0.45]) box(0, y, 1, 0.1, 0.86, 0.14, "wood");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 0.8, 0.86, 0.14, "wood");
+      break;
+    case "chozubachi":
+      // 手水鉢: 石の水盤に水を張り、竹の柄杓を手前の縁に渡す
+      box(0, 0, 1, 1, 0, 0.85, "stone");
+      box(0, 0, 0.84, 0.72, 0.85, 0.06, "water");
+      for (const y of [-0.43, 0.43]) box(0, y, 1, 0.14, 0.85, 0.15, "stone");
+      for (const x of [-0.46, 0.46]) box(x, 0, 0.08, 0.72, 0.85, 0.15, "stone");
+      for (const x of [-0.25, 0, 0.25]) {
+        box(x, 0.1, 0.03, 0.7, 0.97, 0.03, "bamboo");
+        ellipse(x, -0.25, 0.09, 0.18, 0.95, 0.05, "bamboo");
+      }
+      break;
+    case "blackboard":
+      // 黒板: 壁に掛けた緑の板とアルミの枠、手前にチョーク受け
+      box(0, 0.25, 1, 0.5, 0.4, 0.02, "metal");
+      for (const x of [-0.2, 0.1, 0.3]) box(x, 0.3, 0.02, 0.2, 0.42, 0.01, "board");
+      box(0, -0.23, 0.98, 0.5, 0.42, 0.57, "chalkboard");
+      box(0, -0.25, 1, 0.5, 0.41, 0.59, "metal");
+      break;
+    case "whiteboard":
+      // ホワイトボード（脚付き）: 白い板と枠、2本の柱、床に脚とキャスター
+      for (const x of [-0.45, 0.45]) {
+        for (const y of [-0.45, 0.45]) ellipse(x, y, 0.03, 0.09, 0, 0.03, "black");
+        box(x, 0, 0.04, 1, 0.03, 0.03, "metal");
+      }
+      box(0, 0.06, 0.4, 0.1, 0.36, 0.015, "metal");
+      box(0, 0, 0.86, 0.05, 0.38, 0.58, "board");
+      box(0, 0, 0.88, 0.04, 0.37, 0.6, "metal");
+      for (const x of [-0.45, 0.45]) ellipse(x, 0, 0.025, 0.075, 0.06, 0.94, "metal");
+      break;
+    case "lectern":
+      // 教卓: 前と横を囲った台と天板。先生の側は足の入る黒い奥
+      box(0, -0.44, 0.6, 0.04, 0.05, 0.7, "trim");
+      box(0, 0.03, 0.96, 0.9, 0, 0.95, "wood");
+      box(0, 0, 1, 1, 0.95, 0.05, "paleWood");
+      break;
+    case "schoolDesk":
+      // 学校の机と椅子: 奥に机（物入れ付き）、手前に椅子（背もたれは手前）
+      for (const x of [-0.46, 0.46]) for (const y of [-0.4, -0.04]) box(x, y, 0.04, 0.04, 0, 0.9, "metal");
+      for (const x of [-0.27, 0.27]) for (const y of [0.08, 0.36]) box(x, y, 0.035, 0.03, 0, 0.55, "metal");
+      box(0, 0.22, 0.62, 0.38, 0.55, 0.03, "paleWood");
+      for (const x of [-0.27, 0.27]) box(x, 0.42, 0.035, 0.03, 0.58, 0.17, "metal");
+      box(0, -0.22, 0.9, 0.38, 0.79, 0.11, "metal");
+      box(0, -0.22, 1, 0.45, 0.9, 0.04, "paleWood");
+      box(0, 0.43, 0.62, 0.04, 0.75, 0.25, "paleWood");
+      break;
+    case "locker":
+      // ロッカー: 3枚扉の鉄の箱。正面に扉の継ぎ目・通気口・取っ手
+      box(0, -0.01, 1, 0.98, 0, 1, "paint");
+      for (const x of [-1 / 6, 1 / 6]) box(x, 0.49, 0.008, 0.02, 0.02, 0.96, "dark");
+      for (let i = 0; i < 3; i++) {
+        const x = -1 / 3 + i / 3;
+        box(x, 0.49, 0.18, 0.02, 0.84, 0.06, "dark");
+        box(x + 0.1, 0.49, 0.03, 0.02, 0.5, 0.07, "metal");
+      }
+      break;
+    case "copier":
+      // 複合機（コピー機）: 用紙の引き出しの付いた台、読み取り部、ふた、手前に操作パネル
+      box(0, -0.015, 1, 0.97, 0, 0.75, "enamel");
+      for (const z of [0.08, 0.28, 0.48]) box(0, 0.485, 0.9, 0.03, z, 0.17, "board");
+      box(0, -0.03, 1, 0.94, 0.75, 0.2, "enamel");
+      box(0.2, 0.4, 0.5, 0.18, 0.9, 0.07, "screen");
+      box(0.05, -0.08, 0.9, 0.76, 0.95, 0.05, "dark");
+      break;
+    case "partition":
+      // パーティション: 布張りの板と枠、床に2本の脚
+      for (const x of [-0.4, 0.4]) box(x, 0, 0.05, 1, 0, 0.06, "metal");
+      box(0, 0, 0.98, 0.08, 0.06, 0.92, "cloth");
+      for (const x of [-0.49, 0.49]) box(x, 0, 0.02, 0.1, 0.06, 0.92, "metal");
+      box(0, 0, 1, 0.1, 0.98, 0.02, "metal");
+      break;
+    case "safe":
+      // 金庫: 黒い鉄の箱に、扉とダイヤルと取っ手
+      box(0, -0.02, 1, 0.96, 0, 1, "dark");
+      box(0, 0.47, 0.86, 0.02, 0.08, 0.84, "darkSteel");
+      cm("disc", -0.12 * w, 0.49 * d, 0.02 * d, Math.min(12, w * 0.3), height * 0.55, Math.min(12, w * 0.3), "metal", { angle: Math.PI / 2 });
+      box(0.18, 0.49, 0.14, 0.02, 0.45, 0.05, "metal");
+      break;
+    case "fireExtinguisher":
+      // 消火器: 赤い筒と肩、上に金具とレバー、横にホース
+      ellipse(0, 0, 0.68, 0.68, 0, 0.8, "red");
+      box(0.38, 0.05, 0.08, 0.08, 0.3, 0.56, "black");
+      ellipse(0, 0, 0.68, 0.68, 0.8, 0.06, "red", 0.45);
+      box(0, 0, 0.2, 0.3, 0.86, 0.09, "metal");
+      box(0, 0.08, 0.16, 0.5, 0.94, 0.06, "black");
+      break;
+    case "counter":
+      // カウンター: 腰板で囲った台に天板。天板は奥（客の側）へ少し張り出す
+      box(0, 0.06, 1, 0.8, 0, 0.05, "trim");
+      box(0, 0.06, 1, 0.88, 0.05, 0.9, "wood");
+      box(0, 0, 1, 1, 0.95, 0.05, "paleWood");
+      break;
+    case "showcase":
+      // ショーケース: 木の台の上にガラスのケース。中に品物
+      box(0, 0, 1, 1, 0, 0.55, "wood");
+      for (const x of [-0.3, 0, 0.3]) box(x, 0, 0.14, 0.4, 0.55, 0.08, "gold");
+      for (const x of [-0.49, 0.49]) for (const y of [-0.48, 0.48]) box(x, y, 0.02, 0.04, 0.55, 0.45, "metal");
+      box(0, 0, 1, 1, 0.55, 0.45, "glass");
+      break;
+    case "displayShelf":
+      // 陳列棚（ゴンドラ）: 背板の両側に棚板を4段。棚に色とりどりの商品
+      box(0, 0, 1, 1, 0, 0.08, "enamel");
+      for (const side of [-1, 1]) {
+        [0.08, 0.34, 0.6, 0.85].forEach((z, level) => {
+          if (level) box(0, side * 0.26, 1, 0.44, z, 0.015, "enamel");
+          for (let i = 0; i < 5; i++) {
+            box(-0.4 + i * 0.2, side * 0.25, 0.17, 0.34, z + (level ? 0.015 : 0), 0.09 + ((i + level) % 3) * 0.02, goods[(i + level + (side > 0 ? 1 : 0)) % 4]);
+          }
+        });
+      }
+      box(0, 0, 1, 0.06, 0.08, 0.92, "enamel");
+      break;
+    case "vendingMachine":
+      // 自動販売機: 赤い箱。正面に商品の見本の窓、お金を入れる所、取り出し口
+      box(0, -0.015, 1, 0.97, 0, 1, "red");
+      box(0, 0.48, 0.84, 0.02, 0.5, 0.42, "board");
+      for (const [row, z] of [0.54, 0.67, 0.8].entries()) {
+        for (let i = 0; i < 6; i++) box(-0.35 + i * 0.14, 0.495, 0.1, 0.01, z, 0.08, goods[(i + row) % 4]);
+      }
+      box(0.3, 0.485, 0.16, 0.03, 0.3, 0.14, "metal");
+      box(-0.08, 0.485, 0.56, 0.03, 0.08, 0.1, "black");
+      break;
+    case "signboard":
+      // 立て看板（A型）: 上でつながった2枚の板を前後に開いて立てる。外側の面は黒板（木の枠より厚く、上から見ると枠の内側に見える）
+      for (const side of [-1, 1]) {
+        slab(0, side * d / 4, w, d / 2, 0, height, 2.4, "wood", side);
+        slab(0, side * d / 4, w * 0.84, d / 2, 0, height, 3, "chalkboard", side);
+      }
+      // 2枚をつなぐ上の木
+      cm("box", 0, 0, w, Math.min(8, d * 0.16), height - 2.5, 2.5, "wood");
+      break;
+    case "barStool":
+      // カウンターチェア: 丸い台と支柱、足をのせる輪、丸い座面
+      ellipse(0, 0, 1, 1, 0, 0.03, "metal");
+      ellipse(0, 0, 0.12, 0.12, 0.03, 0.89, "metal");
+      ring(0, 0, 0.8, 0.8, 0.35, 0.03, "metal", 0.86);
+      ellipse(0, 0, 0.85, 0.85, 0.92, 0.08, "leather");
+      break;
+    case "hospitalBed":
+      // 病院のベッド: キャスター付きの白い枠、マットレスと枕と掛け布団、両脇の柵、頭と足の板
+      for (const x of [-0.42, 0.42]) for (const y of [-0.44, 0.44]) ellipse(x, y, 0.08, 0.04, 0, 0.2, "metal");
+      box(0, 0, 0.94, 0.94, 0.2, 0.2, "enamel");
+      box(0, 0.01, 0.88, 0.86, 0.4, 0.26, "linen", 0.03);
+      box(0, 0.12, 0.86, 0.6, 0.66, 0.03, "cloth");
+      box(0, -0.36, 0.6, 0.12, 0.66, 0.06, "linen", 0.02);
+      for (const x of [-0.47, 0.47]) box(x, -0.15, 0.03, 0.4, 0.66, 0.12, "metal");
+      box(0, 0.48, 0.94, 0.04, 0.2, 0.65, "enamel");
+      box(0, -0.48, 0.94, 0.04, 0.2, 0.8, "enamel");
+      break;
+    case "ivStand": {
+      // 点滴スタンド: 5本脚のキャスター、細い支柱、上に横棒と点滴の袋
+      const r = Math.min(w, d) / 2;
+      for (let i = 0; i < 5; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / 5;
+        cm("box", Math.cos(a) * r * 0.48, Math.sin(a) * r * 0.48, r * 0.9, Math.min(3, r * 0.2), 4, 3, "metal", { angle: a });
+        cm("ellipse", Math.cos(a) * r * 0.88, Math.sin(a) * r * 0.88, r * 0.2, r * 0.2, 0, 4, "black");
+      }
+      cm("ellipse", 0, 0, 2.5, 2.5, 7, height * 0.97 - 7, "metal");
+      cm("box", 8, 0, 10, 3, height * 0.7, height * 0.2, "glass");
+      cm("box", 0, 0, Math.min(30, w), 1.5, height * 0.95, height * 0.02, "metal");
+      cm("ellipse", 0, 0, 3.5, 3.5, height * 0.97, height * 0.03, "metal");
+      break;
+    }
+    case "wheelchair":
+      // 車椅子: 後ろの大きな車輪と前の小さなキャスター、布の座面と背もたれ、ひじ掛け、足台
+      for (const sx of [-1, 1]) {
+        disc(sx * 0.46, -0.05, 0.05, 0.6, 0, 0.652, "black");
+        disc(sx * 0.46, -0.05, 0.065, 0.46, 0.08, 0.49, "metal");
+        disc(sx * 0.38, 0.38, 0.035, 0.12, 0, 0.13, "black");
+        box(sx * 0.18, 0.45, 0.25, 0.1, 0.08, 0.02, "black");
+        box(sx * 0.38, 0.05, 0.03, 0.6, 0.47, 0.03, "metal");
+        box(sx * 0.36, -0.2, 0.03, 0.03, 0.47, 0.5, "metal");
+        box(sx * 0.4, -0.02, 0.06, 0.32, 0.72, 0.03, "black");
+        box(sx * 0.36, -0.24, 0.04, 0.1, 0.95, 0.05, "black");
+      }
+      box(0, 0.02, 0.72, 0.42, 0.5, 0.03, "cloth");
+      box(0, -0.2, 0.68, 0.03, 0.53, 0.42, "cloth");
+      break;
+    case "examCouch":
+      // 診察台: 白い台に、ビニールのクッションと紙のシーツ
+      box(0, 0, 0.85, 0.9, 0, 0.85, "enamel");
+      box(0, 0, 1, 1, 0.85, 0.13, "vinyl", 0.03);
+      box(0, 0.05, 0.55, 0.8, 0.98, 0.02, "board");
+      break;
+    case "slide": {
+      // すべり台: 奥にはしご、上に踊り場と手すり、手前へ下りる滑り面と、すべり下りた所の平らな面
+      const back = -d / 2, ladder = Math.min(25, d * 0.08), deck = Math.min(40, d * 0.12), runout = Math.min(40, d * 0.12);
+      const deckZ = height * 0.68, rail = Math.min(4, w * 0.08), runZ = Math.min(30, deckZ * 0.25);
+      const slopeStart = back + ladder + deck, slopeEnd = d / 2 - runout;
+      for (const x of [-1, 1]) {
+        cm("box", x * (w / 2 - rail / 2), back + ladder / 2, rail, rail, 0, deckZ, "metal");
+        cm("ellipse", x * (w / 2 - rail / 2), slopeStart - rail / 2, rail, rail, 0, deckZ, "metal");
+        cm("ellipse", x * (w / 2 - rail / 2), d / 2 - rail / 2, rail, rail, 0, runZ, "metal");
+      }
+      for (let z = 25; z < deckZ - 5; z += 25) cm("disc", 0, back + ladder / 2, w - rail * 2, 3, z, 3, "metal");
+      cm("box", 0, back + ladder + deck / 2, w, deck, deckZ, 4, "red");
+      for (const x of [-1, 1]) cm("box", x * (w / 2 - rail / 2), back + ladder + deck / 2, rail, deck, deckZ + 4, height - deckZ - 4, "red");
+      const surface = slab(0, (slopeStart + slopeEnd) / 2, w - rail * 2, slopeEnd - slopeStart, runZ, deckZ + 4 - runZ, 3, "yellow");
+      for (const x of [-1, 1]) tilted(x * (w / 2 - rail / 2), (slopeStart + slopeEnd) / 2, rail, surface.length, 16, surface.center, surface.tilt, "yellow");
+      cm("box", 0, d / 2 - runout / 2, w, runout, runZ - 3, 3, "yellow");
+      for (const x of [-1, 1]) cm("box", x * (w / 2 - rail / 2), d / 2 - runout / 2, rail, runout, runZ - 3, 12, "yellow");
+      break;
+    }
+    case "jungleGym": {
+      // ジャングルジム: 縦の柱と横の棒を、60cmほどの格子に組む
+      const nx = Math.max(1, Math.round(w / 60)), ny = Math.max(1, Math.round(d / 60)), nz = Math.max(1, Math.round(height / 60));
+      const bar = Math.min(4, w / (nx + 1) / 2, d / (ny + 1) / 2);
+      const xs = Array.from({ length: nx + 1 }, (_, i) => -w / 2 + bar / 2 + (i / nx) * (w - bar));
+      const ys = Array.from({ length: ny + 1 }, (_, i) => -d / 2 + bar / 2 + (i / ny) * (d - bar));
+      for (let k = 1; k <= nz; k++) {
+        const z = (k / nz) * height - bar;
+        for (const y of ys) cm("disc", 0, y, w - bar, bar, z, bar, "red");
+        for (const x of xs) cm("disc", x, 0, d - bar, bar, z, bar, "yellow", { angle: Math.PI / 2 });
+      }
+      for (const x of xs) for (const y of ys) cm("ellipse", x, y, bar, bar, 0, height, "blue");
+      break;
+    }
+    case "ironBar":
+      // 鉄棒: 3本の柱に、高さの違う2本の棒
+      disc(-0.24, 0, 0.48, 0.12, 0.72, 0.03, "metal");
+      disc(0.24, 0, 0.48, 0.12, 0.95, 0.03, "metal");
+      for (const x of [-0.48, 0, 0.48]) ellipse(x, 0, 0.025, 0.2, 0, 1, "blue");
+      break;
+    case "sandbox":
+      // 砂場: 木の枠に砂。バケツが1つ
+      box(0, 0, 0.9, 0.9, 0, 0.6, "sand");
+      ellipse(0.2, 0.15, 0.06, 0.06, 0.6, 0.35, "goodsA", 1.25);
+      for (const x of [-0.475, 0.475]) box(x, 0, 0.05, 1, 0, 1, "wood");
+      for (const y of [-0.475, 0.475]) box(0, y, 0.9, 0.05, 0, 1, "wood");
+      break;
+    case "vaultingBox":
+      // 跳び箱: 下ほど広い木の段を重ね、いちばん上に白い布の台
+      for (let i = 0; i < 6; i++) box(0, 0, 1 - (i / 6) * 0.2, 1 - (i / 6) * 0.12, i * 0.15, 0.15, "paleWood");
+      box(0, 0, 0.78, 0.86, 0.9, 0.1, "linen", 0.02);
+      break;
+    case "pingPongTable":
+      // 卓球台: 青い天板に白い線、中央にネット。4本の脚
+      for (const x of [-0.42, 0.42]) for (const y of [-0.4, 0.4]) box(x, y, 0.04, 0.03, 0, 0.8, "dark");
+      box(0, 0, 1, 1, 0.8, 0.03, "tableBlue");
+      for (const y of [-0.4965, 0.4965]) box(0, y, 1, 0.007, 0.83, 0.005, "board");
+      for (const x of [-0.4935, 0.4935]) box(x, 0, 0.013, 1, 0.83, 0.005, "board");
+      box(0, 0, 0.004, 1, 0.83, 0.005, "board");
+      box(0, 0, 1, 0.006, 0.835, 0.165, "net");
+      break;
+    case "poolTable":
+      // ビリヤード台: 木の台に緑のラシャ、縁のクッションと6つのポケット
+      for (const x of [-0.4, 0.4]) for (const y of [-0.42, 0.42]) box(x, y, 0.1, 0.06, 0, 0.12, "wood");
+      box(0, 0, 0.94, 0.96, 0.12, 0.8, "wood");
+      box(0, 0, 0.86, 0.92, 0.92, 0.05, "felt");
+      for (const x of [-0.43, 0.43]) for (const y of [-0.46, 0, 0.46]) ellipse(x, y, 0.085, 0.047, 0.95, 0.025, "black");
+      for (const x of [-0.465, 0.465]) box(x, 0, 0.07, 1, 0.92, 0.08, "wood");
+      for (const y of [-0.48, 0.48]) box(0, y, 0.86, 0.04, 0.92, 0.08, "wood");
+      break;
+    case "drumKit": {
+      // ドラムセット: 手前にバスドラム、上にタム2つ、横にスネア・フロアタム・シンバル、奥に椅子
+      const sx = w / 170, sy = d / 140, sz = height / 110;
+      const drum = (x: number, y: number, size: number, bottom: number, tall: number, material: PartMaterialName) =>
+        cm("ellipse", x * sx, y * sy, size * sx, size * sy, bottom * sz, tall * sz, material);
+      for (const [x, y, tall] of [[-60, -25, 85], [-50, 42, 108], [58, 32, 100], [-30, -12, 50]] as const) drum(x, y, 3, 0, tall, "metal");
+      drum(0, -50, 35, 0, 50, "black");
+      cm("disc", 0, 25 * sy, 40 * sy, 56 * sx, 0, 56 * sz, "drumShell", { angle: Math.PI / 2 });
+      drum(48, -8, 40, 5, 50, "drumShell");
+      drum(48, -8, 39, 55, 1, "board");
+      drum(-30, -12, 36, 50, 14, "drumShell");
+      drum(-30, -12, 35, 64, 1, "board");
+      drum(-15, 22, 28, 60, 22, "drumShell");
+      drum(-15, 22, 27, 82, 1, "board");
+      drum(15, 22, 32, 60, 24, "drumShell");
+      drum(15, 22, 31, 84, 1, "board");
+      drum(-60, -25, 36, 85, 1, "gold");
+      drum(-60, -25, 36, 88, 1, "gold");
+      drum(58, 32, 50, 100, 2, "gold");
+      drum(-50, 42, 45, 108, 2, "gold");
+      break;
+    }
+    case "stage":
+      // ステージ（舞台）: 板張りの台。手前の端に上がるための段
+      box(0.35, 0.46, 0.2, 0.08, 0, 0.33, "wood");
+      box(0.35, 0.38, 0.2, 0.08, 0, 0.66, "wood");
+      box(0, -0.08, 1, 0.84, 0, 0.96, "wood");
+      box(0, -0.08, 1, 0.84, 0.96, 0.04, "paleWood");
+      break;
+    case "fountain":
+      // 噴水: 石の水盤に水を張り、中央の柱の上に小さな水盤。てっぺんから水が上がる
+      ellipse(0, 0, 0.9, 0.9, 0, 0.22, "water");
+      ring(0, 0, 1, 1, 0, 0.28, "stone", 0.9);
+      ellipse(0, 0, 0.12, 0.12, 0, 0.62, "stone");
+      ellipse(0, 0, 0.42, 0.42, 0.6, 0.03, "stone");
+      ellipse(0, 0, 0.36, 0.36, 0.63, 0.06, "water");
+      ring(0, 0, 0.42, 0.42, 0.62, 0.1, "stone", 0.86);
+      ellipse(0, 0, 0.04, 0.04, 0.72, 0.12, "stone");
+      ellipse(0, 0, 0.07, 0.07, 0.84, 0.16, "waterJet", 0.3);
+      break;
+    case "statue":
+      // 石像: 2段の台座の上に、衣をまとった人の像
+      box(0, 0, 1, 1, 0, 0.35, "granite");
+      box(0, 0, 0.9, 0.9, 0.35, 0.04, "granite");
+      ellipse(0, 0, 0.46, 0.36, 0.39, 0.33, "statue", 0.8);
+      ellipse(0, 0, 0.5, 0.3, 0.72, 0.16, "statue", 1.25);
+      sphere(0, 0, 0.2, 0.22, 0.88, 0.12, "statue");
+      break;
+    case "campfire": {
+      // 焚き火: 石で囲んだ灰の上に薪を組み、炎を上げる
+      const r = Math.min(w, d) / 2, stone = Math.min(16, r * 0.4);
+      ellipse(0, 0, 0.72, 0.72, 0, 0.02, "ash");
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        cm("sphere", Math.cos(a) * (r - stone / 2), Math.sin(a) * (r - stone / 2), stone, stone * 0.9, 0, height * 0.2, "stone");
+      }
+      for (let i = 0; i < 3; i++) cm("disc", 0, 0, r * 1.1, Math.min(10, r * 0.2), 2 + i * 7, 10, "wood", { angle: (i * Math.PI) / 3 });
+      cm("ellipse", 0, 0, r * 0.7, r * 0.7, 10, height * 0.62, "flame", { taper: 0.05 });
+      cm("ellipse", 0, 0, r * 0.36, r * 0.36, 12, height - 12, "flameCore", { taper: 0.05 });
+      break;
+    }
+    case "tent": {
+      // テント: 床のシートの上に、棟から両側へ下りる2枚の布。棟と両端に骨組み
+      box(0, 0, 1, 1, 0, 0.01, "groundSheet");
+      for (const side of [-1, 1]) slab(0, side * d / 4, w * 0.96, d / 2, 0, height, 1.5, "tent", side);
+      for (const x of [-1, 1]) cm("ellipse", x * (w / 2 - 1.5), 0, 3, 3, 0, height - 3, "metal");
+      cm("disc", 0, 0, w, 3, height - 3, 3, "metal");
+      break;
+    }
+    case "westernGrave":
+      // 十字架の墓: 石の台と十字架、手前に寝かせた石板
+      box(0, 0.12, 0.84, 0.76, 0, 0.08, "stone");
+      box(0, -0.38, 1, 0.24, 0, 0.12, "granite");
+      box(0, -0.38, 0.6, 0.09, 0.62, 0.14, "stone");
+      box(0, -0.38, 0.18, 0.09, 0.12, 0.88, "stone");
+      break;
+    case "trafficCone": {
+      // カラーコーン: 四角い台に、白い帯を巻いた赤いコーン（帯の上下で分けて、真上から見ても帯が見える）
+      const radius = (t: number) => 0.7 * (1 - (0.88 * (t - 0.05)) / 0.95);
+      box(0, 0, 1, 1, 0, 0.05, "orange", 0.02);
+      ellipse(0, 0, 0.7, 0.7, 0.05, 0.4, "orange", radius(0.45) / 0.7);
+      ellipse(0, 0, radius(0.45), radius(0.45), 0.45, 0.15, "board", radius(0.6) / radius(0.45));
+      ellipse(0, 0, radius(0.6), radius(0.6), 0.6, 0.4, "orange", radius(1) / radius(0.6));
+      break;
+    }
+    case "utilityPole":
+      // 電柱: コンクリートの柱に2本の腕木と碍子
+      box(0, 0, 0.7, 0.25, 0.78, 0.012, "metal");
+      box(0, 0, 1, 0.25, 0.86, 0.012, "metal");
+      for (const x of [-0.4, -0.2, 0.2, 0.4]) ellipse(x, 0, 0.05, 0.18, 0.872, 0.014, "ceramic");
+      ellipse(0, 0, 0.25, 0.875, 0, 1, "concrete", 0.7);
+      break;
+    case "busStop": {
+      // バス停: 丸い重しの台、支柱、時刻表の板、上に丸い標識
+      const size = Math.min(46, height * 0.2, w);
+      ellipse(0, 0, 0.8, 0.8, 0, 0.05, "concrete");
+      box(0, 0.08, 0.5, 0.04, 0.4, 0.3, "board");
+      cm("disc", 0, 0, 2, size, height - 4 - size, size, "blue", { angle: Math.PI / 2 });
+      cm("disc", 0, 0, 2.6, size * 0.78, height - 4 - size * 0.89, size * 0.78, "board", { angle: Math.PI / 2 });
+      ellipse(0, 0, 0.1, 0.1, 0.05, 0.95, "metal");
+      break;
+    }
+    case "phoneBooth":
+      // 電話ボックス: ガラスの箱に緑の屋根。奥の壁に電話と台
+      box(0, 0, 1, 1, 0, 0.03, "concrete");
+      box(0, -0.38, 0.5, 0.2, 0.42, 0.02, "metal");
+      box(0, -0.4, 0.3, 0.15, 0.44, 0.2, "phone");
+      for (const x of [-0.47, 0.47]) for (const y of [-0.47, 0.47]) box(x, y, 0.06, 0.06, 0.03, 0.89, "phoneRoof");
+      box(0, 0, 1, 1, 0.03, 0.89, "glass");
+      box(0, 0, 1, 1, 0.92, 0.08, "phoneRoof");
+      break;
+    case "manhole":
+      // マンホール: 鉄の枠とふた。ふたに丸と十字の模様
+      ellipse(0, 0, 0.9, 0.9, 0, 0.9, "darkSteel");
+      ring(0, 0, 1, 1, 0, 1, "iron", 0.9);
+      ring(0, 0, 0.6, 0.6, 0.9, 0.1, "iron", 0.85);
+      box(0, 0, 0.6, 0.03, 0.9, 0.1, "iron");
+      box(0, 0, 0.03, 0.6, 0.9, 0.1, "iron");
+      break;
+    case "drum":
+      // ドラム缶: 青い缶に、転がすための2本の輪と、ふたの縁
+      ellipse(0, 0, 0.96, 0.96, 0, 0.97, "blue");
+      for (const z of [0.32, 0.64]) ring(0, 0, 1, 1, z, 0.03, "blue", 0.94);
+      ellipse(0.28, 0, 0.1, 0.1, 0.97, 0.02, "metal");
+      ring(0, 0, 0.98, 0.98, 0.97, 0.03, "blue", 0.9);
+      break;
+    case "bus":
+      // バス: 白い車体に窓の帯と色の線、屋根に冷房。4つの車輪
+      for (const x of [-0.44, 0.44]) for (const y of [-0.33, 0.27]) disc(x, y, 0.1, 0.09, 0, 0.31, "black");
+      box(0, 0, 1, 1, 0.3, 0.05, "busStripe");
+      box(0, 0, 1, 1, 0.5, 0.3, "screen");
+      box(0, 0, 0.98, 0.99, 0.09, 0.88, "busBody", 0.01);
+      box(0, 0, 0.9, 0.9, 0.97, 0.015, "busRoof");
+      box(0, -0.1, 0.5, 0.15, 0.97, 0.03, "busRoof");
+      break;
+    case "cardboard":
+      // 段ボール箱: 茶色の箱と、ふたの合わせ目に貼ったテープ
+      box(0, 0, 1, 1, 0, 0.98, "cardboard");
+      box(0, 0, 1, 0.14, 0.98, 0.02, "tape");
+      break;
+    case "acOutdoor": {
+      // エアコンの室外機: 白い箱と、正面の丸いファンの格子。下に脚
+      const size = Math.min(w * 0.5, height * 0.7);
+      for (const x of [-0.4, 0.4]) box(x, 0, 0.1, 1, 0, 0.05, "dark");
+      box(0, -0.035, 1, 0.93, 0.05, 0.95, "enamel");
+      cm("disc", -0.12 * w, 0.465 * d, 0.07 * d, size, height * 0.55 - size / 2, size, "grille", { angle: Math.PI / 2 });
+      break;
+    }
+    case "fan": {
+      // 扇風機: 丸い台と支柱、後ろのモーター、前に羽根と網のガード
+      const size = Math.min(w * 0.95, height * 0.38);
+      ellipse(0, 0, 0.75, 0.75, 0, 0.05, "enamel");
+      ellipse(0, 0, 0.08, 0.08, 0.05, 0.72, "enamel");
+      const motor = Math.min(height * 0.2, size * 0.55);
+      cm("sphere", 0, -0.15 * d, w * 0.3, d * 0.35, height - size / 2 - motor / 2, motor, "enamel");
+      cm("disc", 0, d * 0.15, d * 0.04, size * 0.92, height - size / 2 - size * 0.46, size * 0.92, "fanBlade", { angle: Math.PI / 2 });
+      cm("disc", 0, d * 0.15, d * 0.34, size, height - size, size, "net", { angle: Math.PI / 2 });
+      break;
+    }
+    case "stove":
+      // 石油ストーブ: 丸い胴と天板、正面の燃える窓。天板にやかん
+      ellipse(0, 0, 1, 1, 0, 0.04, "dark");
+      ellipse(0, 0, 0.9, 0.9, 0.04, 0.71, "enamel");
+      box(0, 0.44, 0.3, 0.06, 0.3, 0.25, "ember");
+      ellipse(0, 0, 0.95, 0.95, 0.75, 0.03, "metal");
+      ellipse(0, 0, 0.42, 0.42, 0.78, 0.17, "metal", 0.7);
+      box(0, 0, 0.3, 0.03, 0.95, 0.05, "black");
+      break;
+    case "curtain": {
+      // カーテン: 上のレールから下がる、ひだの寄った布
+      const folds = Math.max(2, Math.round(w / 15)), fold = (w / folds) * 1.1;
+      for (let i = 0; i < folds; i++) {
+        cm("ellipse", -w / 2 + fold / 2 + (i / (folds - 1)) * (w - fold), (i % 2 ? -0.12 : 0.12) * d, fold, d * 0.55, 0, height * 0.965, "cloth");
+      }
+      box(0, 0, 1, 0.2, 0.97, 0.03, "metal");
+      break;
+    }
+    case "treasureChest":
+      // 宝箱: 木の箱に丸いふた。金の帯と錠前
+      box(0, 0, 0.96, 0.96, 0, 0.583, "wood");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 1, 0, 0.583, "gold");
+      box(0, 0.49, 0.1, 0.02, 0.4, 0.15, "gold");
+      disc(0, 0, 0.96, 0.96, 0.183, 0.8, "wood");
+      for (const x of [-0.3, 0.3]) disc(x, 0, 0.06, 1, 0.167, 0.833, "gold");
+      break;
+    case "barrel": {
+      // 樽: 胴の膨らんだ木の樽に、鉄のたが
+      ellipse(0, 0, 1, 1, 0, 0.5, "wood", 1 / 0.88);
+      ellipse(0, 0, 1, 1, 0.5, 0.48, "wood", 0.88);
+      for (const z of [0.1, 0.36, 0.6, 0.86]) {
+        const r = z < 0.5 ? 0.88 + 0.24 * z : 1 - 0.25 * (z - 0.5);
+        ring(0, 0, Math.min(1, r + 0.02), Math.min(1, r + 0.02), z - 0.02, 0.04, "iron", (r - 0.02) / Math.min(1, r + 0.02));
+      }
+      ellipse(0, 0, 0.86, 0.86, 0.98, 0.02, "paleWood");
+      break;
+    }
+    case "crate":
+      // 木箱: 板の箱に、角の柱と上の枠、斜めの板
+      box(0, 0, 0.94, 0.94, 0, 0.97, "paleWood");
+      // 斜めの板は、上の枠の内側の角から角へ渡す
+      cm("box", 0, 0, Math.hypot(w, d) * 0.82, Math.min(6, Math.min(w, d) * 0.08), height * 0.97, height * 0.03, "wood", { angle: Math.atan2(d, w) });
+      for (const x of [-0.47, 0.47]) for (const y of [-0.47, 0.47]) box(x, y, 0.06, 0.06, 0, 1, "wood");
+      for (const y of [-0.47, 0.47]) box(0, y, 0.88, 0.06, 0.92, 0.08, "wood");
+      for (const x of [-0.47, 0.47]) box(x, 0, 0.06, 0.88, 0.92, 0.08, "wood");
+      break;
+    case "throne":
+      // 玉座: 金の枠に赤いビロードの座面と背もたれ。背の上に飾り
+      box(0, 0, 1, 1, 0, 0.06, "gold");
+      box(0, 0.1, 0.7, 0.6, 0.06, 0.2, "gold");
+      box(0, 0.1, 0.62, 0.55, 0.26, 0.04, "velvet");
+      for (const x of [-0.42, 0.42]) box(x, 0.1, 0.16, 0.7, 0.06, 0.32, "gold");
+      box(0, -0.27, 0.6, 0.04, 0.3, 0.55, "velvet");
+      box(0, -0.38, 0.8, 0.2, 0.06, 0.86, "gold");
+      for (const x of [-0.36, 0.36]) sphere(x, -0.38, 0.12, 0.13, 0.92, 0.07, "gold");
+      box(0, -0.4, 0.36, 0.16, 0.92, 0.08, "gold");
+      break;
+    case "altar":
+      // 祭壇: 白い布を掛けた台に、赤い敷布、燭台2つと十字架
+      box(0, 0, 1, 1, 0, 0.64, "linen");
+      box(0, 0, 0.3, 1, 0.64, 0.005, "velvet");
+      for (const x of [-0.38, 0.38]) {
+        ellipse(x, -0.2, 0.06, 0.15, 0.645, 0.02, "gold");
+        ellipse(x, -0.2, 0.02, 0.05, 0.665, 0.17, "gold");
+        ellipse(x, -0.2, 0.025, 0.06, 0.835, 0.1, "board");
+        ellipse(x, -0.2, 0.012, 0.03, 0.935, 0.04, "flame", 0.05);
+      }
+      box(0, -0.3, 0.14, 0.06, 0.88, 0.025, "gold");
+      box(0, -0.3, 0.03, 0.06, 0.645, 0.355, "gold");
+      break;
+    case "coffin":
+      // 棺: 白木の箱とふた。頭の側に小窓
+      box(0, 0, 0.96, 0.97, 0, 0.88, "paleWood");
+      box(0, 0, 1, 1, 0.88, 0.11, "paleWood");
+      box(0, -0.32, 0.4, 0.14, 0.99, 0.01, "trim");
+      break;
+    case "cage": {
+      // 檻: 下と上の鉄の枠に、四方の縦の格子。上には横棒（床は透けて見える）
+      const across = Math.max(2, Math.round(w / 12)), along = Math.max(2, Math.round(d / 12)), bar = Math.min(2.2, w / (across + 1), d / (along + 1));
+      for (const y of [-0.48, 0.48]) box(0, y, 1, 0.04, 0, 0.04, "iron");
+      for (const x of [-0.48, 0.48]) box(x, 0, 0.04, 0.92, 0, 0.04, "iron");
+      for (let i = 0; i <= across; i++) for (const side of [-1, 1]) cm("ellipse", -w / 2 + bar / 2 + (i / across) * (w - bar), side * (d / 2 - bar / 2), bar, bar, height * 0.04, height * 0.92, "iron");
+      for (let i = 1; i < along; i++) for (const side of [-1, 1]) cm("ellipse", side * (w / 2 - bar / 2), -d / 2 + bar / 2 + (i / along) * (d - bar), bar, bar, height * 0.04, height * 0.92, "iron");
+      for (const y of [-0.48, 0.48]) box(0, y, 1, 0.04, 0.96, 0.04, "iron");
+      for (const x of [-0.48, 0.48]) box(x, 0, 0.04, 0.92, 0.96, 0.04, "iron");
+      for (const y of [-0.25, 0, 0.25]) box(0, y, 0.92, 0.02, 0.97, 0.03, "iron");
+      break;
+    }
+    case "brazier": {
+      // 篝火（かがり火）: 3本脚の上に鉄のかごを載せ、薪を燃やす
+      const r = Math.min(w, d) / 2;
+      for (let i = 0; i < 3; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI * 2) / 3;
+        cm("ellipse", Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8, Math.min(3, r * 0.15), Math.min(3, r * 0.15), 0, height * 0.66, "iron");
+      }
+      ellipse(0, 0, 0.8, 0.8, 0.62, 0.02, "iron");
+      ring(0, 0, 0.9, 0.9, 0.62, 0.14, "iron", 0.88);
+      for (let i = 0; i < 3; i++) cm("disc", 0, 0, r * 1.4, Math.min(6, r * 0.25), height * 0.64 + i * 4, 6, "wood", { angle: (i * Math.PI) / 3 });
+      cm("ellipse", 0, 0, r * 0.8, r * 0.8, height * 0.7, height * 0.22, "flame", { taper: 0.05 });
+      cm("ellipse", 0, 0, r * 0.4, r * 0.4, height * 0.7, height * 0.3, "flameCore", { taper: 0.05 });
+      break;
+    }
   }
-  return parts.sort((a, b) => (a.bottom + a.height) - (b.bottom + b.height));
+  return parts.sort((a, b) => furniturePartTop(a) - furniturePartTop(b));
 }
 
 // ---- 岩 ----

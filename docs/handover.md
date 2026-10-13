@@ -42,7 +42,7 @@
    ```
    npm run dev        # http://127.0.0.1:5173/ を開く
    npm test           # 単体テスト（373件）
-   npm run test:e2e   # 画面のテスト（約10分。PASS: の行が54本）
+   npm run test:e2e   # 画面のテスト（約12分。PASS: の行が55本）
    npm run build
    ```
    取ってきたばかりの環境では、E2E が途中の再読み込み（`page.reload`）で止まって失敗することがまれにある（下の「気をつけること」）。もう一度実行すれば通る。
@@ -132,14 +132,14 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `index.html` | 画面の部品（上のバー、左の欄、2Dと3Dの欄、メニュー）。先頭で間取り専用版かどうかを見分ける |
 | `src/main.ts` | アプリ本体（約8500行）。状態、2Dの描画と操作、選択中の欄、3Dの組み立て、保存、書き出し、メニュー |
 | `src/furniture-catalog.ts` | 家具の種類（名前・標準の大きさ。`FURNITURE_DEFS`）と、デザインの名前（`FURNITURE_VARIANTS`。2Dと3Dで共通の番号）、一覧の分類（`FURNITURE_GROUPS`。どの種類も1つの分類の `kinds` に入り、`also` でほかの分類にも重ねて出す。`doorStyles` でその分類にもドアを出す） |
-| `src/furniture-shapes.ts` | 2Dと3Dで共通の形のデータ（岩・池・足跡・血・破片・人の模型の骨組みなど） |
+| `src/furniture-shapes.ts` | 2Dと3Dで共通の形のデータ（岩・池・足跡・血・破片・人の模型の骨組みなど）。部品で組む家具（`PART_KINDS`: 和風の家具・鳥居・学校やお店の設備・遊具など89種類）は `furnitureParts()` が部品（箱・円柱・輪・横倒しの円柱・楕円体・傾けた板）の並びを返し、2D（`drawFurnitureSymbol`）は低い順に真上から描き、3D（`buildFurnitureModel`）は同じ部品を立体にする。材質は `PART_MATERIALS`（色を変えられる部品は `tintable`、ガラスは `opacity`、炎は `glow`）。壁に掛ける物は `MOUNTED_PART_KINDS` |
 | `src/furniture-models.ts` | 家具の3Dモデル（`buildFurnitureModel`）。種類ごとの `case` |
 | `src/opening-models.ts` | ドア・引き戸・和風の建具・窓の3Dモデル |
 | `src/opening-shapes.ts` | ドアの種類（`DOOR_STYLES`: ドア・両開きドア・引き戸・障子・襖・格子戸・板戸・門扉）と、2D・3D共通の戸の並び（`slidingPanels`）・組子や格子の位置（`panelBars`）・門扉の板（`gateSlats`） |
 | `src/geometry.ts` | 壁の開口（ドア・窓の所を抜く）、床の分け方 |
 | `src/plan-style.ts` | 2Dの絵柄17種類（`PLAN_STYLES`、分類は `PLAN_STYLE_GROUPS`）。描き先を包んで、線・塗り・文字の描き方を変える |
 | `src/templates.ts` | テンプレートの分類（`TEMPLATE_GROUPS`、6つの分類に50種類）と、そのうち45種類の間取りのデータ（`BUILDERS`）。部屋を並べると壁を自動で立てる、小さな作り方（`planBuilder`）で書く。住まいの4種類と作例は `main.ts` |
-| `src/surfaces.ts` | 床材（フローリング・タイル・石・草地）の模様 |
+| `src/surfaces.ts` | 床材22種類（フローリング・畳・大理石・石畳・アスファルト・砂利・水面など）の模様。`surfaceCanvas()` の1枚の模様を2Dと3Dの両方が使い、`surfaceTileCm()` がその模様1枚の大きさ（畳は360cm、モザイクは50cmなど）。端にかかる粒は反対側にも描いて継ぎ目を出さない |
 | `src/colors.ts` | カラーコード（透明度つき）の読み取り |
 | `src/translucency.ts` | 透明度のある色の3Dの材質 |
 | `src/persistence.ts` | ブラウザに保存した間取りの読み込みと、壊れていたときの復旧・原本の退避 |
@@ -183,13 +183,12 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 
 ### 家具を1種類増やすとき
 
-1. `furniture-catalog.ts` の `FURNITURE_DEFS` に足す（名前と標準の大きさ）。デザインがあれば `FURNITURE_VARIANTS` にも足す。
-2. 形が複雑なら、`furniture-shapes.ts` に共通の形のデータを作る。
-3. 2Dを作る: `main.ts` の `drawFurnitureSymbol()` に `case` を足す。塗りの色は `furnitureSymbolFill()`、デザインは `SYMBOL_VARIANTS` に足す。
-4. 3Dを作る: `furniture-models.ts` の `buildFurnitureModel()` に `case` を足す。
-5. 左の一覧と検索: `FURNITURE_CATEGORIES` と `SEARCH_KEYWORDS` に足す。
-6. 確かめる: `npm test`（全種類を自動で調べる）、`npm run test:e2e`（全種類の大きさ・回転・反転・色）、`npm run compare -- 新しい種類`。
-7. 説明を直す: README の家具の表と数（いまは一覧に94種類。ペンの線 `paint` は一覧に出さないので、定義は95）と、更新履歴。
+1. `furniture-catalog.ts` の `FurnitureKind` と `FURNITURE_DEFS` に足す（名前と標準の大きさ。部品で組む家具は `height` も）。デザインがあれば `FURNITURE_VARIANTS` にも足す。
+2. いちばん簡単なのは、部品で組む家具にすること: `furniture-shapes.ts` の `PART_KINDS` に足し、`furnitureParts()` に `case` を書く（割合で書く `box`/`ellipse`/`ring`/`disc`/`sphere`、cm で書く `cm`、傾けた板の `slab`/`tilted`）。これだけで2Dも3Dもでき、真上から見た形が必ずそろう。いちばん低い部品は床（0）から、いちばん高い部品は高さちょうど（1）までにする（単体テストが確かめる。壁に掛ける物は `MOUNTED_PART_KINDS` に足す）。
+3. 部品で組まない家具は、形のデータを `furniture-shapes.ts` に作り、2Dは `main.ts` の `drawFurnitureSymbol()`（塗りは `furnitureSymbolFill()`、デザインは `SYMBOL_VARIANTS`）、3Dは `furniture-models.ts` の `buildFurnitureModel()` に `case` を足す。
+4. 左の一覧と検索: `FURNITURE_GROUPS`（どれか1つの分類の `kinds` に入れ、ほかの分類にも出すなら `also`）と `main.ts` の `SEARCH_KEYWORDS` に足す。
+5. 確かめる: `npm test`（全種類を自動で調べる）、`npm run test:e2e`（全種類の大きさ・回転・反転・色）、`npm run compare -- 新しい種類`。
+6. 説明を直す: README の家具の表と数（いまは一覧に159種類。ペンの線 `paint` は一覧に出さないので、定義は160）と、更新履歴。
 
 ### 2Dの絵柄（`src/plan-style.ts`）の仕組み
 
@@ -278,6 +277,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - テンプレートを27種類にした（「テンプレ27種（家/病院/洋館/など）」）。住まい・屋敷と宿・お店・施設・屋外とそのほかの5つに分けた。部屋の名前（テンプレートの部屋の名前は付けてよい）が家具に隠れないかをテストで確かめる。
   - 2Dの絵柄を6種類足して9種類にした（「描画スタイルを他にも作れ」）。メニューは、それぞれの絵柄で描いた見本を並べる形にした。
 - **2026-10-10**: 「テンプレートは複数階がありそうなものは複数階も作れ」で、旅館・ホテル・病院・学校・図書館・警察署・美術館・城に上の階を足した（ホテル・学校は3階）。上の階へ続く階段は同じ場所に置き、いちばん上の階に屋根を載せる（`tests/templates.test.mjs` が確かめる）。2階の下にならない部分には、1階に屋根を載せる（図書館・城）。
+- **2026-10-14**: 「一回の屋根が選択できない」（1階の屋根）は、2Dの当たり判定で庭・地面の床が屋根の縁より先に拾われていたのが原因。`hitTest` で屋根の縁（`roofEdgeAt`。いま見ている階の屋根が先）を床より先に調べるようにした。「屋根の色も変えられる」で屋根に `color`（見本 `ROOF_COLORS` とカラーコード。透かせる）。「鳥居を追加」「もっとたくさんの家具や設備を追加」で、部品で組む家具を一般化して65種類を足し（`PART_KINDS`）、分類を7つ足した。「床材も追加」で床材を17種類足した（`surfaces.ts`）。テンプレートも新しい家具・床材に置き換えた（神社の鳥居・学校の黒板・病院のベッドなど）。E2E は `tests/roof-color-editor.mjs`（`--roof-color-only`）。
 - **2026-10-13**: 「和風の障子とかをドアに追加して」「襖とか」「門戸・玄関戸とか」「被ってもいいから」「分類とかを見直して」で、ドアの種類を8つにし（`opening-shapes.ts`）、和風のテンプレートの引き戸を障子・襖・格子戸・板戸に変え、一覧の分類を `FURNITURE_GROUPS` に移して重ねて出せるようにした。「3dは長押しとダブルクリックどっちがいいかな」には、マウスはダブルクリック（回すつもりで止まったときに家具が動く事故がない）、タッチは長押しと答え、1回クリックで選び方の案内（`#threeHint`）を出し、タッチの長押しで選んでそのまま動かせるようにした（`tests/three-press-editor.mjs`）。
 - **2026-10-10**: 「もっとたくさん」と言われ、テンプレートを50種類（「屋外・乗り物」「ファンタジー・SF」の分類を足して6つ）、2Dの絵柄を17種類（メニューは5つの分類）にした。寺の墓地のために、家具に「墓石」を足した（2Dと3Dは `GRAVE_PARTS` で同じ配置）。
 
@@ -286,7 +286,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
 ## 10. 気をつけること・残っている課題
 
 - **2026-10-10 の選択操作**: `main.ts` の `multiSelection` は保存しない一時的な集合で、既存の `selectedId` を主選択として残す。Ctrl/Cmd＋クリックで追加・解除し、2Dは全要素を、3Dは家具をつかんでまとめて動かせる。`selection.ts` が共通の差分を足し、元の座標をスナップし直さない。固定した物は除外する。1ジェスチャー1履歴、Esc・pointercancel・フォーカス喪失で原位置へ戻す。描くツールは短いクリック、置くツールは450msの長押しで選択する。`tests/selection-editor.mjs` は通常のE2Eから呼ぶ。
-- **2026-10-10 の和風家具12種類**: 畳・座布団・ちゃぶ台・屏風・障子の衝立・行灯・階段箪笥・囲炉裏・火鉢・縁台・檜風呂・つくばい。`furniture-shapes.ts` の `japaneseParts` と `JAPANESE_MATERIALS` が2D・3D共通の部品データ。高さ1cm〜30m（ほかの家具の下限10cmはそのまま）。標準・横長・縦長・最小の形と高さは家具の単体テストで確認する。
+- **2026-10-10 の和風家具12種類**: 畳・座布団・ちゃぶ台・屏風・障子の衝立・行灯・階段箪笥・囲炉裏・火鉢・縁台・檜風呂・つくばい。`furniture-shapes.ts` の `japaneseParts` と `JAPANESE_MATERIALS` が2D・3D共通の部品データ（2026-10-14 に、ほかの家具にも使えるよう `furnitureParts` と `PART_MATERIALS` に広げた）。高さ1cm〜30m（ほかの家具の下限10cmはそのまま）。標準・横長・縦長・最小の形と高さは家具の単体テストで確認する。
 
 - **前のメールアドレスが古いコミットに残っている**: サイトと README からは消したが、昔のコミットの中には残っている。履歴の書き換えを提案したが、行っていない。どうするかはユーザーが決める。
 - **画像付きフォームの自動入力**: 確かめられていない（上の表）。

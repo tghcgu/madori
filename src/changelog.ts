@@ -8,6 +8,25 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-14",
+    items: [{
+      ja: "家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー・TRPG」の分類を足しました",
+      en: "Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy and TRPG",
+    }, {
+      ja: "床材を17種類追加: 畳・カーペット・ヘリンボーン・ウッドデッキ（板張り）・モザイクタイル・市松（チェッカー）・大理石・石畳・レンガ・コンクリート・アスファルト・鉄板（縞鋼板）・土（土間）・砂・砂利・雪・水面。2Dの模様と3Dの床は同じ模様・同じ大きさです",
+      en: "Added 17 floor materials: tatami, carpet, herringbone, wooden deck, mosaic tiles, checkerboard, marble, cobblestones, brick, concrete, asphalt, checker plate, soil, sand, gravel, snow and water. The 2D pattern and the 3D floor share the same pattern at the same scale",
+    }, {
+      ja: "屋根の色を変えられるように。「選択中」の色の見本かカラーコードで選び、末尾2桁で透かすと、3Dで屋根越しに中が見えます",
+      en: "Roof colors can now be changed under Selection with swatches or a color code. Adding two digits for transparency makes the roof see-through in 3D",
+    }, {
+      ja: "庭や地面の床の上にある屋根の縁も、2Dでクリックして選べるように（1階の屋根を選べないことがありました）。いま見ている階の屋根を先に選びます",
+      en: "Roof edges over gardens and ground floors can now be clicked in 2D (ground-floor roofs could not be selected before). The roof of the floor being viewed is chosen first",
+    }, {
+      ja: "テンプレートに新しい家具と床材を使用。神社に鳥居・狛犬・賽銭箱・手水鉢と玉砂利・石畳、寺の境内も玉砂利に。学校に黒板・教卓・学校の机、病院に病院のベッド・診察台・点滴スタンド・車椅子、コンビニに陳列棚・カウンター・自動販売機、公園と保育園に遊具、キャンプ場にテントと焚き火、ダンジョンと城に玉座・篝火・宝箱。和室は畳の床、土間は土の床です",
+      en: "Templates use the new furniture and floors: the shrine has a torii, lion-dogs, an offering box, a basin, gravel and a stone path, and the temple grounds are gravel; the school has blackboards, lecterns and school desks; the hospital has hospital beds, examination couches, an IV stand and a wheelchair; the convenience store has store shelves, a counter and a vending machine; the park and nursery have playground equipment; the campsite has tents and a campfire; the dungeon and castle have thrones, braziers and treasure chests. Japanese rooms have tatami floors and earthen entrances have soil",
+    }],
+  },
+  {
     date: "2026-10-13",
     items: [{
       ja: "ドアに「両開きドア」と和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）を追加。2Dの記号と3Dの形は、同じ戸の並びと組子・格子の位置から作ります。2.4m以上の障子・襖は引き違いの4枚建てになり、置いたあとも「扉の種類」で変えられます。日本家屋・旅館・武家屋敷・古民家・寺・神社・居酒屋・銭湯のテンプレートも、障子・襖・格子戸・板戸に変えました",

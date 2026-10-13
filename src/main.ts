@@ -2,7 +2,7 @@ import { createIcons, icons } from "lucide";
 import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { SURFACE_DEFS, SURFACE_TILE_CM, isRoomSurface, surfaceCanvas, type RoomSurface } from "./surfaces";
+import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
@@ -23,7 +23,7 @@ import {
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
   PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
   type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
-  JAPANESE_MATERIALS, isJapaneseKind, japaneseParts,
+  PART_MATERIALS, furnitureParts, isPartKind, partSpan,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
@@ -155,6 +155,8 @@ interface Roof {
   sides?: number;
   rotation?: number;
   rise?: number;
+  // 屋根の色（カラーコード。末尾2桁で透かせる）。なければ標準の灰色（ROOF_COLORS の先頭）
+  color?: string;
 }
 
 // 2Dの間取りだけに表示する自由な文字。x, y は文字のまとまりの中心
@@ -407,6 +409,39 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   byobu: "びょうぶ 間仕切り", shojiScreen: "しょうじ ついたて 間仕切り", andon: "あんどん 照明 灯り",
   stepTansu: "かいだんだんす 階段たんす 箪笥 収納", irori: "いろり 暖房 炉", hibachi: "ひばち 暖房",
   engawa: "えんだい 縁側 えんがわ ベンチ", hinokiBath: "ひのきぶろ 檜 ヒノキ 浴槽 風呂", tsukubai: "蹲 つくばい 手水鉢 ちょうずばち 庭 和風",
+  butsudan: "ぶつだん 仏 ほとけ 位牌 いはい 和室", kamidana: "かみだな 神 かみ 神社 お札 おふだ 榊 さかき 壁 かべ 和室",
+  tokonoma: "とこのま 掛け軸 かけじく 床柱 とこばしら 生け花 いけばな 和室 座敷", kamado: "かまど 竈 へっつい 釜 かま 土間 どま 台所 だいどころ 古民家",
+  washikiToilet: "わしきといれ 和式 便器 べんき 便所 べんじょ トイレ", chochin: "ちょうちん 赤提灯 あかちょうちん 灯り あかり 居酒屋 いざかや 祭り まつり",
+  takegaki: "たけがき 竹 たけ 垣根 かきね 生垣 柵 さく 庭 にわ 和風 屋外 外 そと", ido: "いど 井筒 いづつ つるべ 水 みず 古民家 庭 にわ 屋外 外 そと",
+  torii: "とりい 神社 じんじゃ 鳥居 朱 しゅ 稲荷 いなり 参道 さんどう 屋外 外 そと", komainu: "こまいぬ 狛犬 獅子 しし 神社 じんじゃ 石像 せきぞう 像",
+  saisenBako: "さいせんばこ 賽銭 さいせん お賽銭 おさいせん 神社 じんじゃ 寺 てら", chozubachi: "ちょうずばち 手水 ちょうず 手水舎 ちょうずや 柄杓 ひしゃく 神社 じんじゃ 寺 てら",
+  blackboard: "こくばん 黒板 チョーク 教室 きょうしつ 学校 がっこう", whiteboard: "ほわいとぼーど ボード 会議 かいぎ 事務所 じむしょ 学校 がっこう",
+  lectern: "きょうたく 教壇 きょうだん 演台 えんだい 講義 こうぎ 教室 きょうしつ", schoolDesk: "がっこう 学習机 つくえ 机 いす 椅子 教室 きょうしつ 生徒 せいと",
+  locker: "ろっかー 更衣室 こういしつ 収納 しゅうのう 学校 がっこう 事務所 じむしょ", copier: "こぴーき コピー機 ふくごうき プリンター 印刷 いんさつ 事務所 じむしょ",
+  partition: "ぱーてぃしょん ついたて 衝立 間仕切り まじきり 事務所 じむしょ", safe: "きんこ 金庫 お金 おかね 銀行 ぎんこう 事務所 じむしょ",
+  fireExtinguisher: "しょうかき 消火 しょうか 火事 かじ 防災 ぼうさい", counter: "かうんたー 受付 うけつけ レジ バー 台 だい 店 みせ",
+  showcase: "しょーけーす ガラスケース 陳列 ちんれつ ケーキ 宝石 ほうせき 店 みせ", displayShelf: "ちんれつだな 商品棚 しょうひんだな ゴンドラ スーパー コンビニ 店 みせ",
+  vendingMachine: "じどうはんばいき 自販機 じはんき ジュース 飲み物 のみもの 屋外 外 そと", signboard: "たてかんばん 看板 かんばん 黒板 メニュー 店 みせ カフェ",
+  barStool: "かうんたーちぇあ ハイスツール 椅子 いす イス バー カウンター", hospitalBed: "びょういん 介護 かいご ベッド ベット 寝台 病室 びょうしつ",
+  ivStand: "てんてき 点滴 病院 びょういん 医療 いりょう", wheelchair: "くるまいす 車イス 介護 かいご 病院 びょういん",
+  examCouch: "しんさつだい 診察 しんさつ ベッド 病院 びょういん 保健室 ほけんしつ", slide: "すべりだい 滑り台 遊具 ゆうぐ 公園 こうえん 子供 こども 屋外 外 そと",
+  jungleGym: "じゃんぐるじむ 遊具 ゆうぐ 公園 こうえん 子供 こども 屋外 外 そと", ironBar: "てつぼう 鉄棒 逆上がり さかあがり 遊具 ゆうぐ 公園 こうえん 校庭 こうてい",
+  sandbox: "すなば 砂 すな 遊具 ゆうぐ 公園 こうえん 子供 こども 屋外 外 そと", vaultingBox: "とびばこ 体育 たいいく 体育館 たいいくかん",
+  pingPongTable: "たっきゅうだい 卓球 たっきゅう ピンポン 台 だい", poolTable: "びりやーど ビリヤード 撞球 どうきゅう 台 だい バー",
+  drumKit: "どらむ 太鼓 たいこ 楽器 がっき バンド ライブ 音楽 おんがく", stage: "すてーじ 舞台 ぶたい 壇 だん 演台 えんだい ライブ 体育館 たいいくかん",
+  fountain: "ふんすい 噴水 水 みず 公園 こうえん 広場 ひろば 屋外 外 そと", statue: "せきぞう 石像 銅像 どうぞう 像 ぞう 彫刻 ちょうこく 公園 こうえん",
+  campfire: "たきび 焚き火 キャンプ ファイヤー 火 ひ 屋外 外 そと", tent: "てんと キャンプ 野営 やえい 屋外 外 そと",
+  westernGrave: "はか 墓 お墓 十字架 じゅうじか 墓地 ぼち 教会 きょうかい 洋風 屋外 外 そと", trafficCone: "からーこーん パイロン 三角コーン 工事 こうじ 道路 どうろ",
+  utilityPole: "でんちゅう 電柱 電信柱 でんしんばしら 電線 でんせん 道路 どうろ 屋外 外 そと", busStop: "ばすてい バス停 停留所 ていりゅうじょ 標識 ひょうしき 道路 どうろ",
+  phoneBooth: "でんわぼっくす 電話 でんわ 公衆電話 こうしゅうでんわ 屋外 外 そと", manhole: "まんほーる ふた 蓋 下水 げすい 道路 どうろ",
+  drum: "どらむかん ドラム缶 缶 かん 工場 こうじょう 倉庫 そうこ", bus: "ばす 乗り物 のりもの 車 くるま",
+  cardboard: "だんぼーる 段ボール 箱 はこ 荷物 にもつ 引っ越し ひっこし 倉庫 そうこ", acOutdoor: "しつがいき 室外機 エアコン ベランダ 屋外 外 そと",
+  fan: "せんぷうき 扇風機 夏 なつ 風 かぜ", stove: "すとーぶ 石油ストーブ 暖房 だんぼう やかん 冬 ふゆ",
+  curtain: "かーてん 窓 まど 布 ぬの 仕切り しきり", treasureChest: "たからばこ 宝 たから 箱 はこ ダンジョン TRPG",
+  barrel: "たる 樽 酒樽 さかだる ワイン 倉庫 そうこ 酒場 さかば", crate: "きばこ 木箱 箱 はこ 荷物 にもつ 倉庫 そうこ",
+  throne: "ぎょくざ 玉座 王 おう 椅子 いす 城 しろ 王座 おうざ", altar: "さいだん 祭壇 教会 きょうかい 神殿 しんでん 燭台 しょくだい ろうそく",
+  coffin: "ひつぎ 棺 棺桶 かんおけ 葬儀 そうぎ 吸血鬼 きゅうけつき", cage: "おり 檻 牢 ろう 牢屋 ろうや 鉄格子 てつごうし 動物 どうぶつ",
+  brazier: "かがりび 篝火 たいまつ 松明 火 ひ 神社 じんじゃ 城 しろ",
   evidenceMarker: "ばんごう 番号 数字 すうじ 印 しるし マーカー 証拠 しょうこ 札 ふだ 事件 じけん 調査 ちょうさ 探索 TRPG",
   footprints: "あしあと 足 あし 靴 くつ 素足 はだし 跡 あと 痕跡 こんせき 事件 じけん TRPG",
   fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG 模型 もけい マネキン ポーズ",
@@ -533,6 +568,11 @@ let planStyle: PlanStyle = "standard";
 // 2Dの背景（地の色・方眼・紙の模様）。"auto" なら線画の絵柄に合わせる
 let planBackground: PlanBackground = "auto";
 let pixelDot = DEFAULT_PIXEL_DOT;
+// 屋根の色の見本。先頭が標準の色（3Dの屋根の材質と同じ）
+const ROOF_COLORS: [string, string][] = [
+  ["#5d6773", "いぶし瓦（標準）"], ["#2f3338", "黒"], ["#8d949c", "銀"], ["#9c4a2f", "赤茶（洋瓦）"], ["#c8452f", "朱"], ["#6b4b35", "こげ茶"],
+  ["#b59a6a", "かやぶき"], ["#5e9c8b", "緑青（銅板）"], ["#2f6b4f", "緑"], ["#3f5f8c", "青"], ["#2c3e66", "紺"], ["#e8e4da", "白"],
+];
 // ペンのよく使う色（血の色が最初）
 const PEN_COLORS: [string, string][] = [
   ["#9b1c17", "血の色"], ["#e03131", "赤"], ["#f08c00", "だいだい"], ["#f2c230", "黄"], ["#2f9e44", "緑"], ["#1c7ed6", "青"],
@@ -730,6 +770,7 @@ function normalizeRoof(value: unknown): Roof | null {
     rise: isRadialRoof(item.kind) && typeof item.rise === "number" && Number.isFinite(item.rise) ? clamp(item.rise, 10, 2000) : undefined,
     floorId: typeof item.floorId === "string" ? item.floorId : undefined,
     locked: item.locked === true ? true : undefined,
+    color: parseColorCode(item.color)?.code,
   };
 }
 
@@ -843,7 +884,7 @@ function normalizeEntity(value: unknown): Entity {
         filled: entity.filled === true ? true : undefined,
       } : {}),
       height: FURNITURE_DEFS[entity.kind].height !== undefined && finite(entity.height)
-        ? clamp(Math.round(entity.height!), isJapaneseKind(entity.kind) ? 1 : MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
+        ? clamp(Math.round(entity.height!), isPartKind(entity.kind) ? 1 : MIN_FURNITURE_HEIGHT, MAX_FURNITURE_HEIGHT)
         : undefined,
     };
   }
@@ -4338,8 +4379,10 @@ function drawRoof2d(roofItem: Roof): void {
   const inset = Math.min(roofItem.w, roofItem.h) / 2;
 
   ctx.save();
-  ctx.fillStyle = selected ? "rgba(39, 117, 209, 0.12)" : "rgba(93, 103, 115, 0.06)";
-  ctx.strokeStyle = selected ? "#2775d1" : "#657180";
+  // 色を決めた屋根は、その色でうすく塗り、少し濃くした色で縁を描く（透明度があれば、そのぶん薄く）
+  const tint = roofItem.color ? solidColor(roofItem.color) : null;
+  ctx.fillStyle = selected ? "rgba(39, 117, 209, 0.12)" : tint ? withAlpha(tint, 0.16 * colorAlpha(roofItem.color)) : "rgba(93, 103, 115, 0.06)";
+  ctx.strokeStyle = selected ? "#2775d1" : tint ? withAlpha(darkenColor(tint, 0.2), Math.max(0.35, colorAlpha(roofItem.color))) : "#657180";
   ctx.lineWidth = (selected ? 2.2 : 1.4) / view.zoom;
   ctx.setLineDash(selected ? [] : [7 / view.zoom, 5 / view.zoom]);
   const outline = roofOutline(roofItem);
@@ -4413,7 +4456,7 @@ function drawRoom(room: Room): void {
   // 透明度は部屋ごとではなく、同じ色の部屋をまとめて重ねるときに付ける（drawLayer）
   const fill = solidColor(room.color);
   const pattern = surface !== "plain" ? ctx.createPattern(surfaceCanvas(surface, fill), "repeat") : null;
-  pattern?.setTransform(new DOMMatrix().translate(room.x, room.y).scale(SURFACE_TILE_CM / 256));
+  pattern?.setTransform(new DOMMatrix().translate(room.x, room.y).scale(surfaceTileCm(surface) / 256));
   ctx.fillStyle = pattern ?? fill;
   ctx.strokeStyle = selected ? "#2775d1" : "#c3c9d2";
   ctx.lineWidth = selected ? 2.4 / view.zoom : 1.1 / view.zoom;
@@ -4848,15 +4891,18 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
 }
 
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture, fromAbove = false): void {
-  if (isJapaneseKind(kind)) {
-    for (const part of japaneseParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
+  // 部品で組む家具は、3Dと同じ部品を低い順に真上から描く（横倒しの円柱と傾けた板は、上から見た長方形）
+  if (isPartKind(kind)) {
+    for (const part of furnitureParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
       ctx.save();
       ctx.translate(part.x, part.y);
       ctx.rotate(part.angle ?? 0);
-      const material = JAPANESE_MATERIALS[part.material];
+      const material = PART_MATERIALS[part.material];
       ctx.fillStyle = material.tintable && item?.color ? solidColor(item.color) : material.color;
-      if (part.shape === "box") strokeRoundedRect(-part.w / 2, -part.d / 2, part.w, part.d, part.radius, true);
-      else if (part.shape === "ellipse") strokeEllipse(0, 0, part.w / 2, part.d / 2, true);
+      if (material.opacity !== undefined) ctx.globalAlpha *= Math.max(0.3, material.opacity);
+      const depth = partSpan(part);
+      if (part.shape === "box" || part.shape === "disc") strokeRoundedRect(-part.w / 2, -depth / 2, part.w, depth, part.radius, true);
+      else if (part.shape === "ellipse" || part.shape === "sphere") strokeEllipse(0, 0, part.w / 2, part.d / 2, true);
       else {
         ctx.beginPath();
         ctx.ellipse(0, 0, part.w / 2, part.d / 2, 0, 0, Math.PI * 2);
@@ -8064,8 +8110,23 @@ function buildRoofGeometry(width: number, depth: number, height: number, ridgeIn
   return geometry;
 }
 
+// 屋根の材質。色を決めていなければ、ほかの屋根と同じ材質を使う。透明度があれば透かし、影を落とさない
+function roofMaterialFor(roofItem: Roof): THREE.MeshStandardMaterial {
+  if (!roofItem.color) return roofMaterial;
+  const key = `roof-${roofItem.color}`;
+  const cached = coloredMaterialCache.get(key);
+  if (cached) return cached;
+  const material = roofMaterial.clone();
+  material.color.set(solidColor(roofItem.color));
+  makeTranslucent(material, colorAlpha(roofItem.color));
+  coloredMaterialCache.set(key, material);
+  return material;
+}
+
 function addRoof3d(roofItem: Roof, center: Point): void {
   if (!roofVisible3d) return;
+  const material = roofMaterialFor(roofItem);
+  const opaque = colorAlpha(roofItem.color) >= 1;
   const topIndex = roofItem.floorId ? state.floors.findIndex((floor) => floor.id === roofItem.floorId) : state.floors.length - 1;
   if (topIndex < 0 || hiddenFloorIds.has(state.floors[topIndex].id)) return;
   const width = roofItem.w * SCALE_3D;
@@ -8074,7 +8135,8 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   const topY = floorBaseY(topIndex) + WALL_HEIGHT + 0.06;
 
   if (isRadialRoof(roofItem.kind)) {
-    const model = radialRoofModel(roofItem, roofMaterial);
+    const model = radialRoofModel(roofItem, material);
+    if (!opaque) model.traverse((object) => { object.castShadow = false; });
     model.scale.setScalar(SCALE_3D);
     model.position.set(pos.x, topY, pos.z);
     markSelectable(model, roofItem.id);
@@ -8084,9 +8146,9 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   }
 
   if (roofItem.kind === "flat") {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), roofMaterial);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, 0.16, depth), material);
     mesh.position.set(pos.x, topY + 0.08, pos.z);
-    mesh.castShadow = true;
+    mesh.castShadow = opaque;
     mesh.receiveShadow = true;
     markSelectable(mesh, roofItem.id);
     planGroup.add(mesh);
@@ -8103,12 +8165,12 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   const height = short * (roofItem.kind === "gable" ? 0.34 : 0.3);
   const ridgeInset = roofItem.kind === "gable" ? 0 : short / 2;
   const geometry = buildRoofGeometry(long, short, height, ridgeInset);
-  const mesh = new THREE.Mesh(geometry, roofMaterial);
+  const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(pos.x, topY, pos.z);
   if (depth > width) {
     mesh.rotation.y = Math.PI / 2;
   }
-  mesh.castShadow = true;
+  mesh.castShadow = opaque;
   mesh.receiveShadow = true;
   markSelectable(mesh, roofItem.id);
   planGroup.add(mesh);
@@ -8329,6 +8391,8 @@ function updatePropertiesPanel(): void {
           <label>奥行 cm<input id="roofHInput" type="number" min="40" step="${radial ? 1 : 20}" value="${selected.h}" ${placementDisabled} /></label>
         </div>`}
         ${radial ? `<label>屋根の高さ cm<input id="roofRiseInput" type="number" min="10" max="2000" step="1" value="${selected.rise ?? ""}" placeholder="自動（${Math.round(roofRise(selected))}）" ${placementDisabled} /></label>` : ""}
+        ${colorField("roofColorInput", "色", selected.color ?? ROOF_COLORS[0][0])}
+        <div class="pen-colors roof-colors" role="group" aria-label="屋根の色の見本">${ROOF_COLORS.map(([value, label]) => `<button type="button" class="pen-color${(parseColorCode(selected.color)?.rgb ?? ROOF_COLORS[0][0]) === value ? " is-active" : ""}" data-roof-color="${value}" title="${label}" aria-label="${label}" style="--pen-color: ${value}"></button>`).join("")}</div>
         <div class="two-col">
           <label>位置 X<input id="roofXInput" type="number" step="20" value="${selected.x}" ${placementDisabled} /></label>
           <label>位置 Y<input id="roofYInput" type="number" step="20" value="${selected.y}" ${placementDisabled} /></label>
@@ -8352,6 +8416,14 @@ function updatePropertiesPanel(): void {
     bindNumber("#roofSidesInput", value => { selected.sides = roofSides(value); });
     bindNumber("#roofRotationInput", value => { selected.rotation = ((value % 360) + 360) % 360; });
     bindInput("#roofRiseInput", value => { selected.rise = value.trim() && Number.isFinite(Number(value)) ? clamp(Number(value), 10, 2000) : undefined; });
+    // 標準の色を選んだら、色を持たない（ほかの屋根と同じ材質）に戻す。見本を選び直しても透明度は残す
+    const setRoofColor = (value: string | undefined) => { selected.color = value && value !== ROOF_COLORS[0][0] ? value : undefined; };
+    bindColor("#roofColorInput", setRoofColor);
+    propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-roof-color]").forEach((button) => button.addEventListener("click", () => {
+      setRoofColor(withAlpha(button.dataset.roofColor ?? ROOF_COLORS[0][0], colorAlpha(selected.color)));
+      commitState();
+      redrawAll();
+    }));
     bindNumber("#roofXInput", (value) => (selected.x = snap(value)));
     bindNumber("#roofYInput", (value) => (selected.y = snap(value)));
     bindButton("#roofRotateButton", () => rotateEntity(selected, 90));
@@ -8618,12 +8690,12 @@ function updatePropertiesPanel(): void {
   ).join("");
   const defaultHeight = FURNITURE_DEFS[selectedFurniture.kind].height;
   const duplicateStair = isStair(selectedFurniture) && stairsBelow(state.floors, state.activeFloor).some((item) => sameStairPlacement(selectedFurniture, item));
-  const minimumHeight = isJapaneseKind(selectedFurniture.kind) ? 1 : MIN_FURNITURE_HEIGHT;
+  const minimumHeight = isPartKind(selectedFurniture.kind) ? 1 : MIN_FURNITURE_HEIGHT;
   const markerRow = selectedFurniture.kind === "evidenceMarker"
     ? `<label>番号（印に書く文字。${MAX_MARKER_LABEL}文字まで）<input id="markerLabelInput" value="${escapeHtml(selectedFurniture.markerLabel ?? "")}" maxlength="${MAX_MARKER_LABEL}" autocomplete="off" /></label>`
     : "";
   const heightRow = defaultHeight !== undefined && !PLAN_EDITION
-    ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${minimumHeight}" max="${MAX_FURNITURE_HEIGHT}" step="${isJapaneseKind(selectedFurniture.kind) ? 1 : 10}" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
+    ? `<label>高さ cm<input id="furnitureHeightInput" type="number" min="${minimumHeight}" max="${MAX_FURNITURE_HEIGHT}" step="${isPartKind(selectedFurniture.kind) ? 1 : 10}" value="${selectedFurniture.height ?? defaultHeight}" ${placementDisabled} /></label>`
     : "";
   // 2Dの記号だけのデザインは、3Dが標準の形のままになることを名前に添える
   const only2d = FURNITURE_VARIANTS_2D_ONLY[selectedFurniture.kind] ?? [];
@@ -9374,9 +9446,12 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     }
   }
 
+  // 屋根は縁の線で選ぶ。庭・地面などの床の上にある縁でも選べるよう、床より先に調べる（いま見ている階の屋根を優先）
+  const roofEdge = roofsOn2d() ? roofEdgeAt(point, selectedRoof?.id) : null;
   for (let i = entities.length - 1; i >= 0; i -= 1) {
     const entity = entities[i];
     if (entity.type === "room") {
+      if (roofEdge) return { entity: roofEdge, corner: null };
       const corner = getCornerHit(entity, point);
       if (corner) return { entity, corner };
       if (pointInPolygon(point.x, point.y, floorPolygon(entity))) {
@@ -9415,13 +9490,21 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
       }
     }
   }
-  for (let i = roofsOn2d() ? state.roofs.length - 1 : -1; i >= 0; i -= 1) {
-    const roofItem = state.roofs[i];
-    if (roofItem.id !== selectedRoof?.id && isPointNearRoofEdge(point, roofItem)) {
-      return { entity: roofItem, corner: null };
-    }
-  }
+  if (roofEdge) return { entity: roofEdge, corner: null };
   return { entity: null, corner: null };
+}
+
+// 点の近くに縁がある屋根。いま見ている階の屋根を先に、同じ階どうしなら後から置いた（上に描かれる）屋根を選ぶ
+function roofEdgeAt(point: Point, skipId?: string): Roof | null {
+  const floorId = activeFloor().id, topId = state.floors[state.floors.length - 1]?.id;
+  let other: Roof | null = null;
+  for (let i = state.roofs.length - 1; i >= 0; i -= 1) {
+    const roofItem = state.roofs[i];
+    if (roofItem.id === skipId || !isPointNearRoofEdge(point, roofItem)) continue;
+    if ((roofItem.floorId ?? topId) === floorId) return roofItem;
+    other ??= roofItem;
+  }
+  return other;
 }
 
 function getLineEndpointHit(entity: LinearElement, point: Point): string | null {
@@ -10219,10 +10302,11 @@ function roomMaterial(roomItem: Room, rect: Rectangle): THREE.MeshStandardMateri
     const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
     map.colorSpace = THREE.SRGBColorSpace;
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(rect.w / SURFACE_TILE_CM, rect.h / SURFACE_TILE_CM);
-    map.offset.set((rect.x - roomItem.x) / SURFACE_TILE_CM, (roomItem.y + roomItem.h - rect.y - rect.h) / SURFACE_TILE_CM);
+    const tile = surfaceTileCm(surface);
+    map.repeat.set(rect.w / tile, rect.h / tile);
+    map.offset.set((rect.x - roomItem.x) / tile, (roomItem.y + roomItem.h - rect.y - rect.h) / tile);
     map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    material = new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness });
+    material = new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness, metalness: SURFACE_DEFS[surface].metalness ?? 0 });
   }
   makeTranslucent(material, colorAlpha(code));
   return material;

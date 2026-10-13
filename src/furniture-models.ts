@@ -12,7 +12,7 @@ import {
   SPIRAL_POT_SCALE, spiralLeaves,
   CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, markerTextureSpan, personDesign, personLayout, personOutline, shardPieces,
   type PersonPart, type PersonPose, type StoneSlab,
-  isJapaneseKind, japaneseParts, JAPANESE_MATERIALS,
+  PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise,
 } from "./furniture-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
@@ -376,26 +376,43 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
   // 高さを指定できる種類では、いちばん高い所がちょうどこの高さになるように作る
   const tall = clamp((item.height ?? FURNITURE_DEFS[item.kind].height ?? 100) / 100, 0.1, 30);
   const m = new Model(item.color3d ?? item.color);
-  if (isJapaneseKind(item.kind)) {
+  // 部品で組む家具（和風の家具・鳥居・遊具など）。2Dの記号と同じ部品の並びから作る
+  if (isPartKind(item.kind)) {
     const height = clamp(item.height ?? FURNITURE_DEFS[item.kind].height!, 1, 3000);
-    for (const part of japaneseParts(item.kind, item.w, item.h, height)) {
-      const spec = JAPANESE_MATERIALS[part.material];
-      const material = m.material(`japanese-${part.material}`, Number.parseInt(spec.color.slice(1), 16), 0.72, 0, spec.tintable);
+    for (const part of furnitureParts(item.kind, item.w, item.h, height)) {
+      const spec = PART_MATERIALS[part.material];
+      const name = `part-${part.material}`, color = Number.parseInt(spec.color.slice(1), 16);
+      const material = spec.opacity !== undefined ? m.glass(name, color, spec.opacity) : m.material(name, color, spec.roughness ?? 0.72, spec.metalness ?? 0, spec.tintable);
+      // 炎や明かりは、自分の色で光らせる（色を変えたら、その色で光る）
+      if (spec.glow) { material.emissive.copy(material.color); material.emissiveIntensity = 0.8; }
+      const x = part.x / 100, z = part.y / 100, y = (part.bottom + partRise(part) / 2) / 100;
       let mesh: THREE.Mesh;
       if (part.shape === "box") {
-        mesh = m.box(part.w / 100, part.height / 100, part.d / 100, part.x / 100, (part.bottom + part.height / 2) / 100, part.y / 100, material, part.radius / 100);
+        mesh = m.box(part.w / 100, part.height / 100, part.d / 100, x, y, z, material, part.radius / 100);
       } else if (part.shape === "ring") {
         const inner = part.inner ?? 0.68, top = part.height / 100;
-        mesh = m.vessel([[inner, 0], [1, 0], [1, top], [inner, top], [inner, 0]], part.w / 200, part.d / 200, [part.x / 100, part.bottom / 100, part.y / 100], material);
+        mesh = m.vessel([[inner, 0], [1, 0], [1, top], [inner, top], [inner, 0]], part.w / 200, part.d / 200, [x, part.bottom / 100, z], material);
+      } else if (part.shape === "disc") {
+        // 横倒しの円柱: 軸を x に向け、長さ w、奥行と高さの直径 d・height
+        mesh = m.cylinder(0.5, 0.5, 1, [x, y, z], material, 32);
+        mesh.scale.set(part.height / 100, part.w / 100, part.d / 100);
+        mesh.rotation.z = Math.PI / 2;
+      } else if (part.shape === "sphere") {
+        mesh = m.ellipsoid(part.w / 100, part.height / 100, part.d / 100, [x, y, z], material);
       } else {
-        mesh = m.cylinder(1, 1, part.height / 100, [part.x / 100, (part.bottom + part.height / 2) / 100, part.y / 100], material, 40);
+        // taper が1より小さいと上が細く、大きいと上が太い。上から見た大きさは太い方
+        const taper = part.taper ?? 1;
+        mesh = m.cylinder(Math.min(1, taper), Math.min(1, 1 / taper), part.height / 100, [x, y, z], material, 40);
         mesh.scale.set(part.w / 200, 1, part.d / 200);
       }
+      // 先に傾け（x軸）、横倒し（z軸）、最後に上から見た向き（y軸）
+      mesh.rotation.order = "YXZ";
+      mesh.rotation.x = part.tilt ?? 0;
       mesh.rotation.y = -(part.angle ?? 0);
     }
     m.reserveFootprint(w, d);
     m.group.name = item.kind;
-    return m.finish(w, d, false, optimize);
+    return m.finish(w, d, isMountedPartKind(item.kind), optimize);
   }
   // 別デザインの番号。0は標準。範囲外の番号は標準として作る
   const variantCount = FURNITURE_VARIANTS[item.kind]?.length ?? 0;

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { FURNITURE_DEFS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY } from '../src/furniture-catalog.ts';
 import {
   PERSON_HEIGHT, PERSON_PRESETS, bloodShape, evidenceMarkerShape, footprintPathTrail, footprintTrail, glassShards, markerTextSize, normalizePersonPose,
-  JAPANESE_KINDS, japaneseParts,
+  JAPANESE_KINDS, MOUNTED_PART_KINDS, PART_KINDS, furnitureParts, furniturePartTop, partSpan,
   partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights, shardMargin, shardPieces, shardTrail,
 } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
@@ -18,19 +18,68 @@ function dispose(group) {
   materials.forEach(material => material.dispose());
 }
 
-test('Japanese furniture uses ordered shared parts with visible tatami borders above the base', () => {
-  for (const kind of JAPANESE_KINDS) {
+test('parts-based furniture uses ordered shared parts with visible tatami borders above the base', () => {
+  for (const kind of PART_KINDS) {
     const def = FURNITURE_DEFS[kind];
-    const parts = japaneseParts(kind, def.w, def.h, def.height);
+    assert.ok(def?.height > 0, `${kind}: catalog entry with a height`);
+    const parts = furnitureParts(kind, def.w, def.h, def.height);
     assert.ok(parts.length > 1);
-    const tops = parts.map(part => part.bottom + part.height);
+    const tops = parts.map(furniturePartTop);
     assert.deepEqual(tops, [...tops].sort((a, b) => a - b), kind);
-    assert.ok(parts.every(part => part.w > 0 && part.d > 0 && part.height > 0));
+    assert.ok(parts.every(part => part.w > 0 && part.d > 0 && part.height > 0), kind);
   }
-  const parts = japaneseParts('tatami', 90, 180, 6);
+  assert.ok(JAPANESE_KINDS.every(kind => PART_KINDS.includes(kind)));
+  const parts = furnitureParts('tatami', 90, 180, 6);
   const base = parts.find(part => part.material === 'straw');
   for (const part of parts.filter(part => ['border', 'weave'].includes(part.material))) {
     assert.ok(part.bottom + part.height > base.bottom + base.height);
+  }
+});
+
+test('parts stay inside the footprint, stand on the floor (or hang from the wall) and reach the full height', () => {
+  for (const kind of PART_KINDS) {
+    const { w, h: d, height } = FURNITURE_DEFS[kind];
+    const parts = furnitureParts(kind, w, d, height);
+    for (const part of parts) {
+      // 上から見た四隅を、部品の向きで回してから確かめる
+      const a = part.angle ?? 0, hw = part.w / 2, hd = partSpan(part) / 2;
+      const reachX = Math.abs(Math.cos(a)) * hw + Math.abs(Math.sin(a)) * hd, reachY = Math.abs(Math.sin(a)) * hw + Math.abs(Math.cos(a)) * hd;
+      assert.ok(Math.abs(part.x) + reachX <= w / 2 + 0.6, `${kind} ${part.material}: x ${part.x} ± ${reachX}`);
+      assert.ok(Math.abs(part.y) + reachY <= d / 2 + 0.6, `${kind} ${part.material}: y ${part.y} ± ${reachY}`);
+    }
+    const bottom = Math.min(...parts.map(part => part.bottom)), top = Math.max(...parts.map(furniturePartTop));
+    assert.ok(Math.abs(top - height) < 0.5, `${kind}: top ${top}`);
+    if (MOUNTED_PART_KINDS.includes(kind)) assert.ok(bottom > height * 0.3, `${kind}: hangs from the wall`);
+    else assert.ok(Math.abs(bottom) < 1e-9, `${kind}: stands on the floor (${bottom})`);
+  }
+});
+
+test('the torii has vermilion pillars and beams under a black top, seen whole from above', () => {
+  const parts = furnitureParts('torii', 360, 60, 400);
+  const top = parts[parts.length - 1];
+  assert.equal(top.material, 'trim');
+  assert.ok(Math.abs(furniturePartTop(top) - 400) < 1e-9);
+  const pillars = parts.filter(part => part.shape === 'ellipse' && part.material === 'vermilion');
+  assert.equal(pillars.length, 2);
+  assert.deepEqual(pillars.map(part => Math.sign(part.x)).sort(), [-1, 1]);
+  // 笠木は幅いっぱい、柱は笠木の下に隠れる
+  const kasagi = parts.find(part => part.material === 'vermilion' && part.w === 360);
+  assert.ok(kasagi && pillars.every(pillar => furniturePartTop(pillar) <= kasagi.bottom));
+});
+
+test('tilted boards fit their span and lean the right way', () => {
+  for (const kind of ['signboard', 'tent', 'slide']) {
+    const { w, h: d, height } = FURNITURE_DEFS[kind];
+    const boards = furnitureParts(kind, w, d, height).filter(part => part.tilt);
+    assert.ok(boards.length >= 2, kind);
+    for (const board of boards) assert.ok(partSpan(board) <= d + 1e-6 && furniturePartTop(board) <= height + 1e-6, kind);
+  }
+  // A型の看板とテントは、手前の板が手前へ、奥の板が奥へ下がる
+  for (const kind of ['signboard', 'tent']) {
+    const { w, h: d, height } = FURNITURE_DEFS[kind];
+    for (const board of furnitureParts(kind, w, d, height).filter(part => part.tilt && part.material !== 'chalkboard')) {
+      assert.equal(Math.sign(board.tilt), Math.sign(board.y), `${kind}: ${board.y}`);
+    }
   }
 });
 
