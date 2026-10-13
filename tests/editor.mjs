@@ -10,6 +10,7 @@ import { verifyTemplateFloors } from './template-floors-editor.mjs';
 import { verifyFloorUi } from './floor-ui-editor.mjs';
 import { verifyRoofShapes } from './roof-editor.mjs';
 import { verifyEllipses } from './ellipse-editor.mjs';
+import { verifyPolygonFloors } from './polygon-floor-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -169,6 +170,9 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyPolygonFloors({ page, importPlan, choose, planPoint, move, change, pixels, output });
+  if (!process.argv.includes('--polygon-floors-only')) {
+  await freshPage();
   await verifyRoofShapes({ page, importPlan, choose, planPoint, project, change, move, pixels, output });
   await freshPage();
   await verifyEllipses({ page, importPlan, choose, planPoint, change, move, pixels, output });
@@ -1557,6 +1561,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

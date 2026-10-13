@@ -32,7 +32,7 @@ import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow }
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
 import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
-import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, type FloorPreset } from "./floor-editing";
+import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, regularFloor, regularFloorOutline, regularFloorSize, regularFloorSides, type FloorPreset } from "./floor-editing";
 import { ROOF_LABELS, isRoofKind, isRadialRoof, roofOutline, roofSides, roofRise, regularRoofSize, radialRoofModel, type RoofKind } from "./roof-shapes";
 
 // 間取り専用版（3Dなし）。/plan/ で開いたとき（index.html の先頭で印を付ける）は、同じアプリで3Dの欄と3Dだけの設定を出さない。
@@ -1454,7 +1454,9 @@ function renderFloorVisibility(): void {
 function addRoof(kind: RoofKind): void {
   if (!isRoofKind(kind)) return;
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
-  const selectedBounds = selected?.type === "room" ? { x: selected.x, y: selected.y, w: selected.w, h: selected.h }
+  const floorPolygonShape = selected?.type === "room" ? regularFloor(selected) : null;
+  const selectedBounds = floorPolygonShape && isRadialRoof(kind) ? { x: floorPolygonShape.x - floorPolygonShape.diameter / 2, y: floorPolygonShape.y - floorPolygonShape.diameter / 2, w: floorPolygonShape.diameter, h: floorPolygonShape.diameter }
+    : selected?.type === "room" ? { x: selected.x, y: selected.y, w: selected.w, h: selected.h }
     : selected?.type === "shape" && isRadialRoof(kind) ? { x: selected.x - selected.r, y: selected.y - shapeRadiusY(selected), w: selected.r * 2, h: shapeRadiusY(selected) * 2 } : null;
   const sourceBounds =
     selectedBounds ??
@@ -1475,8 +1477,8 @@ function addRoof(kind: RoofKind): void {
   if (isRadialRoof(kind) && selectedBounds) Object.assign(item, { x: selectedBounds.x - overhang, y: selectedBounds.y - overhang, w: selectedBounds.w + overhang * 2, h: selectedBounds.h + overhang * 2 });
   if (kind === "polygon") {
     Object.assign(item, regularRoofSize(item));
-    item.sides = selected?.type === "shape" && selected.kind === "polygon" ? roofSides(selected.sides) : 6;
-    item.rotation = selected?.type === "shape" && selected.kind === "polygon" ? radiansToDegrees(selected.rotation ?? 0) : 0;
+    item.sides = selected?.type === "shape" && selected.kind === "polygon" ? roofSides(selected.sides) : floorPolygonShape?.sides ?? 6;
+    item.rotation = selected?.type === "shape" && selected.kind === "polygon" ? radiansToDegrees(selected.rotation ?? 0) : floorPolygonShape?.rotation ?? 0;
   }
   item.floorId = activeFloor().id;
   state.roofs.push(item);
@@ -3202,6 +3204,7 @@ function reshapeRoom(room: Room, points: [number, number][]): boolean {
 
 function floorHandles(room: Room): { key: string; x: number; y: number }[] {
   if (floorEdit?.id !== room.id) {
+    if (regularFloor(room)) return floorPoints(room).map(([x, y], i) => ({ key: `regular:${i}`, x, y }));
     if (isEllipseFloor(room)) return [
       { key: "round:e", x: room.x + room.w, y: room.y + room.h / 2 },
       { key: "round:s", x: room.x + room.w / 2, y: room.y + room.h },
@@ -3400,8 +3403,9 @@ function rotateEntity(entity: Entity, degrees: number): void {
     const cy = entity.y + entity.h / 2;
     const newW = entity.h;
     const newH = entity.w;
-    entity.x = snap(cx - newW / 2);
-    entity.y = snap(cy - newH / 2);
+    const polygon = regularFloor(entity);
+    entity.x = polygon ? cx - newW / 2 : snap(cx - newW / 2);
+    entity.y = polygon ? cy - newH / 2 : snap(cy - newH / 2);
     entity.w = newW;
     entity.h = newH;
     if (entity.outline) entity.outline = entity.outline.map(([x, y]) => [1 - y, x]);
@@ -3490,6 +3494,11 @@ function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): 
 
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (isLocked(entity) || isLocked(origin)) return;
+  if (entity.type === "room" && origin.type === "room" && corner.startsWith("regular:")) {
+    const polygon = regularFloor(origin);
+    if (polygon) Object.assign(entity, regularFloorSize(origin, Math.round(Math.hypot(point.x - polygon.x, point.y - polygon.y) * 2)));
+    return;
+  }
   if (entity.type === "shape" && origin.type === "shape" && corner.startsWith("radius:")) {
     if (origin.kind === "ellipse") {
       if (Number(corner.slice(7)) % 2) entity.ry = Math.max(GRID, Math.round(Math.abs(point.y - origin.y)));
@@ -7377,7 +7386,7 @@ function drawResizeHandles(entity: Room | Furniture | Roof): void {
     const edge = handle.key.startsWith("edge:");
     const vertex = floorEdit?.id === entity.id && handle.key === `vertex:${floorEdit.vertex}`;
     ctx.fillStyle = vertex ? "#2775d1" : "#ffffff";
-    if (edge || handle.key.startsWith("round:") || handle.key.startsWith("vertex:")) {
+    if (edge || handle.key.startsWith("round:") || handle.key.startsWith("regular:") || handle.key.startsWith("vertex:")) {
       ctx.beginPath(); ctx.arc(handle.x, handle.y, (vertex ? 7 : edge ? 4 : 5) / view.zoom, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       if (edge) {
         strokeLine(handle.x - 2 / view.zoom, handle.y, handle.x + 2 / view.zoom, handle.y);
@@ -8138,19 +8147,21 @@ function updatePropertiesPanel(): void {
   if (selected.type === "room") {
     const editing = floorEdit?.id === selected.id;
     const round = isEllipseFloor(selected) && Math.abs(selected.w - selected.h) < 0.01;
+    const polygon = regularFloor(selected);
     propertiesPanel.innerHTML = `
       <div class="property-grid">
         ${lockRow}
         <div class="floor-shapes" role="group" aria-label="床の形">
-          ${(["rectangle", "circle", "ellipse", "l"] as FloorPreset[]).map(preset => { const label = { rectangle: "長方形", circle: "円", ellipse: "楕円", l: "L字" }[preset]; return `<button type="button" data-floor-preset="${preset}" title="${label}の床に変更" aria-label="${label}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`; }).join("")}
+          ${(["rectangle", "circle", "ellipse", "polygon", "l"] as FloorPreset[]).map(preset => { const label = { rectangle: "長方形", circle: "円", ellipse: "楕円", polygon: "正多角形", l: "L字" }[preset]; return `<button type="button" data-floor-preset="${preset}" title="${label}の床に変更" aria-label="${label}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`; }).join("")}
         </div>
         <button type="button" class="prop-button" id="floorEditToggle" aria-pressed="${editing}" ${placementDisabled}><i data-lucide="${editing ? "check" : "square-pen"}"></i>${editing ? "輪郭の編集を完了" : "輪郭を編集"}</button>
         ${editing && floorEdit?.vertex != null ? `<div class="floor-vertices"><div class="vertex-heading"><span>頂点 ${floorEdit.vertex + 1}</span><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="選択した頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
           <div class="two-col"><label>X cm<input id="floorVertexX" type="number" step="1" ${placementDisabled} /></label><label>Y cm<input id="floorVertexY" type="number" step="1" ${placementDisabled} /></label></div></div>` : ""}
         ${round && !editing ? diameterControl("floor", selected.w, placementDisabled) : ""}
+        ${polygon && !editing ? `<div class="two-col"><label>辺の数<input id="floorSidesInput" type="number" min="3" max="12" step="1" value="${polygon.sides}" ${placementDisabled} /></label><label>向き °<input id="floorRotationInput" type="number" step="1" value="${Math.round(polygon.rotation * 100) / 100}" ${placementDisabled} /></label></div>${diameterControl("floor", polygon.diameter, placementDisabled, "外接円の直径 cm")}` : ""}
         <div class="two-col">
-          <label>幅 cm<input id="roomWInput" type="number" min="40" step="1" value="${Math.round(selected.w * 10) / 10}" ${placementDisabled} /></label>
-          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="1" value="${Math.round(selected.h * 10) / 10}" ${placementDisabled} /></label>
+          <label>幅 cm<input id="roomWInput" type="number" min="40" step="1" value="${Math.round((polygon?.w ?? selected.w) * 10) / 10}" ${placementDisabled} /></label>
+          <label>奥行 cm<input id="roomHInput" type="number" min="40" step="1" value="${Math.round((polygon?.h ?? selected.h) * 10) / 10}" ${placementDisabled} /></label>
         </div>
         <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし" /></label>
@@ -8167,6 +8178,11 @@ function updatePropertiesPanel(): void {
     bindWritingMode(selected);
     bindFloorShapeControls(selected);
     if (round && !editing) bindDiameter("floor", selected, () => selected.w, value => Object.assign(selected, centeredFloorSize(selected, value, value)));
+    if (polygon && !editing) {
+      bindDiameter("floor", selected, () => regularFloor(selected)!.diameter, value => Object.assign(selected, regularFloorSize(selected, value)));
+      bindNumber("#floorSidesInput", value => changeRegularFloor(selected, regularFloorSides(value), regularFloor(selected)!.rotation));
+      bindNumber("#floorRotationInput", value => changeRegularFloor(selected, regularFloor(selected)!.sides, value));
+    }
     bindFloorVertices(selected);
     bindSelect("#roomSurfaceInput", (value) => {
       if (!isRoomSurface(value)) return;
@@ -8175,8 +8191,8 @@ function updatePropertiesPanel(): void {
       selected.color3d = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color3d ?? selected.color));
       selected.color = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color));
     });
-    bindNumber("#roomWInput", value => { const w = Math.max(GRID * 2, value); if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, w, selected.h)); else selected.w = w; });
-    bindNumber("#roomHInput", value => { const h = Math.max(GRID * 2, value); if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, selected.w, h)); else selected.h = h; });
+    bindNumber("#roomWInput", value => { const w = Math.max(GRID * 2, value), p = regularFloor(selected); if (p) Object.assign(selected, regularFloorSize(selected, p.diameter * w / p.w)); else if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, w, selected.h)); else selected.w = w; });
+    bindNumber("#roomHInput", value => { const h = Math.max(GRID * 2, value), p = regularFloor(selected); if (p) Object.assign(selected, regularFloorSize(selected, p.diameter * h / p.h)); else if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, selected.w, h)); else selected.h = h; });
     bindColor("#roomColorInput", (value) => (selected.color = value ?? SURFACE_DEFS[selected.surface ?? "plain"].color));
     bindColor("#roomColor3dInput", (value) => (selected.color3d = value));
     bindButton("#roomRotateButton", () => rotateEntity(selected, 90));
@@ -9224,15 +9240,37 @@ function bindFloorVertices(room: Room): void {
   sync(); createIcons({ icons });
 }
 
+function changeRegularFloor(room: Room, sides: number, rotation: number): boolean {
+  const polygon = regularFloor(room);
+  const diameter = polygon?.diameter ?? Math.min(room.w, room.h);
+  const cx = polygon?.x ?? room.x + room.w / 2, cy = polygon?.y ?? room.y + room.h / 2;
+  const size = { x: cx - diameter / 2, y: cy - diameter / 2, w: diameter, h: diameter };
+  const outline = regularFloorOutline(sides, rotation);
+  const holes = floorPolygon(room).slice(1).map(ring => ring.map(([x, y]): [number, number] => [(x - size.x) / size.w, (y - size.y) / size.h]));
+  let normalizedHoles: Room["holes"];
+  try { normalizedHoles = normalizeFloorHoles(holes, outline); }
+  catch { floorEditError = "階段などの開口が床の外に出るため、この形には変更できません"; syncFloorToolbar(); return false; }
+  const label = getRoomLabelPosition(room);
+  Object.assign(room, size, { outline, holes: normalizedHoles });
+  room.labelOffsetX = label.x - room.x; room.labelOffsetY = label.y - room.y;
+  floorEdit = null; floorEditError = "";
+  return true;
+}
+
 function bindFloorShapeControls(room: Room): void {
   propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-floor-preset]").forEach(button => {
     const preset = button.dataset.floorPreset as FloorPreset;
     const canvas = button.querySelector("canvas")!, g = canvas.getContext("2d")!;
     const points = presetOutline(preset) ?? [[0, 0], [1, 0], [1, 1], [0, 1]];
     g.fillStyle = "#dceaf7"; g.strokeStyle = "#315575"; g.lineWidth = 3;
-    g.beginPath(); points.forEach(([x, y], i) => i ? g.lineTo((preset === "circle" ? 22 : 12) + x * (preset === "circle" ? 44 : 64), 10 + y * 44) : g.moveTo((preset === "circle" ? 22 : 12) + x * (preset === "circle" ? 44 : 64), 10 + y * 44)); g.closePath(); g.fill(); g.stroke();
+    const equalAxes = preset === "circle" || preset === "polygon";
+    g.beginPath(); points.forEach(([x, y], i) => i ? g.lineTo((equalAxes ? 22 : 12) + x * (equalAxes ? 44 : 64), 10 + y * 44) : g.moveTo((equalAxes ? 22 : 12) + x * (equalAxes ? 44 : 64), 10 + y * 44)); g.closePath(); g.fill(); g.stroke();
     button.addEventListener("click", () => {
       if (isLocked(room)) return;
+      if (preset === "polygon") {
+        if (changeRegularFloor(room, 6, 0)) { commitState(); redrawAll(); }
+        return;
+      }
       const outline = presetOutline(preset);
       const size = preset === "circle" ? centeredFloorSize(room, Math.min(room.w, room.h), Math.min(room.w, room.h))
         : preset === "ellipse" ? centeredFloorSize(room, room.w, Math.abs(room.w - room.h) < 0.01 ? Math.max(40, room.h * 0.6) : room.h) : { x: room.x, y: room.y, w: room.w, h: room.h };
@@ -9280,8 +9318,9 @@ function bindDiameter(prefix: string, entity: Entity, get: () => number, set: (v
     if (get() > Number(range.max)) range.max = String(Math.ceil(get() * 2 / 100) * 100);
     number.value = String(Math.round(get() * 10) / 10); range.value = String(get());
     if (entity.type === "room") {
-      requiredElement<HTMLInputElement>("#roomWInput").value = String(Math.round(entity.w * 10) / 10);
-      requiredElement<HTMLInputElement>("#roomHInput").value = String(Math.round(entity.h * 10) / 10);
+      const polygon = regularFloor(entity);
+      requiredElement<HTMLInputElement>("#roomWInput").value = String(Math.round((polygon?.w ?? entity.w) * 10) / 10);
+      requiredElement<HTMLInputElement>("#roomHInput").value = String(Math.round((polygon?.h ?? entity.h) * 10) / 10);
     }
     if (entity.type === "shape") {
       const w = propertiesPanel.querySelector<HTMLInputElement>("#shapeWInput"), h = propertiesPanel.querySelector<HTMLInputElement>("#shapeHInput");

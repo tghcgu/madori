@@ -254,7 +254,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 「線で囲んで床を作成」を選び、2Dで角になる点を順にクリック（タップ）します。始点をもう一度押す・`Enter`・キャンバス上のチェックボタンで閉じると、その形の床ができます。`Shift`で最後の点から水平・垂直に、`Backspace`または戻るボタンで1点戻し、やり直しボタンで復元、`Esc`または×で中止できます。交差した輪郭は確定せず、理由を表示します。作図だけでは壁は作られません。
 
-既存の床は長方形・円・楕円・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
+既存の床は長方形・円・楕円・正多角形・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
+
+正多角形の床は、床を選んで形の見本の六角形を押すと作れます。「辺の数」で三角形〜十二角形、「向き」で角度、「外接円の直径」で大きさを指定できます。頂点のつまみや幅・奥行を変更しても、辺の長さがそろうように縦横を一緒に拡大縮小します。「輪郭を編集」で頂点を個別に動かすと自由な形に変更できます。正多角形の床を選んで正多角形の屋根を追加すると、辺数・向き・中心がそろいます。床材・名前・色はそのまま引き継ぎ、階段の開口が床の外に出る形への変更は止めます。
 
 円の壁・円形の床は、円周の4つのつまみ、直径の数値、＋／−、スライダーで中心を保って拡大縮小できます。円形床の幅・奥行を個別に変えると楕円になります。円弧・多角形の壁も外周のつまみと直径欄で変更できます。スライダー操作は1回のUndoで戻せます。図形の壁の「この図形に合わせて床を追加」は元の壁を残して円・円弧（扇形）・多角形に合う床を作ります。床の輪郭は2D・3D・PNG・JSONで共通です。
 
@@ -660,6 +662,10 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年10月13日
+
+- 正多角形の床を追加。床の形の見本から選び、3〜12辺・向き・外接円の直径を調整できます。つまみや幅・奥行の変更でも辺の長さをそろえて拡大縮小し、階段の開口を保護します。輪郭の自由編集、同じ辺数・向きの屋根の追加、保存・取り消しにも対応
+
 ### 2026年10月12日
 
 - 円すい・ドーム・正多角形の屋根を追加。直径や幅・奥行、高さを調整でき、正多角形は3〜12辺と向きを選べます。2D・3Dで輪郭が一致し、魔法使いの塔と城の塔のテンプレートも円すい屋根に変更しました
@@ -930,7 +936,8 @@ You can edit the starter plan immediately or load one of 50 templates, from hous
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
-- Existing floors have rectangle, circle, ellipse and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
+- Existing floors have rectangle, circle, ellipse, regular polygon and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
+- To make a regular polygon floor, select a floor and press the hexagonal preset. Choose 3 to 12 sides, rotation and circumcircle diameter. Perimeter handles and width/depth inputs resize proportionally to keep all sides equal. Contour editing can turn it into a freeform floor. Adding a polygon roof while the floor is selected matches its sides, orientation and center. Materials, names and colors are retained; shape changes that would expose stairwell holes are blocked
 - Circle walls and circular floors have four perimeter handles, an exact diameter field, increment/decrement buttons and a live slider. Resizing keeps the center fixed; a slider gesture is one undo step. Changing a circular floor's width and depth independently makes an ellipse. Arc and polygon walls also have radial size handles and a diameter control. Shape walls can add matching floors while keeping the wall; arcs produce sector floors. 2D, 3D, PNG and JSON share the same outline, including concave cutouts and overlap clipping
 - Draw an ellipse wall by choosing "楕円" under Shape walls and dragging a bounding rectangle. Alternatively, edit an existing circle's width and depth independently. Ellipse wall and floor handles change only their own axis while keeping the center fixed. Add a matching ellipse floor from the wall properties, switch the wall shape back to Circle to restore equal axes, or press R to swap the ellipse's axes
 - Edit dimensions, line length, angle, coordinates, and colors numerically
@@ -1481,6 +1488,10 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-13
+
+- Added regular polygon floors with a visual preset, 3 to 12 sides, rotation and circumcircle diameter. Handles and dimension fields scale proportionally to preserve equal sides, and shape changes protect stairwell holes. Supports freeform contour editing, matching polygon roofs, persistence and undo
 
 ### 2026-10-12
 

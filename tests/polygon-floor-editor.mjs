@@ -1,0 +1,85 @@
+import assert from 'node:assert/strict';
+import { floorPoints } from '../src/floor-outline.ts';
+import { regularFloor, regularFloorOutline } from '../src/floor-editing.ts';
+
+export async function verifyPolygonFloors({page,importPlan,choose,planPoint,move,change,pixels,output}) {
+  const base={id:'floor',type:'room',name:'',x:0,y:0,w:800,h:600,color:'#d6b58a',surface:'wood'};
+  const plan=entities=>({floors:[{id:'f1',name:'1F',entities}],activeFloor:0,roofs:[],selectedId:null});
+  const snapshot=()=>page.evaluate(()=>window.__editorTest.snapshot());
+  const floor=async()=>(await snapshot()).floors[0].entities[0];
+  const click=async(x,y)=>{const p=await planPoint(x,y);await page.mouse.click(p.x,p.y);};
+  const geometry=e=>({x:e.x,y:e.y,w:e.w,h:e.h,outline:e.outline,holes:e.holes});
+  await importPlan(plan([base]));
+  await page.locator('button[data-view-mode="split"]').click();
+  await click(400,300);
+  await page.locator('[data-floor-preset="polygon"]').click();
+  let p=regularFloor(await floor());assert.equal(p.sides,6);assert.equal(p.diameter,600);
+  assert.equal((await floor()).name,'');assert.equal((await floor()).surface,'wood');
+  for(let sides=3;sides<=12;sides++) {
+    await change('#floorSidesInput',sides);await change('#floorRotationInput',17.5);
+    const f=await floor();p=regularFloor(f);assert.equal(p.sides,sides);assert.ok(Math.abs(p.rotation-17.5)<1e-5);
+    assert.ok(Math.abs(p.x-400)<1e-5 && Math.abs(p.y-300)<1e-5);
+    assert.equal(await page.evaluate(()=>window.__editorTest.floorAt('floor',400,300)),true);
+    assert.equal(await page.evaluate(()=>window.__editorTest.floorAt('floor',102,2)),false);
+  }
+  await change('#floorSidesInput',2);assert.equal(regularFloor(await floor()).sides,3);
+  await change('#floorSidesInput',99);assert.equal(regularFloor(await floor()).sides,12);
+  await change('#floorSidesInput',7);await change('#floorRotationInput',23);
+  await change('#floorDiameterInput',535);assert.ok(Math.abs(regularFloor(await floor()).diameter-535)<1e-6);
+  await page.locator('#undoButton').click();assert.ok(Math.abs(regularFloor(await floor()).diameter-600)<1e-6);
+  await page.locator('#redoButton').click();
+  await page.locator('#floorDiameterPlus').click();assert.ok(Math.abs(regularFloor(await floor()).diameter-545)<1e-6);
+  await change('#roomWInput',620);assert.ok(Math.abs(regularFloor(await floor()).w-620)<1e-6);
+  await change('#roomHInput',440);assert.ok(Math.abs(regularFloor(await floor()).h-440)<1e-6);
+  await change('#floorDiameterInput',440);
+  p=regularFloor(await floor());assert.ok(Math.abs(Number(await page.locator('#roomWInput').inputValue())-p.w)<.1);
+  await page.locator('#fitButton').click();
+  const before=await floor(),v=floorPoints(before)[0];
+  await move(await planPoint(...v),40,20);
+  p=regularFloor(await floor());assert.ok(p.diameter>440);assert.ok(Math.abs(p.x-400)<1e-5&&Math.abs(p.y-300)<1e-5);
+  await page.locator('#undoButton').click();assert.deepEqual(geometry(await floor()),geometry(before));
+  await move(await planPoint(...v),40,20,true);assert.deepEqual(geometry(await floor()),geometry(before));
+  await page.keyboard.press('r');p=regularFloor(await floor());assert.ok(Math.abs(p.rotation-113)<1e-5);assert.ok(Math.abs(p.x-400)<1e-5&&Math.abs(p.y-300)<1e-5);
+  await page.locator('#undoButton').click();
+  await page.locator('#floorEditToggle').click();
+  await move(await planPoint(...floorPoints(await floor())[0]),-40,25);
+  assert.equal(regularFloor(await floor()),null);
+  await page.locator('#floorEditToggle').click();assert.equal(await page.locator('#floorSidesInput').count(),0);
+  await page.locator('#undoButton').click();assert.equal(regularFloor(await floor()).sides,7);
+  await page.locator('#entityLockedInput').check();
+  for(const selector of ['#floorSidesInput','#floorRotationInput','#floorDiameterInput','[data-floor-preset="polygon"]']) assert.equal(await page.locator(selector).isDisabled(),true);
+  await page.locator('#entityLockedInput').uncheck();
+  await choose('[data-roof-add="polygon"]');
+  const roof=(await snapshot()).roofs[0];assert.equal(roof.sides,7);assert.ok(Math.abs(roof.rotation-23)<1e-5);assert.ok(Math.abs(roof.w-520)<1e-5);
+  await page.locator('#undoButton').click();
+  const stored=geometry(await floor());
+  await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>Boolean(window.__editorTest));
+  assert.deepEqual(geometry(await floor()),stored);
+  const download=page.waitForEvent('download');await page.locator('#exportButton').click();
+  const chunks=[];for await(const chunk of await(await download).createReadStream())chunks.push(chunk);
+  await importPlan(JSON.parse(Buffer.concat(chunks).toString()));assert.deepEqual(geometry(await floor()),stored);
+  console.log('PASS: regular floors: 3-12 sides, rotation, exact diameter, proportional dimensions, handles, contour editing, locks, roof alignment, undo and JSON reload');
+
+  await importPlan(plan([{...base,w:800,h:800,holes:[[[.08,.45],[.16,.45],[.16,.55],[.08,.55]]]}]));
+  await click(400,400);await page.locator('[data-floor-preset="polygon"]').click();
+  const withHole=geometry(await floor());assert.equal(regularFloor(await floor()).sides,6);
+  await change('#floorSidesInput',3);assert.deepEqual(geometry(await floor()),withHole);
+  assert.match(await page.locator('.floor-error').textContent(),/開口/);
+  assert.equal(await page.evaluate(()=>window.__editorTest.floorAt('floor',100,400)),false);
+  await change('#floorDiameterInput',1000);assert.equal(regularFloor(await floor()).sides,6);
+  assert.equal((await floor()).holes.length,1);
+
+  const gallery=[3,6,8].map((sides,i)=>({...base,id:`floor-${i}`,x:i*640,y:0,w:520,h:520,surface:['wood','tile','stone'][i],outline:regularFloorOutline(sides,0)}));
+  await importPlan(plan(gallery));await page.locator('#fitButton').click();
+  await click(260,260);assert.equal(await page.locator('[data-floor-preset="polygon"]').getAttribute('aria-pressed'),'true');
+  assert.ok((await pixels()).colors>20);
+  await page.screenshot({path:`${output}/polygon-floors-desktop.png`});
+  const hash=(await pixels()).hash,box=await page.locator('#threeCanvas').boundingBox();
+  await move({x:box.x+box.width*.8,y:box.y+box.height*.3},40,20);
+  assert.notEqual((await pixels()).hash,hash);
+  await page.setViewportSize({width:390,height:844});await page.locator('#panelToggle').click();
+  await page.locator('button[data-view-mode="three"]').click();
+  assert.ok((await pixels()).colors>20);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  await page.screenshot({path:`${output}/polygon-floors-mobile.png`});
+  console.log('PASS: polygon floors protect stairwell holes; matching desktop/mobile 2D and 3D footprints, materials and orbit');
+}

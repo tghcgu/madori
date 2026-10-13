@@ -1,17 +1,40 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline } from '../src/floor-editing.ts';
+import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, regularFloor, regularFloorOutline, regularFloorSize, regularFloorSides } from '../src/floor-editing.ts';
 import { floorPolygon, normalizeOutline, outlineFromPoints, pointInPolygon } from '../src/floor-outline.ts';
 
 test('floor presets are valid, independent and detectable after persistence', () => {
-  for (const preset of ['rectangle', 'circle', 'ellipse', 'l']) {
-    const floor = { x: 20, y: -80, w: 600, h: preset === 'circle' ? 600 : 400, outline: presetOutline(preset) };
+  for (const preset of ['rectangle', 'circle', 'ellipse', 'polygon', 'l']) {
+    const floor = { x: 20, y: -80, w: 600, h: ['circle','polygon'].includes(preset) ? 600 : 400, outline: presetOutline(preset) };
     normalizeOutline(floor.outline);
     assert.equal(floorPreset(JSON.parse(JSON.stringify(floor))), preset);
   }
   const points = presetOutline('l'); points[0][0] = .2;
   assert.equal(presetOutline('l')[0][0], 0);
   assert.equal(floorPreset({ x: 0, y: 0, w: 200, h: 400, outline: points }), 'free');
+});
+
+test('regular floors retain equal edges, angles and center at 3 to 12 sides after resizing and reload', () => {
+  assert.equal(regularFloorSides(2),3);assert.equal(regularFloorSides(99),12);assert.equal(regularFloorSides(NaN),6);
+  for(let sides=3;sides<=12;sides++) for(const rotation of [0,17.5,90,270]) {
+    let floor={x:-300,y:120,w:600,h:600,outline:regularFloorOutline(sides,rotation)};
+    normalizeOutline(floor.outline);
+    let p=regularFloor(JSON.parse(JSON.stringify(floor)));
+    assert.equal(p.sides,sides);assert.ok(Math.abs(p.rotation-rotation)<1e-6);
+    assert.equal(floorPreset(floor),'polygon');
+    floor={...floor,...regularFloorSize(floor,535)};
+    p=regularFloor(floor);
+    assert.ok(Math.abs(p.diameter-535)<1e-6);assert.ok(Math.abs(p.x)<1e-6);assert.ok(Math.abs(p.y-420)<1e-6);
+    const points=floor.outline.map(([x,y])=>[floor.x+x*floor.w,floor.y+y*floor.h]);
+    const lengths=points.map((p,i)=>Math.hypot(p[0]-points[(i+1)%sides][0],p[1]-points[(i+1)%sides][1]));
+    assert.ok(lengths.every(n=>Math.abs(n-lengths[0])<1e-6));
+    assert.ok(regularFloor(outlineFromPoints(points)), 'recognizes existing tightly bounded polygon floors');
+    floor.outline[0][0]+=.01;
+    assert.equal(regularFloor(floor),null,'vertex edits leave regular polygon mode');
+  }
+  assert.equal(regularFloor({x:0,y:0,w:600,h:400}),null);
+  assert.equal(regularFloor({x:0,y:0,w:600,h:400,outline:presetOutline('l')}),null);
+  assert.equal(regularFloor({x:0,y:0,w:600,h:400,outline:regularFloorOutline(6,0)}),null);
 });
 
 test('round floors retain simple size handles after rotation, but not after vertex deformation', () => {

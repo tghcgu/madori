@@ -1601,7 +1601,7 @@ select:focus-visible {
 }
 
 .floor-draw-tool { width: 100%; min-height: 38px; margin-top: 8px; }
-.floor-shapes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.floor-shapes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
 .floor-shapes button { height: 48px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 .floor-shapes button[aria-pressed="true"] { border-color: var(--accent); background: #e8f1fb; }
 .floor-shapes button:disabled { opacity: .45; cursor: not-allowed; }
