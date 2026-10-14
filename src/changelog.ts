@@ -10,6 +10,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-14",
     items: [{
+      ja: "家具・設備の一覧を、よく使う順に並べ直しました（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いておくのは建具と椅子・ソファだけです。いくつかの分類に重ねて出している物は、検索の結果では上の分類の1つだけを出します",
+      en: "Reordered the furniture palette by how often things are used: openings, household furniture such as seating, tables and beds, then stairs, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open, and items shown in several groups appear once in search results",
+    }, {
+      ja: "家具を置く・文字を置く・消すツールのままでも、ダブルクリックでそこにある物を選べるように。2Dでも3Dでも同じで、スマホ・タブレットは2回タップか長押しです。1回目のクリックで置いた家具や消した物は取り消します",
+      en: "While placing furniture or text, or erasing, a double-click now selects whatever is there, in both 2D and 3D (double tap or long press on phones and tablets). Whatever the first click placed or erased is undone",
+    }, {
       ja: "家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー・TRPG」の分類を足しました",
       en: "Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy and TRPG",
     }, {

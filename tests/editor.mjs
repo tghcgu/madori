@@ -15,6 +15,7 @@ import { verifyThreeSelection } from './three-selection-editor.mjs';
 import { verifyDoors } from './doors-editor.mjs';
 import { verifyThreePress } from './three-press-editor.mjs';
 import { verifyRoofColor } from './roof-color-editor.mjs';
+import { verifyDoublePress } from './double-press-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -176,6 +177,8 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyDoublePress({ open, plan });
+  if (!process.argv.includes('--double-press-only')) {
   await verifyRoofColor({ open, output });
   if (!process.argv.includes('--roof-color-only')) {
   await verifyDoors({ page, importPlan, choose, planPoint, move, saved, output });
@@ -1576,6 +1579,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

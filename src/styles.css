@@ -553,10 +553,6 @@ select:focus-visible {
   display: none !important;
 }
 
-#roofCategory {
-  margin-top: 8px;
-}
-
 .roof-body {
   padding: 8px;
 }

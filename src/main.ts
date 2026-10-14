@@ -5,7 +5,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
-import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, type FurnitureKind } from "./furniture-catalog";
+import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { CHANGELOG, changelogDate } from "./changelog";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
@@ -220,6 +220,8 @@ interface ThreeDrag {
   created: boolean;
   moved: boolean;
   origins?: Entity[];
+  // 置くツールで押したとき、押した所にあった物（続けてもう1回押したら、それを選ぶ）
+  pressedId?: string;
 }
 
 function requiredElement<T extends Element>(selector: string): T {
@@ -635,6 +637,12 @@ let drag: PointerState = {
 const LONG_PRESS_MS = 450;
 // 押してから離すまでにこれより動かなければクリック（画面のpx）
 const CLICK_SLOP = 5;
+// 置く・消すツールのまま、同じ所を続けて押したら（ダブルクリック・2回タップ）、そこにある物を選ぶ。
+// 1回目のクリックで置いた（消した）物は取り消す。何もない所に置いたときは、置いた物を選ぶ
+const DOUBLE_PRESS_MS = 500;
+interface LastClick { at: number; x: number; y: number; history: number; select: string | null; revert: boolean }
+let lastPlanClick: LastClick | null = null;
+let lastThreeClick: LastClick | null = null;
 let longPressTimer = 0;
 let longPressPoint: Point | null = null;
 let pressRing: HTMLDivElement | null = null;
@@ -1182,6 +1190,11 @@ function setupUi(): void {
     });
   }
 
+  // ほかの所（一覧のボタンなど）を押したら、ダブルクリックの1回目の記録を捨てる（別の家具を選んで同じ所に置けるように）
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target !== planCanvas) lastPlanClick = null;
+    if (event.target !== threeCanvas) lastThreeClick = null;
+  }, true);
   planCanvas.addEventListener("pointerdown", handlePointerDown);
   planCanvas.addEventListener("pointermove", handlePointerMove);
   planCanvas.addEventListener("pointerup", handlePointerUp);
@@ -1226,10 +1239,13 @@ function setupUi(): void {
 }
 
 function buildFurniturePicker(): void {
+  // 屋根の欄はHTMLに置いてあり、ほかの欄と一緒に使う順に並べ直す（作り直しで消えないよう、先に外しておく）
+  const roofCategory = requiredElement<HTMLDetailsElement>("#roofCategory");
+  roofCategory.remove();
   furniturePicker.innerHTML = "";
+  const sections = new Map<string, HTMLElement>();
 
-  // よく使う建具と家具を上に、床材・階段・図形の壁は下に置く。屋根はHTML側で最後に並ぶ
-  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ 和風 わふう");
+  const fittings = createPaletteGroup("建具（ドア・窓）", true, "たてぐ");
   DOOR_STYLES.forEach((style) => fittings.items.appendChild(createDoorStyleButton(style.value)));
   ([
     ["window", "窓", "まど"],
@@ -1243,17 +1259,18 @@ function buildFurniturePicker(): void {
     button.dataset.tool = tool;
     fittings.items.appendChild(button);
   });
-  furniturePicker.appendChild(fittings.details);
+  sections.set("fittings", fittings.details);
 
-  FURNITURE_GROUPS.forEach((category, categoryIndex) => {
-    const group = createPaletteGroup(category.label, categoryIndex === 0, category.keywords);
+  FURNITURE_GROUPS.forEach((category) => {
+    // はじめは、建具といちばんよく使う分類（並びの先頭の家具の分類）だけを開いておく
+    const group = createPaletteGroup(category.label, category.id === PALETTE_ORDER.find((id) => FURNITURE_GROUPS.some((item) => item.id === id)), category.keywords);
     // 和風の欄には、障子・襖などのドアも並べる（建具の欄と重ねて出す）
     category.doorStyles?.forEach((style) => group.items.appendChild(createDoorStyleButton(style)));
     [...category.kinds, ...(category.also ?? [])].forEach((kind) => group.items.appendChild(createFurnitureButton(kind)));
-    furniturePicker.appendChild(group.details);
+    sections.set(category.id, group.details);
   });
 
-  const surfaces = createPaletteGroup("床・地面", true, "ゆか 床 素材");
+  const surfaces = createPaletteGroup("床・地面", false, "ゆか 床 素材");
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
@@ -1270,11 +1287,11 @@ function buildFurniturePicker(): void {
     button.prepend(swatch);
     surfaces.items.appendChild(button);
   });
-  furniturePicker.appendChild(surfaces.details);
+  sections.set("surfaces", surfaces.details);
 
   const stairs = createPaletteGroup("階段", false, "かいだん");
   STAIR_KINDS.forEach((kind) => stairs.items.appendChild(createFurnitureButton(kind)));
-  furniturePicker.appendChild(stairs.details);
+  sections.set("stairs", stairs.details);
 
   const shapes = createPaletteGroup("図形の壁", false, "図形 ずけい 壁 かべ");
   ([
@@ -1301,11 +1318,15 @@ function buildFurniturePicker(): void {
     button.dataset.shape = key;
     shapes.items.appendChild(button);
   });
-  furniturePicker.appendChild(shapes.details);
+  sections.set("shapes", shapes.details);
 
-  // 屋根の欄はHTMLに固定で置いてあるので、検索用の語だけ付ける
-  const roofCategory = requiredElement<HTMLDetailsElement>("#roofCategory");
+  // 屋根の欄はHTMLに置いてあるので、検索用の語を付けて並びに入れる
   roofCategory.dataset.search = normalizeSearchText("屋根 やね");
+  sections.set("roofs", roofCategory);
+  for (const id of PALETTE_ORDER) {
+    const section = sections.get(id);
+    if (section) furniturePicker.appendChild(section);
+  }
   const roofKeywords: Record<RoofKind, string> = { gable: "きりづま", hip: "よせむね", flat: "ろくやね りくやね フラット", cone: "えんすい 円形 丸 まる 塔", dome: "どーむ 円形 丸 まる 半球", polygon: "せいたかっけい 多角形 三角 四角 五角 六角 八角" };
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
     const kind = button.dataset.roofAdd as RoofKind;
@@ -1373,10 +1394,18 @@ function normalizeSearchText(value: string): string {
     .replace(/[\u30a1-\u30f6]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0x60));
 }
 
+// 一覧のボタンが表す物（いくつかの分類に重ねて出している物は、同じ値になる）
+function paletteItemKey(button: HTMLButtonElement): string | null {
+  const { furniture, doorStyle, tool, surface, shape, roofAdd } = button.dataset;
+  return furniture ? `furniture:${furniture}` : doorStyle ? `door:${doorStyle}` : surface ? `surface:${surface}` : shape ? `shape:${shape}` : roofAdd ? `roof:${roofAdd}` : tool ? `tool:${tool}` : null;
+}
+
 function applyPaletteSearch(): void {
   const terms = normalizeSearchText(paletteSearch.value).split(/\s+/).filter(Boolean);
   const searching = terms.length > 0;
   let anyMatch = false;
+  // 検索の結果では、重ねて出している物を、上の（よく使う）分類の1つだけにする
+  const found = new Set<string>();
   document.querySelectorAll<HTMLElement>(".palette-section").forEach((section) => {
     let sectionMatch = false;
     section.querySelectorAll<HTMLDetailsElement>(".palette-group").forEach((group) => {
@@ -1384,7 +1413,12 @@ function applyPaletteSearch(): void {
       let groupMatch = false;
       group.querySelectorAll<HTMLButtonElement>("button[data-search]").forEach((button) => {
         const text = `${button.dataset.search} ${groupText}`;
-        const match = !searching || terms.every((term) => text.includes(term));
+        let match = !searching || terms.every((term) => text.includes(term));
+        const key = searching && match ? paletteItemKey(button) : null;
+        if (key) {
+          if (found.has(key)) match = false;
+          else found.add(key);
+        }
         button.classList.toggle("palette-hidden", !match);
         groupMatch ||= match;
       });
@@ -2273,6 +2307,16 @@ function handlePointerDown(event: PointerEvent): void {
     return;
   }
 
+  // 置く・消すツールで、同じ所を続けて押した（ダブルクリック）: 1回目を取り消して、そこにある物を選ぶ
+  const doubled = !event.ctrlKey && !event.metaKey && isDoublePress(lastPlanClick, event) ? lastPlanClick : null;
+  lastPlanClick = null;
+  if (doubled) {
+    revertLastClick(doubled);
+    if (doubled.select && findEntity(doubled.select)) selectFromOtherTool(doubled.select, false);
+    redrawAll();
+    return;
+  }
+
   const point = screenToWorld(event);
   if (activeTool === "floor") {
     event.preventDefault();
@@ -2435,7 +2479,21 @@ function placeTextAt(point: Point, target: Entity | null): void {
   pendingTextFocus = true;
 }
 
-// ---- ほかのツールのまま物を選ぶ（クリック・長押し） ----
+// ---- ほかのツールのまま物を選ぶ（クリック・ダブルクリック・長押し） ----
+
+function isDoublePress(last: LastClick | null, event: PointerEvent): boolean {
+  return Boolean(last) && performance.now() - last!.at <= DOUBLE_PRESS_MS && Math.hypot(event.clientX - last!.x, event.clientY - last!.y) <= CLICK_SLOP * 2;
+}
+
+// 1回目のクリックで置いた・消した物を取り消す。その変更が最後の記録のときだけ（ほかの操作をはさんだら取り消さない）。
+// 取り消した記録は「やり直し」にも残さない
+function revertLastClick(last: LastClick): void {
+  if (!last.revert || historyIndex !== last.history || historyIndex <= 0) return;
+  history = history.slice(0, historyIndex);
+  historyIndex -= 1;
+  state = cloneState(history[historyIndex]);
+  persistState();
+}
 
 // 押した物を選び、選択ツールに切り替える。holding なら押したまま動かせるようにする（長押しのあと、そのままドラッグで動かす）
 function selectFromOtherTool(entityId: string, holding: boolean): void {
@@ -2538,7 +2596,7 @@ function toolHintParts(): string[] | null {
 // ツールの使い方と、ほかの物の選び方（描くツールはクリック、置くツールは長押し）
 function toolAction(): [string, string] | null {
   const click = "物をクリックで選ぶ";
-  const hold = "物を長押しで選ぶ";
+  const hold = "物をダブルクリック・長押しで選ぶ";
   switch (activeTool) {
     case "select":
     case "floor":
@@ -2666,6 +2724,8 @@ function handlePointerMove(event: PointerEvent): void {
 function handlePointerUp(event: PointerEvent): void {
   if (drag.pointerId !== event.pointerId) return;
 
+  const tool = activeTool, pressedId = drag.pressedId;
+  let erasedId: string | null = null;
   const end = drag.currentWorld;
   const start = drag.startWorld;
   const distanceMoved = Math.hypot(end.x - start.x, end.y - start.y);
@@ -2697,6 +2757,7 @@ function handlePointerUp(event: PointerEvent): void {
       removeEntityById(target.id);
       if (state.selectedId === target.id) state.selectedId = null;
       commitState();
+      erasedId = target.id;
     } else if (target) {
       state.selectedId = target.id;
       updateUi();
@@ -2745,6 +2806,12 @@ function handlePointerUp(event: PointerEvent): void {
       commitState();
     }
   }
+  // クリックで置いた・消した物を覚えておく（続けてもう1回押したら、取り消してそこにある物を選ぶ）
+  if (clicked && (tool === "furniture" || tool === "text") && drag.createdId && findEntity(drag.createdId)) {
+    lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: pressedId ?? drag.createdId, revert: Boolean(pressedId) };
+  } else if (clicked && erasedId) {
+    lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: erasedId, revert: true };
+  }
 
   drag = {
     dragMode: "none",
@@ -2792,12 +2859,24 @@ function handleThreePointerDown(event: PointerEvent): void {
     threePointerDown = null;
     return;
   }
+  // 置く・消すツールで、同じ所を続けて押した（ダブルクリック・2回タップ）: 1回目を取り消して、そこにある物を選ぶ
+  const doubled = !event.ctrlKey && !event.metaKey && isDoublePress(lastThreeClick, event) ? lastThreeClick : null;
+  lastThreeClick = null;
+  if (doubled) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    threePointerDown = null;
+    revertLastClick(doubled);
+    selectThreePress(doubled.select);
+    return;
+  }
   threePointerDown = { x: event.clientX, y: event.clientY };
   const id = pickThreeEntity(event);
   const selected = id ? findEntity(id) : undefined;
-  // タッチの長押しで家具を選ぶ（指を動かせば、ふつうに視点が回る）
-  if (event.pointerType !== "mouse" && activeTool === "select" && selected?.type === "furniture" && !event.ctrlKey && !event.metaKey && !threeMoveId) {
-    startThreeLongPress(event, selected.id);
+  // タッチの長押しで物を選ぶ（指を動かせば、ふつうに視点が回る）。家具を置くツールのままでも選べる
+  if (event.pointerType !== "mouse" && !event.ctrlKey && !event.metaKey
+    && ((activeTool === "select" && selected?.type === "furniture" && !threeMoveId) || (activeTool === "furniture" && selected))) {
+    startThreeLongPress(event, selected!.id);
   }
   if (event.ctrlKey || event.metaKey) {
     threeMoveId = null;
@@ -2822,6 +2901,7 @@ function handleThreePointerDown(event: PointerEvent): void {
     if (selected && !isLocked(selected)) {
       removeEntityById(selected.id);
       commitState();
+      lastThreeClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: selected.id, revert: true };
       redrawAll();
     }
     return;
@@ -2856,9 +2936,19 @@ function handleThreePointerDown(event: PointerEvent): void {
   const members = selectedEntities();
   const origins = !created && members.length > 1 && members.some((item) => item.id === furnitureItem.id) ? members.map(cloneEntity) : undefined;
   if (!origins) selectOnly(furnitureItem.id);
-  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, origins, planeY, created, moved: false };
+  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, origins, planeY, created, moved: false, pressedId: created ? id ?? undefined : undefined };
   threeCanvas.style.cursor = "grabbing";
   redrawAll();
+}
+
+// 3Dで物を選ぶ（家具なら、そのままドラッグで動かせるようにする）。何もなければ選択を外す
+function selectThreePress(id: string | null): void {
+  const entity = id ? findEntity(id) : undefined;
+  selectThreeEntity(entity ? entity.id : null);
+  if (entity?.type === "furniture") {
+    threeMoveId = isLocked(entity) ? null : entity.id;
+    syncThreeMoveMode();
+  }
 }
 
 // 右ドラッグで動かす前に、回転の中心（controls.target）を視線の中心線上で、マウスの下にある物と同じ奥行きへ移す。
@@ -2920,6 +3010,10 @@ function finishThreeDrag(cancel = false): void {
     else restoreOrigins(gesture.origins ?? [gesture.origin]);
   } else if (gesture.origins ? gesture.origins.some((origin) => JSON.stringify(findEntity(origin.id)) !== JSON.stringify(origin)) : current && (gesture.created || JSON.stringify(current) !== JSON.stringify(gesture.origin))) {
     commitState();
+    // クリックで置いた家具（続けてもう1回押したら、取り消して、そこにあった物を選ぶ）
+    if (gesture.created && !gesture.moved && current) {
+      lastThreeClick = { at: performance.now(), x: gesture.startScreen.x, y: gesture.startScreen.y, history: historyIndex, select: gesture.pressedId ?? current.id, revert: Boolean(gesture.pressedId) };
+    }
   }
   controls.enabled = true;
   if (threeCanvas.hasPointerCapture(gesture.pointerId)) threeCanvas.releasePointerCapture(gesture.pointerId);
@@ -2943,7 +3037,13 @@ function startThreeLongPress(event: PointerEvent, id: string): void {
       threeLongPress = null;
       hidePressRing();
       const entity = press ? findEntity(press.id) : undefined;
-      if (!press || entity?.type !== "furniture") return;
+      if (!press || !entity) return;
+      // 家具を置くツールで押していたときは、置きかけた家具をやめる
+      if (threeDrag?.created) cancelThreeDrag();
+      if (entity.type !== "furniture") {
+        selectThreeEntity(press.id);
+        return;
+      }
       selectThreeEntity(press.id);
       threeMoveId = isLocked(entity) ? null : press.id;
       syncThreeMoveMode();
