@@ -66,7 +66,25 @@ export async function verifyRoofColor({ open, output }) {
     await page.waitForFunction(() => Boolean(window.__editorTest));
     assert.equal((await saved()).roofs.find(item => item.id === 'roof1').color, '#c8452f80');
     assert.ok((await roofColor('roof1')).every(color => color === 'c8452f'));
-    console.log('PASS: roofs: edges over the garden select the roof of the viewed floor, color swatches, see-through color codes, undo and reload');
+
+    // 屋根ごとに置く高さを上げ下げできる（同じ階の屋根でも別の高さに）
+    const bottom = async id => (await page.evaluate(id => window.__editorTest.bounds(id), id)).min[1];
+    assert.deepEqual(await ids(), ['roof1']);
+    const before = await bottom('roof1'), other = await bottom('roof2');
+    await page.locator('#roofElevationInput').fill('-120');
+    await page.locator('#roofElevationInput').press('Tab');
+    assert.equal((await saved()).roofs.find(item => item.id === 'roof1').elevation, -120);
+    assert.ok(Math.abs(await bottom('roof1') - (before - 1.2)) < 0.01, 'the roof is lowered by 120 cm');
+    assert.ok(Math.abs(await bottom('roof2') - other) < 0.001, 'the other roof stays');
+    await page.locator('#roofElevationInput').fill('0');
+    await page.locator('#roofElevationInput').press('Tab');
+    assert.equal((await saved()).roofs.find(item => item.id === 'roof1').elevation, undefined, '0 is not stored');
+    await page.keyboard.press('Control+z');
+    assert.equal((await saved()).roofs.find(item => item.id === 'roof1').elevation, -120);
+    await page.reload();
+    await page.waitForFunction(() => Boolean(window.__editorTest));
+    assert.ok(Math.abs(await bottom('roof1') - (before - 1.2)) < 0.01, 'the height is kept after reload');
+    console.log('PASS: roofs: edges over the garden select the roof of the viewed floor, color swatches, see-through color codes, raise/lower each roof, undo and reload');
   } finally {
     await page.context().close();
   }

@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-14",
     items: [{
+      ja: "屋根ごとに置く高さを上げ下げできるように。「選択中」の「上げ下げ cm」で、設置階の壁の上からずらします（下げるときはマイナス）。同じ階の屋根でも、下屋（げや）や重なった屋根を別の高さに置けます",
+      en: "Each roof can now be raised or lowered with Raise/lower (cm) under Selection, measured from the top of its floor's walls (negative to lower). Roofs on the same floor can sit at different heights, such as a lean-to below the main roof or stacked roofs",
+    }, {
       ja: "家具・設備の一覧を、よく使う順に並べ直しました（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いておくのは建具と椅子・ソファだけです。いくつかの分類に重ねて出している物は、検索の結果では上の分類の1つだけを出します",
       en: "Reordered the furniture palette by how often things are used: openings, household furniture such as seating, tables and beds, then stairs, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open, and items shown in several groups appear once in search results",
     }, {

@@ -155,6 +155,8 @@ interface Roof {
   sides?: number;
   rotation?: number;
   rise?: number;
+  // 置く高さのずれ cm（設置階の壁の上から、上げるとプラス・下げるとマイナス）。なければ 0
+  elevation?: number;
   // 屋根の色（カラーコード。末尾2桁で透かせる）。なければ標準の灰色（ROOF_COLORS の先頭）
   color?: string;
 }
@@ -290,6 +292,8 @@ const WALL_THICKNESS_2D = 10;
 const WALL_HEIGHT = 2.6;
 const FLOOR_SLAB = 0.15;
 const FLOOR_SPACING = WALL_HEIGHT + FLOOR_SLAB;
+// 屋根を上げ下げできる幅（cm）
+const ROOF_ELEVATION_LIMIT = 3000;
 // 開口の高さ範囲（壁がドア・窓と重なった部分だけを切り抜くために使う）
 const DOOR_HEAD_Y = 2.1;
 const WINDOW_SILL_Y = 0.84;
@@ -777,9 +781,15 @@ function normalizeRoof(value: unknown): Roof | null {
     } : {}),
     rise: isRadialRoof(item.kind) && typeof item.rise === "number" && Number.isFinite(item.rise) ? clamp(item.rise, 10, 2000) : undefined,
     floorId: typeof item.floorId === "string" ? item.floorId : undefined,
+    elevation: roofElevation(item.elevation) || undefined,
     locked: item.locked === true ? true : undefined,
     color: parseColorCode(item.color)?.code,
   };
+}
+
+// 屋根を置く高さのずれ（cm）。数でなければ 0
+function roofElevation(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? clamp(Math.round(value), -ROOF_ELEVATION_LIMIT, ROOF_ELEVATION_LIMIT) : 0;
 }
 
 function legacyRoofs(kind: unknown, floors: Floor[]): Roof[] {
@@ -8232,7 +8242,7 @@ function addRoof3d(roofItem: Roof, center: Point): void {
   const width = roofItem.w * SCALE_3D;
   const depth = roofItem.h * SCALE_3D;
   const pos = to3d(roofItem.x + roofItem.w / 2, roofItem.y + roofItem.h / 2, center);
-  const topY = floorBaseY(topIndex) + WALL_HEIGHT + 0.06;
+  const topY = floorBaseY(topIndex) + WALL_HEIGHT + 0.06 + roofElevation(roofItem.elevation) * SCALE_3D;
 
   if (isRadialRoof(roofItem.kind)) {
     const model = radialRoofModel(roofItem, material);
@@ -8479,6 +8489,7 @@ function updatePropertiesPanel(): void {
         ${lockRow}
         <p class="empty-state">屋根 ${roofIndex + 1}</p>
         <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${floor.name}</option>`).join("")}</select></label>
+        <label>上げ下げ cm<input id="roofElevationInput" type="number" min="${-ROOF_ELEVATION_LIMIT}" max="${ROOF_ELEVATION_LIMIT}" step="10" value="${roofElevation(selected.elevation)}" title="設置階の壁の上から、屋根を置く高さをずらす（下げるとマイナス）" ${placementDisabled} /></label>
         <label>種類
           <select id="roofKindInput" ${placementDisabled}>
             ${Object.entries(ROOF_LABELS).map(([kind, label]) => `<option value="${kind}" ${selected.kind === kind ? "selected" : ""}>${label}</option>`).join("")}
@@ -8505,6 +8516,7 @@ function updatePropertiesPanel(): void {
     bindSelect("#roofFloorInput", (value) => {
       if (state.floors.some((floor) => floor.id === value)) selected.floorId = value;
     });
+    bindNumber("#roofElevationInput", (value) => { selected.elevation = roofElevation(value) || undefined; });
     bindSelect("#roofKindInput", (value) => {
       if (!isRoofKind(value)) return;
       selected.kind = value;
