@@ -419,6 +419,18 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 上部の「読み込み」で、以前に書き出したJSONを復元できます。旧バージョンの単一階データや1枚屋根データも、可能な範囲で現在の形式へ変換します。
 
+### ファイルの組み合わせ
+
+上部の「組み合わせ」で、書き出したJSONを、いまの間取りに足せます。ファイルはいくつでも一度に選べます。置き方は次の3つから選びます（選んだ置き方は覚えておきます）。
+
+| 置き方 | 内容 |
+| --- | --- |
+| 右に並べる | いまの間取り（屋根も含む）の右へ200cmあけて、上の端をそろえて置きます。複数のファイルは順に右へ並びます |
+| 同じ位置に重ねる | ファイルに保存された位置のまま足します |
+| 上の階に積む | ファイルの階を、いまのいちばん上の階の上に足します |
+
+並べる・重ねるときは、1Fは1Fへ、地下は地下へと同じ階どうしを合わせ、足りない階は足します。屋根は元の階と一緒に移り、足した物には新しいIDが付きます。足したあとは、表示中の階の足した物が選ばれた状態になるので、そのままドラッグや矢印キーで位置を直せます。1回の「元に戻す」で、足した物も足した階も元に戻ります。何もない間取りに足すときは、ファイルの位置と階のまま入れます。
+
 > [!TIP]
 > 重要なプランは、ブラウザの自動保存だけに頼らず、定期的にJSONを書き出してください。
 
@@ -680,6 +692,7 @@ npm.cmd run dev
 
 ### 2026年10月15日
 
+- いくつかのファイルを組み合わせる「組み合わせ」を追加。書き出したファイルを、いまの間取りに足せます（いくつでも一度に選べます）。置き方は「右に並べる」「同じ位置に重ねる」「上の階に積む」から選べ、1Fは1Fへ・地下は地下へと同じ階どうしを合わせます。足した物は選ばれた状態になるので、そのままドラッグで位置を直せ、1回の「元に戻す」で取り消せます
 - 3Dでは、ドア・窓も家具と同じくダブルクリックで選ぶように（スマホ・タブレットは長押し）。1回のクリックでは選択を変えず、選び方を案内します
 
 ### 2026年10月14日
@@ -1284,6 +1297,8 @@ Export creates a file named `madori-YYYY-MM-DD.json`. It contains floors, rooms,
 
 Import restores a previously exported file. The loader also migrates older single-floor and single-roof formats where possible.
 
+Combine adds exported files to the current plan; you can pick several at once. Choose how to place them (the choice is remembered): side by side (to the right of the current plan, roofs included, with a 200 cm gap and the top edges aligned; several files line up in turn), in the same place (at the positions saved in the file), or stacked (the file's floors go on top of the current top floor). Side by side and same place match floors by level (1F to 1F, basements to basements) and add missing floors. Roofs move with their floors, and added items get new ids. Afterwards, the added items on the shown floor stay selected, so you can drag them or use the arrow keys to adjust their position. One Undo removes everything that was added, including new floors. Combining into an empty plan keeps the file's positions and floors.
+
 > [!TIP]
 > Export important work regularly instead of relying only on browser storage.
 
@@ -1545,6 +1560,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-15
 
+- Added Combine for putting several files together: add exported files to the current plan (pick as many as you like at once). Place them side by side, in the same place, or stacked on top; floors are matched by level (1F to 1F, basements to basements). The added items stay selected so you can drag them into place, and one Undo removes them
 - In 3D, doors and windows are now selected with a double-click like furniture (long press on phones and tablets). A single click leaves the selection unchanged and explains how to select them
 
 ### 2026-10-14

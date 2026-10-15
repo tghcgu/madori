@@ -827,6 +827,13 @@ select:focus-visible {
   min-width: 0;
 }
 
+.image-export-menu .menu-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .image-export-menu .primary-export {
   border-color: rgba(39, 117, 209, 0.52);
   background: rgba(39, 117, 209, 0.1);

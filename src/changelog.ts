@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-15",
     items: [{
+      ja: "いくつかのファイルを組み合わせる「組み合わせ」を追加。書き出したファイルを、いまの間取りに足せます（いくつでも一度に選べます）。置き方は「右に並べる」「同じ位置に重ねる」「上の階に積む」から選べ、1Fは1Fへ・地下は地下へと同じ階どうしを合わせます。足した物は選ばれた状態になるので、そのままドラッグで位置を直せ、1回の「元に戻す」で取り消せます",
+      en: "Added Combine for putting several files together: add exported files to the current plan (pick as many as you like at once). Place them side by side, in the same place, or stacked on top; floors are matched by level (1F to 1F, basements to basements). The added items stay selected so you can drag them into place, and one Undo removes them",
+    }, {
       ja: "3Dでは、ドア・窓も家具と同じくダブルクリックで選ぶように（スマホ・タブレットは長押し）。1回のクリックでは選択を変えず、選び方を案内します",
       en: "In 3D, doors and windows are now selected with a double-click like furniture (long press on phones and tablets). A single click leaves the selection unchanged and explains how to select them",
     }],

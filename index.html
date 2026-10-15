@@ -125,11 +125,29 @@
             <i data-lucide="upload"></i>
             <span>読み込み</span>
           </button>
+          <div class="image-export">
+            <button class="text-button" id="combineButton" type="button" title="書き出したファイル（JSON）を、いまの間取りに足す" aria-expanded="false">
+              <i data-lucide="combine"></i>
+              <span>組み合わせ</span>
+            </button>
+            <div class="image-export-menu" id="combineMenu" hidden>
+              <label>置き方
+                <select id="combinePlacement">
+                  <option value="side">右に並べる</option>
+                  <option value="same">同じ位置に重ねる</option>
+                  <option value="stack">上の階に積む</option>
+                </select>
+              </label>
+              <button class="text-button primary-export" id="combineChoose" type="button" title="足すファイルを選ぶ（いくつでも選べます）">ファイルを選んで足す</button>
+              <p class="menu-note">いくつでも一度に選べます。並べる・重ねるときは、同じ階どうし（1Fは1Fへ）を合わせます。足した物は選んだ状態になるので、そのままドラッグで位置を直せます</p>
+            </div>
+          </div>
           <button class="text-button danger" id="resetButton" type="button" title="新しい間取りを始める（いまの間取りは確認してから消します）">
             <i data-lucide="rotate-ccw"></i>
             <span>新規</span>
           </button>
           <input id="importInput" type="file" accept="application/json" hidden />
+          <input id="combineInput" type="file" accept="application/json" multiple hidden />
         </div>
       </header>
 

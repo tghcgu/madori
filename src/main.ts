@@ -245,6 +245,7 @@ const planStats = requiredElement<HTMLSpanElement>("#planStats");
 const threeStats = requiredElement<HTMLSpanElement>("#threeStats");
 const saveStatus = requiredElement<HTMLSpanElement>("#saveStatus");
 const importInput = requiredElement<HTMLInputElement>("#importInput");
+const combineInput = requiredElement<HTMLInputElement>("#combineInput");
 const dimensionToggle = requiredElement<HTMLButtonElement>("#dimensionToggle");
 const furniturePicker = requiredElement<HTMLDivElement>("#furniturePicker");
 const paletteSearch = requiredElement<HTMLInputElement>("#paletteSearch");
@@ -744,6 +745,8 @@ interface SavedViewState {
   symbols?: Partial<Record<FurnitureKind, number>>;
   ghost?: { target?: string; color?: string; opacity?: number };
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
+  // 「組み合わせ」の置き方
+  combine?: string;
   pen?: { color?: string; brush?: number; filled?: boolean };
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
@@ -1091,6 +1094,7 @@ function setupUi(): void {
   setupGhostMenu();
   setupPlanStyleMenu();
   setupImageExport();
+  setupCombine();
   setupEdition();
   setupTopNote();
   setupFeedbackForm();
@@ -9509,6 +9513,155 @@ function importPlan(): void {
     }
   });
   reader.readAsText(file);
+}
+
+// ---- いくつかのファイルを組み合わせる ----
+// 書き出したファイル（JSON）を、いまの間取りに足す。いくつでも一度に選べ、1回の「元に戻す」で取り消せる。
+// 置き方: 右に並べる（重ならないよう、いまの間取りの右へずらす）・同じ位置に重ねる・上の階に積む。
+// 並べる・重ねるときは、1Fは1Fへ、地下は地下へと同じ階どうしを合わせる（足りない階は足す）
+type CombinePlacement = "side" | "same" | "stack";
+const COMBINE_PLACEMENTS: CombinePlacement[] = ["side", "same", "stack"];
+// 右に並べるときの、いまの間取りとのすき間（cm）
+const COMBINE_GAP = GRID * 10;
+let combinePlacement: CombinePlacement = "side";
+
+function setupCombine(): void {
+  const button = document.querySelector<HTMLButtonElement>("#combineButton");
+  const menu = document.querySelector<HTMLDivElement>("#combineMenu");
+  const placement = document.querySelector<HTMLSelectElement>("#combinePlacement");
+  if (!button || !menu || !placement) return;
+  if (COMBINE_PLACEMENTS.includes(viewState.combine as CombinePlacement)) combinePlacement = viewState.combine as CombinePlacement;
+  placement.value = combinePlacement;
+  placement.addEventListener("change", () => {
+    if (!COMBINE_PLACEMENTS.includes(placement.value as CombinePlacement)) return;
+    combinePlacement = placement.value as CombinePlacement;
+    viewState.combine = combinePlacement;
+    scheduleViewStateSave();
+  });
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  };
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+    close();
+  });
+  document.querySelector<HTMLButtonElement>("#combineChoose")?.addEventListener("click", () => {
+    close();
+    combineInput.click();
+  });
+  combineInput.addEventListener("change", () => void combinePlanFiles());
+}
+
+async function combinePlanFiles(): Promise<void> {
+  const files = [...(combineInput.files ?? [])];
+  combineInput.value = "";
+  if (!files.length) return;
+  const parts: PlanState[] = [];
+  let failed = 0;
+  for (const file of files) {
+    try {
+      const plan = normalizePlan(JSON.parse(await file.text()));
+      if (!plan) throw new Error("Invalid plan");
+      parts.push(plan);
+    } catch {
+      failed += 1;
+    }
+  }
+  if (parts.length) combinePlans(parts, combinePlacement);
+  saveStatus.textContent = parts.length
+    ? `${parts.length}個を組み合わせました${failed ? `（${failed}個は読めず）` : ""}`
+    : "読み込み失敗";
+  window.setTimeout(() => (saveStatus.textContent = "保存済み"), 2400);
+}
+
+// 間取りを、いまの間取りに足す。足した物は新しいIDにし、表示している階の分を選んだ状態にする（そのままドラッグで位置を直せる）
+function combinePlans(parts: PlanState[], placement: CombinePlacement): void {
+  floorDraft = null;
+  floorEdit = null;
+  floorEditError = "";
+  threeMoveId = null;
+  const added = new Set<string>();
+  const copyOf = <T extends Entity>(entity: T, dx: number, dy: number): T => {
+    const copy = cloneEntity(entity) as T;
+    copy.id = newId(copy.type);
+    translateEntity(copy, dx, dy);
+    added.add(copy.id);
+    return copy;
+  };
+  for (const part of parts) {
+    // 何もない間取りに足すときは、ファイルの位置と階のまま入れる
+    const mode = isPlanEmpty(state) ? "same" : placement;
+    let dx = 0, dy = 0;
+    if (mode === "side") {
+      const here = planBounds(state), there = planBounds(part);
+      if (here && there) {
+        dx = snap(here.x + here.w + COMBINE_GAP - there.x);
+        dy = snap(here.y - there.y);
+      }
+    }
+    const partBasements = basementCount(part);
+    const floorIds = new Map<string, string>();
+    part.floors.forEach((floor, index) => {
+      const target = mode === "stack" ? pushEmptyFloor() : floorAtLevel(index - partBasements);
+      floorIds.set(floor.id, target.id);
+      floor.entities.forEach((entity) => target.entities.push(copyOf(entity, dx, dy)));
+    });
+    const topId = part.floors[part.floors.length - 1].id;
+    part.roofs.forEach((roofItem) => {
+      const copy = copyOf(roofItem, dx, dy);
+      copy.floorId = floorIds.get(roofItem.floorId ?? topId) ?? floorIds.get(topId);
+      state.roofs.push(copy);
+    });
+  }
+  renameFloors();
+  // 足した物が見える階を表示して、その階の分を選ぶ
+  if (!activeEntities().some((entity) => added.has(entity.id))) {
+    const shown = state.floors.findIndex((floor) => floor.entities.some((entity) => added.has(entity.id)));
+    if (shown >= 0) state.activeFloor = shown;
+  }
+  const floorId = activeFloor().id;
+  selectMany([
+    ...activeEntities().filter((entity) => added.has(entity.id)),
+    ...state.roofs.filter((roofItem) => added.has(roofItem.id) && roofItem.floorId === floorId),
+  ].map((entity) => entity.id));
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  syncPlanCursor();
+  commitState();
+  fitPlanToCanvas();
+  pendingCameraFrame = true;
+  redrawAll();
+}
+
+function isPlanEmpty(plan: PlanState): boolean {
+  return plan.roofs.length === 0 && plan.floors.every((floor) => floor.entities.length === 0);
+}
+
+// 間取り全体（すべての階と屋根）の外形
+function planBounds(plan: PlanState): Bounds | null {
+  return getEntitiesBounds([...plan.floors.flatMap((floor) => floor.entities), ...plan.roofs]);
+}
+
+function pushEmptyFloor(): Floor {
+  const floor: Floor = { id: newId("floor"), name: "", entities: [] };
+  state.floors.push(floor);
+  return floor;
+}
+
+// その高さの階（1Fが0、B1Fが-1）。なければ上や下（地下）に足す
+function floorAtLevel(level: number): Floor {
+  while (level + basementCount() < 0) {
+    state.floors.unshift({ id: newId("floor"), name: "", entities: [] });
+    state.basements = basementCount() + 1;
+    state.activeFloor += 1;
+  }
+  while (level + basementCount() >= state.floors.length) pushEmptyFloor();
+  return state.floors[level + basementCount()];
 }
 
 function screenToWorld(event: PointerEvent | MouseEvent | WheelEvent): Point {
