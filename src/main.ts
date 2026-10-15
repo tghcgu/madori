@@ -4480,13 +4480,33 @@ function drawSelectionMarks(entity: Entity): void {
   }
 }
 
+// 2Dの屋根の中に引く線（棟・隅棟・円すいの筋・陸屋根の内側の線）。クリックで屋根を選ぶ当たり判定にも使う
+function roofLines2d(roofItem: Roof): [Point, Point][] {
+  const { x, y, w, h } = roofItem;
+  const cx = x + w / 2, cy = y + h / 2, inset = Math.min(w, h) / 2;
+  const line = (x1: number, y1: number, x2: number, y2: number): [Point, Point] => [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+  if (roofItem.kind === "dome") return [];
+  if (isRadialRoof(roofItem.kind)) {
+    return roofOutline(roofItem).filter((_, i) => roofItem.kind === "polygon" || i % 8 === 0).map(([px, py]) => line(cx, cy, px, py));
+  }
+  if (roofItem.kind === "flat") {
+    const e = Math.min(16 / view.zoom, w / 4, h / 4);
+    return [line(x + e, y + e, x + w - e, y + e), line(x + w - e, y + e, x + w - e, y + h - e), line(x + w - e, y + h - e, x + e, y + h - e), line(x + e, y + h - e, x + e, y + e)];
+  }
+  const gable = roofItem.kind === "gable";
+  if (w >= h) {
+    const start = gable ? x : x + inset, end = gable ? x + w : x + w - inset;
+    return [line(start, cy, end, cy), ...(gable ? [] : [line(x, y, start, cy), line(start, cy, x, y + h), line(x + w, y, end, cy), line(end, cy, x + w, y + h)])];
+  }
+  const start = gable ? y : y + inset, end = gable ? y + h : y + h - inset;
+  return [line(cx, start, cx, end), ...(gable ? [] : [line(x, y, cx, start), line(cx, start, x + w, y), line(x, y + h, cx, end), line(cx, end, x + w, y + h)])];
+}
+
 function drawRoof2d(roofItem: Roof): void {
   if (deferOverlay(() => drawRoof2d(roofItem))) return;
   const selected = state.selectedId === roofItem.id;
-  const horizontal = roofItem.w >= roofItem.h;
   const cx = roofItem.x + roofItem.w / 2;
   const cy = roofItem.y + roofItem.h / 2;
-  const inset = Math.min(roofItem.w, roofItem.h) / 2;
 
   ctx.save();
   // 色を決めた屋根は、その色でうすく塗り、少し濃くした色で縁を描く（透明度があれば、そのぶん薄く）
@@ -4502,42 +4522,10 @@ function drawRoof2d(roofItem: Roof): void {
   ctx.setLineDash([]);
 
   ctx.beginPath();
-  if (isRadialRoof(roofItem.kind)) {
-    if (roofItem.kind === "dome") {
-      for (const scale of [0.45, 0.8]) { ctx.moveTo(cx + roofItem.w / 2 * scale, cy); ctx.ellipse(cx, cy, roofItem.w / 2 * scale, roofItem.h / 2 * scale, 0, 0, Math.PI * 2); }
-    } else {
-      outline.forEach(([x, y], i) => { if (roofItem.kind === "polygon" || i % 8 === 0) { ctx.moveTo(cx, cy); ctx.lineTo(x, y); } });
-    }
-  } else if (roofItem.kind === "flat") {
-    const edgeInset = Math.min(16 / view.zoom, roofItem.w / 4, roofItem.h / 4);
-    ctx.rect(roofItem.x + edgeInset, roofItem.y + edgeInset, roofItem.w - edgeInset * 2, roofItem.h - edgeInset * 2);
-  } else if (horizontal) {
-    const ridgeStart = roofItem.kind === "gable" ? roofItem.x : roofItem.x + inset;
-    const ridgeEnd = roofItem.kind === "gable" ? roofItem.x + roofItem.w : roofItem.x + roofItem.w - inset;
-    ctx.moveTo(ridgeStart, cy);
-    ctx.lineTo(ridgeEnd, cy);
-    if (roofItem.kind === "hip") {
-      ctx.moveTo(roofItem.x, roofItem.y);
-      ctx.lineTo(ridgeStart, cy);
-      ctx.lineTo(roofItem.x, roofItem.y + roofItem.h);
-      ctx.moveTo(roofItem.x + roofItem.w, roofItem.y);
-      ctx.lineTo(ridgeEnd, cy);
-      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y + roofItem.h);
-    }
-  } else {
-    const ridgeStart = roofItem.kind === "gable" ? roofItem.y : roofItem.y + inset;
-    const ridgeEnd = roofItem.kind === "gable" ? roofItem.y + roofItem.h : roofItem.y + roofItem.h - inset;
-    ctx.moveTo(cx, ridgeStart);
-    ctx.lineTo(cx, ridgeEnd);
-    if (roofItem.kind === "hip") {
-      ctx.moveTo(roofItem.x, roofItem.y);
-      ctx.lineTo(cx, ridgeStart);
-      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y);
-      ctx.moveTo(roofItem.x, roofItem.y + roofItem.h);
-      ctx.lineTo(cx, ridgeEnd);
-      ctx.lineTo(roofItem.x + roofItem.w, roofItem.y + roofItem.h);
-    }
+  if (roofItem.kind === "dome") {
+    for (const scale of [0.45, 0.8]) { ctx.moveTo(cx + roofItem.w / 2 * scale, cy); ctx.ellipse(cx, cy, roofItem.w / 2 * scale, roofItem.h / 2 * scale, 0, 0, Math.PI * 2); }
   }
+  roofLines2d(roofItem).forEach(([from, to]) => { ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); });
   ctx.stroke();
 
   if (showDimensions) {
@@ -9558,7 +9546,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     }
   }
 
-  // 屋根は縁の線で選ぶ。庭・地面などの床の上にある縁でも選べるよう、床より先に調べる（いま見ている階の屋根を優先）
+  // 屋根は縁と棟の線で選ぶ。庭・地面などの床の上にある線でも選べるよう、床より先に調べる（いま見ている階の屋根を優先）
   const roofEdge = roofsOn2d() ? roofEdgeAt(point, selectedRoof?.id) : null;
   for (let i = entities.length - 1; i >= 0; i -= 1) {
     const entity = entities[i];
@@ -9597,13 +9585,30 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
         const endpoint = getLineEndpointHit(entity, point);
         if (endpoint) return { entity, corner: endpoint };
       }
-      if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < 12 / view.zoom) {
+      // ドア・窓は壁の厚みのぶんも当たりにする。開き戸は、開いた扉と開く範囲（4分の1の円）も当たり
+      const reach = entity.type === "wall" ? 12 / view.zoom : Math.max(12 / view.zoom, WALL_THICKNESS_2D);
+      if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < reach || (entity.type === "door" && isPointInDoorSwing(point, entity))) {
         return { entity, corner: null };
       }
     }
   }
   if (roofEdge) return { entity: roofEdge, corner: null };
-  return { entity: null, corner: null };
+  // 選択ツールでは、ほかに何もない所（軒先など）を押すと、そこを覆う屋根を選ぶ（消すツールでうっかり消さないよう、選択ツールだけ）
+  const roofInside = roofsOn2d() && activeTool === "select" ? roofAt(point) : null;
+  return { entity: roofInside, corner: null };
+}
+
+// その点を覆う屋根（いま見ている階の屋根を優先）
+function roofAt(point: Point): Roof | null {
+  const floorId = activeFloor().id, topId = state.floors[state.floors.length - 1]?.id;
+  let other: Roof | null = null;
+  for (let i = state.roofs.length - 1; i >= 0; i -= 1) {
+    const roofItem = state.roofs[i];
+    if (!isPointInRoof(point, roofItem)) continue;
+    if ((roofItem.floorId ?? topId) === floorId) return roofItem;
+    other ??= roofItem;
+  }
+  return other;
 }
 
 // 点の近くに縁がある屋根。いま見ている階の屋根を先に、同じ階どうしなら後から置いた（上に描かれる）屋根を選ぶ
@@ -9846,6 +9851,24 @@ function isPointNearRoofEdge(point: Point, roofItem: Roof): boolean {
   return points.some(([x, y], i) => {
     const next = points[(i + 1) % points.length];
     return distanceToSegment(point, { x, y }, { x: next[0], y: next[1] }) <= tolerance;
+  }) || roofLines2d(roofItem).some(([from, to]) => distanceToSegment(point, from, to) <= tolerance);
+}
+
+// 開き戸（片開き・両開き・門扉）の、開いた扉と開く範囲の4分の1の円の中か
+function isPointInDoorSwing(point: Point, door: LinearElement): boolean {
+  if (door.doorStyle && door.doorStyle !== "double" && door.doorStyle !== "gate") return false;
+  const length = Math.max(distance(door), GRID);
+  const a = Math.atan2(door.y2 - door.y1, door.x2 - door.x1);
+  const open = a + ((door.flip ? 1 : -1) * Math.PI) / 2;
+  const leaves = door.doorStyle ? doubleLeaves() : [{ hinge: -1, width: 1 }];
+  const slack = 6 / view.zoom;
+  return leaves.some((leaf) => {
+    const hinge = leaf.hinge < 0 ? { x: door.x1, y: door.y1 } : { x: door.x2, y: door.y2 };
+    const closed = leaf.hinge < 0 ? a : a + Math.PI;
+    const dx = point.x - hinge.x, dy = point.y - hinge.y;
+    return Math.hypot(dx, dy) <= length * leaf.width + slack
+      && dx * Math.cos(closed) + dy * Math.sin(closed) >= -slack
+      && dx * Math.cos(open) + dy * Math.sin(open) >= -slack;
   });
 }
 

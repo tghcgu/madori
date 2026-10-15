@@ -46,5 +46,16 @@ export async function verifyDoors({ page, importPlan, choose, planPoint, move, s
   placed = await doors();
   assert.deepEqual(placed.map(door => door.doorStyle ?? 'swing'), ['swing', 'gate', 'koshi']);
   await page.locator('#planCanvas').screenshot({ path: `${output}/doors.png` });
-  console.log('PASS: door styles: double, sliding, shoji, fusuma, lattice entrance, plank and gate doors from the palette, style changes in 2D and 3D, and Japanese doors in the Japanese group');
+
+  // 開き戸・門扉は、開く範囲（4分の1の円）の中を押しても選べる。範囲の外は、ふつうに床
+  await page.locator('[data-tool="select"]').first().click();
+  const clickAt = async (x, y) => { const at = await planPoint(x, y); await page.mouse.click(at.x, at.y); };
+  const selection = () => page.evaluate(() => window.__editorTest.selection());
+  await clickAt(160, 140);
+  assert.deepEqual(await selection(), [placed[0].id], 'inside the swing of a door selects it');
+  await clickAt(430, 150);
+  assert.deepEqual(await selection(), [placed[1].id], 'inside the swing of a gate selects it');
+  await clickAt(160, 300);
+  assert.deepEqual(await selection(), ['hall'], 'the other side of the door is the floor');
+  console.log('PASS: door styles: double, sliding, shoji, fusuma, lattice entrance, plank and gate doors from the palette, style changes in 2D and 3D, Japanese doors in the Japanese group, and selecting doors inside their swing');
 }

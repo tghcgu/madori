@@ -199,7 +199,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 2D上でドラッグ移動
 - 四隅のハンドルでサイズ変更
 - 幅と奥行を90度入れ替え
-- 2Dまたは3Dから屋根を選択。2Dでは屋根の縁（破線）をクリックします。庭や地面の床の上にある縁でも選べ、同じ所に縁が重なるときは、いま見ている階の屋根を選びます
+- 2Dまたは3Dから屋根を選択。2Dでは屋根の縁（破線）か棟などの屋根の中の線をクリックします。床も家具もない軒先を押しても選べます（選択ツールのとき）。庭や地面の床の上にある線でも選べ、同じ所に線が重なるときは、いま見ている階の屋根を選びます
 - 屋根ごとに色を指定（いぶし瓦・黒・赤茶・朱・緑青・青などの見本か、カラーコード）。末尾2桁で透かすと、3Dで屋根越しに中が見えます。2Dの屋根の線と面も、その色でうすく描きます
 - 2D上の屋根には名前を表示せず、寸法表示がONのときだけ大きさを表示
 - 屋根ごとの固定、選択、削除
@@ -680,6 +680,8 @@ npm.cmd run dev
 
 ### 2026年10月14日
 
+- 2Dでドアを選びやすく。開き戸・両開き・門扉は、開いた扉や開く範囲の円弧の中を押しても選べます。引き戸・障子なども、壁の厚みのぶん広く当たります
+- 2Dで屋根を選びやすく。縁の破線だけでなく、棟などの屋根の中の線や、床も家具もない軒先を押しても選べます（軒先は選択ツールのとき）
 - 屋根ごとに置く高さを上げ下げできるように。「選択中」の「上げ下げ cm」で、設置階の壁の上からずらします（下げるときはマイナス）。同じ階の屋根でも、下屋（げや）や重なった屋根を別の高さに置けます
 - 家具・設備の一覧を、よく使う順に並べ直しました（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いておくのは建具と椅子・ソファだけです。いくつかの分類に重ねて出している物は、検索の結果では上の分類の1つだけを出します
 - 家具を置く・文字を置く・消すツールのままでも、ダブルクリックでそこにある物を選べるように。2Dでも3Dでも同じで、スマホ・タブレットは2回タップか長押しです。1回目のクリックで置いた家具や消した物は取り消します
@@ -1070,7 +1072,7 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 - Drag roofs on the 2D canvas
 - Resize roofs from corner handles
 - Swap width and depth with a 90-degree rotation
-- Select roofs from either the 2D or 3D view. In 2D, click the dashed roof edge; edges over gardens and ground floors work too, and where edges overlap, the roof of the floor being viewed is chosen
+- Select roofs from either the 2D or 3D view. In 2D, click the dashed roof edge or a line inside the roof such as the ridge, or (with the Select tool) an empty spot under the roof such as the eaves; lines over gardens and ground floors work too, and where lines overlap, the roof of the floor being viewed is chosen
 - Give each roof its own color with swatches (smoked tile, black, terracotta, vermilion, verdigris, blue and more) or a color code. Two extra digits for transparency make the roof see-through in 3D, and the 2D outline is tinted with the same color
 - Roofs show no name on the 2D plan; their size appears only when dimension labels are on
 - Lock, select, and delete roofs independently
@@ -1539,6 +1541,8 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-14
 
+- Doors are easier to select in 2D: click anywhere inside the swing of a hinged, double or gate door, and sliding doors and shoji respond across the full wall thickness
+- Roofs are easier to select in 2D: besides the dashed edge, click a line inside the roof such as the ridge, or an empty spot under the roof such as the eaves (with the Select tool)
 - Each roof can now be raised or lowered with Raise/lower (cm) under Selection, measured from the top of its floor's walls (negative to lower). Roofs on the same floor can sit at different heights, such as a lean-to below the main roof or stacked roofs
 - Reordered the furniture palette by how often things are used: openings, household furniture such as seating, tables and beds, then stairs, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open, and items shown in several groups appear once in search results
 - While placing furniture or text, or erasing, a double-click now selects whatever is there, in both 2D and 3D (double tap or long press on phones and tablets). Whatever the first click placed or erased is undone

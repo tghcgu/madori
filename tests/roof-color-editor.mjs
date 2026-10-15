@@ -9,6 +9,7 @@ export async function verifyRoofColor({ open, output }) {
   const roofs = [
     { id: 'roof1', type: 'roof', kind: 'gable', x: 260, y: 160, w: 480, h: 480, floorId: 'f1' },
     { id: 'roof2', type: 'roof', kind: 'hip', x: 260, y: 160, w: 480, h: 480, floorId: 'f2' },
+    { id: 'roof3', type: 'roof', kind: 'flat', x: 1100, y: 100, w: 200, h: 200, floorId: 'f1' },
   ];
   const data = { floors: [{ id: 'f1', name: '1F', entities: [ground, house] }, { id: 'f2', name: '2F', entities: [upper] }], activeFloor: 0, selectedId: null, roofs };
   const page = await open(JSON.stringify(data));
@@ -27,6 +28,19 @@ export async function verifyRoofColor({ open, output }) {
     at = await point(100, 400);
     await page.mouse.click(at.x, at.y);
     assert.deepEqual(await ids(), ['garden']);
+    // 屋根の中の線（棟）でも選べる
+    at = await point(500, 400);
+    await page.mouse.click(at.x, at.y);
+    assert.deepEqual(await ids(), ['roof1'], 'the ridge line selects the roof');
+    // 床も家具もない所は、そこを覆う屋根が選ばれる。消すツールでは、そこを押しても屋根は消えない
+    at = await point(1200, 200);
+    await page.mouse.click(at.x, at.y);
+    assert.deepEqual(await ids(), ['roof3'], 'an empty spot under a roof selects the roof');
+    await page.keyboard.press('Escape');
+    await page.locator('[data-tool="erase"]').first().click();
+    await page.mouse.click(at.x, at.y);
+    assert.equal((await saved()).roofs.length, 3, 'the eraser does not erase a roof from inside');
+    await page.locator('[data-tool="select"]').first().click();
     // 2階を見ているときは、同じ所で2階の屋根が選ばれる
     await page.locator('#floorTabs button').filter({ hasText: /^2F$/ }).first().click();
     at = await point(260, 400);

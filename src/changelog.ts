@@ -10,6 +10,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-14",
     items: [{
+      ja: "2Dでドアを選びやすく。開き戸・両開き・門扉は、開いた扉や開く範囲の円弧の中を押しても選べます。引き戸・障子なども、壁の厚みのぶん広く当たります",
+      en: "Doors are easier to select in 2D: click anywhere inside the swing of a hinged, double or gate door, and sliding doors and shoji respond across the full wall thickness",
+    }, {
+      ja: "2Dで屋根を選びやすく。縁の破線だけでなく、棟などの屋根の中の線や、床も家具もない軒先を押しても選べます（軒先は選択ツールのとき）",
+      en: "Roofs are easier to select in 2D: besides the dashed edge, click a line inside the roof such as the ridge, or an empty spot under the roof such as the eaves (with the Select tool)",
+    }, {
       ja: "屋根ごとに置く高さを上げ下げできるように。「選択中」の「上げ下げ cm」で、設置階の壁の上からずらします（下げるときはマイナス）。同じ階の屋根でも、下屋（げや）や重なった屋根を別の高さに置けます",
       en: "Each roof can now be raised or lowered with Raise/lower (cm) under Selection, measured from the top of its floor's walls (negative to lower). Roofs on the same floor can sit at different heights, such as a lean-to below the main roof or stacked roofs",
     }, {
