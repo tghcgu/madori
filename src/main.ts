@@ -2885,7 +2885,7 @@ function handleThreePointerDown(event: PointerEvent): void {
   const selected = id ? findEntity(id) : undefined;
   // タッチの長押しで物を選ぶ（指を動かせば、ふつうに視点が回る）。家具を置くツールのままでも選べる
   if (event.pointerType !== "mouse" && !event.ctrlKey && !event.metaKey
-    && ((activeTool === "select" && selected?.type === "furniture" && !threeMoveId) || (activeTool === "furniture" && selected))) {
+    && ((activeTool === "select" && isThreeDoubleSelect(selected) && !(selected?.type === "furniture" && threeMoveId)) || (activeTool === "furniture" && selected))) {
     startThreeLongPress(event, selected!.id);
   }
   if (event.ctrlKey || event.metaKey) {
@@ -3035,7 +3035,7 @@ function cancelThreeDrag(): void {
   finishThreeDrag(true);
 }
 
-// 3D: タッチ（指・ペン）で家具を長押ししたら、選んで、そのまま指を動かすと家具が動く（マウスはダブルクリックで選ぶ）
+// 3D: タッチ（指・ペン）で家具・ドア・窓を長押ししたら選ぶ。家具は、そのまま指を動かすと動く（マウスはダブルクリックで選ぶ）
 let threeLongPress: { timer: number; pointerId: number; x: number; y: number; id: string; last: PointerEvent } | null = null;
 
 function startThreeLongPress(event: PointerEvent, id: string): void {
@@ -3128,14 +3128,20 @@ function handleThreePointerUp(event: PointerEvent): void {
   threePointerDown = null;
   if (moved > 6 || activeTool === "furniture") return;
   const entityId = pickThreeEntity(event);
-  // 家具の上で視点を操作しても選択が変わらないよう、選択はダブルクリックで行う。1回クリックしたときは、選び方を案内する
-  if (entityId && findEntity(entityId)?.type === "furniture") {
-    if (!selectedEntities().some((item) => item.id === entityId) && activeTool === "select" && event.pointerType === "mouse") {
-      showThreeHint("家具はダブルクリックで選べます。選んだ家具は、そのままドラッグで動かせます");
+  const entity = entityId ? findEntity(entityId) : undefined;
+  // 家具・ドア・窓の上で視点を操作しても選択が変わらないよう、選択はダブルクリックで行う。1回クリックしたときは、選び方を案内する
+  if (entity && isThreeDoubleSelect(entity)) {
+    if (!selectedEntities().some((item) => item.id === entity.id) && activeTool === "select" && event.pointerType === "mouse") {
+      showThreeHint(entity.type === "furniture" ? "家具はダブルクリックで選べます。選んだ家具は、そのままドラッグで動かせます" : "ドア・窓はダブルクリックで選べます");
     }
     return;
   }
   selectThreeEntity(entityId);
+}
+
+// 3Dでダブルクリック（タッチは長押し）で選ぶ物: 家具と建具（ドア・窓）。ほかの物（床・壁・屋根など）は1回のクリックで選ぶ
+function isThreeDoubleSelect(entity: Entity | undefined): boolean {
+  return entity?.type === "furniture" || entity?.type === "door" || entity?.type === "window";
 }
 
 function selectThreeEntity(entityId: string | null): void {
@@ -3157,10 +3163,9 @@ function selectThreeEntity(entityId: string | null): void {
 function handleThreeDoubleClick(event: MouseEvent): void {
   if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || threeDrag || activeTool === "furniture" || activeTool === "erase") return;
   const id = pickThreeEntity(event), entity = id ? findEntity(id) : undefined;
-  if (entity?.type !== "furniture") return;
-  selectThreeEntity(id);
-  threeMoveId = isLocked(entity) ? null : id;
-  syncThreeMoveMode();
+  if (!isThreeDoubleSelect(entity)) return;
+  // 家具なら、そのままドラッグで動かせるようにする
+  selectThreePress(id);
 }
 
 function syncThreeMoveMode(): void {

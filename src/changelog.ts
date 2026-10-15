@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-15",
+    items: [{
+      ja: "3Dでは、ドア・窓も家具と同じくダブルクリックで選ぶように（スマホ・タブレットは長押し）。1回のクリックでは選択を変えず、選び方を案内します",
+      en: "In 3D, doors and windows are now selected with a double-click like furniture (long press on phones and tablets). A single click leaves the selection unchanged and explains how to select them",
+    }],
+  },
+  {
     date: "2026-10-14",
     items: [{
       ja: "2Dでドアを選びやすく。開き戸・両開き・門扉は、開いた扉や開く範囲の円弧の中を押しても選べます。引き戸・障子なども、壁の厚みのぶん広く当たります",

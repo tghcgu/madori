@@ -127,7 +127,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 8方位と真上から選べる光の向き
 - 階ごとの表示・非表示
 - 屋根全体の一時表示・非表示（屋根ごとに色も変えられ、透かせば中が見えます）
-- 3D上の家具はダブルクリックで選択。1回クリックや長押しでは選択を変えません。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。家具以外は1回クリックで選択します
+- 3D上の家具・ドア・窓はダブルクリックで選択（スマホ・タブレットは長押し）。1回クリックでは選択を変えず、選び方を案内します。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。床・壁・屋根などは1回クリックで選択します
 - 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
 - 「選択」ツールで家具をダブルクリックすると移動モードになり、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動アイコンでも切り替え可能です。空白クリック・Escで解除し、移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
 - 右ドラッグ／Shift＋左ドラッグは、画面に沿った上下左右の平行移動です。上下ドラッグで高さも変わり、2階・3階の室内まで視点を持ち上げられます
@@ -363,8 +363,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 3D | 左ドラッグ | 視点回転。家具をダブルクリックして移動モードにすると家具移動 |
 | 3D | 右ドラッグ | 画面に沿って視点を上下左右へ平行移動（高さも変更） |
 | 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
-| 3D | ダブルクリック | 家具を選択し、固定されていなければ移動モードへ |
-| 3D | クリック | 家具以外を選択。家具ツールでは編集中の階へ配置 |
+| 3D | ダブルクリック | 家具・ドア・窓を選択。家具は、固定されていなければ移動モードへ |
+| 3D | クリック | 床・壁・屋根などを選択。家具ツールでは編集中の階へ配置 |
 
 ### キーボードショートカット
 
@@ -677,6 +677,10 @@ npm.cmd run dev
 ## 更新履歴
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
+
+### 2026年10月15日
+
+- 3Dでは、ドア・窓も家具と同じくダブルクリックで選ぶように（スマホ・タブレットは長押し）。1回のクリックでは選択を変えず、選び方を案内します
 
 ### 2026年10月14日
 
@@ -1003,7 +1007,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Eight compass directions plus overhead lighting
 - Per-floor visibility controls
 - Temporary roof visibility toggle
-- Double-click furniture in 3D to select and edit it; a single click or hold does not change the selection. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Other objects use a single click
+- Double-click furniture, doors and windows in 3D to select and edit them (long press on phones and tablets); a single click does not change the selection and explains how to select instead. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Floors, walls, roofs and other objects use a single click
 - In Select mode, double-click furniture to enter move mode, then drag it (or its selected group). The move icon also toggles the mode. Click empty space or press Escape to leave; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
 
 ### Multiple floors
@@ -1226,8 +1230,8 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 3D | Left-drag | Orbit by default, including over furniture; move selected furniture after entering move mode |
 | 3D | Right-drag | Pan along the screen, including camera elevation |
 | 3D | Mouse wheel | Zoom; keep zooming in to enter rooms, reverse to move back |
-| 3D | Double-click | Select furniture and enter move mode unless locked |
-| 3D | Click | Select non-furniture objects, or place furniture on the active floor with a furniture tool |
+| 3D | Double-click | Select furniture, doors and windows; furniture enters move mode unless locked |
+| 3D | Click | Select floors, walls, roofs and other objects, or place furniture on the active floor with a furniture tool |
 
 ### Keyboard
 
@@ -1538,6 +1542,10 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-15
+
+- In 3D, doors and windows are now selected with a double-click like furniture (long press on phones and tablets). A single click leaves the selection unchanged and explains how to select them
 
 ### 2026-10-14
 
