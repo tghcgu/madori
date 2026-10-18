@@ -10,6 +10,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "テンプレートを153種類に。1K・タワーマンション・京町家・日本の城・温泉・寿司屋・スーパー・教室・診療所・水族館・駅・遊園地・新幹線・冒険者ギルド・魔王城・宇宙ステーション・廃病院など103種類を足し、「和風・歴史」「学校・仕事場」「公共・医療」「文化・娯楽」「乗り物」「SF・ホラー」など11の分類に分け直しました",
+      en: "153 templates: added 103, including a 1K, a high-rise condominium, a Kyoto townhouse, a Japanese castle, a hot spring, a sushi restaurant, a supermarket, a classroom, a clinic, an aquarium, a train station, an amusement park, a shinkansen, an adventurers' guild, a demon lord's castle, a space station and an abandoned hospital, regrouped into 11 groups such as Japanese and historic, Schools and workplaces, Public and medical, Culture and entertainment, Vehicles, and Sci-fi and horror",
+    }, {
+      ja: "映画館のテンプレートで、スクリーンが屋根から突き出ていたのを直しました",
+      en: "Fixed the screen sticking out through the roof in the cinema template",
+    }, {
       ja: "池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です",
       en: "Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape",
     }, {

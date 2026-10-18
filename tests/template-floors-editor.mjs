@@ -53,5 +53,5 @@ export async function verifyTemplateFloors({page,choose,output,pixels}) {
   await page.setViewportSize({width:1440,height:1000});
   await page.locator('#panelToggle').click();
   await page.locator('button[data-view-mode="split"]').click();
-  console.log('PASS: all 50 templates normalize, upper slabs have stairwell openings, circular towers render and reload');
+  console.log(`PASS: all ${keys.length} templates normalize, upper slabs have stairwell openings, circular towers render and reload`);
 }

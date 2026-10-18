@@ -77,7 +77,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 5. 上部の「同時」「2D」「3D」で表示を切り替えます。
 6. 大切なプランは「書き出し」からJSONファイルとして保存します。
 
-インストールもログインも不要です。最初から用意されている間取りを編集するか、「テンプレート」から家・マンション・洋館・旅館・病院・学校・寺・城・宇宙船など50種類の間取りを読み込めます。
+インストールもログインも不要です。最初から用意されている間取りを編集するか、「テンプレート」から家・マンション・洋館・旅館・お店・病院・学校・寺・城・駅・遊園地・宇宙船など153種類の間取りを読み込めます。
 
 ## 主な機能
 
@@ -283,60 +283,163 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 階段のあるテンプレートは、上階の床に階段用の開口を設けています。最上階には余分な上り階段を置かず、下階からの階段を参照表示します。「魔法使いの塔」と「城」の塔は円形の壁・床です。これらは新しく読み込むテンプレートに適用され、保存済みの間取りは自動で変更しません。
 
-家・お店・施設・乗り物・ファンタジーなど50種類を、6つの分類に分けて並べています。どれも壁・ドア・窓・家具・床の模様・屋根まで入っていて、2Dでも3Dでもそのまま見られます（部屋の名前は家具に隠れない場所に置いています）。
+家・和風の建物・お店・学校・病院・街・乗り物・ファンタジー・SFなど153種類を、11の分類に分けて並べています。どれも壁・ドア・窓・家具・床の模様・屋根まで入っていて、2Dでも3Dでもそのまま見られます（部屋の名前は家具に隠れない場所に置いています）。
 
 | 分類 | テンプレート | 内容 |
 | --- | --- | --- |
 | 住まい | ワンルーム | 1部屋と水回りの小さな家 |
+| 住まい | 1K | 洋室・キッチン・ユニットバスとベランダ |
 | 住まい | 1LDK | LDKと寝室 |
 | 住まい | 2LDK | LDKと洋室2つ |
 | 住まい | 二階建て 3LDK | 1階にLDK、2階に寝室と洋室、屋根 |
 | 住まい | 三階建て | 1階に車庫と水回り、2階にLDK、3階に寝室。狭い土地の三階建て |
 | 住まい | マンション | 3LDKのマンションの1戸。玄関からの廊下とバルコニー |
+| 住まい | タワーマンション | 高層階の2LDK。大きな窓とバルコニー、ウォークインクローゼット |
+| 住まい | メゾネット | 1階にLDKと水回り、2階に寝室と子ども部屋 |
 | 住まい | アパート | 1Kが3部屋ずつの二階建て。外廊下と外階段 |
+| 住まい | 団地 | 昭和の団地の3DK。和室2つとダイニングキッチン |
 | 住まい | シェアハウス | 共用のLDKと水回り、個室5つの二階建て |
-| 住まい | 平屋の日本家屋 | 茶の間・座敷・土間・縁側と庭のある和風の家 |
-| 住まい | 古民家 | 土間・囲炉裏の間・座敷と縁側、庭と蔵 |
+| 住まい | 二世帯住宅 | 1階に親世帯、2階に子世帯の二階建て |
+| 住まい | ガレージハウス | 1階にガレージと作業場、2階にLDKと寝室 |
+| 住まい | 中庭のある家 | 中庭を囲む平屋 |
+| 住まい | 平屋の洋風住宅 | テラスと庭のある平屋 |
+| 住まい | ログハウス | 暖炉のあるリビングとデッキ、森の中の丸太の家 |
+| 住まい | ペントハウス | 最上階の広いリビングと屋上テラス |
+| 住まい | 小さな家 | 1部屋に寝床・台所・シャワーをまとめた小屋 |
 | 住まい | サンプル（作例） | いろいろな家具や床を置いた二階建ての作例 |
+| 和風・歴史 | 平屋の日本家屋 | 茶の間・座敷・土間・縁側と庭のある和風の家 |
+| 和風・歴史 | 古民家 | 土間・囲炉裏の間・座敷と縁側、庭と蔵 |
+| 和風・歴史 | 武家屋敷 | 広間・書院・茶室、池と枯山水の庭、白い土塀と表門 |
+| 和風・歴史 | 京町家 | 通り庭の土間・店の間・坪庭・奥の間 |
+| 和風・歴史 | 長屋 | 路地に面した4軒の長屋。土間とかまど、共同の井戸 |
+| 和風・歴史 | 忍者屋敷 | 隠し部屋・仏間・納戸と竹垣 |
+| 和風・歴史 | 日本の城 | 石垣と堀に囲まれた本丸、三重の天守・本丸御殿・櫓門・隅櫓 |
+| 和風・歴史 | 神社 | 本殿・拝殿・神楽殿・社務所、二つの鳥居の長い参道、玉垣と池 |
+| 和風・歴史 | 寺 | 本堂・庫裏・鐘楼・五重塔・山門と墓地、築地塀に囲まれた境内 |
+| 和風・歴史 | 日本庭園 | 池・流れ・飛び石・石灯籠の庭と茶室・東屋 |
+| 和風・歴史 | 温泉 | 男湯・女湯の内湯と、竹垣で仕切った露天風呂 |
+| 和風・歴史 | 茶室 | 茶室・水屋と、飛び石とつくばいの露地 |
+| 和風・歴史 | 屋台 | 提灯をさげた夜のラーメン屋台 |
 | 屋敷・宿 | 洋館 | 大広間・食堂・書斎のある二階建てと地下室（B1F） |
-| 屋敷・宿 | 武家屋敷 | 広間・書院・茶室、池と枯山水の庭、白い土塀と表門 |
+| 屋敷・宿 | 宮殿 | 謁見の間・舞踏の間と東西の間、噴水と花壇の前庭 |
+| 屋敷・宿 | 海辺の別荘 | プールとヤシの木のある白い別荘 |
 | 屋敷・宿 | 山荘・ペンション | 暖炉のラウンジと客室4つ。森とテラス |
 | 屋敷・宿 | 旅館 | 客室・宴会場・大浴場と中庭。2階にも客室と談話室 |
+| 屋敷・宿 | 民宿 | 帳場・食堂・客室・風呂の小さな宿 |
 | 屋敷・宿 | ホテル | 1階にロビーとレストラン、2・3階に客室（三階建て） |
+| 屋敷・宿 | ゲストハウス | ラウンジとキッチン、2段ベッドのドミトリー |
+| 屋敷・宿 | カプセルホテル | カプセルが並ぶ寝室・ロッカー・浴場・ラウンジ |
 | 屋敷・宿 | 寮 | 個室が並ぶ二階建て。食堂・大浴場・洗濯室 |
 | お店 | カフェ | カウンターと客席、テラス席 |
+| お店 | 喫茶店 | レトロなソファ席とカウンター |
 | お店 | レストラン | テーブル席・個室・厨房とワインセラー |
 | お店 | ラーメン屋 | L字のカウンターと厨房、テーブル席 |
+| お店 | 寿司屋 | つけ台のカウンター・座敷・厨房 |
+| お店 | 焼肉店 | ロースター付きのテーブル席とレジ |
+| お店 | ファストフード | カウンター・客席・厨房と駐車場 |
 | お店 | 居酒屋 | カウンター・座敷・個室と厨房 |
 | お店 | バー | カウンターとボックス席 |
-| お店 | 美容院 | 鏡の前の席・シャンプー台・待合 |
-| お店 | 本屋 | 本棚の列・平台・レジとカフェ |
+| お店 | パン屋 | パンの棚とショーケース、工房、イートイン |
+| お店 | 花屋 | 鉢植えと花の並ぶ売り場、作業場、店先の花壇 |
+| お店 | 駄菓子屋 | 駄菓子の棚と店番の茶の間、店先のベンチ |
+| お店 | スーパー | 陳列棚の並ぶ売り場・レジ・バックヤードと駐車場 |
 | お店 | コンビニ | 売り場・レジ・事務所と駐車場 |
-| 施設 | 病院 | 1階に待合・診察室・手術室、2階に病棟 |
-| 施設 | 学校 | 3階建て。教室・職員室・保健室・理科室・音楽室・図書室・美術室 |
-| 施設 | 保育園 | 保育室・お昼寝の部屋・給食室と園庭 |
-| 施設 | 図書館 | 本棚と閲覧席・書庫、2階に学習室と郷土資料室 |
-| 施設 | 体育館 | 広いアリーナ・ステージ・更衣室・器具庫 |
-| 施設 | オフィス | 執務室・会議室・社長室 |
-| 施設 | 研究所 | 実験室・資料室・サーバー室 |
-| 施設 | 警察署 | 刑事課・取調室・留置場、2階に道場と会議室 |
-| 施設 | 交番 | 小さな交番。机と奥の休憩室 |
-| 施設 | 美術館 | 展示室5つ・ショップ・2階にカフェと収蔵庫 |
-| 施設 | 映画館 | スクリーンと客席・ロビー・映写室 |
-| 施設 | 教会 | 長椅子の並ぶ礼拝堂と、芝生の庭・墓地・外灯の小道 |
-| 施設 | 神社 | 本殿・拝殿・神楽殿・社務所、二つの鳥居の長い参道、玉垣と池 |
-| 施設 | 寺 | 本堂・庫裏・鐘楼・五重塔・山門と墓地、築地塀に囲まれた境内 |
-| 施設 | 銭湯 | 男湯・女湯と番台 |
-| 施設 | 廃工場 | 作業場・倉庫・事務所 |
-| 屋外・乗り物 | 公園 | 遊び場・池・広場 |
-| 屋外・乗り物 | キャンプ場 | テント・タープ・焚き火・バンガローと川 |
-| 屋外・乗り物 | 客船 | 客室・レストラン・プールデッキ・操舵室 |
-| 屋外・乗り物 | 寝台列車 | 個室の寝台車と食堂車の2両 |
-| ファンタジー・SF | 城 | 玉座の間・大広間・塔・兵舎、城壁と見張り台に囲まれた中庭、堀と跳ね橋。2階に王の寝室と礼拝室 |
-| ファンタジー・SF | 冒険者の宿 | 酒場・暖炉・依頼の掲示板と2階の客室 |
-| ファンタジー・SF | 魔法使いの塔 | らせん階段でつながる書庫・研究室・寝室 |
-| ファンタジー・SF | 地下牢 | 牢屋・大広間・武器庫・宝物庫のダンジョン |
-| ファンタジー・SF | 宇宙船 | 操縦室・居室・食堂・医務室・機関室 |
+| お店 | 薬局 | 売り場・調剤室・待合 |
+| お店 | 服屋 | 洋服の棚・試着室・ストック |
+| お店 | 本屋 | 本棚の列・平台・レジとカフェ |
+| お店 | 骨董屋 | 古道具の並ぶ店と奥の間 |
+| お店 | おもちゃ屋 | おもちゃの棚とレジ |
+| お店 | 美容院 | 鏡の前の席・シャンプー台・待合 |
+| お店 | 床屋 | 理容椅子の並ぶ店と待合 |
+| お店 | コインランドリー | 洗濯機の並ぶ小さな店 |
+| お店 | ガソリンスタンド | 給油機の屋根と事務所 |
+| お店 | ゲームセンター | ゲーム機が並ぶフロアと景品・両替 |
+| お店 | カラオケ | 受付・ドリンクバーと個室4つ |
+| お店 | ネットカフェ | 受付・マンガの棚と個室ブース |
+| 学校・仕事場 | 学校 | 3階建て。教室・職員室・保健室・理科室・音楽室・図書室・美術室 |
+| 学校・仕事場 | 教室 | 黒板・教卓と30の机の教室と廊下 |
+| 学校・仕事場 | 講義室 | 壇上とホワイトボード、長机の並ぶ大学の講義室 |
+| 学校・仕事場 | 部室 | 長机とロッカー・ソファの文化部の部室 |
+| 学校・仕事場 | 学校の屋上 | フェンスに囲まれた屋上と塔屋 |
+| 学校・仕事場 | 保育園 | 保育室・お昼寝の部屋・給食室と園庭 |
+| 学校・仕事場 | 図書館 | 本棚と閲覧席・書庫、2階に学習室と郷土資料室 |
+| 学校・仕事場 | オフィス | 執務室・会議室・社長室 |
+| 学校・仕事場 | 漫画家の仕事場 | 作画机の並ぶ仕事場・資料室・仮眠室 |
+| 学校・仕事場 | 研究所 | 実験室・資料室・サーバー室 |
+| 公共・医療 | 病院 | 1階に待合・診察室・手術室、2階に病棟 |
+| 公共・医療 | 診療所 | 待合室・受付・診察室・処置室の町のお医者さん |
+| 公共・医療 | 歯医者 | 診療台の並ぶ診療室・待合・受付・技工室 |
+| 公共・医療 | 動物病院 | 待合・診察室と、ケージの並ぶ入院室 |
+| 公共・医療 | 老人ホーム | 食堂・機能訓練室・浴室と個室4つ、庭 |
+| 公共・医療 | 警察署 | 刑事課・取調室・留置場、2階に道場と会議室 |
+| 公共・医療 | 交番 | 小さな交番。机と奥の休憩室 |
+| 公共・医療 | 消防署 | 消防車の車庫・事務室・仮眠室 |
+| 公共・医療 | 市役所 | 窓口・待合・会議室・市長室と前の広場 |
+| 公共・医療 | 郵便局 | 窓口・事務室・仕分け室 |
+| 公共・医療 | 銀行 | ロビーと窓口・事務室・金庫室・応接室 |
+| 公共・医療 | 法廷 | 裁判官席・証言台・傍聴席と控室 |
+| 公共・医療 | 刑務所 | 独房の並ぶ廊下・看守室・食堂と運動場 |
+| 公共・医療 | 葬儀場 | 祭壇の式場・控室・受付 |
+| 文化・娯楽 | 美術館 | 展示室5つ・ショップ・2階にカフェと収蔵庫 |
+| 文化・娯楽 | 水族館 | 大水槽・水槽の並ぶ通路・ショップ |
+| 文化・娯楽 | 映画館 | スクリーンと客席・ロビー・映写室 |
+| 文化・娯楽 | 劇場 | 舞台と幕・客席・楽屋・ロビー |
+| 文化・娯楽 | コンサートホール | ステージと客席、ホワイエ。丸い屋根 |
+| 文化・娯楽 | ダンススタジオ | 鏡とバーのスタジオ・更衣室・受付 |
+| 文化・娯楽 | 録音スタジオ | ブース・コントロール室・ロビー |
+| 文化・娯楽 | 天文台 | 丸い観測室と丸屋根 |
+| 文化・娯楽 | 教会 | 長椅子の並ぶ礼拝堂と、芝生の庭・墓地・外灯の小道 |
+| 文化・娯楽 | 結婚式場 | 長椅子の並ぶ白いチャペルと控室、花壇の小道 |
+| 文化・娯楽 | 体育館 | 広いアリーナ・ステージ・更衣室・器具庫 |
+| 文化・娯楽 | 屋内プール | 25mプールと更衣室・シャワー |
+| 文化・娯楽 | 銭湯 | 男湯・女湯と番台 |
+| 屋外・街 | 公園 | 遊び場・池・広場 |
+| 屋外・街 | 校庭 | トラックのある校庭と遊具・体育倉庫・朝礼台 |
+| 屋外・街 | 商店街 | アーケードに7軒の店が並ぶ通り |
+| 屋外・街 | 交差点 | 十字路・角のコンビニ・バス停・電柱 |
+| 屋外・街 | 踏切 | 線路と道路の踏切、詰所 |
+| 屋外・街 | 駅 | 駅舎・駅員室・ホームと線路、駅前のバス停 |
+| 屋外・街 | 駐車場 | 車の並ぶ駐車場と管理室 |
+| 屋外・街 | 夏祭り | 参道に屋台が並ぶお祭り。鳥居と舞台 |
+| 屋外・街 | 海水浴場 | 海の家・パラソル・ヤシの木と砂浜 |
+| 屋外・街 | 港 | 倉庫・事務所・岸壁と桟橋 |
+| 屋外・街 | 河川敷 | 広い川・土手の道・橋とボート小屋 |
+| 屋外・街 | 農家と田畑 | 母屋と納屋、畑の畝と田んぼ |
+| 屋外・街 | 動物園 | ゾウ舎・サル山・ペンギン池と売店 |
+| 屋外・街 | 遊園地 | 園内を回る汽車の線路・お化け屋敷・噴水・ステージと売店 |
+| 屋外・街 | 霊園 | 和型と洋型の墓が並ぶ霊園と管理棟 |
+| 屋外・街 | キャンプ場 | テント・タープ・焚き火・バンガローと川 |
+| 乗り物 | 客船 | 客室・レストラン・プールデッキ・操舵室 |
+| 乗り物 | 寝台列車 | 個室の寝台車と食堂車の2両 |
+| 乗り物 | 新幹線 | 2列と2列の座席が並ぶ客室とデッキ・トイレ |
+| 乗り物 | バスの車内 | 運転席と座席、前と中の扉 |
+| 乗り物 | 飛行機の機内 | 客席・ギャレー・操縦室 |
+| 乗り物 | 潜水艦 | 魚雷室・発令所・居住区・機関室 |
+| ファンタジー | 城 | 玉座の間・大広間・塔・兵舎、城壁と見張り台に囲まれた中庭、堀と跳ね橋。2階に王の寝室と礼拝室 |
+| ファンタジー | 冒険者の宿 | 酒場・暖炉・依頼の掲示板と2階の客室 |
+| ファンタジー | 冒険者ギルド | 受付ホール・依頼の掲示板・ギルド長室 |
+| ファンタジー | 武器屋 | 武器の棚とショーケース、倉庫 |
+| ファンタジー | 鍛冶屋 | 炉と金床の鍛冶場、店先と井戸 |
+| ファンタジー | 錬金術師の工房 | 大釜と実験台の実験室、書庫 |
+| ファンタジー | 魔法学校 | 魔法の教室と図書室、2階に寮 |
+| ファンタジー | 魔法使いの塔 | らせん階段でつながる書庫・研究室・寝室 |
+| ファンタジー | 村 | 宿屋・道具屋・民家・教会と小道、川 |
+| ファンタジー | 砦 | 石壁に囲まれた兵舎・武器庫・見張り台 |
+| ファンタジー | 闘技場 | 丸い壁に囲まれた砂の闘技場と観客席 |
+| ファンタジー | 魔王城 | 玉座の間・大広間・牢・宝物庫と赤い堀 |
+| ファンタジー | 地下牢 | 牢屋・大広間・武器庫・宝物庫のダンジョン |
+| ファンタジー | 迷宮 | 入り組んだ通路の先に宝箱 |
+| ファンタジー | 竜の巣 | 財宝の積まれた洞窟と溶岩の川 |
+| ファンタジー | ツリーハウス | 木の上の小屋と根元の物置 |
+| SF・ホラー | 宇宙船 | 操縦室・居室・食堂・医務室・機関室 |
+| SF・ホラー | 宇宙ステーション | 丸い司令室と居住・ドッキング・温室のモジュール |
+| SF・ホラー | 秘密基地 | 司令室・格納庫・研究室・仮眠室 |
+| SF・ホラー | 管制室 | 壁に並ぶモニターと机の列、サーバー室 |
+| SF・ホラー | 幽霊屋敷 | 荒れた広間・食堂・書斎と2階の子ども部屋 |
+| SF・ホラー | 廃病院 | 待合・診察室・手術室・霊安室 |
+| SF・ホラー | 廃校 | 荒れた教室・理科室・廊下 |
+| SF・ホラー | 廃工場 | 作業場・倉庫・事務所 |
+| SF・ホラー | 地下水道 | 水路と通路、制御室 |
 
 > [!WARNING]
 > テンプレートを適用すると現在の間取りを置き換えます。確認ダイアログの内容を確認し、必要なプランは先に書き出してください。
@@ -695,6 +798,8 @@ npm.cmd run dev
 
 ### 2026年10月19日
 
+- テンプレートを153種類に。1K・タワーマンション・京町家・日本の城・温泉・寿司屋・スーパー・教室・診療所・水族館・駅・遊園地・新幹線・冒険者ギルド・魔王城・宇宙ステーション・廃病院など103種類を足し、「和風・歴史」「学校・仕事場」「公共・医療」「文化・娯楽」「乗り物」「SF・ホラー」など11の分類に分け直しました
+- 映画館のテンプレートで、スクリーンが屋根から突き出ていたのを直しました
 - 池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です
 - 自由な形で作る家具・設備を6種類追加: 芝生・川・小道・生け垣・石垣・線路。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます
 - テンプレートの外まわりを作り込み。城は城壁と見張り台・門楼・堀と跳ね橋、神社は玉垣・瑞垣・二つの鳥居の長い参道・神楽殿・手水舎の屋根・池・御神木、寺は山門（二重の屋根と仁王像）・五重塔・築地塀・池と飛び石、武家屋敷は白い土塀と表門・池・枯山水、教会は芝生の庭・墓地・外灯の小道
@@ -985,7 +1090,7 @@ It requires no account, installation, backend server, or database. Work is saved
 5. Switch between Split, 2D, and 3D views from the top bar.
 6. Export important plans as JSON using the Download button.
 
-You can edit the starter plan immediately or load one of 50 templates, from houses and a condominium to a Western mansion, a ryokan, a hospital, a school, a temple, a castle, and a spaceship.
+You can edit the starter plan immediately or load one of 153 templates, from houses and a condominium to a Western mansion, a ryokan, shops, a hospital, a school, a temple, a castle, a train station, an amusement park, and a spaceship.
 
 ## Feature Overview
 
@@ -1179,60 +1284,163 @@ Rugs render below furniture. Adding a floor or rug afterward does not prevent se
 
 Multi-floor templates include upper-floor stairwell openings and show arriving stairs without adding an extra flight above the top floor. The wizard tower and castle towers use circular walls and floors. These changes apply when loading a new template, not to existing saved plans.
 
-50 templates in 6 groups, from homes, shops, and facilities to vehicles and fantasy. Each one comes with walls, doors, windows, furniture, floor patterns, and roofs, ready to view in 2D and 3D (room names are placed where furniture does not hide them).
+153 templates in 11 groups, from homes, Japanese buildings, shops, schools, and hospitals to towns, vehicles, fantasy, and sci-fi. Each one comes with walls, doors, windows, furniture, floor patterns, and roofs, ready to view in 2D and 3D (room names are placed where furniture does not hide them).
 
 | Group | Template | Contents |
 | --- | --- | --- |
 | Homes | Studio | A small home with one room and bathroom facilities |
+| Homes | 1K | A Western-style room, a kitchen, a unit bath, and a balcony |
 | Homes | 1LDK | LDK and a bedroom |
 | Homes | 2LDK | LDK and two rooms |
 | Homes | Two-story 3LDK | LDK downstairs, bedrooms upstairs, and a roof |
 | Homes | Three-story house | A garage and bathroom on the first floor, LDK on the second, and bedrooms on the third, for a narrow lot |
 | Homes | Condominium | One 3LDK unit with a hallway from the entrance and a balcony |
+| Homes | High-rise condominium | A 2LDK on a high floor with large windows, a balcony, and a walk-in closet |
+| Homes | Maisonette | LDK and bathrooms on the first floor, and a bedroom and a child's room on the second |
 | Homes | Apartment | Two stories of three 1K units each, with an outdoor corridor and stairs |
+| Homes | Danchi apartment | A 3DK in a Showa-era housing complex, with two tatami rooms and a dining kitchen |
 | Homes | Share house | A shared LDK and bathrooms with five private rooms on two floors |
-| Homes | Japanese house | A one-story Japanese house with a living room, a tatami guest room, an earthen entrance, a veranda, and a garden |
-| Homes | Old farmhouse | An earthen-floored work area, a hearth room, tatami rooms, and a veranda, with a garden and a storehouse |
+| Homes | Two-family house | Two stories, with the parents downstairs and the younger family upstairs |
+| Homes | Garage house | A garage and a workshop on the first floor, and an LDK and a bedroom on the second |
+| Homes | Courtyard house | A one-story house around a courtyard |
+| Homes | Bungalow | A one-story Western-style house with a terrace and a garden |
+| Homes | Log house | A log house in the woods with a fireplace living room and a deck |
+| Homes | Penthouse | A large living room on the top floor and a rooftop terrace |
+| Homes | Tiny house | A cabin with a bed, a kitchen, and a shower in one room |
 | Homes | Showcase | A two-story sample with many kinds of furniture and floors |
+| Japanese and historic | Japanese house | A one-story Japanese house with a living room, a tatami guest room, an earthen entrance, a veranda, and a garden |
+| Japanese and historic | Old farmhouse | An earthen-floored work area, a hearth room, tatami rooms, and a veranda, with a garden and a storehouse |
+| Japanese and historic | Samurai residence | A hall, a study, a tea room, a garden with a pond and a dry rock garden, and a white earthen wall with a gate |
+| Japanese and historic | Kyoto townhouse | An earthen passage, a shop room, a small inner garden, and back rooms |
+| Japanese and historic | Row houses | Four row houses on an alley, with earthen floors, cooking stoves, and a shared well |
+| Japanese and historic | Ninja house | A hidden room, a Buddhist altar room, a storeroom, and a bamboo fence |
+| Japanese and historic | Japanese castle | An inner citadel inside stone walls and a moat, with a three-tier keep, a palace, a gate tower, and corner turrets |
+| Japanese and historic | Shrine | Main hall, worship hall, kagura stage and shrine office, a long approach through two torii gates, a sacred fence and a pond |
+| Japanese and historic | Temple | Main hall, priests' quarters, a bell tower, a five-story pagoda, a main gate and a graveyard inside earthen walls |
+| Japanese and historic | Japanese garden | A garden with a pond, a stream, stepping stones, and stone lanterns, plus a tea house and an arbor |
+| Japanese and historic | Hot spring | Indoor baths for men and women, and open-air baths behind bamboo fences |
+| Japanese and historic | Tea house | A tea room and a preparation room, with a garden path of stepping stones and a stone basin |
+| Japanese and historic | Food stall | A ramen stall at night, hung with lanterns |
 | Mansions and inns | Western mansion | Two stories with a great hall, dining room, and study, plus a cellar (B1F) |
-| Mansions and inns | Samurai residence | A hall, a study, a tea room, a garden with a pond and a dry rock garden, and a white earthen wall with a gate |
+| Mansions and inns | Palace | An audience hall, a ballroom, east and west rooms, and a forecourt with a fountain and flower beds |
+| Mansions and inns | Seaside villa | A white villa with a pool and palm trees |
 | Mansions and inns | Lodge | A fireplace lounge and four guest rooms, with a terrace in the woods |
 | Mansions and inns | Ryokan | Guest rooms, a banquet hall, a large bath, and a courtyard, with more guest rooms and a lounge upstairs |
+| Mansions and inns | Minshuku | A small family-run inn with a front desk, a dining room, guest rooms, and a bath |
 | Mansions and inns | Hotel | A lobby and a restaurant on the first floor, and guest rooms on the second and third |
+| Mansions and inns | Guesthouse | A lounge, a kitchen, and dormitories with bunk beds |
+| Mansions and inns | Capsule hotel | Rows of capsules, lockers, a bath, and a lounge |
 | Mansions and inns | Dormitory | Two floors of private rooms with a dining hall, a large bath, and a laundry |
 | Shops | Cafe | A counter, tables, and terrace seats |
+| Shops | Retro coffee shop | Old-style sofa seats and a counter |
 | Shops | Restaurant | Tables, a private room, a kitchen, and a wine cellar |
 | Shops | Ramen shop | An L-shaped counter, a kitchen, and tables |
+| Shops | Sushi restaurant | A sushi counter, a tatami room, and a kitchen |
+| Shops | Yakiniku restaurant | Tables with grills and a register |
+| Shops | Fast food restaurant | A counter, seats, a kitchen, and parking |
 | Shops | Izakaya | A counter, a tatami room, a private room, and a kitchen |
 | Shops | Bar | A counter and booth seats |
-| Shops | Hair salon | Styling chairs at mirrors, shampoo stations, and a waiting area |
-| Shops | Bookstore | Rows of shelves, display tables, a register, and a cafe |
+| Shops | Bakery | Bread shelves and a showcase, a workshop, and an eat-in corner |
+| Shops | Florist | A shop of potted plants and flowers, a workroom, and flower beds out front |
+| Shops | Penny candy shop | Shelves of cheap sweets, the shopkeeper's sitting room, and a bench out front |
+| Shops | Supermarket | A sales floor of shelves, checkouts, a back room, and parking |
 | Shops | Convenience store | Sales floor, register, office, and parking |
-| Facilities | Hospital | Waiting room, consulting rooms, and an operating room, with wards upstairs |
-| Facilities | School | Three floors: classrooms, a staff room, a nurse's office, a science room, a music room, a library, and an art room |
-| Facilities | Nursery school | A playroom, a nap room, a kitchen, and a playground |
-| Facilities | Library | Bookshelves, reading tables, and stacks, with a study room and a local history room upstairs |
-| Facilities | Gymnasium | A large arena, a stage, locker rooms, and an equipment room |
-| Facilities | Office | Open office, meeting room, and president's office |
-| Facilities | Laboratory | Labs, archive, and server room |
-| Facilities | Police station | Detectives' room, interrogation rooms, and cells, with a dojo and a meeting room upstairs |
-| Facilities | Police box | A small koban with a desk and a back room |
-| Facilities | Art museum | Five galleries, a shop, and upstairs a cafe and a storeroom |
-| Facilities | Cinema | A screen and seats, a lobby, and a projection room |
-| Facilities | Church | A chapel lined with pews, with a lawn, a graveyard and a lamp-lit path |
-| Facilities | Shrine | Main hall, worship hall, kagura stage and shrine office, a long approach through two torii gates, a sacred fence and a pond |
-| Facilities | Temple | Main hall, priests' quarters, a bell tower, a five-story pagoda, a main gate and a graveyard inside earthen walls |
-| Facilities | Public bath | Men's and women's baths and the attendant's booth |
-| Facilities | Abandoned factory | Workshop, warehouse, and office |
-| Outdoors and vehicles | Park | Playground, pond, and plaza |
-| Outdoors and vehicles | Campsite | Tents, a tarp, a campfire, a bungalow, and a river |
-| Outdoors and vehicles | Cruise ship | Cabins, a restaurant, a pool deck, and the bridge |
-| Outdoors and vehicles | Sleeper train | A sleeping car with private rooms, and a dining car |
-| Fantasy and sci-fi | Castle | Throne room, great hall, towers and barracks, a courtyard inside curtain walls and turrets, a moat and a drawbridge, with the king's bedchamber and a chapel upstairs |
-| Fantasy and sci-fi | Adventurers' inn | A tavern with a fireplace and a quest board, and guest rooms upstairs |
-| Fantasy and sci-fi | Wizard's tower | A library, a laboratory, and a bedroom joined by a spiral staircase |
-| Fantasy and sci-fi | Dungeon | Cells, a great hall, an armory, and a treasure room |
-| Fantasy and sci-fi | Spaceship | Bridge, crew cabins, mess hall, sick bay, and engine room |
+| Shops | Pharmacy | A sales floor, a dispensary, and a waiting area |
+| Shops | Clothing store | Clothes racks, fitting rooms, and a stockroom |
+| Shops | Bookstore | Rows of shelves, display tables, a register, and a cafe |
+| Shops | Antique shop | A shop full of old things and a back room |
+| Shops | Toy shop | Toy shelves and a register |
+| Shops | Hair salon | Styling chairs at mirrors, shampoo stations, and a waiting area |
+| Shops | Barbershop | A row of barber chairs and a waiting area |
+| Shops | Laundromat | A small shop lined with washing machines |
+| Shops | Gas station | A canopy over the pumps and an office |
+| Shops | Game arcade | A floor of game machines, prizes, and a change machine |
+| Shops | Karaoke | A front desk, a drink bar, and four private rooms |
+| Shops | Internet cafe | A front desk, manga shelves, and private booths |
+| Schools and workplaces | School | Three floors: classrooms, a staff room, a nurse's office, a science room, a music room, a library, and an art room |
+| Schools and workplaces | Classroom | A classroom with a blackboard, a teacher's desk, and 30 desks, and the hallway |
+| Schools and workplaces | Lecture hall | A university lecture hall with a platform, whiteboards, and rows of long desks |
+| Schools and workplaces | Club room | A club room with long tables, lockers, and a sofa |
+| Schools and workplaces | School rooftop | A fenced rooftop and its stairwell |
+| Schools and workplaces | Nursery school | A playroom, a nap room, a kitchen, and a playground |
+| Schools and workplaces | Library | Bookshelves, reading tables, and stacks, with a study room and a local history room upstairs |
+| Schools and workplaces | Office | Open office, meeting room, and president's office |
+| Schools and workplaces | Manga studio | A workroom of drawing desks, a reference room, and a nap room |
+| Schools and workplaces | Laboratory | Labs, archive, and server room |
+| Public and medical | Hospital | Waiting room, consulting rooms, and an operating room, with wards upstairs |
+| Public and medical | Clinic | A neighborhood doctor's office with a waiting room, reception, a consulting room, and a treatment room |
+| Public and medical | Dentist | A treatment room of dental chairs, a waiting room, reception, and a dental lab |
+| Public and medical | Animal hospital | A waiting room, a consulting room, and a ward lined with cages |
+| Public and medical | Nursing home | A dining room, a rehabilitation room, a bath, four private rooms, and a garden |
+| Public and medical | Police station | Detectives' room, interrogation rooms, and cells, with a dojo and a meeting room upstairs |
+| Public and medical | Police box | A small koban with a desk and a back room |
+| Public and medical | Fire station | A garage for the fire engines, an office, and a nap room |
+| Public and medical | City hall | Service counters, a waiting area, a meeting room, the mayor's office, and a plaza out front |
+| Public and medical | Post office | Counters, an office, and a sorting room |
+| Public and medical | Bank | A lobby and teller windows, an office, a vault, and a reception room |
+| Public and medical | Courtroom | The judges' bench, the witness stand, the public gallery, and a waiting room |
+| Public and medical | Prison | A corridor of cells, a guard room, a dining hall, and an exercise yard |
+| Public and medical | Funeral hall | A ceremony hall with an altar, a waiting room, and reception |
+| Culture and entertainment | Art museum | Five galleries, a shop, and upstairs a cafe and a storeroom |
+| Culture and entertainment | Aquarium | A large tank, a corridor lined with tanks, and a shop |
+| Culture and entertainment | Cinema | A screen and seats, a lobby, and a projection room |
+| Culture and entertainment | Theater | A stage with curtains, seats, dressing rooms, and a lobby |
+| Culture and entertainment | Concert hall | A stage, seats, and a foyer under a round roof |
+| Culture and entertainment | Dance studio | A studio with mirrors and barres, a changing room, and reception |
+| Culture and entertainment | Recording studio | A recording booth, a control room, and a lobby |
+| Culture and entertainment | Observatory | A round observation room under a dome |
+| Culture and entertainment | Church | A chapel lined with pews, with a lawn, a graveyard and a lamp-lit path |
+| Culture and entertainment | Wedding chapel | A white chapel lined with pews, a waiting room, and a path between flower beds |
+| Culture and entertainment | Gymnasium | A large arena, a stage, locker rooms, and an equipment room |
+| Culture and entertainment | Indoor pool | A 25 m pool with changing rooms and showers |
+| Culture and entertainment | Public bath | Men's and women's baths and the attendant's booth |
+| Outdoors and town | Park | Playground, pond, and plaza |
+| Outdoors and town | Schoolyard | A schoolyard with a running track, playground equipment, a sports shed, and an assembly platform |
+| Outdoors and town | Shopping street | A covered arcade lined with seven shops |
+| Outdoors and town | Intersection | A crossroads with a corner convenience store, a bus stop, and utility poles |
+| Outdoors and town | Railroad crossing | A road crossing the tracks, and the crossing keeper's hut |
+| Outdoors and town | Train station | A station building, a staff room, a platform and tracks, and a bus stop out front |
+| Outdoors and town | Parking lot | A parking lot full of cars and an attendant's booth |
+| Outdoors and town | Summer festival | Food stalls along a shrine approach, with a torii and a stage |
+| Outdoors and town | Beach | A beach hut, parasols, palm trees, and sand |
+| Outdoors and town | Harbor | Warehouses, an office, a quay, and a pier |
+| Outdoors and town | Riverbank | A wide river, a path along the bank, a bridge, and a boathouse |
+| Outdoors and town | Farm | A farmhouse and a barn, with vegetable rows and rice paddies |
+| Outdoors and town | Zoo | An elephant house, a monkey mountain, a penguin pool, and a shop |
+| Outdoors and town | Amusement park | A train track looping around the park, a haunted house, a fountain, a stage, and a shop |
+| Outdoors and town | Cemetery | Rows of Japanese and Western graves, and an office |
+| Outdoors and town | Campsite | Tents, a tarp, a campfire, a bungalow, and a river |
+| Vehicles | Cruise ship | Cabins, a restaurant, a pool deck, and the bridge |
+| Vehicles | Sleeper train | A sleeping car with private rooms, and a dining car |
+| Vehicles | Shinkansen | A car with rows of seats two and two, the vestibule, and a restroom |
+| Vehicles | Inside a bus | The driver's seat, rows of seats, and the front and middle doors |
+| Vehicles | Airplane cabin | Passenger seats, a galley, and the cockpit |
+| Vehicles | Submarine | A torpedo room, the control room, crew quarters, and the engine room |
+| Fantasy | Castle | Throne room, great hall, towers and barracks, a courtyard inside curtain walls and turrets, a moat and a drawbridge, with the king's bedchamber and a chapel upstairs |
+| Fantasy | Adventurers' inn | A tavern with a fireplace and a quest board, and guest rooms upstairs |
+| Fantasy | Adventurers' guild | A reception hall, a quest board, and the guild master's office |
+| Fantasy | Weapon shop | Weapon racks and showcases, and a storeroom |
+| Fantasy | Blacksmith | A smithy with a forge and an anvil, a shopfront, and a well |
+| Fantasy | Alchemist's workshop | A laboratory with a cauldron and workbenches, and a library |
+| Fantasy | Magic school | A magic classroom and a library, with a dormitory upstairs |
+| Fantasy | Wizard's tower | A library, a laboratory, and a bedroom joined by a spiral staircase |
+| Fantasy | Village | An inn, a general store, houses, and a church, with paths and a river |
+| Fantasy | Fort | Barracks, an armory, and a watchtower inside stone walls |
+| Fantasy | Colosseum | A sand arena inside a round wall, with benches for spectators |
+| Fantasy | Demon lord's castle | A throne room, a great hall, a cell, a treasury, and a red moat |
+| Fantasy | Dungeon | Cells, a great hall, an armory, and a treasure room |
+| Fantasy | Labyrinth | Winding passages leading to a treasure chest |
+| Fantasy | Dragon's lair | A cave piled with treasure, and a river of lava |
+| Fantasy | Treehouse | A hut up in a tree and a shed at its foot |
+| Sci-fi and horror | Spaceship | Bridge, crew cabins, mess hall, sick bay, and engine room |
+| Sci-fi and horror | Space station | A round command module with living, docking, and greenhouse modules |
+| Sci-fi and horror | Secret base | A command room, a hangar, a lab, and a bunk room |
+| Sci-fi and horror | Control room | A wall of monitors, rows of desks, and a server room |
+| Sci-fi and horror | Haunted house | A ruined hall, a dining room, a study, and a child's room upstairs |
+| Sci-fi and horror | Abandoned hospital | A waiting room, a consulting room, an operating room, and a morgue |
+| Sci-fi and horror | Abandoned school | Ruined classrooms, a science room, and a hallway |
+| Sci-fi and horror | Abandoned factory | Workshop, warehouse, and office |
+| Sci-fi and horror | Sewer | A channel of water, walkways, and a control room |
 
 > [!WARNING]
 > Applying a template replaces the current plan after confirmation. Export anything important before replacing it.
@@ -1579,6 +1787,8 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-19
 
+- 153 templates: added 103, including a 1K, a high-rise condominium, a Kyoto townhouse, a Japanese castle, a hot spring, a sushi restaurant, a supermarket, a classroom, a clinic, an aquarium, a train station, an amusement park, a shinkansen, an adventurers' guild, a demon lord's castle, a space station and an abandoned hospital, regrouped into 11 groups such as Japanese and historic, Schools and workplaces, Public and medical, Culture and entertainment, Vehicles, and Sci-fi and horror
+- Fixed the screen sticking out through the roof in the cinema template
 - Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape
 - Added 6 free-shape items: lawn, river, path, hedge, stone wall and railway. Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one
 - Templates now have detailed surroundings. The castle has curtain walls, turrets, a gatehouse, a moat and a drawbridge; the shrine a sacred fence, a long approach through two torii gates, a kagura stage, a roofed purification fountain, a pond and a sacred tree; the temple a main gate with a two-tier roof and guardian statues, a five-story pagoda, earthen walls, a pond and stepping stones; the samurai residence a white earthen wall with a gate, a pond and a dry rock garden; and the church a lawn, a graveyard and a lamp-lit path

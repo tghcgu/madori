@@ -3,7 +3,8 @@ import test from 'node:test';
 import {
   FREE_AREA_KINDS, FREE_LINE_KINDS, ALWAYS_FREE_KINDS, RAILWAY, bandOutline, defaultFreePath, distanceToFreeLine, freeBand, freeFlowerBed,
   freeLawn, freeLineLength, freeLineWidth, freeMargin, freeOutline, freePathPoints, freePond, freePosts, freeShapeLine, freeSteppingStones,
-  isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong, smoothFreeLine,
+  freeCenterLine, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
+  smoothFreeLine,
 } from '../src/free-shapes.ts';
 
 const blob = [[0, -100], [80, -60], [100, 20], [40, 90], [-60, 80], [-100, 0], [-70, -70]];
@@ -38,6 +39,14 @@ test('smoothing keeps the ends of lines and stays inside the drawn hull', () => 
   const outline = freeOutline(blob);
   assert.ok(polygonArea(outline) > 0, 'outlines turn one way');
   assert.ok(outline.length > blob.length);
+});
+
+test('a line drawn back to where it started keeps its whole loop', () => {
+  const loop = [[0, 0], [400, 0], [400, 300], [0, 300], [0, 0]];
+  const line = freeCenterLine(loop);
+  assert.ok(line.length >= 5, `kept ${line.length} points`);
+  assert.ok(freeLineLength(line) > 1300, 'the loop is about 1400cm long');
+  for (const corner of [[400, 0], [400, 300], [0, 300]]) assert.ok(distanceToFreeLine(corner[0], corner[1], line, false) < 30, `passes by ${corner}`);
 });
 
 test('offset lines run beside the path at the given distance', () => {

@@ -106,10 +106,13 @@ export function simplifyFreeLine(points: Point2[], tolerance: number): Point2[] 
   while (stack.length) {
     const [first, last] = stack.pop()!;
     const [ax, ay] = points[first], [bx, by] = points[last];
-    const length = Math.hypot(bx - ax, by - ay) || 1;
+    const dx = bx - ax, dy = by - ay, length2 = dx * dx + dy * dy;
     let farthest = -1, distance = tolerance;
     for (let i = first + 1; i < last; i += 1) {
-      const d = Math.abs((bx - ax) * (ay - points[i][1]) - (ax - points[i][0]) * (by - ay)) / length;
+      // 線分までの距離（始めと終わりが同じ点の、輪になった線でも消えないように）
+      const [px, py] = points[i];
+      const t = length2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / length2)) : 0;
+      const d = Math.hypot(px - ax - dx * t, py - ay - dy * t);
       if (d > distance) {
         farthest = i;
         distance = d;
