@@ -2,6 +2,7 @@ import { createIcons, icons } from "lucide";
 import "./styles.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
@@ -14,6 +15,10 @@ import {
   DEFAULT_PIXEL_DOT, PIXEL_DOTS, PLAN_BACKGROUNDS, PLAN_STYLES, PLAN_STYLE_GROUPS, RETRO_INK, STYLE_LOOKS, createPixelContext, drawPixelTexts, isDotStyle,
   lookStyle, retroColors, styleContext, styleFinish, styledFont, type PixelText, type PlanBackground, type PlanStyle,
 } from "./plan-style";
+import {
+  AO_FRAGMENT_SHADER, POST_FRAGMENT_SHADER, POST_VERTEX_SHADER, REAL_COMPOSITE_FRAGMENT_SHADER, REAL_FRAGMENT_DECLARATIONS, REAL_VERTEX_BODY, REAL_VERTEX_DECLARATIONS, THREE_STYLES, THREE_STYLE_GROUPS,
+  isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
+} from "./three-style";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
@@ -690,7 +695,11 @@ controls.maxDistance = MAX_CAMERA_DISTANCE;
 // 奥まで寄れるよう、マウスのある場所に向かって拡大縮小する。1目盛りの倍率は2Dとほぼ同じ
 controls.zoomToCursor = true;
 controls.zoomSpeed = 2;
-controls.maxPolarAngle = Math.PI * 0.48;
+// 回す向きに制限は付けない（真上から真下まで。下から見上げることもできる）。真上・真下ちょうどは向きが決まらないので、ごくわずか手前で止める
+controls.minPolarAngle = 0;
+controls.maxPolarAngle = Math.PI;
+// 左ドラッグ（指1本）の回転は、押した所を中心に回すため自前で行う（startThreeOrbit）。拡大縮小と平行移動は OrbitControls のまま
+controls.enableRotate = false;
 controls.addEventListener("change", () => {
   // 注視点の手前で前進が止まらないよう、近づいたら視線の先へ送る。カメラの位置と向きは変えない。
   if (camera.position.distanceToSquared(controls.target) < MIN_CAMERA_FOCUS_DISTANCE ** 2) {
@@ -721,11 +730,11 @@ sunLight.shadow.normalBias = 0.04;
 scene.add(sunLight);
 
 const coloredMaterialCache = new Map<string, THREE.MeshStandardMaterial>();
-const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78 });
-const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8 });
+const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xf4f1ec, roughness: 0.78, name: "plaster-wall" });
+const wallCapMaterial = new THREE.MeshStandardMaterial({ color: 0xe2ddd5, roughness: 0.8, name: "plaster-cap" });
 const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x405064, transparent: true, opacity: 0.55 });
-const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d6773, roughness: 0.86, side: THREE.DoubleSide });
-const slabMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.85 });
+const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x5d6773, roughness: 0.86, side: THREE.DoubleSide, name: "roof-tile" });
+const slabMaterial = new THREE.MeshStandardMaterial({ color: 0xe8e4dc, roughness: 0.85, name: "concrete-slab" });
 const sharedMaterials = new Set<THREE.Material>([
   wallMaterial, wallCapMaterial, edgeMaterial, roofMaterial, slabMaterial,
 ]);
@@ -750,9 +759,13 @@ interface SavedViewState {
   pen?: { color?: string; brush?: number; filled?: boolean };
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
+  // 3Dの絵柄
+  look3d?: string;
 }
 
 const viewState: SavedViewState = loadViewState();
+// 3Dの絵柄（three-style.ts）。標準とリアル以外は、描いたあとに画面全体へ効果をかける
+let threeStyle: ThreeStyle = isThreeStyle(viewState.look3d) ? viewState.look3d : "standard";
 // 起動して元に戻し終えるまでは、途中の表示で記録を上書きしない
 let viewStateReady = false;
 let viewStateTimer = 0;
@@ -1005,15 +1018,20 @@ function applyLightSettings(): void {
   // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
   sunLight.shadow.intensity = shadowsEnabled ? 1 : 0;
   const level = LIGHT_LEVELS[lightLevel - 1];
+  // リアルでは、周りの映り込み（scene.environment）が明るさを足すので、空の光を弱める
+  const real = threeStyle === "real";
+  const ambient = real ? 0.36 : 1;
+  sunLight.color.set(real ? 0xfff0dc : 0xffffff);
+  hemiLight.color.set(real ? 0xdde8ff : 0xffffff);
   if (shadowsEnabled) {
     // 通常: 太陽光で立体感を出す
-    sunLight.intensity = 2.4 * level;
-    hemiLight.intensity = 1.6 * level;
-    hemiLight.groundColor.set(0xaeb7c3);
+    sunLight.intensity = (real ? 3.2 : 2.4) * level;
+    hemiLight.intensity = 1.6 * level * ambient;
+    hemiLight.groundColor.set(real ? 0x9c8f7c : 0xaeb7c3);
   } else {
     // 影オフ: 太陽光を完全に消し、均一な環境光のみのフラットな見た目にする
     sunLight.intensity = 0;
-    hemiLight.intensity = 3.5 * level;
+    hemiLight.intensity = 3.5 * level * ambient;
     hemiLight.groundColor.set(0xffffff);
   }
 }
@@ -1094,6 +1112,7 @@ function setupUi(): void {
   setupGhostMenu();
   setupPlanStyleMenu();
   setupImageExport();
+  setupThreeStyle();
   setupCombine();
   setupEdition();
   setupTopNote();
@@ -1219,6 +1238,13 @@ function setupUi(): void {
   planCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
   planCanvas.addEventListener("dblclick", handleDoubleClick);
   threeCanvas.addEventListener("pointerdown", handleThreePointerDown, { capture: true });
+  // 家具の移動などで止めた押し方（stopImmediatePropagation）では回さないよう、handleThreePointerDown の後に置く
+  threeCanvas.addEventListener("pointerdown", startThreeOrbit, { capture: true });
+  threeCanvas.addEventListener("pointermove", moveThreeOrbit);
+  for (const type of ["pointerup", "pointercancel", "lostpointercapture"] as const) threeCanvas.addEventListener(type, endThreeOrbit);
+  // 指が何本触れているか（2本目が触れたら、回転をやめてピンチ・平行移動にする）。家具をつかんだ指も数える
+  document.addEventListener("pointerdown", (event) => { if (event.pointerType === "touch" && event.target === threeCanvas) threeTouches.add(event.pointerId); }, true);
+  for (const type of ["pointerup", "pointercancel"] as const) document.addEventListener(type, (event) => { threeTouches.delete(event.pointerId); }, true);
   threeCanvas.addEventListener("pointermove", handleThreePointerMove);
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
   for (const type of ["pointermove", "pointerup", "pointercancel"] as const) threeCanvas.addEventListener(type, trackThreeLongPress);
@@ -2689,6 +2715,7 @@ function handlePointerMove(event: PointerEvent): void {
     if (Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP) return;
     moveSelection(drag.origins, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
     redrawAll(false);
+    syncThreeWhileDragging(drag.origins.map((origin) => findEntity(origin.id)).filter((entity): entity is Entity => Boolean(entity)));
     return;
   }
 
@@ -2703,7 +2730,7 @@ function handlePointerMove(event: PointerEvent): void {
     const entity = findEntity(drag.originEntity.id);
     if (isPerson(entity) && drag.limb !== undefined) movePersonLimb(entity, drag.limb, point);
     redrawAll(false);
-    scheduleThreeRefresh();
+    if (entity) syncThreeWhileDragging([entity], true);
     return;
   }
 
@@ -2718,9 +2745,9 @@ function handlePointerMove(event: PointerEvent): void {
     }
     if (drag.dragMode === "resize" && drag.resizeCorner) {
       resizeEntity(entity, drag.originEntity, drag.resizeCorner, point);
-      if (entity.type === "room" || entity.type === "shape") scheduleThreeRefresh();
     }
     redrawAll(false);
+    if (drag.dragMode === "move" || drag.dragMode === "resize") syncThreeWhileDragging([entity], drag.dragMode === "resize");
     return;
   }
 
@@ -2729,6 +2756,8 @@ function handlePointerMove(event: PointerEvent): void {
     if (!entity) return;
     moveEntity(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
     redrawAll(false);
+    // 置いたばかりの家具は、まだ3Dにないので作る
+    syncThreeWhileDragging([entity], !planGroup.children.some((object) => object.userData.entityId === entity.id));
     return;
   }
 
@@ -2965,6 +2994,67 @@ function selectThreePress(id: string | null): void {
   }
 }
 
+// ---- 3D: 左ドラッグの回転は、押した所（マウスの下の物）を中心に回す ----
+// カメラと注視点を、押した点のまわりに同じだけ回すので、押した点は画面の同じ所にとどまる。
+// 押した所に何もなければ地面の点、空なら、これまでどおり画面の中央（controls.target）が中心
+let threeOrbit: { pointerId: number; pivot: THREE.Vector3; x: number; y: number } | null = null;
+const threeTouches = new Set<number>();
+
+function startThreeOrbit(event: PointerEvent): void {
+  if (event.pointerType === "touch" && threeTouches.size > 1) {
+    threeOrbit = null;
+    return;
+  }
+  if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey || !controls.enabled || threeDrag) return;
+  threeOrbit = { pointerId: event.pointerId, pivot: orbitPivotAt(event), x: event.clientX, y: event.clientY };
+}
+
+function moveThreeOrbit(event: PointerEvent): void {
+  if (!threeOrbit || event.pointerId !== threeOrbit.pointerId) return;
+  if (!controls.enabled || threeDrag || threeTouches.size > 1) {
+    threeOrbit = null;
+    return;
+  }
+  // 速さは OrbitControls と同じ（画面の高さぶん動かすと1回転）
+  const height = threeCanvas.clientHeight || 1;
+  const yaw = (-2 * Math.PI * (event.clientX - threeOrbit.x)) / height;
+  const pitch = (-2 * Math.PI * (event.clientY - threeOrbit.y)) / height;
+  threeOrbit.x = event.clientX;
+  threeOrbit.y = event.clientY;
+  orbitAround(threeOrbit.pivot, yaw, pitch);
+}
+
+function endThreeOrbit(event: PointerEvent): void {
+  if (threeOrbit?.pointerId === event.pointerId) threeOrbit = null;
+}
+
+function orbitPivotAt(event: MouseEvent): THREE.Vector3 {
+  setThreeRay(event);
+  planGroup.updateMatrixWorld(true);
+  const hit = raycaster.intersectObjects(planGroup.children, true).find((item) => (item.object as THREE.Mesh).isMesh && item.object.visible);
+  if (hit) return hit.point.clone();
+  // 地面（高さ0）。遠すぎる所（地平線の近く）は使わない
+  const ground = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3());
+  const reach = Math.max(50, camera.position.distanceTo(controls.target) * 4);
+  if (ground && ground.distanceTo(camera.position) <= reach) return ground;
+  return controls.target.clone();
+}
+
+// カメラと注視点を、pivot のまわりに、左右（縦の軸）へ yaw、上下へ pitch だけ回す。上下は、真上・真下ちょうどの手前まで
+function orbitAround(pivot: THREE.Vector3, yaw: number, pitch: number): void {
+  const offset = camera.position.clone().sub(controls.target);
+  const length = offset.length();
+  if (length < 1e-9) return;
+  const polar = Math.acos(clamp(offset.y / length, -1, 1));
+  const turn = clamp(polar + pitch, 0.001, Math.PI - 0.001) - polar;
+  const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+  const side = new THREE.Vector3().crossVectors(offset, camera.up);
+  // 横の軸のまわりに正の向きに回すと、カメラは上（真上から見る側）へ動く。下へ動かすときは逆向き
+  if (side.lengthSq() > 1e-12) rotation.multiply(new THREE.Quaternion().setFromAxisAngle(side.normalize(), -turn));
+  for (const point of [camera.position, controls.target]) point.sub(pivot).applyQuaternion(rotation).add(pivot);
+  controls.update();
+}
+
 // 右ドラッグで動かす前に、回転の中心（controls.target）を視線の中心線上で、マウスの下にある物と同じ奥行きへ移す。
 // 中心線上なので画面は動かない。OrbitControls の移動の速さは中心までの距離で決まるため、
 // つかんだ物がマウスについてくる速さになる。すぐ目の前の物をつかんでも止まったように見えないよう、奥行きには下限を設ける
@@ -3010,7 +3100,9 @@ function handleThreePointerMove(event: PointerEvent): void {
   if (!point || !entity) return;
   if (threeDrag.origins) moveSelection(threeDrag.origins, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
   else moveEntity(entity, threeDrag.origin, point.x - threeDrag.startWorld.x, point.y - threeDrag.startWorld.y);
-  redrawAll();
+  // 3Dは動かした家具だけを動かす（離したときに全体を作り直す）
+  render2d();
+  syncThreeWhileDragging((threeDrag.origins ?? [threeDrag.origin]).map((origin) => findEntity(origin.id)).filter((item): item is Entity => Boolean(item)));
 }
 
 function finishThreeDrag(cancel = false): void {
@@ -7934,7 +8026,9 @@ function rebuildThreeScene(): void {
   }
 
   state.roofs.forEach((roofItem) => addRoof3d(roofItem, center));
-  addSubtleGrid(bounds, center);
+  if (threeStyle === "real") addRealGround(bounds, center);
+  else addSubtleGrid(bounds, center);
+  if (threeStyle === "real") realizeMaterials(planGroup, true);
   if (pendingCameraFrame) {
     frameCamera(bounds);
     pendingCameraFrame = false;
@@ -8022,7 +8116,7 @@ function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number,
     const ly = (dx * Math.sin(angle) + dy * Math.cos(angle)) / (item.h / 2);
     return item.kind === "pond" ? lx * lx + ly * ly <= 1 : Math.abs(lx) <= 1 && Math.abs(ly) <= 1;
   });
-  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, side: THREE.DoubleSide });
+  const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, side: THREE.DoubleSide, name: "grass-blades" });
   makeTranslucent(material, colorAlpha(roomItem.color3d ?? roomItem.color));
   const mesh = new THREE.InstancedMesh(createGrassTuftGeometry(), material, count);
   // 描き直すたびに草の位置が変わらないよう、部屋と範囲から決まる乱数を使う
@@ -8179,13 +8273,71 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
   const group = buildFurnitureModel({ ...furnitureItem, rise: FLOOR_SPACING - floorTop });
   if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
   if (furnitureItem.kind === "paint") applyPaintTexture(group, furnitureItem);
-  const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
-  group.position.set(pos.x, yBase + floorTop, pos.z);
-  group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
+  placeFurniture3d(group, furnitureItem, center, yBase);
   if (furnitureItem.flip) group.scale.x *= -1;
   markSelectable(group, furnitureItem.id);
   planGroup.add(group);
   addSelectionBox(group, furnitureItem.id);
+}
+
+function placeFurniture3d(group: THREE.Object3D, furnitureItem: Furniture, center: Point, yBase: number): void {
+  const floorTop = yBase === 0 ? 0.08 : 0;
+  const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
+  group.position.set(pos.x, yBase + floorTop, pos.z);
+  group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
+}
+
+// ---- 2Dでドラッグしている間も、3Dをすぐ合わせる ----
+// 家具は、その家具の3Dだけを動かす（大きさを変えたときは、その家具だけ作り直す）ので軽い。
+// 壁・床・屋根・階段など、ほかの物の形に響く物は3D全体を作り直す。作り直しが重い間取りでは、そのぶん間を空ける
+let threeDragRefreshAt = 0;
+let threeDragRefreshCost = 0;
+
+function syncThreeWhileDragging(entities: Entity[], rebuild = false): void {
+  if (PLAN_EDITION || viewMode === "plan" || !entities.length) return;
+  if (entities.every((entity) => entity.type === "furniture" && !isStair(entity))) {
+    for (const entity of entities as Furniture[]) {
+      const floorIndex = state.floors.findIndex((floor) => floor.entities.includes(entity));
+      if (floorIndex < 0 || hiddenFloorIds.has(state.floors[floorIndex].id)) continue;
+      const objects = planGroup.children.filter((object) => object.userData.entityId === entity.id && !object.userData.ignoreSelection);
+      if (rebuild) {
+        removeThreeObjects(entity.id);
+        addFurniture3d(entity, threeSceneCenter, floorBaseY(floorIndex));
+        if (threeStyle === "real") realizeMaterials(planGroup, true);
+      } else objects.forEach((object) => placeFurniture3d(object, entity, threeSceneCenter, floorBaseY(floorIndex)));
+    }
+    planGroup.children.forEach((object) => { if (object instanceof THREE.BoxHelper) object.update(); });
+    threeNeedsRender = true;
+    return;
+  }
+  // 前の作り直しにかかった時間の数倍は空ける（軽い間取りでは毎フレーム）
+  const now = performance.now();
+  if (now - threeDragRefreshAt < threeDragRefreshCost * 3) return;
+  threeDragRefreshAt = now;
+  requestAnimationFrame(() => {
+    const start = performance.now();
+    rebuildThreeScene();
+    threeDragRefreshCost = performance.now() - start;
+  });
+}
+
+// その物の3D（選択の枠も）をシーンから外して捨てる。ほかの物と共有している材質は残す
+function removeThreeObjects(entityId: string): void {
+  const objects = planGroup.children.filter((object) => object.userData.entityId === entityId && !object.userData.ignoreSelection);
+  const helpers = planGroup.children.filter((object) => object instanceof THREE.BoxHelper && objects.includes(object.object));
+  const shared = new Set<THREE.Material>([...sharedMaterials, ...coloredMaterialCache.values()]);
+  for (const object of [...objects, ...helpers]) {
+    planGroup.remove(object);
+    object.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      mesh.geometry?.dispose();
+      (Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []).forEach((material) => {
+        if (shared.has(material)) return;
+        (material as THREE.MeshStandardMaterial).map?.dispose();
+        material.dispose();
+      });
+    });
+  }
 }
 
 // ---- Roof ----
@@ -8318,7 +8470,7 @@ function entityIdFromObject(object: THREE.Object3D): string | null {
 
 function addGroundPlaceholder(center: Point): void {
   const geometry = new THREE.BoxGeometry(7, 0.05, 5);
-  const material = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.8 });
+  const material = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, roughness: 0.8, name: "ground" });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.set(center.x, 0, center.y);
   mesh.receiveShadow = true;
@@ -8362,8 +8514,315 @@ function render3dOnce(): void {
   camera.far = Math.max(distance * 200, 1000);
   camera.updateProjectionMatrix();
   controls.update();
-  renderer.render(scene, camera);
+  renderThreeView();
   threeNeedsRender = false;
+}
+
+// ---- 3Dの絵柄 ----
+// 標準とリアルは、そのまま描く。ほかは、色（白模型は白い材質で）と、法線・奥行きを別に描いてから、
+// 画面全体に効果（three-style.ts の POST_FRAGMENT_SHADER）をかけて描き直す
+interface ThreePost {
+  color: THREE.WebGLRenderTarget;
+  normal: THREE.WebGLRenderTarget;
+  material: THREE.ShaderMaterial;
+  scene: THREE.Scene;
+  camera: THREE.OrthographicCamera;
+  quad: THREE.Mesh;
+  normalMaterial: THREE.MeshNormalMaterial;
+  clayMaterial: THREE.MeshStandardMaterial;
+  // リアル: 明るさの幅を残した色（半精度の浮動小数）と、物の間の暗がり（半分の大きさ）
+  realColor: THREE.WebGLRenderTarget | null;
+  ao: THREE.WebGLRenderTarget;
+  aoMaterial: THREE.ShaderMaterial;
+  realMaterial: THREE.ShaderMaterial;
+}
+let threePost: ThreePost | null = null;
+let realEnvironment: THREE.Texture | null = null;
+let realSky: THREE.Texture | null = null;
+const STANDARD_BACKGROUND = new THREE.Color(0xe9edf3);
+// リアルの空の地平線の色（遠くのかすみも同じ色）
+const REAL_HORIZON = 0xe2e9ee;
+
+function ensureThreePost(width: number, height: number): ThreePost {
+  if (!threePost) {
+    const color = new THREE.WebGLRenderTarget(width, height, { samples: 4, colorSpace: THREE.SRGBColorSpace });
+    const normal = new THREE.WebGLRenderTarget(width, height);
+    normal.depthTexture = new THREE.DepthTexture(width, height);
+    const material = new THREE.ShaderMaterial({
+      vertexShader: POST_VERTEX_SHADER,
+      fragmentShader: POST_FRAGMENT_SHADER,
+      uniforms: {
+        tColor: { value: color.texture },
+        tNormal: { value: normal.texture },
+        tDepth: { value: normal.depthTexture },
+        resolution: { value: new THREE.Vector2(width, height) },
+        cameraNear: { value: camera.near },
+        cameraFar: { value: camera.far },
+        pixelRatio: { value: 1 },
+        styleId: { value: 0 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    material.uniforms.focusDistance = { value: 10 };
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+    quad.frustumCulled = false;
+    const postScene = new THREE.Scene();
+    postScene.add(quad);
+    // 半精度の浮動小数の絵に描けない環境では、リアルは暗がりなしで直接描く
+    const floatColor = renderer.extensions.has("EXT_color_buffer_float") || renderer.extensions.has("EXT_color_buffer_half_float");
+    const ao = new THREE.WebGLRenderTarget(Math.max(1, width >> 1), Math.max(1, height >> 1));
+    const aoMaterial = new THREE.ShaderMaterial({
+      vertexShader: POST_VERTEX_SHADER,
+      fragmentShader: AO_FRAGMENT_SHADER,
+      uniforms: {
+        tNormal: { value: normal.texture },
+        tDepth: { value: normal.depthTexture },
+        resolution: { value: new THREE.Vector2(width >> 1, height >> 1) },
+        cameraNear: { value: camera.near },
+        cameraFar: { value: camera.far },
+        projScale: { value: new THREE.Vector2(1, 1) },
+        radius: { value: 0.5 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const realColor = floatColor ? new THREE.WebGLRenderTarget(width, height, { samples: 4, type: THREE.HalfFloatType }) : null;
+    const realMaterial = new THREE.ShaderMaterial({
+      vertexShader: POST_VERTEX_SHADER,
+      fragmentShader: REAL_COMPOSITE_FRAGMENT_SHADER,
+      uniforms: {
+        tColor: { value: realColor?.texture ?? null },
+        tAo: { value: ao.texture },
+        tDepth: { value: normal.depthTexture },
+        aoTexel: { value: new THREE.Vector2(1 / Math.max(1, width >> 1), 1 / Math.max(1, height >> 1)) },
+        cameraNear: { value: camera.near },
+        cameraFar: { value: camera.far },
+        strength: { value: 0.85 },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    threePost = {
+      color, normal, material, scene: postScene, quad,
+      camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1),
+      normalMaterial: new THREE.MeshNormalMaterial({ side: THREE.DoubleSide }),
+      clayMaterial: new THREE.MeshStandardMaterial({ color: 0xf1eee8, roughness: 0.88, side: THREE.DoubleSide }),
+      realColor, ao, aoMaterial, realMaterial,
+    };
+  }
+  if (threePost.color.width !== width || threePost.color.height !== height) {
+    threePost.color.setSize(width, height);
+    threePost.normal.setSize(width, height);
+    threePost.realColor?.setSize(width, height);
+    threePost.ao.setSize(Math.max(1, width >> 1), Math.max(1, height >> 1));
+  }
+  return threePost;
+}
+
+function renderThreeView(): void {
+  const distance = camera.position.distanceTo(controls.target);
+  if (threeStyle === "real" && scene.fog instanceof THREE.Fog) {
+    // 遠くのかすみは、見ている物より十分奥から。地面の端（500m先）は空の色に溶けきる
+    scene.fog.near = distance * 2;
+    scene.fog.far = Math.min(distance * 8 + 80, 450);
+  }
+  if (!isPostStyle(threeStyle) && threeStyle !== "real") {
+    renderer.render(scene, camera);
+    return;
+  }
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const post = ensureThreePost(size.x, size.y);
+  if (threeStyle === "real" && !post.realColor) {
+    renderer.render(scene, camera);
+    return;
+  }
+  // 線（壁の縁・方眼・選択の枠）と、透けて見える物（ガラスなど）は、法線と奥行きの絵には入れない
+  const hidden: THREE.Object3D[] = [];
+  scene.traverse((object) => {
+    if (!object.visible) return;
+    const mesh = object as THREE.Mesh;
+    const lineLike = (object as THREE.Line).isLine || (object as THREE.Points).isPoints || (object as THREE.Sprite).isSprite;
+    const materials = mesh.isMesh ? (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) : [];
+    const seeThrough = materials.length > 0 && materials.every((material) => !material.visible || (material.transparent && material.opacity < 0.75));
+    if (lineLike || seeThrough) hidden.push(object);
+  });
+  const background = scene.background;
+  const clearColor = renderer.getClearColor(new THREE.Color());
+  const clearAlpha = renderer.getClearAlpha();
+  const autoShadow = renderer.shadowMap.autoUpdate;
+  const model = threeStyle === "model";
+  try {
+    // 1. 色（白模型は、すべて白い材質で。ガラスや線は入れない。リアルは明るさの幅を残して）
+    if (model) {
+      scene.overrideMaterial = post.clayMaterial;
+      hidden.forEach((object) => (object.visible = false));
+    }
+    renderer.setRenderTarget(threeStyle === "real" ? post.realColor : post.color);
+    renderer.render(scene, camera);
+    // 2. 法線と奥行き
+    hidden.forEach((object) => (object.visible = false));
+    scene.overrideMaterial = post.normalMaterial;
+    scene.background = null;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.setRenderTarget(post.normal);
+    renderer.setClearColor(0x8080ff, 1);
+    renderer.clear();
+    renderer.render(scene, camera);
+  } finally {
+    hidden.forEach((object) => (object.visible = true));
+    scene.overrideMaterial = null;
+    scene.background = background;
+    renderer.shadowMap.autoUpdate = autoShadow;
+    renderer.setClearColor(clearColor, clearAlpha);
+    renderer.setRenderTarget(null);
+  }
+  if (threeStyle === "real") {
+    // 3. 物の間の暗がり → 4. 色に掛けて、トーンマッピングして画面へ
+    const ao = post.aoMaterial.uniforms;
+    ao.resolution.value.set(post.ao.width, post.ao.height);
+    ao.cameraNear.value = camera.near;
+    ao.cameraFar.value = camera.far;
+    ao.projScale.value.set(camera.projectionMatrix.elements[0], camera.projectionMatrix.elements[5]);
+    // 暗がりを探す範囲は、寄っているときは狭く、引いているときは広く（部屋の隅・家具の下が暗くなる程度）
+    ao.radius.value = clamp(distance * 0.04, 0.12, 1.2);
+    post.quad.material = post.aoMaterial;
+    renderer.setRenderTarget(post.ao);
+    renderer.render(post.scene, post.camera);
+    renderer.setRenderTarget(null);
+    const real = post.realMaterial.uniforms;
+    real.aoTexel.value.set(1 / post.ao.width, 1 / post.ao.height);
+    real.cameraNear.value = camera.near;
+    real.cameraFar.value = camera.far;
+    post.quad.material = post.realMaterial;
+    renderer.render(post.scene, post.camera);
+    post.quad.material = post.material;
+    return;
+  }
+  // 3. 効果をかけて画面へ
+  const uniforms = post.material.uniforms;
+  uniforms.resolution.value.set(size.x, size.y);
+  uniforms.cameraNear.value = camera.near;
+  uniforms.cameraFar.value = camera.far;
+  uniforms.pixelRatio.value = renderer.getPixelRatio();
+  uniforms.focusDistance.value = distance;
+  uniforms.styleId.value = postStyleId(threeStyle);
+  renderer.render(post.scene, post.camera);
+}
+
+// リアルの空（上は青く、地平線に向かって明るく白っぽく）
+function realSkyTexture(): THREE.Texture {
+  if (realSky) return realSky;
+  const canvas = document.createElement("canvas");
+  canvas.width = 4;
+  canvas.height = 256;
+  const context = canvas.getContext("2d");
+  if (context) {
+    const gradient = context.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, "#8fb6dd");
+    gradient.addColorStop(0.55, "#c4d8ea");
+    gradient.addColorStop(1, "#e2e9ee");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 4, 256);
+  }
+  realSky = new THREE.CanvasTexture(canvas);
+  realSky.colorSpace = THREE.SRGBColorSpace;
+  return realSky;
+}
+
+// リアルの地面（方眼の代わり）。遠くはかすみに溶ける
+function addRealGround(bounds: Bounds | null, center: Point): void {
+  const size = Math.max(500, (bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D : 10) * 6);
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(size, 96),
+    new THREE.MeshStandardMaterial({ color: 0xcfc9bd, roughness: 0.95, name: "concrete-ground" }),
+  );
+  ground.rotation.x = -Math.PI / 2;
+  const middle = to3d(center.x, center.y, center);
+  ground.position.set(middle.x, -0.004, middle.z);
+  ground.receiveShadow = true;
+  ground.userData.ignoreSelection = true;
+  planGroup.add(ground);
+}
+
+// リアル: トーンマッピングと周りの映り込み、細かい影、家具・設備の材質の模様と光り方
+function applyThreeStyle(rebuild = true): void {
+  const real = threeStyle === "real";
+  renderer.toneMapping = real ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+  renderer.toneMappingExposure = real ? 0.95 : 1;
+  if (real && !realEnvironment) {
+    const generator = new THREE.PMREMGenerator(renderer);
+    realEnvironment = generator.fromScene(new RoomEnvironment(), 0.04).texture;
+    generator.dispose();
+  }
+  scene.environment = real ? realEnvironment : null;
+  scene.environmentIntensity = 0.06;
+  scene.background = real ? realSkyTexture() : STANDARD_BACKGROUND;
+  scene.fog = real ? new THREE.Fog(REAL_HORIZON, 30, 200) : null;
+  const shadowSize = real ? 4096 : 2048;
+  if (sunLight.shadow.mapSize.x !== shadowSize) {
+    sunLight.shadow.mapSize.set(shadowSize, shadowSize);
+    sunLight.shadow.map?.dispose();
+    sunLight.shadow.map = null;
+  }
+  applyLightSettings();
+  // 方眼と地面を入れ替えるため作り直す（作り直しの中で、材質も本物らしくする）。起動のときは、あとの最初の作り直しに任せる
+  if (rebuild) rebuildThreeScene();
+  if (!real) realizeMaterials(planGroup, false);
+  threeNeedsRender = true;
+}
+
+// 材質を本物らしくする（on=false で元に戻す）。材質の名前から木・布・金属などに分け、模様と光り方をシェーダーに足す
+function realizeMaterials(root: THREE.Object3D, on: boolean): void {
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+      if (on) makeMaterialReal(material);
+      else if (material.userData.realKind) {
+        delete material.userData.realKind;
+        Reflect.deleteProperty(material, "onBeforeCompile");
+        Reflect.deleteProperty(material, "customProgramCacheKey");
+        material.needsUpdate = true;
+      }
+    }
+  });
+}
+
+function makeMaterialReal(material: THREE.MeshStandardMaterial): void {
+  if (material.userData.realKind) return;
+  const kind = realMaterialKind(material.name, material.color.getHex(), material.roughness, material.metalness, material.transparent);
+  material.userData.realKind = kind;
+  // 床など、すでに模様（画像）を持つ物は、光り方だけ変える
+  const colorCode = material.map ? "" : realColorCode(kind);
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", `#include <common>\n${REAL_VERTEX_DECLARATIONS}`)
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\n${REAL_VERTEX_BODY}`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>\n${REAL_FRAGMENT_DECLARATIONS}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>\n${colorCode}`)
+      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${realSurfaceCode(kind)}`);
+  };
+  material.customProgramCacheKey = () => `real-${kind}-${colorCode ? "pattern" : "plain"}`;
+  material.needsUpdate = true;
+}
+
+function setupThreeStyle(): void {
+  const select = document.querySelector<HTMLSelectElement>("#threeStyleSelect");
+  if (!select) return;
+  select.innerHTML = THREE_STYLE_GROUPS.map((group) => `<optgroup label="${escapeHtml(group)}">${THREE_STYLES.filter((style) => style.group === group)
+    .map(({ value, label, hint }) => `<option value="${value}" title="${escapeHtml(hint)}">${escapeHtml(label)}</option>`).join("")}</optgroup>`).join("");
+  select.value = threeStyle;
+  select.addEventListener("change", () => {
+    if (!isThreeStyle(select.value)) return;
+    threeStyle = select.value;
+    viewState.look3d = threeStyle;
+    scheduleViewStateSave();
+    applyThreeStyle();
+  });
+  applyThreeStyle(false);
 }
 
 function animate3d(): void {
@@ -9452,7 +9911,7 @@ function exportThreeImage(): void {
   const ratio = Math.min(pixelRatio * 2, EXPORT_MAX_SIDE / size.x, EXPORT_MAX_SIDE / size.y, renderer.capabilities.maxTextureSize / Math.max(size.x, size.y));
   renderer.setPixelRatio(ratio);
   renderer.setSize(size.x, size.y, false);
-  renderer.render(scene, camera);
+  renderThreeView();
   const stamp = localDateStamp();
   downloadCanvas(renderer.domElement, `madori-${stamp}-3d.png`);
   renderer.setPixelRatio(pixelRatio);
@@ -10590,7 +11049,7 @@ function roomMaterial(roomItem: Room, rect: Rectangle): THREE.MeshStandardMateri
   const color = solidColor(code);
   let material: THREE.MeshStandardMaterial;
   if (surface === "plain") {
-    material = new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
+    material = new THREE.MeshStandardMaterial({ color, roughness: 0.82, name: "surface-plain" });
   } else {
     const map = new THREE.CanvasTexture(surfaceCanvas(surface, color));
     map.colorSpace = THREE.SRGBColorSpace;
@@ -10599,7 +11058,7 @@ function roomMaterial(roomItem: Room, rect: Rectangle): THREE.MeshStandardMateri
     map.repeat.set(rect.w / tile, rect.h / tile);
     map.offset.set((rect.x - roomItem.x) / tile, (roomItem.y + roomItem.h - rect.y - rect.h) / tile);
     map.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    material = new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness, metalness: SURFACE_DEFS[surface].metalness ?? 0 });
+    material = new THREE.MeshStandardMaterial({ map, roughness: SURFACE_DEFS[surface].roughness, metalness: SURFACE_DEFS[surface].metalness ?? 0, name: `surface-${surface}` });
   }
   makeTranslucent(material, colorAlpha(code));
   return material;
@@ -10610,7 +11069,7 @@ function coloredMaterial(color: string, roughness = 0.75): THREE.MeshStandardMat
   const key = `${color}-${roughness}`;
   const cached = coloredMaterialCache.get(key);
   if (cached) return cached;
-  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor(color)), roughness });
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor(color)), roughness, name: "plaster-colored" });
   makeTranslucent(material, colorAlpha(color));
   coloredMaterialCache.set(key, material);
   return material;

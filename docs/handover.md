@@ -42,7 +42,7 @@
    ```
    npm run dev        # http://127.0.0.1:5173/ を開く
    npm test           # 単体テスト（373件）
-   npm run test:e2e   # 画面のテスト（約12分。PASS: の行が57本）
+   npm run test:e2e   # 画面のテスト（約12分。PASS: の行が59本）
    npm run build
    ```
    取ってきたばかりの環境では、E2E が途中の再読み込み（`page.reload`）で止まって失敗することがまれにある（下の「気をつけること」）。もう一度実行すれば通る。
@@ -137,6 +137,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `src/opening-models.ts` | ドア・引き戸・和風の建具・窓の3Dモデル |
 | `src/opening-shapes.ts` | ドアの種類（`DOOR_STYLES`: ドア・両開きドア・引き戸・障子・襖・格子戸・板戸・門扉）と、2D・3D共通の戸の並び（`slidingPanels`）・組子や格子の位置（`panelBars`）・門扉の板（`gateSlats`） |
 | `src/geometry.ts` | 壁の開口（ドア・窓の所を抜く）、床の分け方 |
+| `src/three-style.ts` | 3Dの絵柄15種類（`THREE_STYLES`）。標準・リアル以外は、色と法線・奥行きを別に描いてから画面全体に効果をかける（`POST_FRAGMENT_SHADER`）。リアルは物の間の暗がり（`AO_FRAGMENT_SHADER`）とトーンマッピング（`REAL_COMPOSITE_FRAGMENT_SHADER`）、材質の名前から木・布・金属などに分けて（`realMaterialKind`）シェーダーに模様と光り方を足す。three.js を読み込まない（テストが読む） |
 | `src/plan-style.ts` | 2Dの絵柄17種類（`PLAN_STYLES`、分類は `PLAN_STYLE_GROUPS`）。描き先を包んで、線・塗り・文字の描き方を変える |
 | `src/templates.ts` | テンプレートの分類（`TEMPLATE_GROUPS`、6つの分類に50種類）と、そのうち45種類の間取りのデータ（`BUILDERS`）。部屋を並べると壁を自動で立てる、小さな作り方（`planBuilder`）で書く。住まいの4種類と作例は `main.ts` |
 | `src/surfaces.ts` | 床材22種類（フローリング・畳・大理石・石畳・アスファルト・砂利・水面など）の模様。`surfaceCanvas()` の1枚の模様を2Dと3Dの両方が使い、`surfaceTileCm()` がその模様1枚の大きさ（畳は360cm、モザイクは50cmなど）。端にかかる粒は反対側にも描いて継ぎ目を出さない |
@@ -160,7 +161,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
   - 家具は `drawFurniture2d()` → `drawFurnitureSymbol()`（種類ごとの `case`）
   - 文字（2026-10-11）: `src/text-layout.ts` が横書き・縦書きの位置と寸法を共通計算。自由テキストは `size`、部屋名は `labelSize`（未指定で従来の自動値）、両方 `writingMode` を保存。書き出し・ヒット判定も同じ計算を使う
   - 自由な床: Room の `outline` は外枠に対する0〜1の頂点配列。`src/floor-outline.ts` で検証・変換・重なりの差分を扱う（polygon-clipping）。凹形・穴を Three.js の ExtrudeGeometry で床スラブにし、草も実際の輪郭内だけに生やす。交差した頂点編集は受け付けない
-  - 3D操作: `threeMoveId` がダブルクリックで始める家具移動モード。通常のドラッグは OrbitControls。`screenSpacePanning = true` で右ドラッグは画面に沿う移動になり、高さも変わる。選択解除・Escで移動モードを終える
+  - 3D操作: `threeMoveId` がダブルクリックで始める家具移動モード。左ドラッグ（指1本）の回転は OrbitControls を使わず（`enableRotate = false`）、`startThreeOrbit`・`orbitAround` が押した点（`orbitPivotAt`）のまわりにカメラと注視点を回す。上下の制限はなし。拡大縮小と右ドラッグは OrbitControls。`screenSpacePanning = true` で右ドラッグは画面に沿う移動になり、高さも変わる。選択解除・Escで移動モードを終える
   - 階段（2026-10-11）: `src/stairs.ts` が直下階の階段を参照表示する。上階の2D・PNGでは下り矢印を描き、データと3Dには追加しない。同じ配置の実物が編集中の階にあるときは実物を優先。表示の範囲は全体表示・PNGにも含める。選択欄の `useLowerStairButton` は重複した実物を取り消し可能な操作で削除する。テンプレートの最上階は重複階段を含めない（保存データには自動削除をかけない）
   - アパートの外階段は1Fから2F廊下へ上がり、2Fには到着側の踊り場だけを置く。床が階段を覆わないことと廊下への接続は `tests/templates.test.mjs` で確認する。利用者が描いた床に自動で開口を追加する機能ではない
   - 別デザインは `SYMBOL_VARIANTS`（「2D記号の別デザイン」の見出し）
@@ -278,6 +279,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - テンプレートを27種類にした（「テンプレ27種（家/病院/洋館/など）」）。住まい・屋敷と宿・お店・施設・屋外とそのほかの5つに分けた。部屋の名前（テンプレートの部屋の名前は付けてよい）が家具に隠れないかをテストで確かめる。
   - 2Dの絵柄を6種類足して9種類にした（「描画スタイルを他にも作れ」）。メニューは、それぞれの絵柄で描いた見本を並べる形にした。
 - **2026-10-10**: 「テンプレートは複数階がありそうなものは複数階も作れ」で、旅館・ホテル・病院・学校・図書館・警察署・美術館・城に上の階を足した（ホテル・学校は3階）。上の階へ続く階段は同じ場所に置き、いちばん上の階に屋根を載せる（`tests/templates.test.mjs` が確かめる）。2階の下にならない部分には、1階に屋根を載せる（図書館・城）。
+- **2026-10-18**: 「3dの方も絵柄を追加」「全ての家具や設備をリアルな絵柄も追加して3Dの方で」で、3Dの絵柄15種類（`src/three-style.ts`。3D欄の `#threeStyleSelect`、`viewState.look3d` に覚える）。描くのは `renderThreeView()`（3Dの画像の書き出しも同じ）。リアルは `applyThreeStyle()` がトーンマッピング・`RoomEnvironment` の映り込み・影の細かさ・空（`realSkyTexture`）・地面（`addRealGround`、方眼の代わり）・かすみを切り替え、作り直しのたびに `realizeMaterials()` で材質のシェーダーに模様を足す（材質の名前で分けるので、壁・床・屋根の材質にも名前を付けた）。「3Dの方の左クリックも真ん中を中心じゃなくて視点を中心に」は、押した所を中心に回す意味にした（ホイールと右ドラッグもマウスの位置が基準のため）。「視点移動制限をなくして」で上下の制限をなくした。「家具を動かすとリアルタイムに3dに反映」は `syncThreeWhileDragging()`（家具はその家具の3Dだけ動かす・作り直す。ほかは作り直しにかかった時間に合わせて間引いて全体を作り直す）。E2E は `tests/three-style-editor.mjs`（`--three-style-only`）と `tests/live-three-editor.mjs`（`--live-three-only`）。
 - **2026-10-15（その2）**: 「いくつかのファイルを組み合わせる機能」で、上のバーに「組み合わせ」（`#combineButton`・`#combineMenu`・`#combineInput`（複数選べる））を足した。`combinePlans` が書き出したファイルをいまの間取りに足す。置き方（`combinePlacement`。`viewState.combine` に覚える）は、右に並べる（`planBounds` の右へ `COMBINE_GAP`）・同じ位置・上の階に積む。並べる・重ねるときは `floorAtLevel` で同じ階どうし（地下も）を合わせ、足りない階は足す。足した物は新しいIDにし、屋根の `floorId` は付け替える。足したあと、表示中の階の足した物を `selectMany` で選ぶ。何もない間取りに足すときは「同じ位置」と同じ。E2E は `tests/combine-editor.mjs`（`--combine-only`）。
 - **2026-10-15**: 「3Dはドアもダブルクリックで選べるように」で、3Dのドア・窓を家具と同じ扱いにした（`isThreeDoubleSelect`）。ダブルクリック（タッチは長押し）で選び、1回のクリックでは選択を変えずに案内（`#threeHint`）を出す。それまでのドア・窓は1回のクリックで選ばれていた（ダブルクリックでも選べてはいた）。床・壁・屋根などは1回のクリックのまま。`tests/three-press-editor.mjs` に足した。
 - **2026-10-14（その3）**: 「違う屋根を別の高さに置けるように」で、屋根に `elevation`（設置階の壁の上からのずれ cm、±`ROOF_ELEVATION_LIMIT`）を足した。「選択中」の「上げ下げ cm」で変え、`addRoof3d` の高さに足す。2Dは変わらない。「2dで屋根を選択できない？」で、縁だけでなく棟などの線（`roofLines2d`。2Dの描画と共通）と、選択ツールで何もない所を押したときの屋根（`roofAt`）でも選べるようにした。「ドアも選びずらい」で、開き戸の開く範囲（`isPointInDoorSwing`）と、ドア・窓は壁の厚みのぶんも当たりにした（`tests/doors-editor.mjs`）。E2E は `tests/roof-color-editor.mjs` に足した。

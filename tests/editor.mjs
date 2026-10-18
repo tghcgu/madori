@@ -17,6 +17,8 @@ import { verifyThreePress } from './three-press-editor.mjs';
 import { verifyRoofColor } from './roof-color-editor.mjs';
 import { verifyDoublePress } from './double-press-editor.mjs';
 import { verifyCombine } from './combine-editor.mjs';
+import { verifyLiveThree } from './live-three-editor.mjs';
+import { verifyThreeStyles } from './three-style-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -81,11 +83,21 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         return camera.position.toArray();
       },
       cameraPose() { return { position: camera.position.toArray(), target: controls.target.toArray() }; },
+      pickPoint(x, y) {
+        setThreeRay({ clientX: x, clientY: y });
+        planGroup.updateMatrixWorld(true);
+        const hit = raycaster.intersectObjects(planGroup.children, true).find(h => h.object.isMesh && h.object.visible);
+        return hit ? hit.point.toArray() : null;
+      },
+      projectWorld(p) {
+        const v = new THREE.Vector3(...p).project(camera), r = threeCanvas.getBoundingClientRect();
+        return { x: r.left + (v.x + 1) * r.width / 2, y: r.top + (1 - v.y) * r.height / 2 };
+      },
       materials(id) {
         const found = [];
         planGroup.traverse(o => {
           if (!o.isMesh || entityIdFromObject(o) !== id) return;
-          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow, map: Boolean(m.map) }));
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => found.push({ name: m.name, transparent: m.transparent, opacity: m.opacity, color: m.color.getHexString(), shadow: o.castShadow, map: Boolean(m.map), real: m.userData.realKind ?? null }));
         });
         return found;
       },
@@ -178,6 +190,10 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyThreeStyles({ open, plan, output });
+  if (!process.argv.includes('--three-style-only')) {
+  await verifyLiveThree({ open, plan, output });
+  if (!process.argv.includes('--live-three-only')) {
   await verifyCombine({ open, output });
   if (!process.argv.includes('--combine-only')) {
   await verifyDoublePress({ open, plan });
@@ -1582,6 +1598,8 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
+  }
   }
   }
   }

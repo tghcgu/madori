@@ -8,6 +8,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-18",
+    items: [{
+      ja: "3Dの絵柄を追加。3Dの欄で、標準・リアル・白模型・線画・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラーの15種類から選べます。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます",
+      en: "Added looks for the 3D view. Choose from 15 in the 3D bar: standard, realistic, white model, line art, old photo, pencil, watercolor, ink wash, anime, manga, pixel art, retro game, blueprint, neon and horror. The chosen look is remembered and used for 3D image export",
+    }, {
+      ja: "リアルの絵柄では、すべての家具・設備の材質（木目・布目・金属の筋・石の粒・陶器や漆のつや など）と光（周りの映り込み・細かい影・物の間の暗がり）を本物らしくし、空と地面も描きます",
+      en: "The realistic look gives all furniture and equipment realistic materials (wood grain, fabric weave, brushed metal, stone grain, glossy ceramics and lacquer, and more) and realistic lighting (environment reflections, finer shadows and ambient occlusion), with a sky and ground",
+    }, {
+      ja: "3Dの左ドラッグは、画面の真ん中ではなく、押した所（マウスの下の物）を中心に回るように。上下の向きの制限もなくし、下から見上げることもできます",
+      en: "Left-drag in 3D now orbits around the point you press (whatever is under the mouse) instead of the screen center, and the vertical angle is no longer limited, so you can look up from below",
+    }, {
+      ja: "2Dで家具・壁・床などをドラッグしている間も、3Dがすぐ追いつくように（これまでは離したときに3Dが変わりました）。3Dで家具を動かすのも軽くなりました",
+      en: "The 3D view now follows while you drag furniture, walls or floors in 2D (it used to update only when you let go), and moving furniture in 3D is smoother",
+    }],
+  },
+  {
     date: "2026-10-15",
     items: [{
       ja: "いくつかのファイルを組み合わせる「組み合わせ」を追加。書き出したファイルを、いまの間取りに足せます（いくつでも一度に選べます）。置き方は「右に並べる」「同じ位置に重ねる」「上の階に積む」から選べ、1Fは1Fへ・地下は地下へと同じ階どうしを合わせます。足した物は選ばれた状態になるので、そのままドラッグで位置を直せ、1回の「元に戻す」で取り消せます",

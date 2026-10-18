@@ -112,16 +112,18 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 3Dプレビュー
 
-- 2D間取りをThree.jsでリアルタイム変換
+- 2D間取りをThree.jsでリアルタイム変換（2Dで家具・壁・床などをドラッグしている間も、3Dがすぐ追いつきます）
 - `同時`、`2Dのみ`、`3Dのみ`の表示モード
 - `同時`表示では、2Dと3Dの境目をドラッグして広さを自由に変更（境目を選んで矢印キーでも5%ずつ動かせます。ダブルクリックで元の半分ずつに戻ります）。境目の位置はブラウザに記憶され、タブレットやスマホの上下表示でも使えます
-- マウスドラッグによる視点回転・移動
+- マウスドラッグによる視点回転・移動。左ドラッグは押した所（マウスの下の物）を中心に回り、押した物が画面の同じ所にとどまります。上下の向きに制限はなく、真上から見下ろすことも、下から見上げることもできます
 - ホイールによるズーム（マウスのある場所に向かって進み、拡大し続けると窓や壁を越えて室内まで入れます。近づいても前進が止まらず、逆回転で後退できます。タッチ操作ではピンチに対応）
 - 右ドラッグの移動は、つかんだ物がマウスについてくる速さで動きます。すぐ目の前まで寄ったあとでも、止まったようにならず動かせます
 - 壁、床、ドア、引き戸、障子・襖などの和風の建具、窓、家具、設備、階段、屋根を立体化
 - 階段は出発する下の階に1つ配置すれば、到着する上の階の2D図とPNGにも下り向きの記号で自動表示します（下階の透過表示がオフでも表示）。上の階に同じ階段を複製する必要はありません。記号の位置・大きさは下階の階段に追従し、編集は下階で行います
 - すでに上下階へ同じ階段を重ねていた場合は、上階の階段を選択して「下階の階段表示に切り替え」を押すと、上階の実物だけを削除して下階の記号表示にできます。固定中は操作できず、取り消しにも対応します。上階からさらに上へ登る階段は、そのまま残せます
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
+- 3Dの絵柄を15種類から選べます（標準・リアル・白模型・線画・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラー）。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます
+- リアルの絵柄は、光（トーンマッピング・周りの映り込み・細かい影・物の間の暗がり）と、家具・設備の材質（木目・布目・金属の筋・石の粒・陶器や漆のつや など）を本物らしくし、空と地面も描きます
 - 影のON/OFF
 - 5段階の明るさ調整
 - 8方位と真上から選べる光の向き
@@ -360,7 +362,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 2D | ホイール | 拡大・縮小 |
 | 2D | ダブルクリック | 要素を選択してプロパティを表示 |
 | 2D | 四隅・端点をドラッグ | 部屋、家具、屋根、線要素のサイズ変更 |
-| 3D | 左ドラッグ | 視点回転。家具をダブルクリックして移動モードにすると家具移動 |
+| 3D | 左ドラッグ | 押した所を中心に視点回転（上下の制限なし）。家具をダブルクリックして移動モードにすると家具移動 |
 | 3D | 右ドラッグ | 画面に沿って視点を上下左右へ平行移動（高さも変更） |
 | 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
 | 3D | ダブルクリック | 家具・ドア・窓を選択。家具は、固定されていなければ移動モードへ |
@@ -690,6 +692,13 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年10月18日
+
+- 3Dの絵柄を追加。3Dの欄で、標準・リアル・白模型・線画・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラーの15種類から選べます。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます
+- リアルの絵柄では、すべての家具・設備の材質（木目・布目・金属の筋・石の粒・陶器や漆のつや など）と光（周りの映り込み・細かい影・物の間の暗がり）を本物らしくし、空と地面も描きます
+- 3Dの左ドラッグは、画面の真ん中ではなく、押した所（マウスの下の物）を中心に回るように。上下の向きの制限もなくし、下から見上げることもできます
+- 2Dで家具・壁・床などをドラッグしている間も、3Dがすぐ追いつくように（これまでは離したときに3Dが変わりました）。3Dで家具を動かすのも軽くなりました
+
 ### 2026年10月15日
 
 - いくつかのファイルを組み合わせる「組み合わせ」を追加。書き出したファイルを、いまの間取りに足せます（いくつでも一度に選べます）。置き方は「右に並べる」「同じ位置に重ねる」「上の階に積む」から選べ、1Fは1Fへ・地下は地下へと同じ階どうしを合わせます。足した物は選ばれた状態になるので、そのままドラッグで位置を直せ、1回の「元に戻す」で取り消せます
@@ -1007,14 +1016,16 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 
 ### 3D preview
 
-- Real-time conversion from the 2D plan using Three.js
+- Real-time conversion from the 2D plan using Three.js (the 3D view follows while you drag furniture, walls or floors in 2D)
 - Split, 2D-only, and 3D-only view modes
 - In Split view, drag the boundary between 2D and 3D to resize them freely (or focus it and use the arrow keys to move it 5% at a time; double-click to go back to half and half). The browser remembers the position, and it also works in the stacked layout on tablets and phones
-- Orbit, pan, and zoom camera controls. The 3D view zooms toward the mouse pointer; keep scrolling to pass through windows and walls into rooms, and reverse to move back. Forward movement no longer stops near the orbit target. Pinch gestures work too. Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
+- Orbit, pan, and zoom camera controls. Left-drag orbits around the point you press (whatever is under the mouse stays put), with no limit on the vertical angle, so you can look straight down or up from below. The 3D view zooms toward the mouse pointer; keep scrolling to pass through windows and walls into rooms, and reverse to move back. Forward movement no longer stops near the orbit target. Pinch gestures work too. Right-drag moves the view so that whatever you grab follows the pointer, and it keeps moving at a usable speed even when zoomed right up to a surface
 - 3D walls, floors, doors, sliding doors, Japanese fittings such as shoji and fusuma, windows, furniture, equipment, stairs, and roofs
 - Place a staircase once on its departure floor. Its arrival is shown automatically as a descending symbol in the next floor's 2D plan and PNG export, even with floor ghosting off. No extra 3D flight is created. The symbol follows edits to the original staircase; edit it on the lower floor
 - For an existing duplicate, select the upper flight and choose "下階の階段表示に切り替え" (use the lower-floor stair display). This removes only that upper flight, supports undo, and is disabled for locked stairs. Keep an upper flight when it intentionally leads to another floor
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
+- 15 looks for the 3D view: standard, realistic, white model, line art, old photo, pencil, watercolor, ink wash, anime, manga, pixel art, retro game, blueprint, neon and horror. The chosen look is remembered and used for 3D image export
+- The realistic look adds tone mapping, environment reflections, finer shadows and ambient occlusion, draws a sky and ground, and gives all furniture and equipment realistic materials (wood grain, fabric weave, brushed metal, stone grain, glossy ceramics and lacquer, and more)
 - Optional shadows
 - Five light intensity levels
 - Eight compass directions plus overhead lighting
@@ -1240,7 +1251,7 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 2D | Mouse wheel | Zoom |
 | 2D | Double-click | Select an item and show its properties |
 | 2D | Drag handles | Resize rooms, furniture, roofs, and line endpoints |
-| 3D | Left-drag | Orbit by default, including over furniture; move selected furniture after entering move mode |
+| 3D | Left-drag | Orbit around the pressed point with no vertical limit, including over furniture; move selected furniture after entering move mode |
 | 3D | Right-drag | Pan along the screen, including camera elevation |
 | 3D | Mouse wheel | Zoom; keep zooming in to enter rooms, reverse to move back |
 | 3D | Double-click | Select furniture, doors and windows; furniture enters move mode unless locked |
@@ -1557,6 +1568,13 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-18
+
+- Added looks for the 3D view. Choose from 15 in the 3D bar: standard, realistic, white model, line art, old photo, pencil, watercolor, ink wash, anime, manga, pixel art, retro game, blueprint, neon and horror. The chosen look is remembered and used for 3D image export
+- The realistic look gives all furniture and equipment realistic materials (wood grain, fabric weave, brushed metal, stone grain, glossy ceramics and lacquer, and more) and realistic lighting (environment reflections, finer shadows and ambient occlusion), with a sky and ground
+- Left-drag in 3D now orbits around the point you press (whatever is under the mouse) instead of the screen center, and the vertical angle is no longer limited, so you can look up from below
+- The 3D view now follows while you drag furniture, walls or floors in 2D (it used to update only when you let go), and moving furniture in 3D is smoother
 
 ### 2026-10-15
 
