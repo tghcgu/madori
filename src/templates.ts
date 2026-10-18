@@ -3,6 +3,7 @@ import { openTemplateStairwells } from "./template-floors.ts";
 import type { RoofKind } from "./roof-shapes.ts";
 import type { DoorStyle } from "./opening-shapes.ts";
 import type { RoomSurface } from "./surfaces.ts";
+import { freeFrame, freeMargin, isFreeShapeKind } from "./free-shapes.ts";
 
 // テンプレート（間取りの見本）。家・病院・洋館など50種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
@@ -35,7 +36,7 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
     label: "屋敷・宿",
     templates: [
       { key: "westernMansion", label: "洋館", title: "大広間・食堂・書斎のある二階建てと地下室" },
-      { key: "samuraiHouse", label: "武家屋敷", title: "広間・書院・茶室と、池のある庭" },
+      { key: "samuraiHouse", label: "武家屋敷", title: "広間・書院・茶室、池と枯山水の庭、白い土塀と表門" },
       { key: "lodge", label: "山荘・ペンション", title: "暖炉のラウンジと客室4つ。森とテラス" },
       { key: "ryokan", label: "旅館", title: "客室・宴会場・大浴場と中庭。2階にも客室と談話室" },
       { key: "hotel", label: "ホテル", title: "1階にロビーとレストラン、2・3階に客室" },
@@ -69,9 +70,9 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
       { key: "policeBox", label: "交番", title: "小さな交番。机と奥の休憩室" },
       { key: "museum", label: "美術館", title: "展示室5つ・ショップ・2階にカフェと収蔵庫" },
       { key: "cinema", label: "映画館", title: "スクリーンと客席・ロビー・映写室" },
-      { key: "church", label: "教会", title: "長椅子の並ぶ礼拝堂" },
-      { key: "shrine", label: "神社", title: "本殿・拝殿・社務所と参道" },
-      { key: "temple", label: "寺", title: "本堂・庫裏・鐘楼と墓地" },
+      { key: "church", label: "教会", title: "長椅子の並ぶ礼拝堂と、芝生の庭・墓地・外灯の小道" },
+      { key: "shrine", label: "神社", title: "本殿・拝殿・神楽殿・社務所、二つの鳥居の長い参道、玉垣と池" },
+      { key: "temple", label: "寺", title: "本堂・庫裏・鐘楼・五重塔・山門と墓地、築地塀に囲まれた境内" },
       { key: "bathhouse", label: "銭湯", title: "男湯・女湯と番台" },
       { key: "factory", label: "廃工場", title: "作業場・倉庫・事務所" },
     ],
@@ -88,7 +89,7 @@ export const TEMPLATE_GROUPS: { label: string; templates: TemplateInfo[] }[] = [
   {
     label: "ファンタジー・SF",
     templates: [
-      { key: "castle", label: "城", title: "玉座の間・大広間・塔・兵舎と城門、2階に王の寝室と礼拝室" },
+      { key: "castle", label: "城", title: "玉座の間・大広間・塔・兵舎、城壁と見張り台に囲まれた中庭、堀と跳ね橋。2階に王の寝室と礼拝室" },
       { key: "adventurersInn", label: "冒険者の宿", title: "酒場・暖炉・依頼の掲示板と2階の客室" },
       { key: "wizardTower", label: "魔法使いの塔", title: "らせん階段でつながる書庫・研究室・寝室" },
       { key: "dungeon", label: "地下牢", title: "牢屋・大広間・武器庫・宝物庫のダンジョン" },
@@ -249,6 +250,19 @@ function floorBuilder(id: string, newId: (prefix: TemplateIdPrefix) => string, s
       });
       return f;
     },
+    // 自由な形（free-shapes.ts）。池・花壇・芝生・ラグは囲む点、川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石はたどる点（cm）で置く
+    trace(kind: string, points: [number, number][], options: { brush?: number; height?: number; color?: string; color3d?: string } = {}) {
+      if (!sizes[kind] || !isFreeShapeKind(kind)) throw new Error(`Not a free shape: ${kind}`);
+      const frame = freeFrame(points, freeMargin(kind, options.brush));
+      entities.push({
+        id: newId("furniture"), type: "furniture", kind, ...frame, rotation: 0,
+        ...(options.brush ? { brush: options.brush } : {}),
+        ...(options.height ? { height: options.height } : {}),
+        ...(options.color ? { color: options.color } : {}),
+        ...(options.color3d ? { color3d: options.color3d } : {}),
+      });
+      return f;
+    },
     // 同じ家具を (dx, dy) ずつずらして count 個
     row(kind: string, X: number, Y: number, count: number, dx: number, dy: number, options: ItemOptions = {}) {
       for (let i = 0; i < count; i += 1) f.item(kind, X + dx * i, Y + dy * i, options);
@@ -309,8 +323,12 @@ function planBuilder(newId: (prefix: TemplateIdPrefix) => string, sizes: Record<
       floors.push(floor);
       return floor;
     },
-    roof(kind: RoofKind, x: number, y: number, w: number, h: number, floor: FloorBuilder, color?: string) {
-      roofs.push({ id: newId("roof"), type: "roof", kind, x, y, w, h, floorId: floor.id, ...(color ? { color } : {}) });
+    // elevation: 設置階の壁の上からの高さのずれ（cm）。重ねた屋根（五重塔・天守）や、低い下屋に使う
+    roof(kind: RoofKind, x: number, y: number, w: number, h: number, floor: FloorBuilder, color?: string, options: { elevation?: number; rise?: number } = {}) {
+      roofs.push({
+        id: newId("roof"), type: "roof", kind, x, y, w, h, floorId: floor.id, ...(color ? { color } : {}),
+        ...(options.elevation ? { elevation: options.elevation } : {}), ...(options.rise ? { rise: options.rise } : {}),
+      });
     },
     plan(basements = 0): TemplatePlan {
       const plan = {
@@ -1345,7 +1363,9 @@ function library(b: PlanBuilder): void {
 
 function church(b: PlanBuilder): void {
   const f = b.floor();
-  f.room("聖具室", 0, 0, 500, 400, C.warm).label(170, 10)
+  // 教会の庭（芝生）
+  f.area("", -400, -300, 1950, 2750, "grass", C.grass)
+    .room("聖具室", 0, 0, 500, 400, C.warm).label(170, 10)
     .room("司祭室", 500, 0, 500, 400, C.wood, "wood")
     .room("礼拝堂", 0, 400, 1000, 1400, "#d6d0c4", "stone")
     .walls()
@@ -1367,52 +1387,85 @@ function church(b: PlanBuilder): void {
     .item("desk", 560, 300)
     .item("chair", 598, 245)
     .item("shelf", 965, 60, { rot: 90 }).item("shelf", 965, 160, { rot: 90 })
-    .item("armchair", 850, 200);
+    .item("armchair", 850, 200)
+    // 入口から門までの小道と外灯
+    .trace("pathway", [[500, 1810], [500, 2430]], { brush: 160 })
+    .row("gardenLight", 380, 1950, 3, 0, 160).row("gardenLight", 590, 1950, 3, 0, 160)
+    // 墓地（十字架の墓）と、まわりの生け垣
+    .trace("hedge", [[1180, 520], [1500, 520], [1500, 1620], [1180, 1620]], { brush: 40, height: 100 });
+  for (let row = 0; row < 5; row += 1) f.row("westernGrave", 1220, 600 + row * 200, 3, 85, 0);
+  // 前の生け垣（門の所は開ける）、木とベンチ、花壇
+  f.trace("hedge", [[-380, 2425], [400, 2425]], { brush: 50 })
+    .trace("hedge", [[600, 2425], [1530, 2425]], { brush: 50 })
+    .item("tree", -350, 100, { w: 260, h: 260 })
+    .item("tree", -350, 1100, { w: 260, h: 260 })
+    .item("conifer", 1200, 1850)
+    .item("bench", -300, 1900, { w: 150, h: 55 })
+    .trace("flowerBed", [[750, 1950], [960, 1920], [1050, 2030], [900, 2120], [740, 2080]]);
   b.roof("gable", -40, 360, 1080, 1480, f);
   b.roof("flat", -40, -40, 1080, 440, f);
 }
 
 function shrine(b: PlanBuilder): void {
   const f = b.floor();
-  f.area("", 0, 0, 1600, 2100, "gravel", C.gravel)
+  f.area("", 0, 0, 1700, 2500, "gravel", C.gravel)
     .area("", 450, 750, 700, 150, "cobblestone", C.cobble)
-    .area("", 680, 900, 240, 1200, "cobblestone", C.cobble)
+    .area("", 680, 900, 240, 1600, "cobblestone", C.cobble)
     .area("手水舎", 250, 1190, 220, 220, "stone", C.stone)
     .room("本殿", 650, 100, 300, 260, C.wood, "wood")
     .room("", 760, 360, 80, 90, C.wood, "wood")
     .room("拝殿", 500, 450, 600, 300, C.wood, "wood")
-    .room("社務所", 1150, 1250, 400, 350, C.wood, "wood").label(20, 110)
+    .room("神楽殿", 1230, 950, 340, 240, C.wood, "wood").label(20, 150)
+    .room("社務所", 1150, 1300, 400, 350, C.wood, "wood").label(20, 110)
     .walls()
     .koshi(700, 750, 900, 750)
     .koshi(760, 360, 840, 360)
     .koshi(760, 450, 840, 450)
-    .koshi(1150, 1400, 1150, 1480)
-    .window(1200, 1600, 1500, 1600)
+    .koshi(1230, 1020, 1230, 1120)
+    .koshi(1150, 1450, 1150, 1530)
+    .window(1200, 1650, 1500, 1650)
     .window(500, 520, 500, 680).window(1100, 520, 1100, 680)
+    .window(1300, 950, 1500, 950)
+    // 玉垣（低い石の垣）で拝殿・本殿の区画を囲む。参道の所は開ける
+    .trace("stoneWall", [[640, 930], [430, 930], [430, 50], [1170, 50], [1170, 930], [960, 930]], { brush: 30, height: 80 })
+    // 瑞垣（本殿を囲む木の垣）
+    .trace("fence", [[740, 400], [625, 400], [625, 75], [975, 75], [975, 400], [860, 400]], { height: 120, color: "#8c3b2a" })
     .item("shoeCabinet", 740, 690, { w: 120, h: 50, color: "#7a4a2a" })
     .item("rug", 620, 500, { w: 360, h: 160, color: "#c9b27c" })
-    .row("stoneLantern", 600, 950, 3, 0, 350)
-    .row("stoneLantern", 940, 950, 3, 0, 350)
-    .item("tree", 40, 40, { w: 280, h: 280 })
-    .item("tree", 1280, 40, { w: 280, h: 280 })
-    .item("tree", 60, 1700, { w: 280, h: 280 })
-    .item("conifer", 1300, 500)
-    .item("conifer", 150, 600)
-    .item("conifer", 1250, 1750)
-    .item("chozubachi", 300, 1290)
-    // 参道の入口に鳥居、拝殿の前に狛犬と賽銭箱
-    .item("torii", 620, 1900)
+    .item("stage", 1340, 975, { w: 200, h: 110 })
+    // 参道の石灯籠、二の鳥居、狛犬と賽銭箱
+    .row("stoneLantern", 600, 950, 4, 0, 350)
+    .row("stoneLantern", 940, 950, 4, 0, 350)
+    .item("torii", 650, 1500, { w: 300, h: 50, height: 330 })
     .item("komainu", 600, 1120).item("komainu", 950, 1120)
     .item("saisenBako", 740, 770)
+    // 鎮守の森と御神木
+    .item("tree", 40, 40, { w: 280, h: 280 })
+    .item("tree", 1280, 40, { w: 280, h: 280 })
+    .item("tree", 40, 2100, { w: 280, h: 280 })
+    .item("tree", 1250, 1950, { w: 380, h: 380 })
+    .item("conifer", 1300, 500)
+    .item("conifer", 150, 600)
+    .item("conifer", 1250, 1720, { w: 150, h: 150 })
+    .item("chozubachi", 300, 1290)
+    // 池と岩
+    .trace("pond", [[150, 1700], [300, 1640], [440, 1720], [430, 1880], [290, 1960], [140, 1880]])
     .item("rock", 330, 1500)
-    .item("bench", 1200, 1700, { w: 150, h: 50 })
-    .item("longTable", 1200, 1290, { w: 200, h: 50 })
-    .item("desk", 1380, 1500)
+    .item("bench", 1180, 1680, { w: 150, h: 50 })
+    .item("longTable", 1200, 1340, { w: 200, h: 50 })
+    .item("desk", 1380, 1550)
     .row("shrub", 100, 1000, 3, 0, 150)
-    .item("shrub", 1380, 1000);
+    // 入口の鳥居、由緒書きの看板、境内の端の生け垣
+    .item("torii", 620, 2330)
+    .item("signboard", 480, 2240)
+    .trace("hedge", [[20, 2465], [560, 2465]], { brush: 50 })
+    .trace("hedge", [[1040, 2465], [1680, 2465]], { brush: 50 });
   b.roof("gable", 620, 70, 360, 320, f, "#5e9c8b");
   b.roof("hip", 470, 420, 660, 360, f, "#5e9c8b");
-  b.roof("gable", 1120, 1220, 460, 410, f);
+  b.roof("hip", 1210, 930, 380, 280, f, "#5e9c8b");
+  b.roof("gable", 1120, 1270, 460, 410, f);
+  // 手水舎は柱だけの屋根（低めに）
+  b.roof("gable", 235, 1175, 250, 250, f, "#5e9c8b", { elevation: -40 });
 }
 
 function police(b: PlanBuilder): void {
@@ -2031,7 +2084,11 @@ function oldFarmhouse(b: PlanBuilder): void {
 
 function samuraiHouse(b: PlanBuilder): void {
   const f = b.floor();
-  f.area("庭", 0, 590, 1700, 610, "grass", C.grass)
+  // 屋敷の敷地（白い土塀の内側）
+  f.area("", -200, -200, 2100, 1560, "gravel", C.gravel)
+    .area("庭", 0, 590, 1700, 610, "grass", C.grass)
+    // 枯山水（白い砂利と岩）
+    .area("", 1120, 660, 480, 300, "gravel", "#e3ddd0")
     .room("台所", 0, 0, 300, 300, C.wood, "wood").label(80, 110)
     .room("玄関", 0, 300, 300, 290, C.stone, "stone")
     .room("広間", 300, 0, 600, 500, C.tatami, "tatami")
@@ -2039,11 +2096,15 @@ function samuraiHouse(b: PlanBuilder): void {
     .room("茶室", 1350, 0, 300, 300, C.tatami, "tatami")
     .room("水屋", 1350, 300, 300, 200, C.wood, "wood")
     .room("縁側", 300, 500, 1350, 90, C.wood, "wood")
+    // 表門（土塀の門）
+    .room("表門", -200, 380, 100, 160, C.wood, "wood").label(10, 60)
     .open(300, 500, 300, 590)
     .open(300, 590, 1650, 590)
     .walls()
     .koshi(0, 380, 0, 520)
     .itado(60, 300, 200, 300)
+    .door(-200, 400, -200, 520, { style: "gate" })
+    .door(-100, 400, -100, 520, { style: "gate", flip: true })
     .fusuma(300, 80, 300, 220)
     .fusuma(300, 330, 300, 470)
     .fusuma(900, 80, 900, 420)
@@ -2072,16 +2133,22 @@ function samuraiHouse(b: PlanBuilder): void {
     .item("zaisu", 1472, 190, { rot: 180 })
     .item("cupboard", 1605, 330, { rot: 90 })
     .item("washbasin", 1380, 445, { rot: 180 })
-    // 庭
-    .item("pond", 500, 760, { w: 400, h: 260 })
-    .item("stoneLantern", 300, 700)
-    .item("stoneLantern", 1000, 680)
-    .item("rock", 950, 880)
-    .item("tree", 1250, 700)
+    // 庭: 自然な形の池、縁側から池への飛び石、石灯籠、松、枯山水の岩
+    .trace("pond", [[470, 770], [680, 700], [900, 760], [930, 900], [780, 1010], [560, 990], [450, 890]])
+    .trace("steppingStones", [[330, 640], [360, 760], [420, 900], [470, 1060]])
+    .item("stoneLantern", 960, 680)
+    .item("stoneLantern", 300, 1080)
+    .item("tsukubai", 1000, 980)
+    .item("rock", 1200, 720)
+    .item("rock", 1420, 840, { symbol: 1 })
     .item("conifer", 60, 900)
-    .item("steppingStones", 150, 620)
-    .item("shrub", 1100, 1080);
+    .item("conifer", 1500, 1020, { w: 160, h: 160 })
+    .item("tree", 1180, 1000, { w: 200, h: 180 })
+    .item("shrub", 1020, 1090)
+    // 白い土塀で敷地を囲む。表門の所は開ける
+    .trace("stoneWall", [[-150, 540], [-150, 1310], [1850, 1310], [1850, -150], [-150, -150], [-150, 380]], { brush: 40, height: 220, color3d: "#efe9da" });
   b.roof("hip", -40, -40, 1730, 670, f);
+  b.roof("gable", -230, 360, 160, 200, f, "#3f4549");
 }
 
 function dormitory(b: PlanBuilder): void {
@@ -2474,15 +2541,20 @@ function cinema(b: PlanBuilder): void {
 
 function temple(b: PlanBuilder): void {
   const f = b.floor();
-  f.area("", 0, 0, 2000, 1700, "gravel", C.gravel)
-    .area("", 950, 650, 100, 1050, "cobblestone", C.cobble)
+  f.area("", 0, 0, 2000, 2300, "gravel", C.gravel)
+    .area("", 950, 650, 100, 1300, "cobblestone", C.cobble)
     .area("墓地", 100, 950, 750, 600, "stone", C.stone)
     .area("鐘楼", 300, 250, 220, 220, "wood", C.wood)
     .room("本堂", 650, 150, 700, 500, C.wood, "wood")
     .room("庫裏", 1450, 150, 450, 500, C.tatami, "tatami")
+    .room("五重塔", 1500, 1000, 260, 260, C.wood, "wood").label(10, 200)
+    .room("山門", 850, 1950, 300, 200, C.wood, "wood").label(20, 120)
     .walls()
     .shoji(750, 650, 1250, 650)
     .door(1500, 650, 1590, 650)
+    .door(1580, 1000, 1680, 1000, { style: "itado" })
+    .door(900, 1950, 1100, 1950, { style: "gate" })
+    .door(900, 2150, 1100, 2150, { style: "gate", flip: true })
     .window(650, 250, 650, 550).window(1350, 250, 1350, 550).window(1900, 250, 1900, 550).window(1500, 150, 1850, 150)
     // 本堂
     .item("cupboard", 850, 160, { w: 300, h: 70, color: "#c9a227" })
@@ -2495,18 +2567,38 @@ function temple(b: PlanBuilder): void {
     .item("table", 1550, 300, { w: 140, h: 80 })
     .item("zaisu", 1570, 230)
     .item("zaisu", 1630, 230)
+    // 山門の仁王像
+    .item("statue", 855, 1965, { w: 50, h: 50, height: 240 })
+    .item("statue", 1095, 1965, { w: 50, h: 50, height: 240 })
     // 鐘楼・墓地・境内
     .item("roundTable", 360, 330, { w: 100, h: 100, color: "#8a6a3a" })
     .item("saisenBako", 940, 670)
     .item("conifer", 60, 500)
-    .item("conifer", 1700, 800)
-    .item("tree", 1400, 1000)
-    .row("stoneLantern", 870, 760, 3, 0, 300)
-    .row("stoneLantern", 1070, 760, 3, 0, 300);
+    .item("conifer", 1720, 1700)
+    .item("tree", 1300, 1500, { w: 260, h: 260 })
+    .row("stoneLantern", 870, 760, 4, 0, 300)
+    .row("stoneLantern", 1070, 760, 4, 0, 300)
+    // 墓地を囲む生け垣（参道の側を開ける）
+    .trace("hedge", [[850, 1575], [75, 1575], [75, 925], [850, 925]], { brush: 30, height: 90 })
+    // 庫裏の前の池と飛び石
+    .trace("pond", [[1520, 720], [1700, 690], [1880, 740], [1870, 880], [1700, 920], [1540, 880]])
+    .trace("steppingStones", [[1150, 700], [1300, 760], [1470, 800]])
+    // 五重塔の芯（重ねた屋根の間に見える、黒っぽい木の塔身）
+    .trace("stoneWall", [[1590, 1090], [1670, 1090], [1670, 1170], [1590, 1170], [1590, 1090]], { brush: 30, height: 820, color3d: "#5a3a26" })
+    // 境内を囲む築地塀（白い土塀と瓦の笠）。山門の所は開ける
+    .trace("stoneWall", [[840, 2060], [20, 2060], [20, 20], [1980, 20], [1980, 2060], [1160, 2060]], { brush: 40, height: 220, color3d: "#efe9da" });
   for (let r = 0; r < 4; r += 1) f.row("grave", 160, 1050 + r * 120, 8, 80, 0, { w: 60, h: 70 });
   b.roof("hip", 620, 120, 760, 560, f);
   b.roof("gable", 1420, 120, 510, 560, f);
   b.roof("hip", 280, 230, 260, 260, f);
+  // 五重塔: 屋根を少しずつ小さくして5つ重ねる
+  for (let tier = 0; tier < 5; tier += 1) {
+    const size = 400 - tier * 34;
+    b.roof("hip", 1630 - size / 2, 1130 - size / 2, size, size, f, "#3f4549", { elevation: tier * 125 });
+  }
+  // 山門: 二重の屋根
+  b.roof("hip", 820, 1920, 360, 260, f, "#3f4549");
+  b.roof("hip", 850, 1940, 300, 220, f, "#3f4549", { elevation: 100 });
 }
 
 // ---- 屋外・乗り物（つづき） ----
@@ -2651,20 +2743,39 @@ function castle(b: PlanBuilder): void {
       .open(150, 600, 250, 600).open(1750, 600, 1850, 600);
   };
   const f = b.floor();
+  // 城のまわりの野原。堀と跳ね橋、その先の道まで
+  f.area("", -500, -500, 3000, 3450, "grass", C.grass);
   towers(f, true);
-  f.area("前庭", 0, 1300, 2000, 400, "grass", C.grass)
-    .room("玉座の間", 500, 0, 1000, 800, C.stone, "stone")
+  f.area("中庭", 0, 1300, 2000, 1000, "gravel", C.gravel).label(240, 40)
+    .room("玉座の間", 500, 0, 1000, 800, C.stone, "stone").label(60, 650)
     .room("兵舎", 0, 600, 500, 700, C.wood, "wood")
-    .room("大広間", 500, 800, 1000, 500, C.wood, "wood")
+    .room("大広間", 500, 800, 1000, 500, C.wood, "wood").label(20, 300)
     .room("厨房", 1500, 600, 500, 700, C.stone, "stone")
-    .room("城門", 900, 1300, 200, 200, C.darkStone, "stone").label(10, 120)
+    .room("城門", 900, 1300, 200, 200, C.darkStone, "stone").label(10, 20)
+    // 外の城門（門楼）。両側に城壁が続く
+    .room("", 880, 2180, 240, 160, C.darkStone, "stone")
     .walls()
     .door(950, 800, 1050, 800)
     .door(500, 1000, 500, 1100).door(1500, 1000, 1500, 1100)
     .door(950, 1300, 1050, 1300)
     .sliding(920, 1500, 1080, 1500)
+    .door(900, 2180, 1100, 2180, { style: "gate" })
+    .door(900, 2340, 1100, 2340, { style: "gate", flip: true })
     .window(700, 0, 1300, 0, true)
-    .window(0, 800, 0, 1100).window(2000, 1150, 2000, 1250)
+    .window(0, 800, 0, 1100).window(2000, 1150, 2000, 1250);
+  // 中庭の前の角の見張り台（丸い小塔）
+  f.roundRoom("", 90, 2210, 140, C.darkStone, "stone", [{ angle: 0, width: 80, type: "door" }, { angle: 90, width: 60, type: "window" }])
+    .roundRoom("", 1910, 2210, 140, C.darkStone, "stone", [{ angle: 180, width: 80, type: "door" }, { angle: 90, width: 60, type: "window" }])
+    // 中庭を囲む城壁（高さ4.5m）
+    .trace("stoneWall", [[45, 1300], [45, 2070]], { brush: 90, height: 450 })
+    .trace("stoneWall", [[230, 2255], [880, 2255]], { brush: 90, height: 450 })
+    .trace("stoneWall", [[1120, 2255], [1770, 2255]], { brush: 90, height: 450 })
+    .trace("stoneWall", [[1955, 1300], [1955, 2070]], { brush: 90, height: 450 })
+    // 城を囲む堀。道すじの始めと終わりを重ねて、ひと回りにする
+    .trace("river", [[1000, -330], [2330, -330], [2330, 2580], [-330, 2580], [-330, -330], [1060, -330]], { brush: 220 })
+    // 堀を渡る跳ね橋と、門から城門までの石畳の道
+    .trace("pathway", [[1000, 2350], [1000, 2930]], { brush: 220 })
+    .trace("pathway", [[1000, 2170], [1000, 1620]], { brush: 200 })
     // 塔（らせん階段）
     .item("stairsSpiral", 180, 230).item("floorLamp", 60, 500)
     .item("stairsSpiral", 1680, 230).item("floorLamp", 1895, 500)
@@ -2687,26 +2798,35 @@ function castle(b: PlanBuilder): void {
     .item("kitchen", 1935, 700, { rot: 90 })
     .item("longTable", 1600, 900, { w: 200, h: 70 })
     .row("roundTable", 1530, 1180, 3, 70, 0, { w: 60, h: 60, color: "#8a5a2b" })
-    // 前庭
+    // 中庭: 井戸・石像・篝火・樽と木箱・木
+    .item("ido", 300, 1750)
+    .item("statue", 1480, 1800)
+    .item("brazier", 820, 2100).item("brazier", 1130, 2100)
+    .item("brazier", 870, 1560).item("brazier", 1080, 1560)
+    .row("barrel", 160, 1980, 3, 65, 0).item("crate", 160, 2050).item("crate", 240, 2050)
     .item("pond", 600, 1450, { w: 120, h: 120, color: "#6f8fa6" })
-    .item("tree", 150, 1380)
-    .item("tree", 1600, 1350)
-    .item("shrub", 1250, 1550);
-  // 2階の下にならない兵舎・大広間・厨房の屋根と、城門の屋根
+    .item("tree", 1600, 1350, { w: 220, h: 220 })
+    .item("shrub", 1250, 1550)
+    // 堀の外、道の両側の木
+    .item("conifer", 300, 2740).item("conifer", 1550, 2740).item("tree", 2100, 2710, { w: 240, h: 240 }).item("tree", -380, 2710, { w: 240, h: 240 });
+  // 2階の下にならない兵舎・大広間・厨房の屋根と、城門・門楼・見張り台の屋根
   b.roof("flat", -30, 600, 2060, 730, f);
   b.roof("hip", 880, 1280, 240, 240, f);
+  b.roof("hip", 860, 2160, 280, 200, f);
+  b.roof("cone", -60, 2060, 300, 300, f);
+  b.roof("cone", 1760, 2060, 300, 300, f);
 
   // 2階: 塔と、王の寝室・礼拝室
   const upper = b.floor();
   towers(upper, false);
   upper.room("王の寝室", 500, 0, 500, 600, C.wood, "wood")
-    .room("礼拝室", 1000, 0, 500, 600, C.stone, "stone")
+    .room("礼拝室", 1000, 0, 500, 600, C.stone, "stone").label(60, 500)
     .walls()
     .door(1000, 250, 1000, 350)
     .window(600, 0, 900, 0, true).window(1100, 0, 1400, 0, true).window(600, 600, 900, 600, true).window(1100, 600, 1400, 600, true)
     .item("stairsSpiral", 180, 230).item("floorLamp", 60, 500)
     .item("stairsSpiral", 1680, 230).item("floorLamp", 1895, 500)
-    .item("bedDouble", 660, 90, { w: 180, h: 220, color: "#8e1f2a" })
+    .item("bedDouble", 660, 100, { w: 180, h: 220, color: "#8e1f2a" })
     .item("sideTable", 600, 100).item("sideTable", 850, 100)
     .item("rug", 600, 340, { w: 300, h: 180, color: "#8e1f2a" })
     .item("fireplace", 955, 380, { rot: 90 })

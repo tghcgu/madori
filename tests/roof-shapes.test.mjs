@@ -46,9 +46,10 @@ test('circular tower templates have matching circular roofs', () => {
   let id = 0;
   for (const key of ['wizardTower','castle']) {
     const plan = templatePlan(key, prefix => `${prefix}-${id++}`, FURNITURE_DEFS);
-    assert.equal(plan.roofs.filter(r => r.kind === 'cone').length, key === 'castle' ? 2 : 1);
+    // 城は2つの塔と、中庭の前の角の2つの見張り台
+    assert.equal(plan.roofs.filter(r => r.kind === 'cone').length, key === 'castle' ? 4 : 1);
     for (const roof of plan.roofs.filter(r => r.kind === 'cone')) {
-      const floor = plan.floors.find(f => f.id === roof.floorId).entities.find(e => e.type === 'room' && e.outline?.length >= 32 && e.x + e.w / 2 === roof.x + roof.w / 2 && e.y + e.h / 2 === roof.y + roof.h / 2);
+      const floor = plan.floors.find(f => f.id === roof.floorId).entities.find(e => e.type === 'room' && e.outline?.length >= 24 && e.x + e.w / 2 === roof.x + roof.w / 2 && e.y + e.h / 2 === roof.y + roof.h / 2);
       assert.ok(floor, 'roof centered over its circular floor');
       assert.ok(roof.w > floor.w);
     }

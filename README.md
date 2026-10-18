@@ -228,18 +228,18 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
 | 階段 | 直階段、折り返し階段、らせん階段 |
 | 床・地面 | 標準、フローリング、ヘリンボーン、ウッドデッキ・板張り、畳、カーペット、タイル、モザイクタイル、市松・チェッカー、大理石、石の床、石畳、レンガ、コンクリート、アスファルト、鉄板（縞鋼板）、草地・芝生、土・土間、砂・砂浜、砂利、雪、水面 |
-| 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、フェンス、竹垣、外灯、石灯籠、墓石、十字架の墓、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ、井戸、噴水、石像、焚き火、テント（門扉、ベンチ、つくばい、縁台、鳥居、室外機、自転車、車） |
+| 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、芝生、川、小道、生け垣、石垣、フェンス、竹垣、外灯、石灯籠、墓石、十字架の墓、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ、井戸、噴水、石像、焚き火、テント（門扉、ベンチ、つくばい、縁台、鳥居、室外機、自転車、車） |
 | 屋根 | 切妻、寄棟、陸屋根、円すい、ドーム、正多角形 |
-| 和風（和室・和の設備） | 障子、襖、格子戸（玄関戸）、板戸、門扉、畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい、仏壇、神棚、床の間、かまど、和式トイレ、提灯（座椅子、こたつ、布団、石灯籠、飛び石、池、墓石、竹垣、井戸、鳥居） |
+| 和風（和室・和の設備） | 障子、襖、格子戸（玄関戸）、板戸、門扉、畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい、仏壇、神棚、床の間、かまど、和式トイレ、提灯（座椅子、こたつ、布団、石灯籠、飛び石、池、墓石、竹垣、生け垣、石垣、井戸、鳥居） |
 | 学校・オフィス | 黒板、ホワイトボード、教卓、学校の机と椅子、ロッカー、複合機（コピー機）、パーティション、金庫、消火器（机、L字デスク、オフィスチェア、長テーブル、棚・本棚、跳び箱、ピアノ） |
 | お店・飲食店 | カウンター、ショーケース、陳列棚、自動販売機、立て看板（A型）（カウンターチェア、ダイニングセット、椅子、丸テーブル、キッチン、提灯、ゴミ箱） |
 | 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、破片 |
 | 乗り物 | 車、バイク、自転車、バス |
 | 病院・介護 | 病院のベッド、点滴スタンド、車椅子、診察台（カーテン、パーティション、洗面台） |
-| 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶（車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
+| 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶、線路（小道、川、車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
 | 神社・寺 | 鳥居、狛犬、賽銭箱、手水鉢（門扉、石灯籠、提灯、神棚、仏壇、篝火、竹垣、墓石、つくばい） |
 | 遊具・スポーツ・音楽 | すべり台、ジャングルジム、鉄棒、砂場、跳び箱、卓球台、ビリヤード台、ドラムセット、ステージ（舞台）（ブランコ、ピアノ） |
-| ファンタジー・TRPG | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）（石像、焚き火、十字架の墓、噴水、テント） |
+| ファンタジー・TRPG | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）（石像、焚き火、十字架の墓、噴水、テント、川、石垣） |
 | 図形の壁 | 円、楕円、円弧、三角形〜八角形 |
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
@@ -248,11 +248,12 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 和風の家具・鳥居・学校やお店の設備・遊具など（`src/furniture-shapes.ts` の `PART_KINDS`）は、箱・円柱・輪・横倒しの円柱・楕円体・傾けた板といった部品の組み合わせで作ります。2Dの記号は同じ部品を低い順に真上から描くので、3Dを真上から見た形と同じになります。高さを変えると部品の高さも一緒に変わり、竹垣・檻・ジャングルジム・カーテンは幅に合わせて柱やひだの数が増えます。神棚・提灯・黒板は壁に掛ける物なので、3Dでも床から浮いた高さに付きます。
 
-- 家具・設備159種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備165種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
 - 和風の12種類は幅・奥行・高さをそれぞれ調整できます（高さ1cm〜30m）。2D記号と3Dモデルは同じ部品の位置・寸法を使っています。
 - 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯・キャットタワーは「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
 - 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています（番号の印に書く番号だけは別です）。
 - 「人」と「倒れた人」は、体の関節を自由に動かせる人の模型です。3Dはデッサン人形のような、一色で関節に玉のある落ち着いた形です。「選択中」の「姿勢」で立っている・うつぶせ・あおむけを切り替え、「ポーズの見本」（気をつけ・歩く・手を上げる・両手を広げる・指さす・座る・ひざをつく・しゃがむ・うつぶせ・手足を広げて・あおむけ）から始めて、「関節の角度」で胴（腰を前・横へ倒す、ねじる）、首（うなずく・かしげる・振り向く）、腕・脚ごとの開く・前後・ひじやひざの曲げ・曲げる向き・手首・足首を変えられます。2Dで選ぶと、手首・足首（白）、ひじ・ひざ（水色）、頭に丸いつまみが出ます。手首・足首をドラッグするとその所まで手足が届き（寝ているときは床の上で、立っているときは腕や脚の向きを変えて）、ひじ・ひざをドラッグすると腕・脚の付け根が回り、頭をドラッグすると腰から曲がります。「身長」で大きさを変えられ、立つと約170cm。座る・ひざをつく・しゃがむでは、いちばん低い所が床に着くように体が下がります。体は太さのある部品（両端の太さが違う丸い部品と関節の玉）の集まりで、3Dはその部品を立体に、2Dは同じ部品を真上から見た形（立った人は頭や肩の輪郭を重ねて）を描くので、どのポーズでも2Dと3Dが同じ形です。倒れた人は、手足を動かすまでは前からある形のままで、デザインの「標準」「手足を広げて」を選ぶといつでもその形に戻せます。「チョークの線」は今のポーズの輪郭になります
+- 自由な形: 池・花壇・芝生・ラグは、パーツを選んで2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石は、なぞった道すじに沿って置けます（クリックだけなら、まっすぐ）。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます。選ぶときは、範囲の四角ではなく形の上をクリックします。3Dも同じ形で、草地の草は川や小道の上には生えません
 - 足跡は、パーツの「足跡」を選んで2Dをドラッグすると、なぞった道すじに沿って、歩く向きにつま先を向けた足跡が左右交互に付きます（クリックだけなら、まっすぐな足跡）。「選択中」で歩幅を変えたり、「道すじを描き直す」でなぞり直したり、「まっすぐにする」で戻したりできます
 - 「人・事件・調査」の印は、TRPGの探索や事件現場の図に使えます。番号の印は置くたびに次の番号（どの階も含めていちばん大きい番号の次）になり、「選択中」の「番号」で4文字まで書き換えられます。3Dでも札の上の面に同じ番号が出ます。足跡（靴・素足）、倒れた人（うつぶせ・手足を広げて・チョークの線）、血（血だまり・飛び散った血・引きずった跡）、破片は、2Dの形と3Dを真上から見た形が同じです。足跡と血は「色 2D」が跡の色になります
 - 「破片」（割れたガラスなど）は、パーツの「破片」を選んで2Dをドラッグすると、なぞった所に破片が散らばります（クリックだけなら、前からあるひとまとまりの形）。「選択中」で、まく幅・量（少なめ・ふつう・多め）を変えたり、「なぞり直す」「ひとまとまりにする」ができます。色を決めていなければ透けたガラス、「色 2D」「色 3D」を決めるとその色の破片（陶器や木の破片など）になります
@@ -298,7 +299,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 住まい | 古民家 | 土間・囲炉裏の間・座敷と縁側、庭と蔵 |
 | 住まい | サンプル（作例） | いろいろな家具や床を置いた二階建ての作例 |
 | 屋敷・宿 | 洋館 | 大広間・食堂・書斎のある二階建てと地下室（B1F） |
-| 屋敷・宿 | 武家屋敷 | 広間・書院・茶室と、池のある庭 |
+| 屋敷・宿 | 武家屋敷 | 広間・書院・茶室、池と枯山水の庭、白い土塀と表門 |
 | 屋敷・宿 | 山荘・ペンション | 暖炉のラウンジと客室4つ。森とテラス |
 | 屋敷・宿 | 旅館 | 客室・宴会場・大浴場と中庭。2階にも客室と談話室 |
 | 屋敷・宿 | ホテル | 1階にロビーとレストラン、2・3階に客室（三階建て） |
@@ -322,16 +323,16 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 施設 | 交番 | 小さな交番。机と奥の休憩室 |
 | 施設 | 美術館 | 展示室5つ・ショップ・2階にカフェと収蔵庫 |
 | 施設 | 映画館 | スクリーンと客席・ロビー・映写室 |
-| 施設 | 教会 | 長椅子の並ぶ礼拝堂 |
-| 施設 | 神社 | 本殿・拝殿・社務所と参道 |
-| 施設 | 寺 | 本堂・庫裏・鐘楼と墓地 |
+| 施設 | 教会 | 長椅子の並ぶ礼拝堂と、芝生の庭・墓地・外灯の小道 |
+| 施設 | 神社 | 本殿・拝殿・神楽殿・社務所、二つの鳥居の長い参道、玉垣と池 |
+| 施設 | 寺 | 本堂・庫裏・鐘楼・五重塔・山門と墓地、築地塀に囲まれた境内 |
 | 施設 | 銭湯 | 男湯・女湯と番台 |
 | 施設 | 廃工場 | 作業場・倉庫・事務所 |
 | 屋外・乗り物 | 公園 | 遊び場・池・広場 |
 | 屋外・乗り物 | キャンプ場 | テント・タープ・焚き火・バンガローと川 |
 | 屋外・乗り物 | 客船 | 客室・レストラン・プールデッキ・操舵室 |
 | 屋外・乗り物 | 寝台列車 | 個室の寝台車と食堂車の2両 |
-| ファンタジー・SF | 城 | 玉座の間・大広間・塔・兵舎と城門、2階に王の寝室と礼拝室 |
+| ファンタジー・SF | 城 | 玉座の間・大広間・塔・兵舎、城壁と見張り台に囲まれた中庭、堀と跳ね橋。2階に王の寝室と礼拝室 |
 | ファンタジー・SF | 冒険者の宿 | 酒場・暖炉・依頼の掲示板と2階の客室 |
 | ファンタジー・SF | 魔法使いの塔 | らせん階段でつながる書庫・研究室・寝室 |
 | ファンタジー・SF | 地下牢 | 牢屋・大広間・武器庫・宝物庫のダンジョン |
@@ -556,7 +557,7 @@ madori/
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
 │  ├─ translucency.ts        # 透明度のある色の3Dの材質
 │  ├─ furniture-catalog.ts   # 家具の種類・名称・標準寸法
-│  ├─ furniture-models.ts    # 家具159種類の3D形状と材質
+│  ├─ furniture-models.ts    # 家具165種類の3D形状と材質
 │  ├─ selection.ts           # 複数の物の位置関係を保った移動
 │  ├─ opening-models.ts      # ドア・引き戸・和風の建具・窓の3D形状
 │  ├─ opening-shapes.ts      # ドアの種類と、2Dと3Dで共通の戸の並び・組子や格子の位置
@@ -691,6 +692,12 @@ npm.cmd run dev
 ## 更新履歴
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
+
+### 2026年10月19日
+
+- 池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です
+- 自由な形で作る家具・設備を6種類追加: 芝生・川・小道・生け垣・石垣・線路。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます
+- テンプレートの外まわりを作り込み。城は城壁と見張り台・門楼・堀と跳ね橋、神社は玉垣・瑞垣・二つの鳥居の長い参道・神楽殿・手水舎の屋根・池・御神木、寺は山門（二重の屋根と仁王像）・五重塔・築地塀・池と飛び石、武家屋敷は白い土塀と表門・池・枯山水、教会は芝生の庭・墓地・外灯の小道
 
 ### 2026年10月18日
 
@@ -1127,18 +1134,18 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower, curtain (andon lantern, folding screen, shoji partition, irori hearth, hibachi, paper lantern, partition) |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
 | Floors and ground | Plain, wood planks, herringbone, wooden deck, tatami, carpet, tile, mosaic tiles, checkerboard, marble, stone paving, cobblestones, brick, concrete, asphalt, checker plate, grass, soil, sand, gravel, snow, water |
-| Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, fence, bamboo fence, garden light, stone lantern, grave, cross grave, mailbox, shed, dog house, parasol, clothes drying stand, swing, well, fountain, statue, campfire, tent (gate, bench, tsukubai basin, veranda bench, torii, outdoor AC unit, bicycle, car) |
+| Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, lawn, river, path, hedge, stone wall, fence, bamboo fence, garden light, stone lantern, grave, cross grave, mailbox, shed, dog house, parasol, clothes drying stand, swing, well, fountain, statue, campfire, tent (gate, bench, tsukubai basin, veranda bench, torii, outdoor AC unit, bicycle, car) |
 | Roofs | Gable, hip, flat, cone, dome, regular polygon |
-| Japanese | Shoji, fusuma, lattice entrance door, plank door, gate, tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin, Buddhist altar, household shrine, tokonoma alcove, kamado stove, squat toilet, paper lantern (floor chair, kotatsu, futon, stone lantern, stepping stones, pond, grave, bamboo fence, well, torii) |
+| Japanese | Shoji, fusuma, lattice entrance door, plank door, gate, tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin, Buddhist altar, household shrine, tokonoma alcove, kamado stove, squat toilet, paper lantern (floor chair, kotatsu, futon, stone lantern, stepping stones, pond, grave, bamboo fence, hedge, stone wall, well, torii) |
 | School and office | Blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe, fire extinguisher (desk, L-shaped desk, office chair, long table, shelf, vaulting box, upright piano) |
 | Shops and restaurants | Counter, showcase, store shelves, vending machine, A-frame sign (bar stool, dining set, chair, round table, kitchen unit, paper lantern, trash can) |
 | People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, shards |
 | Vehicles | Car, motorcycle, bicycle, bus |
 | Hospital and care | Hospital bed, IV stand, wheelchair, examination couch (curtain, partition, washbasin) |
-| Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum (car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
+| Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum, railway (path, river, car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
 | Shrines and temples | Torii gate, guardian lion-dog, offering box, purification basin (gate, stone lantern, paper lantern, household shrine, Buddhist altar, brazier, bamboo fence, grave, tsukubai basin) |
 | Playground, sports and music | Slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit, stage (swing, upright piano) |
-| Fantasy and TRPG | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier (statue, campfire, cross grave, fountain, tent) |
+| Fantasy and TRPG | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier (statue, campfire, cross grave, fountain, tent, river, stone wall) |
 | Shape walls | Circle, ellipse, arc, triangle to octagon |
 
 Type in the search box at the top of the palette to show only matching parts.
@@ -1150,10 +1157,11 @@ Japanese furnishings, the torii, school and shop equipment, playground equipment
 - Trees, conifers, palm trees, shrubs, rocks, fences, garden lights, and cat towers have a height setting (10 cm to 30 m) under Selection. The top of the 3D model matches that height.
 - 2D symbols never use text. They are drawn with shapes, lines, and shading only (except the number on a numbered marker).
 - "人" (person) and "倒れた人" (fallen person) are posable mannequins; in 3D they look like a wooden artist's mannequin with ball joints. Under Selection, choose a posture (standing, face down, face up), start from a pose preset (attention, walking, hands up, arms out, pointing, sitting, kneeling, crouching, face down, spread out, face up), and adjust every joint: the waist (bend forward or sideways, twist), the neck (nod, tilt, turn), and for each arm and leg the spread, forward/back, elbow or knee bend, bend direction, and wrist or ankle. In 2D the selected person shows handles on the wrists and ankles (white), elbows and knees (light blue), and head. Dragging a wrist or ankle reaches for that point (on the floor when lying, by turning the limb when standing); dragging an elbow or knee turns the limb at the shoulder or hip; dragging the head bends the waist. "身長" sets the size; standing height is about 170 cm. Sitting, kneeling and crouching lower the body until its lowest point touches the floor. The body is built from tapered rounded parts and ball joints: 3D builds them and 2D draws the same parts seen from above (with the head and shoulders outlined on top for a standing person), so 2D and 3D match in every pose. The fallen person keeps its original shape until a limb is moved, and choosing the "標準" or "手足を広げて" design brings that shape back; the chalk outline follows the current pose.
+- Free shapes: choose a pond, flower bed, lawn or rug and drag around an area on the 2D plan to give it that shape (a click places the usual shape). Rivers, paths, hedges, stone walls, fences, bamboo fences, railways and stepping stones follow the path you trace (a click places a straight one). Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one. Click on the shape itself, not its frame, to select it. The 3D view has the same shape, and grass blades do not grow on rivers or paths
 - Choose 足跡 (footprints) and drag on the 2D plan to lay footprints along the drawn path, alternating left and right with the toes facing the walking direction (a click places a straight trail). The stride can be changed, and the path can be redrawn or straightened from Selection.
 - The investigation marks are meant for TRPG and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and shards look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
 - "破片" (shards, such as broken glass): choose it and drag on the 2D plan to scatter shards along the path (a click places the original cluster). Under Selection, change the spread and the amount (few, normal, many), redraw the path, or gather the shards into the cluster again. Without a color they are see-through glass; with a 2D/3D color they become solid shards of that color (pottery, wood and so on).
-- All 159 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- All 165 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - The 12 Japanese furnishings have independent width, depth and height settings (height: 1 cm to 30 m). Their 2D symbols and 3D models use the same part dimensions and positions.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
@@ -1187,7 +1195,7 @@ Multi-floor templates include upper-floor stairwell openings and show arriving s
 | Homes | Old farmhouse | An earthen-floored work area, a hearth room, tatami rooms, and a veranda, with a garden and a storehouse |
 | Homes | Showcase | A two-story sample with many kinds of furniture and floors |
 | Mansions and inns | Western mansion | Two stories with a great hall, dining room, and study, plus a cellar (B1F) |
-| Mansions and inns | Samurai residence | A hall, a study, a tea room, and a garden with a pond |
+| Mansions and inns | Samurai residence | A hall, a study, a tea room, a garden with a pond and a dry rock garden, and a white earthen wall with a gate |
 | Mansions and inns | Lodge | A fireplace lounge and four guest rooms, with a terrace in the woods |
 | Mansions and inns | Ryokan | Guest rooms, a banquet hall, a large bath, and a courtyard, with more guest rooms and a lounge upstairs |
 | Mansions and inns | Hotel | A lobby and a restaurant on the first floor, and guest rooms on the second and third |
@@ -1211,16 +1219,16 @@ Multi-floor templates include upper-floor stairwell openings and show arriving s
 | Facilities | Police box | A small koban with a desk and a back room |
 | Facilities | Art museum | Five galleries, a shop, and upstairs a cafe and a storeroom |
 | Facilities | Cinema | A screen and seats, a lobby, and a projection room |
-| Facilities | Church | A chapel lined with pews |
-| Facilities | Shrine | Main hall, worship hall, shrine office, and approach |
-| Facilities | Temple | Main hall, priests' quarters, a bell tower, and a graveyard |
+| Facilities | Church | A chapel lined with pews, with a lawn, a graveyard and a lamp-lit path |
+| Facilities | Shrine | Main hall, worship hall, kagura stage and shrine office, a long approach through two torii gates, a sacred fence and a pond |
+| Facilities | Temple | Main hall, priests' quarters, a bell tower, a five-story pagoda, a main gate and a graveyard inside earthen walls |
 | Facilities | Public bath | Men's and women's baths and the attendant's booth |
 | Facilities | Abandoned factory | Workshop, warehouse, and office |
 | Outdoors and vehicles | Park | Playground, pond, and plaza |
 | Outdoors and vehicles | Campsite | Tents, a tarp, a campfire, a bungalow, and a river |
 | Outdoors and vehicles | Cruise ship | Cabins, a restaurant, a pool deck, and the bridge |
 | Outdoors and vehicles | Sleeper train | A sleeping car with private rooms, and a dining car |
-| Fantasy and sci-fi | Castle | Throne room, great hall, towers, barracks, and gatehouse, with the king's bedchamber and a chapel upstairs |
+| Fantasy and sci-fi | Castle | Throne room, great hall, towers and barracks, a courtyard inside curtain walls and turrets, a moat and a drawbridge, with the king's bedchamber and a chapel upstairs |
 | Fantasy and sci-fi | Adventurers' inn | A tavern with a fireplace and a quest board, and guest rooms upstairs |
 | Fantasy and sci-fi | Wizard's tower | A library, a laboratory, and a bedroom joined by a spiral staircase |
 | Fantasy and sci-fi | Dungeon | Cells, a great hall, an armory, and a treasure room |
@@ -1432,7 +1440,7 @@ madori/
 │  ├─ colors.ts              # Color codes with transparency
 │  ├─ translucency.ts        # 3D materials for see-through colors
 │  ├─ furniture-catalog.ts   # Furniture types, names, default dimensions
-│  ├─ furniture-models.ts    # Geometry and materials for 159 furniture types
+│  ├─ furniture-models.ts    # Geometry and materials for 165 furniture types
 │  ├─ selection.ts           # Group translation that preserves relative positions
 │  ├─ opening-models.ts      # Door, sliding door, Japanese fitting, and window geometry
 │  ├─ opening-shapes.ts      # Door types and the panel layout and bar positions shared by 2D and 3D
@@ -1568,6 +1576,12 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-19
+
+- Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape
+- Added 6 free-shape items: lawn, river, path, hedge, stone wall and railway. Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one
+- Templates now have detailed surroundings. The castle has curtain walls, turrets, a gatehouse, a moat and a drawbridge; the shrine a sacred fence, a long approach through two torii gates, a kagura stage, a roofed purification fountain, a pond and a sacred tree; the temple a main gate with a two-tier roof and guardian statues, a five-story pagoda, earthen walls, a pond and stepping stones; the samurai residence a white earthen wall with a gate, a pond and a dry rock garden; and the church a lawn, a graveyard and a lamp-lit path
 
 ### 2026-10-18
 

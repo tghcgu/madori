@@ -20,6 +20,11 @@ import {
   isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
 } from "./three-style";
 import {
+  FREE_WIDTH_RANGE, RAILWAY, defaultFreePath, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
+  freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
+  offsetFreeLine, pointInFreePolygon, type FreeKind,
+} from "./free-shapes";
+import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
   closetDoorCount, fernFronds, flowerBedLayout, pondShape, rockShapes, steppingStoneLayout, woodGrain, type RockShape,
   CAT_TOWER_DECKS, COAT_HOOK_ANGLES, COAT_HOOK_REACH, DRYER_POLES, GRAVE_PARTS, PARASOL_CORNERS,
@@ -337,7 +342,7 @@ const MAX_FURNITURE_HEIGHT = 3000;
 const GRASS_TUFTS_PER_M2 = 70;
 const GRASS_MAX_TUFTS = 7000;
 // 草が突き抜けて見えてしまう、低くて平たいもの。この下には草を生やさない
-const GRASS_FREE_KINDS: FurnitureKind[] = ["pond", "steppingStones", "rug"];
+const GRASS_FREE_KINDS: FurnitureKind[] = ["pond", "steppingStones", "rug", "flowerBed", "lawn", "river", "pathway", "railway"];
 
 // 家具の別デザインの2Dの描き方。名前と数は FURNITURE_VARIANTS（3Dと共通）に合わせ、同じ順に並べる。
 // 0番（標準）は drawFurnitureSymbol の本体で描き、ここには1番以降を並べる
@@ -459,6 +464,12 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   fallenPerson: "ひと 人 人型 ひとがた 死体 したい 遺体 いたい 倒れた たおれた 被害者 ひがいしゃ チョーク 事件 じけん TRPG 模型 もけい マネキン ポーズ",
   person: "ひと 人 人間 にんげん 人物 じんぶつ 人型 ひとがた 模型 もけい マネキン ポーズ 立つ たつ 立っている 座る すわる 歩く あるく TRPG",
   bloodPool: "ち 血 血痕 けっこん 血だまり ちだまり しぶき 跡 あと 事件 じけん TRPG",
+  lawn: "しばふ 芝 しば にわ 庭 くさ 草 くさはら 草原 ぐらうんど 自由な形 なぞる",
+  river: "かわ 川 みず 水 おがわ 小川 すいろ 水路 ながれ 流れ 自由な形 なぞる",
+  pathway: "こみち 小道 みち 道 さんどう 参道 ほどう 歩道 じゃり 砂利 散歩道 自由な形 なぞる",
+  hedge: "いけがき 生垣 かきね 垣根 うえこみ 植え込み しげみ 茂み 自由な形 なぞる",
+  stoneWall: "いしがき 石垣 いしづみ 石積み しろ 城 へい 塀 自由な形 なぞる",
+  railway: "せんろ 線路 てつどう 鉄道 でんしゃ 電車 れーる レール まくらぎ 枕木 えき 駅 自由な形 なぞる",
   brokenGlass: "はへん かけら 割れたガラス がらす ガラス 割れ われ 窓 まど 瓦礫 がれき 陶器 とうき 皿 さら 木片 散らばる ちらばる 事件 じけん TRPG",
   sofa: "ソファー", sofaCorner: "ソファー コーナー", armchair: "椅子 いす イス チェア ソファー ひとりがけ",
   chair: "いす イス チェア", stool: "椅子 いす イス", bench: "椅子 いす イス 屋外",
@@ -905,12 +916,15 @@ function normalizeEntity(value: unknown): Entity {
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
-      path: entity.kind === "footprints" || entity.kind === "brokenGlass" ? normalizeFootprintPath(entity.path) : undefined,
+      path: entity.kind === "footprints" || entity.kind === "brokenGlass" || isFreeShapeKind(entity.kind) ? normalizeFootprintPath(entity.path) : undefined,
       stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
       pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
       ...(entity.kind === "brokenGlass" ? {
         brush: finite(entity.brush) ? clamp(Math.round(entity.brush!), 5, MAX_BRUSH) : undefined,
         density: SHARD_DENSITIES.some(([value]) => value === entity.density) ? entity.density : undefined,
+      } : {}),
+      ...(isFreeWidthAdjustable(entity.kind) ? {
+        brush: finite(entity.brush) ? clamp(Math.round(entity.brush!), FREE_WIDTH_RANGE.min, FREE_WIDTH_RANGE.max) : undefined,
       } : {}),
       ...(entity.kind === "paint" ? {
         path: normalizePaintPath(entity.path),
@@ -2454,7 +2468,7 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   // 足跡は、なぞった道すじに付ける（クリックだけなら、まっすぐな足跡）。ペンも、なぞった所に線を描く
-  if (activeTool === "paint" || (activeTool === "furniture" && (activeFurniture === "footprints" || activeFurniture === "brokenGlass"))) {
+  if (activeTool === "paint" || (activeTool === "furniture" && (activeFurniture === "footprints" || activeFurniture === "brokenGlass" || isFreeShapeKind(activeFurniture)))) {
     drag.dragMode = "path";
     drag.path = [point];
     render2d();
@@ -2656,6 +2670,7 @@ function toolAction(): [string, string] | null {
     case "polygon":
       return ["ドラッグで図形の壁を描く", click];
     case "furniture":
+      if (isFreeShapeKind(activeFurniture)) return [isFreeAreaKind(activeFurniture) ? "ドラッグで囲んで形を作る（クリックで置く）" : "ドラッグでなぞって置く（クリックで置く）", hold];
       return [activeFurniture === "footprints" || activeFurniture === "brokenGlass" ? "なぞって置く" : "クリックで置く", hold];
     case "text":
       return ["クリックで文字を置く", hold];
@@ -2834,10 +2849,15 @@ function handlePointerUp(event: PointerEvent): void {
     commitState();
   }
 
+  // クリックで置いた自由な形（続けてもう1回押したら、取り消してそこにある物を選ぶ）
+  let pathCreatedId: string | undefined;
   if (drag.dragMode === "path" && drag.path) {
     if (activeTool === "paint") placePaintStroke(drag.path);
     else if (activeFurniture === "brokenGlass") placeShardPath(drag.path);
-    else placeFootprintPath(drag.path);
+    else if (isFreeShapeKind(activeFurniture)) {
+      const created = placeFreeShapePath(activeFurniture, drag.path);
+      if (created && clicked) pathCreatedId = created.id;
+    } else placeFootprintPath(drag.path);
     commitState();
   }
 
@@ -2850,8 +2870,9 @@ function handlePointerUp(event: PointerEvent): void {
     }
   }
   // クリックで置いた・消した物を覚えておく（続けてもう1回押したら、取り消してそこにある物を選ぶ）
-  if (clicked && (tool === "furniture" || tool === "text") && drag.createdId && findEntity(drag.createdId)) {
-    lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: pressedId ?? drag.createdId, revert: Boolean(pressedId) };
+  const placedId = drag.createdId ?? pathCreatedId;
+  if (clicked && (tool === "furniture" || tool === "text") && placedId && findEntity(placedId)) {
+    lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: pressedId ?? placedId, revert: Boolean(pressedId) };
   } else if (clicked && erasedId) {
     lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: erasedId, revert: true };
   }
@@ -4368,6 +4389,7 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
     if (drag.dragMode === "path" && drag.path) {
       if (activeTool === "paint") drawPaintPreview(drag.path);
       else if (activeFurniture === "brokenGlass") drawShardPreview(drag.path);
+      else if (isFreeShapeKind(activeFurniture)) drawFreeShapePreview(activeFurniture, drag.path);
       else drawFootprintPreview(drag.path);
     }
     if (drag.dragMode === "draw" && activeTool !== "furniture") {
@@ -5090,6 +5112,11 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
 }
 
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture, fromAbove = false): void {
+  // 自由な形（なぞった形、または決まった形の道すじ）。3Dと同じ輪郭・帯・石や杭の位置で描く
+  if (isFreeShapeKind(kind) && (item?.path || isAlwaysFreeKind(kind))) {
+    drawFreeShape2d(kind, w, h, item);
+    return;
+  }
   // 部品で組む家具は、3Dと同じ部品を低い順に真上から描く（横倒しの円柱と傾けた板は、上から見た長方形）
   if (isPartKind(kind)) {
     for (const part of furnitureParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
@@ -6592,7 +6619,306 @@ function pathLength(points: Point2[]): number {
   return total;
 }
 
-// 「なぞり直す」を押した足跡・破片
+// ---- 自由な形（free-shapes.ts）: 池・花壇・芝生・ラグはなぞって囲んだ形、川・小道・生け垣・石垣・柵・竹垣・線路・飛び石はなぞった道すじ ----
+
+// 最後に使った幅（川・小道・生け垣・石垣）。次になぞるときも同じ幅
+const freeWidthByKind: Partial<Record<FurnitureKind, number>> = {};
+
+function isFreeShapeItem(item: Furniture): boolean {
+  return isFreeShapeKind(item.kind) && (Boolean(item.path) || isAlwaysFreeKind(item.kind));
+}
+
+function freeItemPoints(kind: FreeKind, w: number, h: number, item?: Furniture): Point2[] {
+  return freePathPoints(item?.path ?? defaultFreePath(kind), w, h);
+}
+
+function fillLoop(points: Point2[], fill: string, stroke = true): void {
+  ctx.fillStyle = fill;
+  traceLoop(points);
+  ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+// 線に沿った幅 width cm の帯（角は丸い）。先に線の色で少し太く、次に塗りの色で描いて、縁取りにする。3Dの帯（箱と丸い柱）と同じ形
+function strokeFreeBand(line: Point2[], width: number, fill: string, closed = false, outline = true): void {
+  if (line.length < 2) return;
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "butt";
+  const ink = ctx.lineWidth;
+  ctx.beginPath();
+  line.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  if (closed) ctx.closePath();
+  if (outline) {
+    ctx.lineWidth = width + ink;
+    ctx.stroke();
+  }
+  ctx.lineWidth = outline ? Math.max(width - ink, ink * 0.5) : width;
+  ctx.strokeStyle = fill;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 2Dの記号。点の位置は3D（furniture-models.ts の buildFreeShape）と同じ
+function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture): void {
+  const points = freeItemPoints(kind, w, h, item);
+  const line = freeCenterLine(points);
+  const tint = item?.color ? solidColor(item.color) : undefined;
+  ctx.save();
+  ctx.lineJoin = "round";
+  switch (kind) {
+    case "pond": {
+      const pond = freePond(points);
+      fillLoop(pond.water, OUTDOOR_WATER);
+      for (const ripple of pond.ripples) {
+        ctx.beginPath();
+        ctx.ellipse(ripple.x, ripple.y, ripple.rx, ripple.ry, 0, RIPPLE_START, RIPPLE_END);
+        ctx.stroke();
+      }
+      ctx.fillStyle = OUTDOOR_STONE;
+      for (const stone of pond.stones) {
+        ctx.save();
+        ctx.translate(stone.x, stone.y);
+        ctx.rotate(stone.angle);
+        strokeEllipse(0, 0, stone.rx, stone.ry, true);
+        ctx.restore();
+      }
+      break;
+    }
+    case "flowerBed": {
+      const bed = freeFlowerBed(points);
+      fillLoop(bed.outline, OUTDOOR_SOIL, false);
+      strokeFreeBand(bed.outline, 8, OUTDOOR_STONE, true);
+      for (const plant of bed.plants) {
+        ctx.fillStyle = OUTDOOR_LEAF;
+        strokeCircle(plant.x, plant.y, plant.r + 3, true);
+        ctx.fillStyle = plant.color;
+        strokeCircle(plant.x, plant.y, plant.r, true);
+      }
+      break;
+    }
+    case "lawn": {
+      const lawn = freeLawn(points);
+      fillLoop(lawn.outline, OUTDOOR_LEAF);
+      ctx.save();
+      ctx.lineWidth *= 0.6;
+      for (const [x, y] of lawn.tufts) strokeCircle(x, y, 3);
+      ctx.restore();
+      break;
+    }
+    case "rug": {
+      const outline = freeOutline(points);
+      fillLoop(outline, tint ? withAlpha(tint, 0.25) : furnitureSymbolFill("rug"));
+      strokeFreeBand(outline, 6, tint ? withAlpha(tint, 0.55) : OUTDOOR_TRUNK, true);
+      break;
+    }
+    case "river": {
+      const width = freeLineWidth("river", item?.brush);
+      strokeFreeBand(line, width + 28, OUTDOOR_SOIL);
+      strokeFreeBand(line, width, OUTDOOR_WATER);
+      strokeFreeBand(line, width * 0.3, "#eef6fa", false, false);
+      break;
+    }
+    case "pathway": {
+      const width = freeLineWidth("pathway", item?.brush);
+      strokeFreeBand(line, width + 8, OUTDOOR_STONE);
+      strokeFreeBand(line, width, "#f4f0e8");
+      break;
+    }
+    case "hedge": {
+      const width = freeLineWidth("hedge", item?.brush);
+      strokeFreeBand(line, width, OUTDOOR_LEAF);
+      strokeFreeBand(line, width * 0.55, "#eef5e8");
+      break;
+    }
+    case "stoneWall": {
+      const width = freeLineWidth("stoneWall", item?.brush);
+      strokeFreeBand(line, width + 2, OUTDOOR_STONE);
+      // 笠石の継ぎ目（3Dの継ぎ目の溝と同じ所。両端は除く）
+      for (const joint of freePosts(line, 38).slice(1, -1)) {
+        const nx = -Math.sin(joint.angle) * (width / 2 + 1), ny = Math.cos(joint.angle) * (width / 2 + 1);
+        strokeLine(joint.x - nx, joint.y - ny, joint.x + nx, joint.y + ny);
+      }
+      break;
+    }
+    case "fence": {
+      strokeFreeBand(line, 4, OUTDOOR_TRUNK);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      for (const post of freePosts(line, 150)) {
+        ctx.save();
+        ctx.translate(post.x, post.y);
+        ctx.rotate(post.angle);
+        ctx.fillRect(-4.5, -4.5, 9, 9);
+        ctx.restore();
+      }
+      break;
+    }
+    case "takegaki": {
+      strokeFreeBand(line, 8, OUTDOOR_TRUNK);
+      ctx.fillStyle = String(ctx.strokeStyle);
+      for (const post of freePosts(line, 180)) strokeCircle(post.x, post.y, 5, true);
+      break;
+    }
+    case "railway": {
+      strokeFreeBand(line, 300, "#ebe8e2");
+      ctx.fillStyle = OUTDOOR_TRUNK;
+      for (const sleeper of freePosts(line, RAILWAY.sleeperSpacing)) {
+        ctx.save();
+        ctx.translate(sleeper.x, sleeper.y);
+        ctx.rotate(sleeper.angle);
+        strokeRoundedRect(-RAILWAY.sleeperWidth / 2, -RAILWAY.sleeperLength / 2, RAILWAY.sleeperWidth, RAILWAY.sleeperLength, 1, true);
+        ctx.restore();
+      }
+      for (const side of [1, -1]) {
+        const rail = offsetFreeLine(line, side * (RAILWAY.gauge / 2 + RAILWAY.railWidth / 2), false);
+        strokeFreeBand(rail, RAILWAY.railWidth, String(ctx.strokeStyle), false, false);
+      }
+      break;
+    }
+    case "steppingStones": {
+      ctx.fillStyle = OUTDOOR_STONE;
+      for (const stone of freeSteppingStones(line)) {
+        ctx.save();
+        ctx.translate(stone.x, stone.y);
+        ctx.rotate(stone.angle);
+        strokeEllipse(0, 0, stone.rx, stone.ry, true);
+        ctx.restore();
+      }
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+// 形の上か（閉じた形は内側か縁の近く、線の形は帯の上）
+function isPointOnFreeShape(item: Furniture, point: Point, reach = 6 / view.zoom): boolean {
+  const kind = item.kind as FreeKind;
+  const [x, y] = worldToFurnitureLocal(item, point);
+  const points = freeItemPoints(kind, item.w, item.h, item);
+  if (isFreeAreaKind(kind)) {
+    const outline = freeOutline(points);
+    return pointInFreePolygon(x, y, outline) || distanceToFreeLine(x, y, outline, true) <= reach + (kind === "pond" ? 18 : 4);
+  }
+  const width = kind === "railway" ? 300 : kind === "river" ? freeLineWidth(kind, item.brush) + 28 : kind === "pathway" ? freeLineWidth(kind, item.brush) + 8 : Math.max(freeLineWidth(kind, item.brush), 12);
+  return distanceToFreeLine(x, y, freeCenterLine(points), false) <= width / 2 + reach;
+}
+
+// なぞり終えたとき。短ければ（クリック）いつもの形で置き、長ければ、なぞった形で作る（または「なぞり直す」の物を描き直す）
+function placeFreeShapePath(kind: FreeKind, points: Point[]): Furniture | null {
+  const redraw = pathRedrawTarget(kind);
+  pathRedrawId = null;
+  const path = tidyPath(points);
+  const area = isFreeAreaKind(kind);
+  if (path.length < (area ? 3 : 2) || pathLength(path) < (area ? 60 : 30)) {
+    if (redraw) return null;
+    const base = FURNITURE_DEFS[kind];
+    const item: Furniture = {
+      id: newId("furniture"), type: "furniture", kind, x: snap(points[0].x - base.w / 2), y: snap(points[0].y - base.h / 2), w: base.w, h: base.h, rotation: 0,
+      ...newFurnitureDetails(kind), ...(isFreeWidthAdjustable(kind) && freeWidthByKind[kind] ? { brush: freeWidthByKind[kind] } : {}),
+    };
+    activeEntities().push(item);
+    state.selectedId = item.id;
+    return item;
+  }
+  const brush = isFreeWidthAdjustable(kind) ? redraw?.brush ?? freeWidthByKind[kind] : undefined;
+  const frame = pathFrame(path, freeMargin(kind, brush));
+  const item: Furniture = redraw ?? { id: newId("furniture"), type: "furniture", kind, x: 0, y: 0, w: 1, h: 1, rotation: 0, ...newFurnitureDetails(kind) };
+  Object.assign(item, frame, { rotation: 0 });
+  if (brush !== undefined) item.brush = brush;
+  delete item.flip;
+  if (!redraw) activeEntities().push(item);
+  state.selectedId = item.id;
+  if (redraw) {
+    activeTool = "select";
+    setActiveButton("[data-tool]", activeTool);
+    setActiveButton("[data-furniture]", "");
+  }
+  return item;
+}
+
+// なぞっている間の見本: 離したときにできる形を、うすく描く
+function drawFreeShapePreview(kind: FreeKind, points: Point[]): void {
+  if (deferOverlay(() => drawFreeShapePreview(kind, points))) return;
+  const path = tidyPath(points);
+  ctx.save();
+  ctx.strokeStyle = "rgba(39, 117, 209, 0.55)";
+  ctx.lineWidth = 1.5 / view.zoom;
+  ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+  traceOpenPath(path);
+  if (isFreeAreaKind(kind)) ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (path.length >= (isFreeAreaKind(kind) ? 3 : 2) && pathLength(path) >= 30) {
+    const redraw = pathRedrawTarget(kind);
+    const brush = isFreeWidthAdjustable(kind) ? redraw?.brush ?? freeWidthByKind[kind] : undefined;
+    const frame = pathFrame(path, freeMargin(kind, brush));
+    ctx.globalAlpha = 0.75;
+    ctx.translate(frame.x + frame.w / 2, frame.y + frame.h / 2);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.2 / view.zoom;
+    drawFreeShape2d(kind, frame.w, frame.h, { id: "preview", type: "furniture", kind, x: frame.x, y: frame.y, w: frame.w, h: frame.h, rotation: 0, path: frame.path, ...(brush ? { brush } : {}) });
+  }
+  ctx.restore();
+}
+
+function freeShapeEditorHtml(item: Furniture, disabled: string): string {
+  const kind = item.kind as FreeKind;
+  const area = isFreeAreaKind(kind);
+  const width = isFreeWidthAdjustable(kind)
+    ? `<label>幅 cm<input id="freeWidthInput" type="number" min="${FREE_WIDTH_RANGE.min}" max="${FREE_WIDTH_RANGE.max}" step="10" value="${freeLineWidth(kind as Parameters<typeof freeLineWidth>[0], item.brush)}" ${disabled} /></label>`
+    : "";
+  const reset = item.path && !isAlwaysFreeKind(kind) ? `<button type="button" class="prop-button" id="freeResetButton" ${disabled}>いつもの形に戻す</button>` : "";
+  return `
+    ${width}
+    <div class="two-col">
+      <button type="button" class="prop-button" id="freeRedrawButton" ${disabled}>${area ? "形をなぞり直す" : "道すじをなぞり直す"}</button>
+      ${reset}
+    </div>
+    <p class="pose-hint">${area ? "パーツを選んで2Dをドラッグすると、囲んだ形になります（クリックだけなら、いつもの形）。" : "パーツを選んで2Dをドラッグすると、なぞった道すじに沿って置けます（クリックだけなら、まっすぐ）。"}</p>`;
+}
+
+// 幅を変えたとき。道すじの場所はそのままに、範囲を合わせ直す
+function refitFreeShape(item: Furniture): void {
+  if (!item.path) return;
+  const points = item.path.map(([u, v]): Point2 => [u * item.w, v * item.h]);
+  const frame = pathFrame(points, freeMargin(item.kind as FreeKind, item.brush));
+  const center = furnitureLocalToWorld(item, [frame.x + frame.w / 2, frame.y + frame.h / 2]);
+  item.w = frame.w;
+  item.h = frame.h;
+  item.path = frame.path;
+  item.x = roundTenth(center.x - frame.w / 2);
+  item.y = roundTenth(center.y - frame.h / 2);
+}
+
+function bindFreeShapeEditor(item: Furniture): void {
+  bindNumber("#freeWidthInput", (value) => {
+    item.brush = clamp(Math.round(value), FREE_WIDTH_RANGE.min, FREE_WIDTH_RANGE.max);
+    freeWidthByKind[item.kind] = item.brush;
+    if (!item.path) item.path = defaultFreePath(item.kind as FreeKind).map(([u, v]) => [u, v]);
+    refitFreeShape(item);
+  });
+  propertiesPanel.querySelector<HTMLButtonElement>("#freeRedrawButton")?.addEventListener("click", () => {
+    pathRedrawId = item.id;
+    activeFurniture = item.kind;
+    activeTool = "furniture";
+    setActiveButton("[data-furniture]", activeFurniture);
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    const hint = propertiesPanel.querySelector<HTMLParagraphElement>(".pose-hint");
+    if (hint) hint.textContent = isFreeAreaKind(item.kind) ? "2Dの上をドラッグして、新しい形を囲んでください。" : "2Dの上をドラッグして、新しい道すじをなぞってください。";
+  });
+  bindButton("#freeResetButton", () => {
+    const base = FURNITURE_DEFS[item.kind];
+    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+    delete item.path;
+    item.w = base.w;
+    item.h = base.h;
+    item.x = snap(cx - base.w / 2);
+    item.y = snap(cy - base.h / 2);
+  });
+}
+
+// 「なぞり直す」を押した足跡・破片・自由な形
 function pathRedrawTarget(kind: FurnitureKind): Furniture | null {
   const target = pathRedrawId ? findEntity(pathRedrawId) : null;
   return target?.type === "furniture" && target.kind === kind && !isLocked(target) ? target : null;
@@ -6748,16 +7074,9 @@ function placeShardPath(points: Point[]): void {
   }
 }
 
-// 道すじ（間取りの cm）から、余白を付けた範囲と、範囲に対する割合の道すじを作る
+// 道すじ（間取りの cm）から、余白を付けた範囲と、範囲に対する割合の道すじを作る（テンプレートと同じ free-shapes.ts の計算）
 function pathFrame(path: Point2[], margin: number): { x: number; y: number; w: number; h: number; path: number[][] } {
-  const xs = path.map((point) => point[0]), ys = path.map((point) => point[1]);
-  const w = roundTenth(Math.max(20, Math.max(...xs) - Math.min(...xs) + margin * 2));
-  const h = roundTenth(Math.max(20, Math.max(...ys) - Math.min(...ys) + margin * 2));
-  const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-  return {
-    x: roundTenth(cx - w / 2), y: roundTenth(cy - h / 2), w, h,
-    path: path.map(([x, y]) => [Math.round(((x - cx) / w) * 10000) / 10000, Math.round(((y - cy) / h) * 10000) / 10000]),
-  };
+  return freeFrame(path, margin);
 }
 
 // なぞっている間の見本: 道すじと、そこにまかれる破片
@@ -8109,7 +8428,8 @@ function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number,
   if (count <= 0) return;
   const bare = entities.filter((entity): entity is Furniture => entity.type === "furniture" && GRASS_FREE_KINDS.includes(entity.kind));
   const isBare = (x: number, y: number) => bare.some((item) => {
-    // 家具の回転を戻した座標で、池は楕円、それ以外は長方形の内側かどうかを見る
+    // 自由な形は、形そのもの（川や小道は帯の上）。ほかは家具の回転を戻した座標で、池は楕円、それ以外は長方形の内側かどうかを見る
+    if (isFreeShapeItem(item)) return isPointOnFreeShape(item, { x, y }, 0);
     const angle = degreesToRadians(-item.rotation);
     const dx = x - (item.x + item.w / 2), dy = y - (item.y + item.h / 2);
     const lx = (dx * Math.cos(angle) - dy * Math.sin(angle)) / (item.w / 2);
@@ -9295,6 +9615,7 @@ function updatePropertiesPanel(): void {
       ${isPersonKind(selectedFurniture.kind) ? personEditorHtml(selectedFurniture, placementDisabled) : ""}
       ${selectedFurniture.kind === "footprints" ? footprintEditorHtml(selectedFurniture, placementDisabled) : ""}
       ${selectedFurniture.kind === "brokenGlass" ? shardEditorHtml(selectedFurniture, placementDisabled) : ""}
+      ${isFreeShapeKind(selectedFurniture.kind) ? freeShapeEditorHtml(selectedFurniture, placementDisabled) : ""}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
       ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
@@ -9329,6 +9650,7 @@ function updatePropertiesPanel(): void {
   if (isPersonKind(selectedFurniture.kind)) bindPersonEditor(selectedFurniture);
   if (selectedFurniture.kind === "footprints") bindFootprintEditor(selectedFurniture);
   if (selectedFurniture.kind === "brokenGlass") bindShardEditor(selectedFurniture);
+  if (isFreeShapeKind(selectedFurniture.kind)) bindFreeShapeEditor(selectedFurniture);
   bindNumber("#furnitureHeightInput", (value) => {
     const height = clamp(Math.round(value), minimumHeight, MAX_FURNITURE_HEIGHT);
     if (height === defaultHeight) delete selectedFurniture.height;
@@ -10181,6 +10503,11 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
     } else if (entity.type === "furniture") {
       const corner = isPerson(entity) ? null : getCornerHit(entity, point);
       if (corner) return { entity, corner };
+      // 自由な形は、範囲の四角ではなく、形そのもので選ぶ（長い柵や川が、まわりの物を選びにくくしないように）
+      if (isFreeShapeItem(entity)) {
+        if (isPointOnFreeShape(entity, point)) return { entity, corner: null };
+        continue;
+      }
       const angle = degreesToRadians(entity.rotation);
       const dx = point.x - entity.x - entity.w / 2;
       const dy = point.y - entity.y - entity.h / 2;

@@ -14,6 +14,10 @@ import {
   type PersonPart, type PersonPose, type StoneSlab,
   PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise,
 } from "./furniture-shapes.ts";
+import {
+  RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
+  freeSteppingStones, isAlwaysFreeKind, isFreeShapeKind, offsetFreeLine, type FreeKind,
+} from "./free-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
 
@@ -134,7 +138,12 @@ class Model {
     mesh.receiveShadow = false;
   }
 
-  finish(w: number, d: number, mounted: boolean, optimize: boolean): THREE.Group {
+  finish(w: number, d: number, mounted: boolean, optimize: boolean, exact = false): THREE.Group {
+    if (exact) {
+      if (optimize) this.mergeOpaqueParts();
+      applyOpacity(this.group, this.alpha);
+      return this.group;
+    }
     this.group.updateMatrixWorld(true);
     const bounds = new THREE.Box3().setFromObject(this.group, true);
     const size = bounds.getSize(new THREE.Vector3());
@@ -291,6 +300,167 @@ function ribbonGeometry(loop: Point2[], widthCm: number, y: number): THREE.Buffe
   return facesGeometry(triangles, () => new THREE.Vector3(0, 1, 0));
 }
 
+// ---- 自由な形（free-shapes.ts）。2Dと同じ点（cm）から作る ----
+
+// 線（cm）に沿った、幅 width cm・高さ bottom〜top m の帯。区切りごとの箱と、曲がり角の丸い柱でつなぐ。
+// 真上から見ると、2Dで同じ線を角を丸くして太く描いた形と同じ（きつい曲がりでも内側が折り返さない）
+function strokeSolid(m: Model, line: Point2[], width: number, bottom: number, top: number, material: Material, closed = false): void {
+  const height = Math.max(top - bottom, 0.002), y = top - height / 2;
+  const count = closed ? line.length : line.length - 1;
+  for (let i = 0; i < count; i += 1) {
+    const a = line[i], b = line[(i + 1) % line.length];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (length < 1e-6) continue;
+    const piece = m.box(length / 100, height, width / 100, (a[0] + b[0]) / 200, y, (a[1] + b[1]) / 200, material, 0);
+    piece.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+  }
+  line.forEach(([x, z], i) => {
+    if (!closed && (i === 0 || i === line.length - 1)) return;
+    m.cylinder(width / 200, width / 200, height, [x / 100, y, z / 100], material, 14);
+  });
+}
+
+// 閉じた輪郭（cm）を、上面 top・厚み thickness（m）の板にする
+function outlineSlab(m: Model, outline: Point2[], thickness: number, top: number, material: Material): THREE.Mesh {
+  return shapeSlab(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), thickness, top, m, material, 1);
+}
+
+// 平たい楕円の石（少し丸み）。向きは2Dの回転と同じ
+function freeStone(m: Model, stone: StoneSlab, height: number, material: Material): void {
+  const mesh = m.mesh(new THREE.SphereGeometry(0.5, 9, 5), [stone.x / 100, height / 2, stone.y / 100], material);
+  mesh.scale.set((stone.rx * 2) / 100, height, (stone.ry * 2) / 100);
+  mesh.rotation.y = -stone.angle;
+}
+
+function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, tall: number): void {
+  const path = item.path ?? defaultFreePath(kind);
+  const points = freePathPoints(path, item.w, item.h);
+  const line = freeCenterLine(points);
+  switch (kind) {
+    case "pond": {
+      // 水面、縁に並ぶ石、さざ波（2Dと同じ輪郭・石の位置）
+      const pond = freePond(points);
+      outlineSlab(m, pond.water, 0.04, 0.05, m.material("water", 0x4a8aa3, 0.06, 0.15, true));
+      const rim = m.material("pond-stone", 0x9a968c, 0.95);
+      for (const stone of pond.stones) freeStone(m, stone, Math.min(stone.rx, stone.ry) * 0.011, rim);
+      const ripple = m.material("pond-ripple", 0xd6ecf2, 0.3);
+      for (const wave of pond.ripples) {
+        const arc = m.mesh(new THREE.TorusGeometry(1, 0.004, 4, 24, RIPPLE_END - RIPPLE_START), [wave.x / 100, 0.052, wave.y / 100], ripple);
+        arc.rotation.set(Math.PI / 2, 0, RIPPLE_START);
+        arc.scale.set(wave.rx / 100, wave.ry / 100, 1);
+      }
+      break;
+    }
+    case "flowerBed": {
+      // れんがの縁、土、株（葉の上に花）
+      const bed = freeFlowerBed(points);
+      outlineSlab(m, bed.outline, 0.2, 0.2, m.material("soil", 0x4a3b2c, 1));
+      strokeSolid(m, bed.outline, 8, 0, 0.25, m.material("bed-border", 0xa86f4c, 0.85, 0, true), true);
+      const leaf = m.material("foliage", 0x4f7a3d, 0.85);
+      for (const plant of bed.plants) {
+        const bush = m.mesh(new THREE.IcosahedronGeometry(1, 0), [plant.x / 100, 0.27, plant.y / 100], leaf);
+        bush.scale.set((plant.r + 3) / 100, 0.06, (plant.r + 3) / 100);
+        m.cylinder(plant.r / 100, plant.r / 100, 0.02, [plant.x / 100, 0.34, plant.y / 100], m.material(`flower-${plant.color}`, Number.parseInt(plant.color.slice(1), 16), 0.7), 7);
+      }
+      break;
+    }
+    case "lawn": {
+      // 薄い芝の板と、草の株（上から見ると小さな丸）
+      const lawn = freeLawn(points);
+      outlineSlab(m, lawn.outline, 0.02, 0.02, m.material("lawn-grass", 0x6f9f45, 0.95, 0, true));
+      const tuft = m.material("grass-tuft", 0x55863a, 0.9);
+      for (const [x, y] of lawn.tufts) m.mesh(new THREE.CylinderGeometry(0, 0.03, 0.06, 5, 1, true), [x / 100, 0.05, y / 100], tuft);
+      break;
+    }
+    case "rug": {
+      // 床に敷いた薄い敷物と、縁取り
+      const outline = freeOutline(points);
+      outlineSlab(m, outline, 0.012, 0.012, m.material("rug", 0xb9785a, 0.95, 0, true));
+      strokeSolid(m, outline, 6, 0.012, 0.016, m.material("rug-border", 0x6f4a3a, 0.95), true);
+      break;
+    }
+    case "river": {
+      // 土手、水面、流れの明るい筋
+      const width = freeLineWidth("river", item.brush);
+      strokeSolid(m, line, width + 28, 0, 0.006, m.material("riverbank-soil", 0x8c7a5a, 0.95));
+      strokeSolid(m, line, width, 0.006, 0.012, m.material("water", 0x4a8aa3, 0.06, 0.15, true));
+      strokeSolid(m, line, width * 0.3, 0.012, 0.014, m.material("water-glint", 0x8cc3dc, 0.05, 0.1));
+      break;
+    }
+    case "pathway": {
+      // 両側の縁石と、砂利の道
+      const width = freeLineWidth("pathway", item.brush);
+      strokeSolid(m, line, width + 8, 0, 0.03, m.material("path-edge-stone", 0x9b968c, 0.9));
+      strokeSolid(m, line, width, 0.03, 0.032, m.material("gravel", 0xc9bfa9, 1, 0, true));
+      break;
+    }
+    case "hedge": {
+      // 刈り込んだ生け垣と、上の面の明るい所
+      const width = freeLineWidth("hedge", item.brush);
+      strokeSolid(m, line, width, 0, tall - 0.04, m.material("hedge-foliage", 0x3f7334, 0.9, 0, true));
+      strokeSolid(m, line, width * 0.55, tall - 0.04, tall, m.material("hedge-foliage-top", 0x5b8f45, 0.9));
+      break;
+    }
+    case "stoneWall": {
+      // 積んだ石の壁と、継ぎ目で分かれた笠石
+      const width = freeLineWidth("stoneWall", item.brush);
+      const cap = Math.min(0.06, tall / 2);
+      strokeSolid(m, line, width, 0, tall - cap, m.material("stone-wall", 0x8f8b82, 0.95, 0, true));
+      // 笠石は道すじに沿ってつなげ、継ぎ目は細い溝の線（2Dの継ぎ目の線と同じ所）
+      strokeSolid(m, line, width + 2, tall - cap, tall, m.material("stone-cap", 0xa9a59b, 0.9));
+      const groove = m.material("stone-joint", 0x5f5b55, 0.95);
+      const joints = freePosts(line, 38);
+      for (const joint of joints.slice(1, -1)) {
+        const mark = m.box(0.015, 0.004, (width + 2) / 100, joint.x / 100, tall - 0.002, joint.y / 100, groove, 0);
+        mark.rotation.y = -joint.angle;
+      }
+      break;
+    }
+    case "fence": {
+      // 道すじに沿う2段の横木と、150cmごとの支柱
+      const rail = m.material("fence", 0xc8b08a, 0.8, 0, true);
+      for (const level of [0.3, 0.85]) strokeSolid(m, line, 4, tall * level, Math.min(tall, tall * level + 0.07), rail);
+      const post = m.material("fence-post", 0x8d7a5c, 0.85);
+      for (const sample of freePosts(line, 150)) {
+        const mesh = m.box(0.09, tall, 0.09, sample.x / 100, tall / 2, sample.y / 100, post, 0);
+        mesh.rotation.y = -sample.angle;
+      }
+      break;
+    }
+    case "takegaki": {
+      // 竹を並べた垣（薄い壁）、上の押し縁、180cmごとの丸い柱
+      const bamboo = m.material("bamboo", 0xc8b27a, 0.75, 0, true);
+      strokeSolid(m, line, 4, 0.05, tall - 0.06, bamboo);
+      strokeSolid(m, line, 8, tall - 0.06, tall, m.material("bamboo-rail", 0xb59a5e, 0.75));
+      const pole = m.material("bamboo-post", 0x6b5a3a, 0.8);
+      for (const sample of freePosts(line, 180)) m.cylinder(0.05, 0.05, tall, [sample.x / 100, tall / 2, sample.y / 100], pole, 12);
+      break;
+    }
+    case "railway": {
+      // 砂利の道床、枕木、2本のレール（1067mm）
+      strokeSolid(m, line, 300, 0, RAILWAY.ballastHeight / 100, m.material("ballast-stone", 0x8e8a84, 1));
+      const sleeper = m.material("sleeper-wood", 0x6e5641, 0.9);
+      const bottom = RAILWAY.ballastHeight / 100, top = bottom + RAILWAY.sleeperHeight / 100;
+      for (const sample of freePosts(line, RAILWAY.sleeperSpacing)) {
+        const mesh = m.box(RAILWAY.sleeperWidth / 100, RAILWAY.sleeperHeight / 100, RAILWAY.sleeperLength / 100, sample.x / 100, (bottom + top) / 2, sample.y / 100, sleeper, 0);
+        mesh.rotation.y = -sample.angle;
+      }
+      const steel = m.material("rail-steel", 0x6a6e73, 0.35, 0.8);
+      for (const side of [1, -1]) {
+        const rail = offsetFreeLine(line, side * (RAILWAY.gauge / 2 + RAILWAY.railWidth / 2), false);
+        strokeSolid(m, rail, RAILWAY.railWidth, top, top + RAILWAY.railHeight / 100, steel);
+      }
+      break;
+    }
+    case "steppingStones": {
+      const stone = m.material("stepping-stone", 0x9c998f, 0.93, 0, true);
+      stone.flatShading = true;
+      for (const slab of freeSteppingStones(line)) freeStone(m, slab, 0.07, stone);
+      break;
+    }
+  }
+}
+
 // 人の体の部品: 両端の楕円体（b の端は a の端の taper 倍）を包む、なめらかな丸い棒。2Dで真上から見た形と同じになる
 function bodyPart(m: Model, part: PersonPart, material: Material): void {
   const a = new THREE.Vector3(...part.a).divideScalar(100), b = new THREE.Vector3(...part.b).divideScalar(100);
@@ -376,6 +546,12 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
   // 高さを指定できる種類では、いちばん高い所がちょうどこの高さになるように作る
   const tall = clamp((item.height ?? FURNITURE_DEFS[item.kind].height ?? 100) / 100, 0.1, 30);
   const m = new Model(item.color3d ?? item.color);
+  // 自由な形: なぞった道すじ（なければ決まった形の道すじ）から、2Dと同じ座標で作る
+  if (isFreeShapeKind(item.kind) && (item.path || isAlwaysFreeKind(item.kind))) {
+    buildFreeShape(m, item, item.kind, tall);
+    m.group.name = item.kind;
+    return m.finish(w, d, false, optimize, true);
+  }
   // 部品で組む家具（和風の家具・鳥居・遊具など）。2Dの記号と同じ部品の並びから作る
   if (isPartKind(item.kind)) {
     const height = clamp(item.height ?? FURNITURE_DEFS[item.kind].height!, 1, 3000);
@@ -2221,6 +2397,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       }
       m.reserveFootprint(w, d);
       break;
+    }
+    case "lawn":
+    case "river":
+    case "pathway":
+    case "hedge":
+    case "stoneWall":
+    case "railway": {
+      // 自由な形（いつも道すじを持つ種類）は、上の自由な形の所で作る
+      buildFreeShape(m, item, item.kind, tall);
+      m.group.name = item.kind;
+      return m.finish(w, d, false, optimize, true);
     }
     default: {
       const unsupported: never = item.kind;

@@ -24,7 +24,13 @@ window.__compare = (only) => {
   for (const [kind, def] of Object.entries(FURNITURE_DEFS)) {
     if (only && !only.includes(kind)) continue;
     const labels = ['標準', ...(FURNITURE_VARIANTS[kind] ?? [])];
-    labels.forEach((label, symbol) => {
+    // 自由な形の種類は、なぞった形（見本の道すじ）も並べる
+    const loop = [[-0.4, -0.3], [0.1, -0.42], [0.42, -0.1], [0.35, 0.3], [-0.05, 0.42], [-0.42, 0.15]];
+    const wave = [[-0.42, 0.25], [-0.15, -0.3], [0.15, 0.3], [0.42, -0.25]];
+    const traced = isFreeShapeKind(kind) ? [{ label: 'なぞった形', path: isFreeAreaKind(kind) ? loop : wave, w: 400, h: isFreeAreaKind(kind) ? 300 : 360 }] : [];
+    [...labels.map((label, symbol) => ({ label, symbol })), ...traced.map((extra) => ({ ...extra, symbol: 0 }))].forEach(({ label, symbol, path, w: pw, h: ph }) => {
+      const def = path ? { ...FURNITURE_DEFS[kind], w: pw, h: ph } : FURNITURE_DEFS[kind];
+      const item = { id: 'compare', type: 'furniture', kind, x: 0, y: 0, w: def.w, h: def.h, rotation: 0, ...(path ? { path } : {}) };
       const scale = Math.min((cell - 24) / def.w, (cell - 24) / def.h) * 2;
       const plan = document.createElement('canvas');
       plan.width = cell * 2; plan.height = cell * 2;
@@ -34,12 +40,12 @@ window.__compare = (only) => {
       ctx.setTransform(scale, 0, 0, scale, cell, cell);
       ctx.lineWidth = 2.4 / scale; ctx.strokeStyle = INK; ctx.fillStyle = furnitureSymbolFill(kind);
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      drawFurnitureSymbol(kind, def.w, def.h, symbol);
+      drawFurnitureSymbol(kind, def.w, def.h, symbol, item);
       ctx = saved;
       // 3D: 真上から平行投影。画面の上が奥（2Dの上）になるようにする
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xffffff);
-      const model = buildFurnitureModel({ kind, w: def.w, h: def.h, symbol });
+      const model = buildFurnitureModel({ kind, w: def.w, h: def.h, symbol, ...(path ? { path } : {}) });
       scene.add(model);
       scene.add(new THREE.HemisphereLight(0xffffff, 0x8a9290, 2.2));
       const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-2, 6, -3); scene.add(sun);
@@ -49,7 +55,7 @@ window.__compare = (only) => {
       renderer.render(scene, camera);
       const top = glCanvas.toDataURL();
       scene.traverse(o => { o.geometry?.dispose(); (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []).forEach(m => m.dispose()); });
-      rows.push({ name: def.label + (symbol ? '（' + label + '）' : ''), plan: plan.toDataURL(), top });
+      rows.push({ name: def.label + (symbol || path ? '（' + label + '）' : ''), plan: plan.toDataURL(), top });
     });
   }
   renderer.dispose();

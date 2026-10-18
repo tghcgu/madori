@@ -283,7 +283,7 @@ const REAL_MATERIAL_RULES: [RealMaterialKind, RegExp][] = [
   ["fabric", /fabric|tatami|upholster|cushion|linen|futon|blanket|duvet|lampshade|cloth|curtain|sisal|carpet|rug|towel|mattress|pillow|bedding|sofa|tent|flag|zabuton/],
   ["leather", /leather|saddle/],
   ["metal", /metal|steel|chrome|brass|iron|hardware|pole|rail|frame-metal|dryer|mailbox|grave-metal|handle|faucet|tap|hinge|wire|cage|bike|bicycle|wheel-rim/],
-  ["stone", /stone|granite|rock|grave|block|concrete|asphalt|slab|roof|coping|fireplace|firebox|brick|statue|lantern-stone|komainu|torii-base|chozubachi|well/],
+  ["stone", /stone|granite|rock|grave|block|concrete|asphalt|slab|roof|coping|fireplace|firebox|brick|bed-border|ballast|statue|lantern-stone|komainu|torii-base|chozubachi|well/],
   ["ceramic", /ceramic|basin|porcelain|enamel|bath|toilet|sink|tile|pot|vase|cup|plate/],
   ["paper", /paper|shoji|lantern|chalk|label|book|board|sign/],
   ["soil", /soil|gravel|sand|dirt|earth|ash/],

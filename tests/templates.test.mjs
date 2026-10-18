@@ -6,6 +6,10 @@ import { incomingStairs, isStair } from '../src/stairs.ts';
 import { floorPolygon, pointInPolygon, normalizeOutline, normalizeFloorHoles, signedArea } from '../src/floor-outline.ts';
 import { stairFootprint } from '../src/template-floors.ts';
 import clipping from 'polygon-clipping';
+import {
+  defaultFreePath, distanceToFreeLine, freeCenterLine, freeLineWidth, freeOutline, freePathPoints, isAlwaysFreeKind, isFreeAreaKind,
+  isFreeShapeKind, pointInFreePolygon,
+} from '../src/free-shapes.ts';
 
 // main.ts で作るテンプレート（住まいの4種類と作例）
 const IN_MAIN = ['studio', 'oneLdk', 'twoLdk', 'twoStory', 'sample'];
@@ -14,6 +18,24 @@ const keys = TEMPLATE_GROUPS.flatMap(group => group.templates.map(template => te
 function build(key) {
   let counter = 0;
   return templatePlan(key, prefix => `${prefix}-${(counter += 1)}`, FURNITURE_DEFS);
+}
+
+// 自由な形（池・川・石垣など）は、範囲の四角ではなく形そのもので確かめる。間取りの上の点（cm）にした輪郭・中心線と幅
+function freeShape(item) {
+  if (!isFreeShapeKind(item.kind) || !(item.path || isAlwaysFreeKind(item.kind))) return null;
+  const points = freePathPoints(item.path ?? defaultFreePath(item.kind), item.w, item.h).map(([x, y]) => [item.x + item.w / 2 + x, item.y + item.h / 2 + y]);
+  const area = isFreeAreaKind(item.kind);
+  const line = area ? freeOutline(points) : freeCenterLine(points);
+  const reach = area ? 0 : (item.kind === 'railway' ? 300 : item.kind === 'river' ? freeLineWidth(item.kind, item.brush) + 28 : freeLineWidth(item.kind, item.brush)) / 2;
+  return { area, line, reach };
+}
+
+// 自由な形が、四角い範囲（文字の箱など）に重なるか
+function freeShapeTouches(shape, x0, y0, x1, y1) {
+  const probes = [];
+  for (let i = 0; i <= 4; i += 1) for (let j = 0; j <= 2; j += 1) probes.push([x0 + ((x1 - x0) * i) / 4, y0 + ((y1 - y0) * j) / 2]);
+  const hit = ([x, y]) => (shape.area ? pointInFreePolygon(x, y, shape.line) : distanceToFreeLine(x, y, shape.line, false) <= shape.reach);
+  return probes.some(hit) || shape.line.some(([x, y]) => x > x0 && x < x1 && y > y0 && y < y1);
 }
 
 // 回したあとの見た目の箱
@@ -69,6 +91,13 @@ for (const key of keys.filter(hasTemplatePlan)) {
           const polygon = floorPolygon(isStair(item) ? { ...room, holes: undefined } : room);
           return pointInPolygon(x, y, polygon) || clipping.intersection(polygon, [[[x-.01,y-.01],[x+.01,y-.01],[x+.01,y+.01],[x-.01,y+.01]]]).length > 0;
         });
+        // 自由な形は、輪郭・道すじの点が間取りの中にあればよい（堀や石垣は建物に沿って回り込むので、範囲の四角は壁をまたぐ）
+        const shape = freeShape(item);
+        if (shape) {
+          assert.equal(item.rotation, 0, `${label} is drawn without rotation`);
+          for (const [x, y] of shape.line) assert.ok(inside(x, y), `${label} follows a path inside the plan at (${Math.round(x)}, ${Math.round(y)})`);
+          continue;
+        }
         for (const [x, y] of [[box.x0, box.y0], [box.x1, box.y0], [box.x0, box.y1], [box.x1, box.y1]]) assert.ok(inside(x, y), `${label} is inside the plan`);
         // 壁を突き抜けない（壁に沿わせるのはよい）
         for (const wall of walls) {
@@ -124,7 +153,10 @@ for (const key of keys.filter(hasTemplatePlan)) {
         assert.ok(label.x0 >= room.x && fitsAcross && label.y1 <= room.y + room.h, `${name} fits in its room`);
         for (const item of furniture) {
           const box = visualBox(item);
-          const overlaps = box.x0 < label.x1 - 2 && box.x1 > label.x0 + 2 && box.y0 < label.y1 - 2 && box.y1 > label.y0 + 2;
+          const shape = freeShape(item);
+          const overlaps = shape
+            ? freeShapeTouches(shape, label.x0 + 2, label.y0 + 2, label.x1 - 2, label.y1 - 2)
+            : box.x0 < label.x1 - 2 && box.x1 > label.x0 + 2 && box.y0 < label.y1 - 2 && box.y1 > label.y0 + 2;
           assert.ok(!overlaps, `${name} is not under the ${item.kind} at (${item.x}, ${item.y})`);
         }
       }

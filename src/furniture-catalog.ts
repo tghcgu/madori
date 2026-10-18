@@ -95,7 +95,9 @@ export type FurnitureKind =
   | "person"
   | "paint"
   | "bloodPool"
-  | "brokenGlass";
+  | "brokenGlass"
+  // 自由な形（なぞって作る。free-shapes.ts）
+  | "lawn" | "river" | "pathway" | "hedge" | "stoneWall" | "railway";
 export interface FurnitureDef {
   label: string;
   w: number;
@@ -269,6 +271,13 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   bloodPool: { label: "血だまり", w: 90, h: 70 },
   // 割れたガラスなどの破片。なぞった道すじに沿ってまける（クリックだけなら、ひとまとまり）
   brokenGlass: { label: "破片", w: 80, h: 60 },
+  // 自由な形: クリックで置くと決まった形、ドラッグでなぞると、その形（線の形は、なぞった道すじに沿う）
+  lawn: { label: "芝生", w: 300, h: 200 },
+  river: { label: "川", w: 400, h: 170 },
+  pathway: { label: "小道", w: 300, h: 102 },
+  hedge: { label: "生け垣", w: 300, h: 72, height: 120 },
+  stoneWall: { label: "石垣", w: 300, h: 57, height: 100 },
+  railway: { label: "線路", w: 500, h: 312 },
 };
 
 // 家具ごとの別デザインの名前（1番以降。0番は標準）。2Dの記号と3Dのモデルが、この番号で同じデザインになる
@@ -345,13 +354,13 @@ export const FURNITURE_GROUPS: FurnitureGroup[] = [
   { id: "bath", label: "浴室・トイレ・洗面", keywords: "よくしつ ふろ 風呂 といれ せんめん 水回り みずまわり", kinds: ["bath", "unitBath", "shower", "toilet", "washbasin"], also: ["washer", "hinokiBath", "washikiToilet"] },
   { id: "appliances", label: "家電", keywords: "かでん", kinds: ["fridge", "washer", "tv", "airConditioner", "acOutdoor", "fan", "stove"], also: ["copier", "vendingMachine"] },
   { id: "decor", label: "照明・インテリア", keywords: "しょうめい あかり いんてりあ 飾り かざり", kinds: ["plant", "plantLarge", "rug", "floorLamp", "fireplace", "wallClock", "grandfatherClock", "aquarium", "piano", "trashCan", "catTower", "curtain"], also: ["andon", "byobu", "shojiScreen", "irori", "hibachi", "chochin", "partition"] },
-  { id: "outdoor", label: "屋外・庭", keywords: "おくがい にわ そと 外", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "fence", "takegaki", "gardenLight", "stoneLantern", "grave", "westernGrave", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing", "ido", "fountain", "statue", "campfire", "tent"], also: ["bench", "tsukubai", "engawa", "torii", "acOutdoor", "bicycle", "car"], doorStyles: ["gate"] },
+  { id: "outdoor", label: "屋外・庭", keywords: "おくがい にわ そと 外", kinds: ["tree", "conifer", "palmTree", "shrub", "rock", "steppingStones", "flowerBed", "pond", "lawn", "river", "pathway", "hedge", "stoneWall", "fence", "takegaki", "gardenLight", "stoneLantern", "grave", "westernGrave", "mailbox", "shed", "dogHouse", "parasol", "clothesDryer", "swing", "ido", "fountain", "statue", "campfire", "tent"], also: ["bench", "tsukubai", "engawa", "torii", "acOutdoor", "bicycle", "car"], doorStyles: ["gate"] },
   {
     id: "japanese",
     label: "和風（和室・和の設備）",
     keywords: "わふう 和 和室 わしつ 日本 にほん 和の",
     kinds: ["tatami", "zabuton", "chabudai", "byobu", "shojiScreen", "andon", "stepTansu", "irori", "hibachi", "engawa", "hinokiBath", "tsukubai", "butsudan", "kamidana", "tokonoma", "kamado", "washikiToilet", "chochin"],
-    also: ["zaisu", "kotatsu", "futon", "stoneLantern", "steppingStones", "pond", "grave", "takegaki", "ido", "torii"],
+    also: ["zaisu", "kotatsu", "futon", "stoneLantern", "steppingStones", "pond", "grave", "takegaki", "hedge", "stoneWall", "ido", "torii"],
     doorStyles: ["shoji", "fusuma", "koshi", "itado", "gate"],
   },
   { id: "school", label: "学校・オフィス", keywords: "がっこう 学校 きょうしつ 教室 おふぃす 事務所 じむしょ 会社 かいしゃ 職員室", kinds: ["blackboard", "whiteboard", "lectern", "schoolDesk", "locker", "copier", "partition", "safe", "fireExtinguisher"], also: ["desk", "deskL", "officeChair", "longTable", "shelf", "vaultingBox", "piano"] },
@@ -359,10 +368,10 @@ export const FURNITURE_GROUPS: FurnitureGroup[] = [
   { id: "people", label: "人・事件・調査", keywords: "ひと じけん ちょうさ TRPG", kinds: ["person", "fallenPerson", "footprints", "evidenceMarker", "bloodPool", "brokenGlass"] },
   { id: "vehicles", label: "乗り物", keywords: "のりもの くるま", kinds: ["car", "motorcycle", "bicycle", "bus"] },
   { id: "hospital", label: "病院・介護", keywords: "びょういん 病院 いりょう 医療 かいご 介護 しんりょうじょ 診療所 保健室 ほけんしつ", kinds: ["hospitalBed", "ivStand", "wheelchair", "examCouch"], also: ["curtain", "partition", "washbasin"] },
-  { id: "street", label: "街・道路", keywords: "まち 街 町 どうろ 道路 みち 道 ろじょう 路上 こうじ 工事", kinds: ["trafficCone", "utilityPole", "busStop", "phoneBooth", "manhole", "drum"], also: ["car", "bus", "bicycle", "vendingMachine", "acOutdoor", "mailbox", "gardenLight", "fence", "bench", "tree", "trashCan", "signboard", "fireExtinguisher"] },
+  { id: "street", label: "街・道路", keywords: "まち 街 町 どうろ 道路 みち 道 ろじょう 路上 こうじ 工事", kinds: ["trafficCone", "utilityPole", "busStop", "phoneBooth", "manhole", "drum", "railway"], also: ["pathway", "river", "car", "bus", "bicycle", "vendingMachine", "acOutdoor", "mailbox", "gardenLight", "fence", "bench", "tree", "trashCan", "signboard", "fireExtinguisher"] },
   { id: "shrine", label: "神社・寺", keywords: "じんじゃ 神社 てら 寺 お寺 おてら 神道 仏教 参道", kinds: ["torii", "komainu", "saisenBako", "chozubachi"], also: ["stoneLantern", "chochin", "kamidana", "butsudan", "brazier", "takegaki", "grave", "tsukubai"], doorStyles: ["gate"] },
   { id: "play", label: "遊具・スポーツ・音楽", keywords: "ゆうぐ 遊具 こうえん 公園 すぽーつ 運動 うんどう たいいく 体育 おんがく 音楽 がっき 楽器 あそび 遊び", kinds: ["slide", "jungleGym", "ironBar", "sandbox", "vaultingBox", "pingPongTable", "poolTable", "drumKit", "stage"], also: ["swing", "piano"] },
-  { id: "fantasy", label: "ファンタジー・TRPG", keywords: "ふぁんたじー ファンタジー 異世界 いせかい ダンジョン だんじょん 城 しろ 中世 ちゅうせい ぼうけん 冒険 TRPG", kinds: ["treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier"], also: ["statue", "campfire", "westernGrave", "fountain", "tent"] },
+  { id: "fantasy", label: "ファンタジー・TRPG", keywords: "ふぁんたじー ファンタジー 異世界 いせかい ダンジョン だんじょん 城 しろ 中世 ちゅうせい ぼうけん 冒険 TRPG", kinds: ["treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier"], also: ["statue", "campfire", "westernGrave", "fountain", "tent", "river", "stoneWall"] },
 ];
 
 // 左の一覧の並び（よく使う順）。家具の分類は FURNITURE_GROUPS の id、ほかは建具・階段・床材・屋根・図形の壁の欄

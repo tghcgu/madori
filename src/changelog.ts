@@ -8,6 +8,19 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-19",
+    items: [{
+      ja: "池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です",
+      en: "Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape",
+    }, {
+      ja: "自由な形で作る家具・設備を6種類追加: 芝生・川・小道・生け垣・石垣・線路。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます",
+      en: "Added 6 free-shape items: lawn, river, path, hedge, stone wall and railway. Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one",
+    }, {
+      ja: "テンプレートの外まわりを作り込み。城は城壁と見張り台・門楼・堀と跳ね橋、神社は玉垣・瑞垣・二つの鳥居の長い参道・神楽殿・手水舎の屋根・池・御神木、寺は山門（二重の屋根と仁王像）・五重塔・築地塀・池と飛び石、武家屋敷は白い土塀と表門・池・枯山水、教会は芝生の庭・墓地・外灯の小道",
+      en: "Templates now have detailed surroundings. The castle has curtain walls, turrets, a gatehouse, a moat and a drawbridge; the shrine a sacred fence, a long approach through two torii gates, a kagura stage, a roofed purification fountain, a pond and a sacred tree; the temple a main gate with a two-tier roof and guardian statues, a five-story pagoda, earthen walls, a pond and stepping stones; the samurai residence a white earthen wall with a gate, a pond and a dry rock garden; and the church a lawn, a graveyard and a lamp-lit path",
+    }],
+  },
+  {
     date: "2026-10-18",
     items: [{
       ja: "3Dの絵柄を追加。3Dの欄で、標準・リアル・白模型・線画・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラーの15種類から選べます。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます",

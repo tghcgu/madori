@@ -42,7 +42,7 @@
    ```
    npm run dev        # http://127.0.0.1:5173/ を開く
    npm test           # 単体テスト（373件）
-   npm run test:e2e   # 画面のテスト（約12分。PASS: の行が59本）
+   npm run test:e2e   # 画面のテスト（約12分。PASS: の行が60本）
    npm run build
    ```
    取ってきたばかりの環境では、E2E が途中の再読み込み（`page.reload`）で止まって失敗することがまれにある（下の「気をつけること」）。もう一度実行すれば通る。
@@ -137,6 +137,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `src/opening-models.ts` | ドア・引き戸・和風の建具・窓の3Dモデル |
 | `src/opening-shapes.ts` | ドアの種類（`DOOR_STYLES`: ドア・両開きドア・引き戸・障子・襖・格子戸・板戸・門扉）と、2D・3D共通の戸の並び（`slidingPanels`）・組子や格子の位置（`panelBars`）・門扉の板（`gateSlats`） |
 | `src/geometry.ts` | 壁の開口（ドア・窓の所を抜く）、床の分け方 |
+| `src/free-shapes.ts` | 自由な形（池・花壇・芝生・ラグはなぞって囲んだ形、川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石はなぞった道すじ）。道すじ（`path`、中心が原点の割合）を、なめらかにして点を減らした輪郭・中心線にし、石や杭・枕木の位置を決める。2D（`drawFreeShape2d`）は太い線（角は丸い）で、3D（`buildFreeShape`）は区切りごとの箱と曲がり角の丸い柱で、同じ帯を作る。3Dは道すじの座標のまま作る（範囲に合わせて伸び縮みしない。`Model.finish` の `exact`） |
 | `src/three-style.ts` | 3Dの絵柄15種類（`THREE_STYLES`）。標準・リアル以外は、色と法線・奥行きを別に描いてから画面全体に効果をかける（`POST_FRAGMENT_SHADER`）。リアルは物の間の暗がり（`AO_FRAGMENT_SHADER`）とトーンマッピング（`REAL_COMPOSITE_FRAGMENT_SHADER`）、材質の名前から木・布・金属などに分けて（`realMaterialKind`）シェーダーに模様と光り方を足す。three.js を読み込まない（テストが読む） |
 | `src/plan-style.ts` | 2Dの絵柄17種類（`PLAN_STYLES`、分類は `PLAN_STYLE_GROUPS`）。描き先を包んで、線・塗り・文字の描き方を変える |
 | `src/templates.ts` | テンプレートの分類（`TEMPLATE_GROUPS`、6つの分類に50種類）と、そのうち45種類の間取りのデータ（`BUILDERS`）。部屋を並べると壁を自動で立てる、小さな作り方（`planBuilder`）で書く。住まいの4種類と作例は `main.ts` |
@@ -279,6 +280,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - テンプレートを27種類にした（「テンプレ27種（家/病院/洋館/など）」）。住まい・屋敷と宿・お店・施設・屋外とそのほかの5つに分けた。部屋の名前（テンプレートの部屋の名前は付けてよい）が家具に隠れないかをテストで確かめる。
   - 2Dの絵柄を6種類足して9種類にした（「描画スタイルを他にも作れ」）。メニューは、それぞれの絵柄で描いた見本を並べる形にした。
 - **2026-10-10**: 「テンプレートは複数階がありそうなものは複数階も作れ」で、旅館・ホテル・病院・学校・図書館・警察署・美術館・城に上の階を足した（ホテル・学校は3階）。上の階へ続く階段は同じ場所に置き、いちばん上の階に屋根を載せる（`tests/templates.test.mjs` が確かめる）。2階の下にならない部分には、1階に屋根を載せる（図書館・城）。
+- **2026-10-19**: 「池とかも自由に形作れるように」「他自由に形作れたら面白いものは反映して」で、自由な形（`src/free-shapes.ts`）。池・花壇・ラグ・フェンス・竹垣・飛び石は、なぞったときだけ `path` を持つ（クリックならいつもの形）。新しい芝生・川・小道・生け垣・石垣・線路はいつも `path` を持つ（なければ `defaultFreePath`）。置き方は足跡・破片と同じ「なぞって置く」（`placeFreeShapePath`、なぞり直しは `pathRedrawId`）。幅は `brush`。選ぶのは形の上だけ（`isPointOnFreeShape`）。草地の草は、形の上には生やさない（`GRASS_FREE_KINDS`）。帯を多角形の合成（polygon-clipping）で作ると長い道すじで1秒近くかかったので、2Dは太い線、3Dは箱と丸い柱にした。`npm run compare` は自由な形の「なぞった形」も並べる。E2E は `tests/free-shape-editor.mjs`（`--free-shapes-only`）。「城とか神社とかテンプレートに外見も作りこめ」で、テンプレートの作り方に `trace()`（自由な形をたどる点で置く）と屋根の `elevation` を足し、城（城壁・見張り台・門楼・堀・跳ね橋）・神社・寺（五重塔は屋根を5つ重ね、芯は細い石垣の輪）・武家屋敷・教会の外まわりを作った。自由な形はなめらかにするとき角を最大30cmしか切らない（長い塀の角が大きく丸まらないように）。`tests/templates.test.mjs` は、自由な形を範囲の四角ではなく形そのもので確かめる。E2E の再読み込みは DOMContentLoaded で進み、止まったら1回やり直す（`tests/editor.mjs` の `open`）。
 - **2026-10-18**: 「3dの方も絵柄を追加」「全ての家具や設備をリアルな絵柄も追加して3Dの方で」で、3Dの絵柄15種類（`src/three-style.ts`。3D欄の `#threeStyleSelect`、`viewState.look3d` に覚える）。描くのは `renderThreeView()`（3Dの画像の書き出しも同じ）。リアルは `applyThreeStyle()` がトーンマッピング・`RoomEnvironment` の映り込み・影の細かさ・空（`realSkyTexture`）・地面（`addRealGround`、方眼の代わり）・かすみを切り替え、作り直しのたびに `realizeMaterials()` で材質のシェーダーに模様を足す（材質の名前で分けるので、壁・床・屋根の材質にも名前を付けた）。「3Dの方の左クリックも真ん中を中心じゃなくて視点を中心に」は、押した所を中心に回す意味にした（ホイールと右ドラッグもマウスの位置が基準のため）。「視点移動制限をなくして」で上下の制限をなくした。「家具を動かすとリアルタイムに3dに反映」は `syncThreeWhileDragging()`（家具はその家具の3Dだけ動かす・作り直す。ほかは作り直しにかかった時間に合わせて間引いて全体を作り直す）。E2E は `tests/three-style-editor.mjs`（`--three-style-only`）と `tests/live-three-editor.mjs`（`--live-three-only`）。
 - **2026-10-15（その2）**: 「いくつかのファイルを組み合わせる機能」で、上のバーに「組み合わせ」（`#combineButton`・`#combineMenu`・`#combineInput`（複数選べる））を足した。`combinePlans` が書き出したファイルをいまの間取りに足す。置き方（`combinePlacement`。`viewState.combine` に覚える）は、右に並べる（`planBounds` の右へ `COMBINE_GAP`）・同じ位置・上の階に積む。並べる・重ねるときは `floorAtLevel` で同じ階どうし（地下も）を合わせ、足りない階は足す。足した物は新しいIDにし、屋根の `floorId` は付け替える。足したあと、表示中の階の足した物を `selectMany` で選ぶ。何もない間取りに足すときは「同じ位置」と同じ。E2E は `tests/combine-editor.mjs`（`--combine-only`）。
 - **2026-10-15**: 「3Dはドアもダブルクリックで選べるように」で、3Dのドア・窓を家具と同じ扱いにした（`isThreeDoubleSelect`）。ダブルクリック（タッチは長押し）で選び、1回のクリックでは選択を変えずに案内（`#threeHint`）を出す。それまでのドア・窓は1回のクリックで選ばれていた（ダブルクリックでも選べてはいた）。床・壁・屋根などは1回のクリックのまま。`tests/three-press-editor.mjs` に足した。

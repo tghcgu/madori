@@ -17,8 +17,10 @@ import { verifyThreePress } from './three-press-editor.mjs';
 import { verifyRoofColor } from './roof-color-editor.mjs';
 import { verifyDoublePress } from './double-press-editor.mjs';
 import { verifyCombine } from './combine-editor.mjs';
+import { TEMPLATE_GROUPS } from '../src/templates.ts';
 import { verifyLiveThree } from './live-three-editor.mjs';
 import { verifyThreeStyles } from './three-style-editor.mjs';
+import { verifyFreeShapes } from './free-shape-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -175,7 +177,28 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
     localStorage.setItem(key, raw);
     sessionStorage.setItem('seeded', 'yes');
   }, { key, raw });
-  await target.goto(server.resolvedUrls.local[0], { waitUntil: 'domcontentloaded', timeout: 60000 });
+  // 再読み込みは、画面のコードが動き出したら（DOMContentLoaded）進む。まれに読み込みが終わらないまま止まる
+  // （ネットワークの切り替わりなど。docs/handover.md の「取ってきたばかりの環境の E2E」）ので、そのときは1回だけやり直す
+  // ネットワークの切り替わりで読み込みが止まったり打ち切られたりしたとき（ERR_NETWORK_CHANGED・ERR_ABORTED）も、やり直す
+  const flaky = (error) => /Timeout|ERR_ABORTED|ERR_NETWORK_CHANGED|frame was detached/.test(String(error));
+  const reload = target.reload.bind(target);
+  target.reload = async (options = {}) => {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await reload({ waitUntil: 'domcontentloaded', timeout: 30000, ...options });
+      } catch (error) {
+        if (attempt >= 2 || !flaky(error)) throw error;
+      }
+    }
+  };
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await target.goto(server.resolvedUrls.local[0], { waitUntil: 'domcontentloaded', timeout: 60000 });
+      break;
+    } catch (error) {
+      if (attempt >= 2 || !flaky(error)) throw error;
+    }
+  }
   await target.waitForFunction(() => Boolean(window.__editorTest));
   return target;
 }
@@ -190,6 +213,8 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyFreeShapes({ open, plan, output });
+  if (!process.argv.includes('--free-shapes-only')) {
   await verifyThreeStyles({ open, plan, output });
   if (!process.argv.includes('--three-style-only')) {
   await verifyLiveThree({ open, plan, output });
@@ -1462,8 +1487,13 @@ try {
     assert.equal(edited.w, w); assert.equal(edited.h, h); assert.equal(edited.rotation, 90);
     assert.equal(edited.flip, true); assert.equal(edited.color3d, '#6c998e');
     const box = await page.evaluate(() => window.__editorTest.bounds('quality'));
-    assert.ok(Math.abs(box.max[0]-box.min[0]-h/100)<1e-5, `${kind}: rotated depth`);
-    assert.ok(Math.abs(box.max[2]-box.min[2]-w/100)<1e-5, `${kind}: rotated width`);
+    // 自由な形（いつも道すじを持つ種類）は、道すじの座標のまま作るので、範囲いっぱいには広がらない。形があることだけ見る
+    if (['lawn', 'river', 'pathway', 'hedge', 'stoneWall', 'railway'].includes(kind)) {
+      assert.ok(box.max[0] - box.min[0] > 0.05 && box.max[2] - box.min[2] > 0.05, `${kind}: has a 3D shape`);
+    } else {
+      assert.ok(Math.abs(box.max[0]-box.min[0]-h/100)<1e-5, `${kind}: rotated depth`);
+      assert.ok(Math.abs(box.max[2]-box.min[2]-w/100)<1e-5, `${kind}: rotated width`);
+    }
     assert.ok(box.min[1] >= 0.08-1e-5, `${kind}: below floor`);
   }
   // End on a piece with volume (the catalog now ends with flat marks on the floor) for the 3D check below.
@@ -1533,11 +1563,12 @@ try {
   await page.context().close();
   console.log('PASS: partial recovery, original download and quota-failure protection');
 
-  // Templates: 50 in six groups. The newer ones are whole buildings with walls, doors, furniture, floors and roofs.
+  // Templates: every group and template from templates.ts. The newer ones are whole buildings with walls, doors, furniture, floors and roofs.
   page = await open();
   page.on('dialog', dialog => dialog.accept());
-  assert.equal(await page.locator('#templateList .template-group').count(), 6);
-  assert.equal(await page.locator('[data-template]').count(), 50);
+  const templateCount = TEMPLATE_GROUPS.flatMap(group => group.templates).length;
+  assert.equal(await page.locator('#templateList .template-group').count(), TEMPLATE_GROUPS.length);
+  assert.equal(await page.locator('[data-template]').count(), templateCount);
   await choose('[data-template="westernMansion"]');
   let built = await saved();
   assert.deepEqual(built.floors.map(floor => floor.name), ['B1F', '1F', '2F'], 'the mansion has a cellar and two floors');
@@ -1557,7 +1588,7 @@ try {
   await page.locator('#undoButton').click();
   assert.ok((await saved()).floors.flatMap(floor => floor.entities).some(entity => entity.name === '宝物庫'), 'loading a template can be undone');
   await page.context().close();
-  console.log('PASS: templates: 50 in six groups, mansion with a cellar, castle, hospital, dungeon and cafe in 2D and 3D, and undo');
+  console.log(`PASS: templates: ${templateCount} in ${TEMPLATE_GROUPS.length} groups, mansion with a cellar, castle, hospital, dungeon and cafe in 2D and 3D, and undo`);
 
   page = await open();
   await verifyInteriorZoom(page, output);
@@ -1598,6 +1629,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

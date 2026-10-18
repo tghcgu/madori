@@ -8,6 +8,9 @@ import {
   partTop, personLayout, personOutline, personRefSize, presetPose, reachHandle, rockShapes, rockVertexHeights, shardMargin, shardPieces, shardTrail,
 } from '../src/furniture-shapes.ts';
 import { buildFurnitureModel } from '../src/furniture-models.ts';
+import {
+  FREE_AREA_KINDS, FREE_LINE_KINDS, bandOutline, freeBand, freeCenterLine, freeLineWidth, freeMargin, freeOutline, freePathPoints, freePond, isAlwaysFreeKind,
+} from '../src/free-shapes.ts';
 
 function dispose(group) {
   const materials = new Set();
@@ -105,17 +108,25 @@ function signature(group) {
 for (const { kind, defaults, symbol } of designs) {
   const name = symbol ? `${kind} (${FURNITURE_VARIANTS[kind][symbol - 1]})` : kind;
   test(`${name}: default, minimum, wide and deep models stay inside their footprint`, () => {
+    // 自由な形（いつも道すじを持つ種類）は、2Dと同じ座標のまま作る（範囲に合わせて伸び縮みしない）ので、決まった大きさの範囲に収まるかだけ見る
+    const free = isAlwaysFreeKind(kind);
     for (const [w, h] of [[defaults.w, defaults.h], [20, 20], [defaults.w * 2, defaults.h * 0.5], [defaults.w * 0.5, defaults.h * 2]]) {
       const group = buildFurnitureModel({ kind, w, h, symbol });
       try {
         const box = new THREE.Box3().setFromObject(group, true);
         const size = box.getSize(new THREE.Vector3());
-        assert.ok(Math.abs(size.x - w / 100) < 1e-5, `${kind} width ${size.x}`);
-        assert.ok(Math.abs(size.z - h / 100) < 1e-5, `${kind} depth ${size.z}`);
+        if (free) {
+          if (w === defaults.w && h === defaults.h) {
+            assert.ok(size.x <= w / 100 + 1e-5 && size.z <= h / 100 + 1e-5, `${kind} fits its frame: ${size.x} x ${size.z}`);
+          }
+        } else {
+          assert.ok(Math.abs(size.x - w / 100) < 1e-5, `${kind} width ${size.x}`);
+          assert.ok(Math.abs(size.z - h / 100) < 1e-5, `${kind} depth ${size.z}`);
+          assert.ok(Math.abs(box.min.x + box.max.x) < 1e-5);
+          assert.ok(Math.abs(box.min.z + box.max.z) < 1e-5);
+        }
         assert.ok(Number.isFinite(size.y) && size.y > 0);
         assert.ok(box.min.y >= -1e-5, `${kind} below floor`);
-        assert.ok(Math.abs(box.min.x + box.max.x) < 1e-5);
-        assert.ok(Math.abs(box.min.z + box.max.z) < 1e-5);
         assert.ok(group.children.length <= 24, `${kind} draw calls ${group.children.length}`);
         let triangles = 0;
         group.traverse(object => {
@@ -416,4 +427,59 @@ test('shard models follow the path and use an opaque tinted color when one is ch
     const box = new THREE.Box3().setFromObject(glass, true).getSize(new THREE.Vector3());
     assert.ok(Math.abs(box.x - 2.8) < 1e-5 && Math.abs(box.z - 0.8) < 1e-5 && box.y < 0.01);
   } finally { dispose(glass); dispose(brown); }
+});
+
+// 自由な形: なぞった道すじから、2Dと同じ座標で3Dを作る
+test('free shapes drawn along a path build 3D models on the same points as the 2D symbol', () => {
+  const loop = [[-0.4, -0.3], [0.1, -0.42], [0.42, -0.1], [0.35, 0.3], [-0.05, 0.42], [-0.42, 0.15]];
+  const wave = [[-0.42, 0.2], [-0.15, -0.25], [0.15, 0.25], [0.42, -0.2]];
+  for (const kind of [...FREE_AREA_KINDS, ...FREE_LINE_KINDS]) {
+    const area = FREE_AREA_KINDS.includes(kind);
+    const def = FURNITURE_DEFS[kind];
+    const w = 400, h = 300;
+    const item = { kind, w, h, path: area ? loop : wave, height: def.height };
+    const group = buildFurnitureModel(item);
+    try {
+      const box = new THREE.Box3().setFromObject(group, true);
+      assert.ok(box.min.y >= -1e-5, `${kind}: on the floor`);
+      // 3Dを真上から見た広がりは、2Dと同じ点から求めた広がりと同じ
+      const points = freePathPoints(item.path, w, h);
+      const shape = area ? freeOutline(points) : bandOutline(freeBand(freeCenterLine(points), freeLineWidth(kind)));
+      const xs = shape.map(([x]) => x / 100), zs = shape.map(([, y]) => y / 100);
+      const margin = freeMargin(kind) / 100 + 0.02;
+      assert.ok(box.min.x >= Math.min(...xs) - margin && box.max.x <= Math.max(...xs) + margin, `${kind}: x ${box.min.x}..${box.max.x}`);
+      assert.ok(box.min.z >= Math.min(...zs) - margin && box.max.z <= Math.max(...zs) + margin, `${kind}: z ${box.min.z}..${box.max.z}`);
+      assert.ok(group.children.length <= 24, `${kind}: draw calls ${group.children.length}`);
+      let triangles = 0;
+      group.traverse(object => {
+        if (!object.geometry) return;
+        triangles += (object.geometry.index?.count ?? object.geometry.getAttribute('position').count) / 3;
+        assert.ok(object.geometry.getAttribute('position').array.every(Number.isFinite), `${kind}: finite`);
+      });
+      assert.ok(triangles < 42000, `${kind}: triangles ${triangles}`);
+      // 高さのある物（生け垣・石垣・柵・竹垣）は、指定の高さちょうど
+      if (def.height) assert.ok(Math.abs(box.max.y - def.height / 100) < 0.02, `${kind}: top ${box.max.y}`);
+      // 道すじを持つ物は、持たない（いつもの形の）物と違う形になる
+      if (!isAlwaysFreeKind(kind)) {
+        const usual = buildFurnitureModel({ kind, w, h });
+        assert.notEqual(signature(group), signature(usual), `${kind}: the drawn shape is used`);
+        dispose(usual);
+      }
+    } finally { dispose(group); }
+  }
+  // 池の水面は、2Dの輪郭と同じ形の板
+  const pond = buildFurnitureModel({ kind: 'pond', w: 400, h: 300, path: loop });
+  const water = pond.children.find(child => child.material.name === 'water');
+  const surface = new THREE.Box3().setFromObject(water, true);
+  const outline = freePond(freePathPoints(loop, 400, 300)).water;
+  assert.ok(Math.abs(surface.min.x - Math.min(...outline.map(([x]) => x)) / 100) < 1e-3);
+  assert.ok(Math.abs(surface.max.z - Math.max(...outline.map(([, y]) => y)) / 100) < 1e-3);
+  dispose(pond);
+  // 川の幅は変えられる
+  const narrow = buildFurnitureModel({ kind: 'river', w: 400, h: 300, path: wave, brush: 60 });
+  const wide = buildFurnitureModel({ kind: 'river', w: 400, h: 300, path: wave, brush: 200 });
+  const span = group => new THREE.Box3().setFromObject(group, true).getSize(new THREE.Vector3()).z;
+  assert.ok(span(wide) > span(narrow) + 1);
+  dispose(narrow);
+  dispose(wide);
 });

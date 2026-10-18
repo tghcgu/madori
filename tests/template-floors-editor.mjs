@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { floorPolygon, pointInPolygon } from '../src/floor-outline.ts';
 import { isStair } from '../src/stairs.ts';
+import { TEMPLATE_GROUPS } from '../src/templates.ts';
 
 export async function verifyTemplateFloors({page,choose,output,pixels}) {
   const keys=await page.locator('[data-template]').evaluateAll(items=>items.map(item=>item.dataset.template));
-  assert.equal(keys.length,50);
+  assert.equal(keys.length,TEMPLATE_GROUPS.flatMap(group=>group.templates).length);
   for(const key of keys) {
     const plan=await page.evaluate(key=>window.__editorTest.templateSnapshot(key),key);
     assert.ok(plan.floors.length,`${key} normalizes successfully`);
