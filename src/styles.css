@@ -1176,6 +1176,21 @@ select:focus-visible {
   gap: 4px;
 }
 
+/* 描き方（ペンで描く・直線で描く・曲線で描く） */
+.draw-method {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.draw-method button {
+  min-height: 32px;
+  padding: 0 2px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 /* ペンで描く物（ペン・川・小道・池など） */
 .pen-kinds {
   display: grid;

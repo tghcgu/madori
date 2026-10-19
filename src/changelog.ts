@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "描き方に「直線で描く」と「曲線で描く」を用意しました（「囲って描く」は「直線で描く」になりました）。直線は角がとがり、点を打つ前にドラッグすると1本の直線（池などの閉じる形は四角）になります。曲線は、打った点を通るなめらかな線です。石垣・竹垣・フェンス・生け垣・線路は、はじめから直線で描けます。描き方は物ごとに覚えます",
+      en: "The drawing method now offers straight lines (直線で描く) and curves (曲線で描く); \"囲って描く\" became straight lines. Straight lines keep sharp corners, and a drag before placing any point draws one straight line (a rectangle for closed shapes such as ponds). Curves pass smoothly through the clicked points. Stone walls, bamboo fences, fences, hedges and railways start as straight lines, and the method is remembered for each kind",
+    }, {
       ja: "床・地面、ペン、池・川・小道などの自由な形、足跡・破片のどれも、描き方を「ペンで描く」（なぞる）か「囲って描く」（クリックで点を打つ）から選べるように。囲って描くと、点と点のあいだはまっすぐになり、閉じる形は最初の点を押すと、線は Enter かダブルクリックで描き終えます",
       en: "Floors and ground, the pen, free shapes such as ponds, rivers and paths, footprints and shards can all be drawn either by tracing (ペンで描く) or by clicking points (囲って描く). With clicked points the edges are straight; closed shapes finish when you click the first point, and lines finish with Enter or a double-click",
     }, {

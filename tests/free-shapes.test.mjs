@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   FREE_AREA_KINDS, FREE_LINE_KINDS, ALWAYS_FREE_KINDS, RAILWAY, bandOutline, defaultFreePath, distanceToFreeLine, freeBand, freeFlowerBed,
   freeLawn, freeLineLength, freeLineWidth, freeMargin, freeOutline, freePathPoints, freePond, freePosts, freeShapeLine, freeSteppingStones,
-  freeCenterLine, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
+  curveThrough, freeCenterLine, isAlwaysFreeKind, sharpCorners, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
   smoothFreeLine,
 } from '../src/free-shapes.ts';
 
@@ -47,6 +47,19 @@ test('a line drawn back to where it started keeps its whole loop', () => {
   assert.ok(line.length >= 5, `kept ${line.length} points`);
   assert.ok(freeLineLength(line) > 1300, 'the loop is about 1400cm long');
   for (const corner of [[400, 0], [400, 300], [0, 300]]) assert.ok(distanceToFreeLine(corner[0], corner[1], line, false) < 30, `passes by ${corner}`);
+});
+
+test('straight shapes keep sharp corners after smoothing, and curves pass through their points', () => {
+  const corner = [[0, 0], [300, 0], [300, 200]];
+  assert.deepEqual(freeCenterLine(sharpCorners(corner, false)), corner, 'the corner of a straight line stays sharp');
+  const box = freeOutline(sharpCorners([[0, 0], [200, 0], [200, 100], [0, 100]], true));
+  for (const p of [[0, 0], [200, 0], [200, 100], [0, 100]]) assert.ok(box.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 0.01), `the box keeps the corner ${p}`);
+  const curve = curveThrough(corner, false);
+  assert.ok(curve.length > 10, 'a curve has many points');
+  for (const p of corner) assert.ok(Math.min(...curve.map(q => Math.hypot(q[0] - p[0], q[1] - p[1]))) < 0.01, `the curve passes ${p}`);
+  const loop = curveThrough([[0, 0], [200, 0], [200, 200], [0, 200]], true);
+  assert.ok(loop.length > 20 && Math.hypot(loop[0][0] - loop.at(-1)[0], loop[0][1] - loop.at(-1)[1]) > 1, 'a closed curve does not repeat its first point');
+  assert.deepEqual(curveThrough([[0, 0], [10, 0]], false), [[0, 0], [10, 0]], 'two points stay a straight line');
 });
 
 test('offset lines run beside the path at the given distance', () => {

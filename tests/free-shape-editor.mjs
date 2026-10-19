@@ -169,37 +169,63 @@ export async function verifyFreeShapes({ open, plan, output }) {
     await page.locator('.tool-button[data-tool="paint"]').click();
     assert.equal(await page.locator('[data-pen-kind="pond"]').getAttribute('aria-checked'), 'true', 'the pen remembers what it draws');
     await page.locator('[data-pen-kind="paint"]').click();
-    // 描き方「囲って描く」: クリックで点を打って描く。線は Enter で終え、閉じた形は最初の点で閉じる。点と点のあいだはまっすぐ
-    await page.locator('[data-pen-kind="river"]').click();
-    await page.locator('[data-draw-method="points"]').click();
-    assert.equal(await page.locator('[data-draw-method="points"]').getAttribute('aria-checked'), 'true');
-    assert.match(await page.locator('#toolHint').textContent(), /クリックで点を打ち/);
+    // 描き方は物ごとに「ペンで描く・直線で描く・曲線で描く」から選べる。直線・曲線はクリックで点を打ち、線は Enter、閉じる形は最初の点で終える
     const clickAt = async (x, y) => { const at = await point(x, y); await page.mouse.click(at.x, at.y); await page.waitForTimeout(80); };
+    const near = (path, item, [x, y]) => {
+      const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+      return Math.min(...path.map(([u, v]) => Math.hypot(cx + u * item.w - x, cy + v * item.h - y)));
+    };
+    await page.locator('[data-pen-kind="river"]').click();
+    assert.equal(await page.locator('[data-draw-method="trace"]').getAttribute('aria-checked'), 'true', 'rivers start with tracing');
+    await page.locator('[data-draw-method="straight"]').click();
+    assert.match(await page.locator('#toolHint').textContent(), /クリックで点を打ち/);
     const riverTotal = (await rivers()).length;
     for (const [x, y] of [[200, 600], [500, 520], [800, 600]]) await clickAt(x, y);
     assert.match(await page.locator('#floorToolbar').textContent(), /川の作図/);
     assert.match(await page.locator('#floorToolbar').textContent(), /3点/);
     await page.keyboard.press('Enter');
     assert.equal((await rivers()).length, riverTotal + 1, 'the river is drawn through the clicked points');
-    assert.equal((await rivers()).at(-1).path.length, 3, 'the river follows the three clicked points');
+    const straightRiver = (await rivers()).at(-1);
+    assert.equal(straightRiver.path.length, 5, 'a straight river keeps a sharp corner at the middle point');
+    // 曲線: 点を通るなめらかな線
+    await page.locator('[data-draw-method="curve"]').click();
+    for (const [x, y] of [[200, 400], [500, 320], [800, 400]]) await clickAt(x, y);
+    await page.keyboard.press('Enter');
+    const curvedRiver = (await rivers()).at(-1);
+    assert.ok(curvedRiver.path.length > 10, `a curved river is a smooth line: ${curvedRiver.path.length} points`);
+    assert.ok(near(curvedRiver.path, curvedRiver, [500, 320]) < 3, 'the curve passes through the clicked points');
+    // 池: 最初の点を押すと閉じる（直線は角をとがらせる）
     await page.locator('[data-pen-kind="pond"]').click();
+    await page.locator('[data-draw-method="straight"]').click();
     const ponds = async () => (await items()).filter(item => item.kind === 'pond');
     const pondTotal = (await ponds()).length;
     for (const [x, y] of [[900, 420], [1100, 420], [1100, 560], [900, 560], [900, 420]]) await clickAt(x, y);
     assert.equal((await ponds()).length, pondTotal + 1, 'clicking the first point again closes the pond');
-    assert.equal((await ponds()).at(-1).path.length, 4);
+    assert.equal((await ponds()).at(-1).path.length, 12, 'every corner of a straight pond stays sharp');
+    // ペンの線: 点と点のあいだはまっすぐ
     await page.locator('[data-pen-kind="paint"]').click();
+    await page.locator('[data-draw-method="straight"]').click();
     const strokes = async () => (await items()).filter(item => item.kind === 'paint');
     const strokeTotal = (await strokes()).length;
     for (const [x, y] of [[100, 100], [300, 100], [300, 250]]) await clickAt(x, y);
     await page.keyboard.press('Enter');
     assert.equal((await strokes()).length, strokeTotal + 1);
     assert.equal((await strokes()).at(-1).path.length, 3, 'the pen line keeps its corners');
-    // 床: 部屋のツールで「囲って描く」を選ぶと「線で囲んで床を作成」、「ペンで描く」で部屋のツールに戻る
+    await page.locator('[data-draw-method="trace"]').click();
+    // 石垣ははじめから直線。点を打つ前にドラッグすると、そのまま1本の直線
+    await page.locator('[data-pen-kind="stoneWall"]').click();
+    assert.equal(await page.locator('[data-draw-method="straight"]').getAttribute('aria-checked'), 'true', 'stone walls start as straight lines');
+    const walls = async () => (await items()).filter(item => item.kind === 'stoneWall');
+    const wallTotal = (await walls()).length;
+    await trace([[150, 760], [650, 760]]);
+    assert.equal((await walls()).length, wallTotal + 1, 'a drag draws one straight stone wall');
+    assert.equal((await walls()).at(-1).path.length, 2);
+    // 床: 部屋のツールで「直線」「曲線」を選ぶと線で囲んで床を作成、「ペンで描く」で部屋のツールに戻る
     await page.locator('.tool-button[data-tool="room"]').click();
     assert.equal(await page.locator('[data-draw-method="trace"]').getAttribute('aria-checked'), 'true');
-    await page.locator('[data-draw-method="points"]').click();
-    assert.equal(await page.locator('.tool-button[data-tool="floor"]').getAttribute('aria-pressed'), 'true', 'enclosing floors uses the floor drawing tool');
+    await page.locator('[data-draw-method="curve"]').click();
+    assert.equal(await page.locator('.tool-button[data-tool="floor"]').getAttribute('aria-pressed'), 'true', 'clicking points for floors uses the floor drawing tool');
+    assert.equal(await page.locator('[data-draw-method="curve"]').getAttribute('aria-checked'), 'true');
     await page.locator('[data-draw-method="trace"]').click();
     assert.equal(await page.locator('.tool-button[data-tool="room"]').getAttribute('aria-pressed'), 'true', 'tracing floors uses the room tool');
     console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and ponds; every shape can be drawn by tracing or by clicking points');

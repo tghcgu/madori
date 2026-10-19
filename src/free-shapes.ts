@@ -126,6 +126,43 @@ export function simplifyFreeLine(points: Point2[], tolerance: number): Point2[] 
   return points.filter((_, index) => keep[index]);
 }
 
+// 角をとがらせた道すじ。角の点を3つ重ねておくと、なめらかにしても（2Dも3Dも）角が丸まらない。線の両端はそのまま
+export function sharpCorners(points: Point2[], closed: boolean): Point2[] {
+  return points.flatMap((point, i): Point2[] => (closed || (i > 0 && i < points.length - 1) ? [point, point, point] : [point]));
+}
+
+// 点を通るなめらかな曲線（セントリペタル Catmull-Rom）。closed なら輪にする。区切りごとに約 step cm で点を置く
+export function curveThrough(points: Point2[], closed: boolean, step = 15): Point2[] {
+  const n = points.length;
+  if (n < 3) return points.map(([x, y]): Point2 => [x, y]);
+  const at = (i: number): Point2 => {
+    if (closed) return points[((i % n) + n) % n];
+    // 線の両端は、外側へまっすぐのばした点を使う
+    if (i < 0) return [2 * points[0][0] - points[1][0], 2 * points[0][1] - points[1][1]];
+    if (i > n - 1) return [2 * points[n - 1][0] - points[n - 2][0], 2 * points[n - 1][1] - points[n - 2][1]];
+    return points[i];
+  };
+  const knot = (a: Point2, b: Point2) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-3);
+  const lerp = (a: Point2, b: Point2, ta: number, tb: number, t: number): Point2 => {
+    const k = (t - ta) / (tb - ta);
+    return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  };
+  const out: Point2[] = [];
+  for (let i = 0; i < (closed ? n : n - 1); i += 1) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    const t0 = 0, t1 = t0 + knot(p0, p1), t2 = t1 + knot(p1, p2), t3 = t2 + knot(p2, p3);
+    const count = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / step));
+    for (let k = 0; k < count; k += 1) {
+      const t = t1 + ((t2 - t1) * k) / count;
+      const a1 = lerp(p0, p1, t0, t1, t), a2 = lerp(p1, p2, t1, t2, t), a3 = lerp(p2, p3, t2, t3, t);
+      const b1 = lerp(a1, a2, t0, t2, t), b2 = lerp(a2, a3, t1, t3, t);
+      out.push(lerp(b1, b2, t1, t2, t));
+    }
+  }
+  if (!closed) out.push([points[n - 1][0], points[n - 1][1]]);
+  return out;
+}
+
 // 線の形の中心線（なめらかにして、見た目が変わらない程度に点を減らす）
 export function freeCenterLine(points: Point2[]): Point2[] {
   return simplifyFreeLine(smoothFreeLine(points, false), 0.6);

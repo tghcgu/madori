@@ -20,7 +20,7 @@ import {
   isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
 } from "./three-style";
 import {
-  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, defaultFreePath, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
+  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, curveThrough, defaultFreePath, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
   freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
   offsetFreeLine, pointInFreePolygon, type FreeKind,
 } from "./free-shapes";
@@ -562,8 +562,12 @@ let activeRoomSurface: RoomSurface = "plain";
 // 形をなぞって描き直している床（部屋のツールで、次になぞった形・四角をこの床に当てる）
 let floorRetraceId: string | null = null;
 let floorDraft: { floorId: string; target: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
-// 描き方。ペン・なぞれる物（池・川・足跡など）・床を、ペンでなぞって描くか、点を打って囲って描くか（ブラウザに覚える）
-let drawMethod: "trace" | "points" = "trace";
+// 描き方。ペン・なぞれる物（池・川・足跡など）・床を、ペンでなぞって描くか、点を打って直線か曲線でつなぐか。物ごとに覚える（ブラウザに保存）
+type DrawMethod = "trace" | "straight" | "curve";
+const DRAW_METHODS: DrawMethod[] = ["trace", "straight", "curve"];
+const drawMethods: Record<string, DrawMethod> = {};
+// まっすぐ描くことが多い物は、はじめから直線
+const STRAIGHT_DRAW_KINDS = new Set<string>(["stoneWall", "takegaki", "fence", "hedge", "railway"]);
 let floorEdit: { id: string; vertex: number | null } | null = null;
 let floorEditError = "";
 let floorToolbar: HTMLDivElement | null = null;
@@ -782,7 +786,7 @@ interface SavedViewState {
   // 「組み合わせ」の置き方
   combine?: string;
   pen?: { color?: string; brush?: number; filled?: boolean; kind?: string };
-  drawMethod?: string;
+  drawMethods?: Record<string, string>;
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
   // 3Dの絵柄
@@ -1354,7 +1358,7 @@ function buildFurniturePicker(): void {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
       floorRetraceId = null;
-      if (activeTool !== "floor") activeTool = drawMethod === "points" ? "floor" : "room";
+      if (activeTool !== "floor") activeTool = drawMethodFor("floor") === "trace" ? "room" : "floor";
       if (activeTool === "floor") updatePropertiesPanel();
       setActiveButton("[data-surface]", surface);
       setActiveButton("[data-tool]", activeTool);
@@ -2145,7 +2149,9 @@ function applySavedDisplaySettings(): void {
     penSettings.filled = filled === true;
     penSettings.kind = (PEN_KINDS as readonly string[]).includes(kind ?? "") ? kind as PenKind : "paint";
   }
-  drawMethod = viewState.drawMethod === "points" ? "points" : "trace";
+  if (viewState.drawMethods && typeof viewState.drawMethods === "object") {
+    for (const [key, method] of Object.entries(viewState.drawMethods)) if ((DRAW_METHODS as string[]).includes(method)) drawMethods[key] = method as DrawMethod;
+  }
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -2230,7 +2236,7 @@ function saveViewState(): void {
   viewState.symbols = { ...lastSymbolByKind };
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
-  viewState.drawMethod = drawMethod;
+  viewState.drawMethods = { ...drawMethods };
   viewState.shards = { ...shardSettings };
   viewState.look = { style: planStyle, dot: pixelDot, background: planBackground };
   try {
@@ -2735,13 +2741,13 @@ function toolAction(): [string, string] | null {
     case "polygon":
       return ["ドラッグで図形の壁を描く", click];
     case "furniture":
-      if (drawMethod === "points" && isTraceableKind(activeFurniture)) return [isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture) ? "クリックで点を打ち、最初の点で閉じる" : "クリックで点を打ち、Enter・ダブルクリックで描き終える", hold];
+      if (currentDrawMethod() !== "trace" && isTraceableKind(activeFurniture)) return [isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture) ? "クリックで点を打ち、最初の点で閉じる" : "クリックで点を打ち、Enter・ダブルクリックで描き終える", hold];
       if (isFreeShapeKind(activeFurniture)) return [isFreeAreaKind(activeFurniture) ? "ドラッグで囲んで形を作る（クリックで置く）" : "ドラッグでなぞって置く（クリックで置く）", hold];
       return [activeFurniture === "footprints" || activeFurniture === "brokenGlass" ? "なぞって置く" : "クリックで置く", hold];
     case "text":
       return ["クリックで文字を置く", hold];
     case "paint":
-      if (drawMethod === "points") return [penSettings.kind === "paint" && !penSettings.filled || (penSettings.kind !== "paint" && !isFreeAreaKind(penSettings.kind)) ? "クリックで点を打ち、Enter・ダブルクリックで描き終える" : "クリックで点を打ち、最初の点で閉じる", hold];
+      if (currentDrawMethod() !== "trace") return [penSettings.kind === "paint" && !penSettings.filled || (penSettings.kind !== "paint" && !isFreeAreaKind(penSettings.kind)) ? "クリックで点を打ち、Enter・ダブルクリックで描き終える" : "クリックで点を打ち、最初の点で閉じる", hold];
       return [penSettings.kind === "paint" ? "ドラッグで描く" : `ドラッグで${FURNITURE_DEFS[penSettings.kind].label}を描く`, hold];
     case "erase":
       return ["クリックで消す", hold];
@@ -2869,7 +2875,12 @@ function handlePointerUp(event: PointerEvent): void {
   // 長押しになる前に離した（クリック）
   const clicked = !traced && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
   cancelLongPress();
-  if (isPointDrafting() && drag.dragMode !== "pan") addDraftFloorPoint(screenToWorld(event), event.shiftKey);
+  if (isPointDrafting() && drag.dragMode !== "pan") {
+    const released = screenToWorld(event);
+    const dragged = Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) > CLICK_SLOP;
+    if (dragged && activeTool !== "floor" && currentDrawMethod() === "straight" && !floorDraft?.points.length) placeStraightDrag(drag.startWorld, released);
+    else addDraftFloorPoint(released, event.shiftKey);
+  }
 
   // Ctrl+クリックは選ぶ物を足す・外す、Ctrl+ドラッグは囲んだ物を足す
   if (drag.dragMode === "marquee") {
@@ -3782,18 +3793,58 @@ function floorHandles(room: Room): { key: string; x: number; y: number }[] {
   ];
 }
 
-// 点を打って描いているか（「線で囲んで床を作成」と、描き方を「囲って描く」にしたペン・なぞれる物）
+// いま描こうとしている物（描き方を覚える単位）。床は "floor"、ペンの線は "paint"
+function drawKey(): string | null {
+  if (activeTool === "room" || activeTool === "floor") return "floor";
+  if (activeTool === "paint") return penSettings.kind;
+  if (activeTool === "furniture" && isTraceableKind(activeFurniture)) return activeFurniture;
+  return null;
+}
+
+function drawMethodFor(key: string): DrawMethod {
+  return drawMethods[key] ?? (STRAIGHT_DRAW_KINDS.has(key) ? "straight" : "trace");
+}
+
+// いまの描き方。床は、部屋のツールが「ペンで描く」、線で囲んで床を作成が「直線」か「曲線」
+function currentDrawMethod(): DrawMethod {
+  const key = drawKey();
+  if (!key || activeTool === "room") return "trace";
+  if (activeTool === "floor") return drawMethods.floor === "curve" ? "curve" : "straight";
+  return drawMethodFor(key);
+}
+
+// 点を打って描いているか（線で囲んで床を作成と、描き方を「直線」「曲線」にしたペン・なぞれる物）
 function isPointDrafting(): boolean {
-  return activeTool === "floor" || (drawMethod === "points" && (activeTool === "paint" || (activeTool === "furniture" && isTraceableKind(activeFurniture))));
+  return activeTool === "floor" || ((activeTool === "paint" || (activeTool === "furniture" && isTraceableKind(activeFurniture))) && currentDrawMethod() !== "trace");
+}
+
+// 打った点から、描く物の道すじを作る。曲線は点を通るなめらかな線、直線の自由な形は角をとがらせる
+function shapeDraftPoints(points: [number, number][], closed: boolean): Point2[] {
+  if (currentDrawMethod() === "curve") return curveThrough(points, closed);
+  const kind = activeTool === "paint" ? penSettings.kind : activeFurniture;
+  if (kind !== "paint" && isFreeShapeKind(kind)) return sharpCorners(points, closed);
+  return points.map(([x, y]): Point2 => [x, y]);
+}
+
+// 直線で描くとき、点を打つ前にドラッグしたら、そのまま1本の直線（閉じる形は四角）を置く
+function placeStraightDrag(start: Point, end: Point): void {
+  const a = draftFloorPoint(start), b = draftFloorPoint(end);
+  if (a.x === b.x && a.y === b.y) return;
+  const target = draftTarget();
+  const points: [number, number][] = target.closed ? [[a.x, a.y], [b.x, a.y], [b.x, b.y], [a.x, b.y]] : [[a.x, a.y], [b.x, b.y]];
+  if (target.closed && (a.x === b.x || a.y === b.y)) return;
+  floorDraft = { floorId: activeFloor().id, target: target.key, points, undone: [], hover: null };
+  finishFloorDraft();
 }
 
 // 点を打って描く物。閉じた形（床・池・塗りつぶすペンなど）は最初の点に戻って閉じ、線（川・小道・ペンの線・足跡など）は Enter かダブルクリックで終える
 function draftTarget(): { key: string; label: string; closed: boolean; min: number } {
-  if (activeTool === "floor") return { key: "floor", label: "床", closed: true, min: 3 };
+  if (activeTool === "floor") return { key: `floor:${currentDrawMethod()}`, label: "床", closed: true, min: 3 };
   const kind = activeTool === "paint" ? penSettings.kind : activeFurniture;
-  if (kind === "paint") return { key: penSettings.filled ? "paint-fill" : "paint", label: "ペン", closed: penSettings.filled, min: penSettings.filled ? 3 : 2 };
+  const method = currentDrawMethod();
+  if (kind === "paint") return { key: `${penSettings.filled ? "paint-fill" : "paint"}:${method}`, label: "ペン", closed: penSettings.filled, min: penSettings.filled ? 3 : 2 };
   const closed = isFreeShapeKind(kind) && isFreeAreaKind(kind);
-  return { key: kind, label: FURNITURE_DEFS[kind].label, closed, min: closed ? 3 : 2 };
+  return { key: `${kind}:${method}`, label: FURNITURE_DEFS[kind].label, closed, min: closed ? 3 : 2 };
 }
 
 function syncFloorEditing(): void {
@@ -3863,7 +3914,8 @@ function finishFloorDraft(): void {
     finishShapeDraft();
     return;
   }
-  const outline = outlineFromPoints(floorDraft.points);
+  const curved = currentDrawMethod() === "curve" ? tracedFloorPoints(curveThrough(floorDraft.points, true), 1) : null;
+  const outline = outlineFromPoints(curved ?? floorDraft.points);
   if (!outline) { floorEditError = "線が交差しているか、床の面積がありません"; syncFloorToolbar(); return; }
   const room: Room = { id: newId("room"), type: "room", name: "", color: SURFACE_DEFS[activeRoomSurface].color, surface: activeRoomSurface, ...outline };
   activeEntities().push(room);
@@ -3880,7 +3932,7 @@ function finishFloorDraft(): void {
 // 点を打って描いたペンの線・自由な形・足跡・破片を置く（点と点のあいだはまっすぐ）。描くツールのまま続けて描ける
 function finishShapeDraft(): void {
   if (!floorDraft) return;
-  const points = floorDraft.points.map(([x, y]): Point => ({ x, y }));
+  const points = shapeDraftPoints(floorDraft.points, draftTarget().closed).map(([x, y]): Point => ({ x, y }));
   floorDraft = null;
   floorEditError = "";
   if (activeTool === "paint") {
@@ -6763,19 +6815,22 @@ function penControlsHtml(prefix: string, color: string, brush: number, filled: b
 
 // 描き方を選ぶ欄（ペンでなぞる・点を打って囲う）。床は「部屋」と「線で囲んで床を作成」を切り替える
 function drawMethodHtml(): string {
-  const method = activeTool === "floor" ? "points" : activeTool === "room" ? "trace" : drawMethod;
-  const item = (value: "trace" | "points", label: string) => `<button type="button" role="radio" data-draw-method="${value}" class="${method === value ? "is-active" : ""}" aria-checked="${method === value}">${label}</button>`;
+  const method = currentDrawMethod();
+  const item = (value: DrawMethod, label: string) => `<button type="button" role="radio" data-draw-method="${value}" class="${method === value ? "is-active" : ""}" aria-checked="${method === value}">${label}</button>`;
   return `<label>描き方</label>
-    <div class="segmented pen-mode draw-method" role="radiogroup" aria-label="描き方">${item("trace", "ペンで描く")}${item("points", "囲って描く")}</div>`;
+    <div class="segmented draw-method" role="radiogroup" aria-label="描き方">${item("trace", "ペンで描く")}${item("straight", "直線で描く")}${item("curve", "曲線で描く")}</div>`;
 }
 
 function bindDrawMethod(): void {
   propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-draw-method]").forEach((button) => button.addEventListener("click", () => {
-    drawMethod = button.dataset.drawMethod === "points" ? "points" : "trace";
+    const method = (DRAW_METHODS as string[]).includes(button.dataset.drawMethod ?? "") ? button.dataset.drawMethod as DrawMethod : "trace";
+    const key = drawKey();
+    if (!key) return;
+    drawMethods[key] = method;
     floorDraft = null;
     floorEditError = "";
-    if (activeTool === "room" && drawMethod === "points") activeTool = "floor";
-    else if (activeTool === "floor" && drawMethod === "trace") activeTool = "room";
+    // 床: ペンで描くなら部屋のツール、直線・曲線なら線で囲んで床を作成
+    if (key === "floor") activeTool = method === "trace" ? "room" : "floor";
     setActiveButton("[data-tool]", activeTool);
     scheduleViewStateSave();
     syncPlanCursor();
@@ -8439,8 +8494,10 @@ function drawFloorDraft(): void {
   const target = draftTarget();
   const points = floorDraft.points, hover = floorDraft.hover;
   const closing = target.closed && points.length >= 3 && hover && Math.hypot(hover.x - points[0][0], hover.y - points[0][1]) <= 14 / view.zoom;
+  const curve = currentDrawMethod() === "curve";
   if (activeTool !== "floor") {
-    const path = [...points.map(([x, y]): Point => ({ x, y })), ...(hover && !closing ? [hover] : [])];
+    const placed: [number, number][] = [...points, ...(hover && !closing ? [[hover.x, hover.y] as [number, number]] : [])];
+    const path = shapeDraftPoints(placed, target.closed && (closing || placed.length >= 3)).map(([x, y]): Point => ({ x, y }));
     if (activeTool === "paint" && penSettings.kind === "paint") drawPaintPreview(path, true);
     else {
       const kind = activeTool === "paint" ? penSettings.kind : activeFurniture;
@@ -8452,8 +8509,15 @@ function drawFloorDraft(): void {
   ctx.strokeStyle = "#2775d1";
   ctx.fillStyle = "rgba(39,117,209,.12)";
   ctx.beginPath();
-  points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-  if (hover) ctx.lineTo(closing ? points[0][0] : hover.x, closing ? points[0][1] : hover.y);
+  if (curve) {
+    // 曲線: 打った点（とマウスの所）を通る線
+    const through: [number, number][] = [...points, ...(hover && !closing ? [[hover.x, hover.y] as [number, number]] : [])];
+    curveThrough(through, target.closed && closing === true).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    if (target.closed && closing) ctx.closePath();
+  } else {
+    points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    if (hover) ctx.lineTo(closing ? points[0][0] : hover.x, closing ? points[0][1] : hover.y);
+  }
   if (target.closed) ctx.fill();
   ctx.stroke();
   if (target.closed) {
@@ -9580,11 +9644,14 @@ function describeSelection(entities: Entity[]): string {
     .filter(([, count]) => count > 0).map(([name, count]) => `${name} ${count}`).join("・");
 }
 
-// 点を打って描くときの案内
+// 点を打って描くときの案内（直線・曲線）
 function drawPointsHint(label: string, closed: boolean): string {
+  const curve = currentDrawMethod() === "curve";
+  const drag = curve || activeTool === "floor" ? "" : closed ? "ドラッグすると四角になります。" : "ドラッグすると1本の直線になります。";
+  const how = curve ? "点を通るなめらかな曲線でつなぎます" : "点と点をまっすぐにつなぎます";
   return closed
-    ? `${label}: 2Dをクリックして点を打ち、最初の点を押すと閉じて${label}になります（Enter でも閉じます。Backspace で1点戻す）。`
-    : `${label}: 2Dをクリックして点を打ち、Enter かダブルクリックで描き終えます（Backspace で1点戻す）。`;
+    ? `${label}: 2Dをクリックして点を打つと、${how}。最初の点を押すと閉じて${label}になります（Enter でも閉じます。Backspace で1点戻す）。${drag}`
+    : `${label}: 2Dをクリックして点を打つと、${how}。Enter かダブルクリックで描き終えます（Backspace で1点戻す）。${drag}`;
 }
 
 function updatePropertiesPanel(): void {
@@ -9639,7 +9706,7 @@ function updatePropertiesPanel(): void {
         ? `ペンで${FURNITURE_DEFS[kind].label}: 2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。`
         : `ペンで${FURNITURE_DEFS[kind].label}: 2Dをなぞると、その道すじに沿って描けます（クリックだけなら、まっすぐ）。`;
     propertiesPanel.innerHTML = `<div class="property-grid">
-        <p class="empty-state">${drawMethod === "points" ? drawPointsHint(kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label, kind === "paint" ? penSettings.filled : isFreeAreaKind(kind)) : hint}</p>
+        <p class="empty-state">${currentDrawMethod() !== "trace" ? drawPointsHint(kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label, kind === "paint" ? penSettings.filled : isFreeAreaKind(kind)) : hint}</p>
         ${drawMethodHtml()}
         ${penKindHtml()}
         ${kind === "paint" ? penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled) : penShapeWidthHtml(kind)}
@@ -9654,7 +9721,7 @@ function updatePropertiesPanel(): void {
     const area = activeTool === "room" || (isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture));
     const hint = activeTool === "room"
       ? "床: 2Dを斜めにドラッグすると四角、ぐるっとなぞるとその形の床になります。"
-      : drawMethod === "points" ? drawPointsHint(label, area) : `${label}: ${area ? "2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。" : "2Dをなぞると、その道すじに沿って置けます（クリックだけなら、まっすぐ）。"}`;
+      : currentDrawMethod() !== "trace" ? drawPointsHint(label, area) : `${label}: ${area ? "2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。" : "2Dをなぞると、その道すじに沿って置けます（クリックだけなら、まっすぐ）。"}`;
     propertiesPanel.innerHTML = `<div class="property-grid">
         <p class="empty-state">${hint}</p>
         ${drawMethodHtml()}
