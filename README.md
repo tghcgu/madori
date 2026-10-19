@@ -93,7 +93,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 3Dを真上から見た形は、2Dの記号と同じになるように作っています。岩の輪郭と稜線、池の輪郭と石の位置、飛び石・花壇の花の並び、木目、ラグの柄、植物の葉の向きなどは、2Dと3Dが同じデータから作られます（冷蔵庫の雪の結晶や靴箱の靴のように、見分けるための図柄は2Dだけに描きます）
 - 部屋名を本文とは別にドラッグして自由配置
 - 部屋名の「文字サイズ cm」を変更できます（空欄で自動）。部屋名と自由テキストは「横書き」「縦書き」を切り替えられ、縦書きの改行は右から左へ列を増やします。保存・Undo/Redo・PNGにも反映されます
-- 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。ペンの色や太さはブラウザに記憶されます
+- 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。描く前から、マウスの所にペン先の大きさの丸が出るので、太さが分かります（太さを変えている間は、2Dの真ん中に同じ丸が出ます）。ペンの色や太さはブラウザに記憶されます
 - 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定。見本から選ぶほか、カラーコード（`#RRGGBB`）を直接入力できます。末尾に2桁足した`#RRGGBBAA`では透明度も決められ（`00`で透明〜`ff`で不透明。例: `#2775d180`で半分透ける）、2Dでは同じ色の要素をまとめて1回で透かすので重なった所や壁の角も同じ濃さ、3Dでは床・壁・建具・家具がまるごと透けます（透けている物は影を落としません）。見本では透明度が市松模様で分かり、見本で色を選び直しても透明度はそのまま。カラーコードを空にすると標準の色に戻ります
@@ -213,7 +213,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 ### 家具・設備
 
-左パネルの「家具・設備」は、よく使う順に並べています（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いているのは建具と椅子・ソファだけで、開け閉めはブラウザが覚えます。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。探しやすいように、いくつかの物は複数の分類に重ねて出します（たとえば座布団は「和風」と「椅子・ソファ」の両方、障子や襖は「建具」と「和風」の両方）。下の表の（）の中が、ほかの分類にも出している物です。検索の結果では、重ねて出している物も、上の分類の1つだけを出します。
+左パネルの「家具・設備」は、よく使う順に並べています（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・なぞって形を決める物・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いているのは建具と椅子・ソファだけで、開け閉めはブラウザが覚えます。家具は置く部屋ではなく種類で分類しているため、店舗や学校など部屋の種類が決まっていない創作でも探しやすくなっています。探しやすいように、いくつかの物は複数の分類に重ねて出します（たとえば座布団は「和風」と「椅子・ソファ」の両方、障子や襖は「建具」と「和風」の両方）。下の表の（）の中が、ほかの分類にも出している物です。検索の結果では、重ねて出している物も、上の分類の1つだけを出します。
 
 | 分類 | 収録要素 |
 | --- | --- |
@@ -227,6 +227,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン、室外機、扇風機、ストーブ（複合機、自動販売機） |
 | 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
 | 階段 | 直階段、折り返し階段、らせん階段 |
+| なぞって形を決める | ペン、池、花壇、芝生、ラグ、川、小道、生け垣、石垣、フェンス、竹垣、線路、飛び石、足跡、破片（床・地面の素材と部屋も、ぐるっとなぞるとその形） |
 | 床・地面 | 標準、フローリング、ヘリンボーン、ウッドデッキ・板張り、畳、カーペット、タイル、モザイクタイル、市松・チェッカー、大理石、石の床、石畳、レンガ、コンクリート、アスファルト、鉄板（縞鋼板）、草地・芝生、土・土間、砂・砂浜、砂利、雪、水面 |
 | 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、芝生、川、小道、生け垣、石垣、フェンス、竹垣、外灯、石灯籠、墓石、十字架の墓、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ、井戸、噴水、石像、焚き火、テント（門扉、ベンチ、つくばい、縁台、鳥居、室外機、自転車、車） |
 | 屋根 | 切妻、寄棟、陸屋根、円すい、ドーム、正多角形 |
@@ -239,7 +240,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶、線路（小道、川、車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
 | 神社・寺 | 鳥居、狛犬、賽銭箱、手水鉢（門扉、石灯籠、提灯、神棚、仏壇、篝火、竹垣、墓石、つくばい） |
 | 遊具・スポーツ・音楽 | すべり台、ジャングルジム、鉄棒、砂場、跳び箱、卓球台、ビリヤード台、ドラムセット、ステージ（舞台）（ブランコ、ピアノ） |
-| ファンタジー・TRPG | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）（石像、焚き火、十字架の墓、噴水、テント、川、石垣） |
+| ファンタジー | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）（石像、焚き火、十字架の墓、噴水、テント、川、石垣） |
 | 図形の壁 | 円、楕円、円弧、三角形〜八角形 |
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
@@ -253,9 +254,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯・キャットタワーは「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
 - 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています（番号の印に書く番号だけは別です）。
 - 「人」と「倒れた人」は、体の関節を自由に動かせる人の模型です。3Dはデッサン人形のような、一色で関節に玉のある落ち着いた形です。「選択中」の「姿勢」で立っている・うつぶせ・あおむけを切り替え、「ポーズの見本」（気をつけ・歩く・手を上げる・両手を広げる・指さす・座る・ひざをつく・しゃがむ・うつぶせ・手足を広げて・あおむけ）から始めて、「関節の角度」で胴（腰を前・横へ倒す、ねじる）、首（うなずく・かしげる・振り向く）、腕・脚ごとの開く・前後・ひじやひざの曲げ・曲げる向き・手首・足首を変えられます。2Dで選ぶと、手首・足首（白）、ひじ・ひざ（水色）、頭に丸いつまみが出ます。手首・足首をドラッグするとその所まで手足が届き（寝ているときは床の上で、立っているときは腕や脚の向きを変えて）、ひじ・ひざをドラッグすると腕・脚の付け根が回り、頭をドラッグすると腰から曲がります。「身長」で大きさを変えられ、立つと約170cm。座る・ひざをつく・しゃがむでは、いちばん低い所が床に着くように体が下がります。体は太さのある部品（両端の太さが違う丸い部品と関節の玉）の集まりで、3Dはその部品を立体に、2Dは同じ部品を真上から見た形（立った人は頭や肩の輪郭を重ねて）を描くので、どのポーズでも2Dと3Dが同じ形です。倒れた人は、手足を動かすまでは前からある形のままで、デザインの「標準」「手足を広げて」を選ぶといつでもその形に戻せます。「チョークの線」は今のポーズの輪郭になります
-- 自由な形: 池・花壇・芝生・ラグは、パーツを選んで2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石は、なぞった道すじに沿って置けます（クリックだけなら、まっすぐ）。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます。選ぶときは、範囲の四角ではなく形の上をクリックします。3Dも同じ形で、草地の草は川や小道の上には生えません
+- 自由な形: 池・花壇・芝生・ラグは、パーツを選んで2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石は、なぞった道すじに沿って置けます（クリックだけなら、まっすぐ）。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます。選ぶときは、範囲の四角ではなく形の上をクリックします。3Dも同じ形で、草地の草は川や小道の上には生えません。なぞって形を決められる物は、一覧のボタンの右に波線の印があり、「なぞって形を決める」の欄にもまとめてあります
 - 足跡は、パーツの「足跡」を選んで2Dをドラッグすると、なぞった道すじに沿って、歩く向きにつま先を向けた足跡が左右交互に付きます（クリックだけなら、まっすぐな足跡）。「選択中」で歩幅を変えたり、「道すじを描き直す」でなぞり直したり、「まっすぐにする」で戻したりできます
-- 「人・事件・調査」の印は、TRPGの探索や事件現場の図に使えます。番号の印は置くたびに次の番号（どの階も含めていちばん大きい番号の次）になり、「選択中」の「番号」で4文字まで書き換えられます。3Dでも札の上の面に同じ番号が出ます。足跡（靴・素足）、倒れた人（うつぶせ・手足を広げて・チョークの線）、血（血だまり・飛び散った血・引きずった跡）、破片は、2Dの形と3Dを真上から見た形が同じです。足跡と血は「色 2D」が跡の色になります
+- 「人・事件・調査」の印は、探索や事件現場の図に使えます。番号の印は置くたびに次の番号（どの階も含めていちばん大きい番号の次）になり、「選択中」の「番号」で4文字まで書き換えられます。3Dでも札の上の面に同じ番号が出ます。足跡（靴・素足）、倒れた人（うつぶせ・手足を広げて・チョークの線）、血（血だまり・飛び散った血・引きずった跡）、破片は、2Dの形と3Dを真上から見た形が同じです。足跡と血は「色 2D」が跡の色になります
 - 「破片」（割れたガラスなど）は、パーツの「破片」を選んで2Dをドラッグすると、なぞった所に破片が散らばります（クリックだけなら、前からあるひとまとまりの形）。「選択中」で、まく幅・量（少なめ・ふつう・多め）を変えたり、「なぞり直す」「ひとまとまりにする」ができます。色を決めていなければ透けたガラス、「色 2D」「色 3D」を決めるとその色の破片（陶器や木の破片など）になります
 - 観葉植物は茎と葉、水槽は透明なガラスと魚・水草、時計は目盛りと針を持ちます。テレビ画面は幅に合わせて16:9の比率を維持します。
 - 色変更は主な張地・本体に適用され、ガラス、金属、文字盤、葉などの色は維持します。
@@ -265,7 +266,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 幅・奥行は3Dの設置範囲にも反映され、回転・反転後も保持されます。既存の保存JSONはそのまま利用できます。
 - 不透明な部品は材質ごとにまとめて描画し、細部を増やした際の描画負荷を抑えています。実製品を再現したCADモデルではありません。
 
-「床・地面」で素材（22種類）を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。畳は180×90cmの畳を半畳ずつずらして敷いた模様、レンガ・石畳・モザイクタイル・市松などは実際の大きさの目地で描きます。既存の部屋は「選択中」の「床材」から変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
+「床・地面」で素材（22種類）を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。斜めにドラッグすると四角、ぐるっとなぞると、その形の床になります（部屋のツールも同じです）。畳は180×90cmの畳を半畳ずつずらして敷いた模様、レンガ・石畳・モザイクタイル・市松などは実際の大きさの目地で描きます。既存の部屋は「選択中」の「床材」から変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
 
 ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
 
@@ -798,8 +799,13 @@ npm.cmd run dev
 
 ### 2026年10月19日
 
+- ペンの太さが分かるように。描く前から、マウスの所にペン先の大きさの丸が出ます。太さを変えている間は、2Dの真ん中に同じ丸が出ます
+- 床・地面の素材と部屋を、なぞって好きな形にできるように。2Dをぐるっとなぞると、その形の床になります（これまでどおり、斜めにドラッグすると四角）
+- なぞって形を決められる物が分かるように。一覧のボタンに波線の印を付け、ペン・池・川・小道・足跡などを「なぞって形を決める」の欄にまとめました
+- テンプレートを見直しました。屋根のなかったカフェ・レストラン・ラーメン屋・居酒屋・バー・コンビニ・本屋・美容院・マンション・客船・寝台列車・宇宙船・地下牢・公園のトイレに屋根を付け、魔王城・潜水艦・京町家・二世帯住宅の屋根の抜けを直し、ドアの開く所をふさいでいた家具や重なっていた家具を動かしました。新幹線の座席は、進む向きにそろえた2席と2席の列にしました
 - テンプレートを153種類に。1K・タワーマンション・京町家・日本の城・温泉・寿司屋・スーパー・教室・診療所・水族館・駅・遊園地・新幹線・冒険者ギルド・魔王城・宇宙ステーション・廃病院など103種類を足し、「和風・歴史」「学校・仕事場」「公共・医療」「文化・娯楽」「乗り物」「SF・ホラー」など11の分類に分け直しました
 - 映画館のテンプレートで、スクリーンが屋根から突き出ていたのを直しました
+- 家具・設備の一覧の分類名を「ファンタジー」だけにしました
 - 池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です
 - 自由な形で作る家具・設備を6種類追加: 芝生・川・小道・生け垣・石垣・線路。川・小道・生け垣・石垣は幅を変えられ、「選択中」で形をなぞり直したり、いつもの形に戻したりできます
 - テンプレートの外まわりを作り込み。城は城壁と見張り台・門楼・堀と跳ね橋、神社は玉垣・瑞垣・二つの鳥居の長い参道・神楽殿・手水舎の屋根・池・御神木、寺は山門（二重の屋根と仁王像）・五重塔・築地塀・池と飛び石、武家屋敷は白い土塀と表門・池・枯山水、教会は芝生の庭・墓地・外灯の小道
@@ -823,7 +829,7 @@ npm.cmd run dev
 - 屋根ごとに置く高さを上げ下げできるように。「選択中」の「上げ下げ cm」で、設置階の壁の上からずらします（下げるときはマイナス）。同じ階の屋根でも、下屋（げや）や重なった屋根を別の高さに置けます
 - 家具・設備の一覧を、よく使う順に並べ直しました（建具 → 椅子・テーブル・ベッドなど家の中の家具 → 階段・床・地面・屋外・屋根 → 和風・学校・お店などの場面ごとの物 → 図形の壁）。はじめに開いておくのは建具と椅子・ソファだけです。いくつかの分類に重ねて出している物は、検索の結果では上の分類の1つだけを出します
 - 家具を置く・文字を置く・消すツールのままでも、ダブルクリックでそこにある物を選べるように。2Dでも3Dでも同じで、スマホ・タブレットは2回タップか長押しです。1回目のクリックで置いた家具や消した物は取り消します
-- 家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー・TRPG」の分類を足しました
+- 家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー」の分類を足しました
 - 床材を17種類追加: 畳・カーペット・ヘリンボーン・ウッドデッキ（板張り）・モザイクタイル・市松（チェッカー）・大理石・石畳・レンガ・コンクリート・アスファルト・鉄板（縞鋼板）・土（土間）・砂・砂利・雪・水面。2Dの模様と3Dの床は同じ模様・同じ大きさです
 - 屋根の色を変えられるように。「選択中」の色の見本かカラーコードで選び、末尾2桁で透かすと、3Dで屋根越しに中が見えます
 - 庭や地面の床の上にある屋根の縁も、2Dでクリックして選べるように（1階の屋根を選べないことがありました）。いま見ている階の屋根を先に選びます
@@ -1104,7 +1110,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Drag room labels independently from room geometry
 - Choose a different design for furniture from the thumbnails under Selection (43 types, including chairs, sofas, beds, tables, fridges, washers, toilets, plants, rugs, rocks, garden lights, flower beds, fences, stools, numbered markers, footprints, the fallen person, and blood; the plant's "spiral leaves" design keeps the previous standard 3D shape). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked. Designs marked "2D symbol only" (such as the hatched closet) keep the standard 3D model
 - Seen from directly above, each 3D model matches its 2D symbol. Rock outlines and ridges, pond outlines and rim stones, stepping stone and flower layouts, wood grain, rug patterns, and plant leaf directions are generated from the same data for 2D and 3D (identifying marks such as the fridge snowflake or the shoes on the shoe cabinet appear only in 2D)
-- Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. The pen settings are remembered in the browser.
+- Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. A circle the size of the pen tip follows the mouse before you draw, so you can see the width (while you change the width, the same circle appears in the middle of the plan). The pen settings are remembered in the browser.
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
@@ -1224,7 +1230,7 @@ Round and polygon roofs can also be placed around a selected circle, ellipse or 
 
 ### Included objects
 
-The furniture and equipment palette is ordered by how often things are used: openings, then household furniture such as seating, tables and beds, then stairs, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open; the browser remembers which groups you open. Search results show each item once, in its highest group. Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types. To make things easier to find, some items appear in more than one group (for example, the zabuton is in both Japanese and Seating, and shoji and fusuma are in both Openings and Japanese); those are listed in parentheses below.
+The furniture and equipment palette is ordered by how often things are used: openings, then household furniture such as seating, tables and beds, then stairs, things whose shape you trace, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open; the browser remembers which groups you open. Search results show each item once, in its highest group. Furniture is grouped by type rather than by room, so it stays easy to find in shops, schools, or other settings without standard room types. To make things easier to find, some items appear in more than one group (for example, the zabuton is in both Japanese and Seating, and shoji and fusuma are in both Openings and Japanese); those are listed in parentheses below.
 
 | Category | Objects |
 | --- | --- |
@@ -1238,6 +1244,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Appliances | Refrigerator, washing machine, TV stand, air conditioner, outdoor AC unit, fan, heater (copier, vending machine) |
 | Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower, curtain (andon lantern, folding screen, shoji partition, irori hearth, hibachi, paper lantern, partition) |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
+| Trace a shape | Pen, pond, flower bed, lawn, rug, river, path, hedge, stone wall, fence, bamboo fence, railway, stepping stones, footprints, shards (floor and ground materials and rooms also take the shape you trace) |
 | Floors and ground | Plain, wood planks, herringbone, wooden deck, tatami, carpet, tile, mosaic tiles, checkerboard, marble, stone paving, cobblestones, brick, concrete, asphalt, checker plate, grass, soil, sand, gravel, snow, water |
 | Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, lawn, river, path, hedge, stone wall, fence, bamboo fence, garden light, stone lantern, grave, cross grave, mailbox, shed, dog house, parasol, clothes drying stand, swing, well, fountain, statue, campfire, tent (gate, bench, tsukubai basin, veranda bench, torii, outdoor AC unit, bicycle, car) |
 | Roofs | Gable, hip, flat, cone, dome, regular polygon |
@@ -1250,7 +1257,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum, railway (path, river, car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
 | Shrines and temples | Torii gate, guardian lion-dog, offering box, purification basin (gate, stone lantern, paper lantern, household shrine, Buddhist altar, brazier, bamboo fence, grave, tsukubai basin) |
 | Playground, sports and music | Slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit, stage (swing, upright piano) |
-| Fantasy and TRPG | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier (statue, campfire, cross grave, fountain, tent, river, stone wall) |
+| Fantasy | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier (statue, campfire, cross grave, fountain, tent, river, stone wall) |
 | Shape walls | Circle, ellipse, arc, triangle to octagon |
 
 Type in the search box at the top of the palette to show only matching parts.
@@ -1262,9 +1269,9 @@ Japanese furnishings, the torii, school and shop equipment, playground equipment
 - Trees, conifers, palm trees, shrubs, rocks, fences, garden lights, and cat towers have a height setting (10 cm to 30 m) under Selection. The top of the 3D model matches that height.
 - 2D symbols never use text. They are drawn with shapes, lines, and shading only (except the number on a numbered marker).
 - "人" (person) and "倒れた人" (fallen person) are posable mannequins; in 3D they look like a wooden artist's mannequin with ball joints. Under Selection, choose a posture (standing, face down, face up), start from a pose preset (attention, walking, hands up, arms out, pointing, sitting, kneeling, crouching, face down, spread out, face up), and adjust every joint: the waist (bend forward or sideways, twist), the neck (nod, tilt, turn), and for each arm and leg the spread, forward/back, elbow or knee bend, bend direction, and wrist or ankle. In 2D the selected person shows handles on the wrists and ankles (white), elbows and knees (light blue), and head. Dragging a wrist or ankle reaches for that point (on the floor when lying, by turning the limb when standing); dragging an elbow or knee turns the limb at the shoulder or hip; dragging the head bends the waist. "身長" sets the size; standing height is about 170 cm. Sitting, kneeling and crouching lower the body until its lowest point touches the floor. The body is built from tapered rounded parts and ball joints: 3D builds them and 2D draws the same parts seen from above (with the head and shoulders outlined on top for a standing person), so 2D and 3D match in every pose. The fallen person keeps its original shape until a limb is moved, and choosing the "標準" or "手足を広げて" design brings that shape back; the chalk outline follows the current pose.
-- Free shapes: choose a pond, flower bed, lawn or rug and drag around an area on the 2D plan to give it that shape (a click places the usual shape). Rivers, paths, hedges, stone walls, fences, bamboo fences, railways and stepping stones follow the path you trace (a click places a straight one). Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one. Click on the shape itself, not its frame, to select it. The 3D view has the same shape, and grass blades do not grow on rivers or paths
+- Free shapes: choose a pond, flower bed, lawn or rug and drag around an area on the 2D plan to give it that shape (a click places the usual shape). Rivers, paths, hedges, stone walls, fences, bamboo fences, railways and stepping stones follow the path you trace (a click places a straight one). Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one. Click on the shape itself, not its frame, to select it. The 3D view has the same shape, and grass blades do not grow on rivers or paths. Items whose shape you can trace have a wave mark on their buttons and are also gathered in the **なぞって形を決める** (trace a shape) group
 - Choose 足跡 (footprints) and drag on the 2D plan to lay footprints along the drawn path, alternating left and right with the toes facing the walking direction (a click places a straight trail). The stride can be changed, and the path can be redrawn or straightened from Selection.
-- The investigation marks are meant for TRPG and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and shards look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
+- The investigation marks are meant for exploration and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and shards look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
 - "破片" (shards, such as broken glass): choose it and drag on the 2D plan to scatter shards along the path (a click places the original cluster). Under Selection, change the spread and the amount (few, normal, many), redraw the path, or gather the shards into the cluster again. Without a color they are see-through glass; with a 2D/3D color they become solid shards of that color (pottery, wood and so on).
 - All 165 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - The 12 Japanese furnishings have independent width, depth and height settings (height: 1 cm to 30 m). Their 2D symbols and 3D models use the same part dimensions and positions.
@@ -1276,7 +1283,7 @@ Japanese furnishings, the torii, school and shop equipment, playground equipment
 - The 3D footprint follows the specified width and depth, including rotation and mirroring. Existing saved JSON files remain compatible.
 - Opaque parts are batched by material to limit drawing overhead. These are simplified layout models, not CAD replicas of real products.
 
-Choose one of the 22 materials under **床・地面** (floors and ground), then drag on the 2D canvas to place an area. Tatami are laid as 180 x 90 cm mats offset by half a mat, and brick, cobblestones, mosaic tiles and checkerboard use joints at their real size. For existing rooms, change **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
+Choose one of the 22 materials under **床・地面** (floors and ground), then drag on the 2D canvas to place an area: a diagonal drag makes a rectangle, and tracing around an area makes a floor of that shape (the room tool works the same way). Tatami are laid as 180 x 90 cm mats offset by half a mat, and brick, cobblestones, mosaic tiles and checkerboard use joints at their real size. For existing rooms, change **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
 
 Rugs render below furniture. Adding a floor or rug afterward does not prevent selecting furniture placed on top.
 
@@ -1787,8 +1794,13 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-19
 
+- The pen shows its width: a circle the size of the pen tip follows the mouse before you draw, and appears in the middle of the plan while you change the width
+- Floors, ground and rooms can take any shape: trace around an area on the 2D plan to make a floor of that shape (a diagonal drag still makes a rectangle)
+- Items whose shape you can trace are easy to find: their buttons carry a wave mark, and the pen, ponds, rivers, paths, footprints and more are gathered in a new trace group
+- Reviewed the templates: added roofs to the cafe, restaurant, ramen shop, izakaya, bar, convenience store, bookstore, hair salon, condominium, cruise ship, sleeper train, spaceship, dungeon and the park toilet; closed gaps in the roofs of the demon lord's castle, submarine, Kyoto townhouse and two-family house; and moved furniture that blocked doors or overlapped. Shinkansen seats now face forward in rows of two and two
 - 153 templates: added 103, including a 1K, a high-rise condominium, a Kyoto townhouse, a Japanese castle, a hot spring, a sushi restaurant, a supermarket, a classroom, a clinic, an aquarium, a train station, an amusement park, a shinkansen, an adventurers' guild, a demon lord's castle, a space station and an abandoned hospital, regrouped into 11 groups such as Japanese and historic, Schools and workplaces, Public and medical, Culture and entertainment, Vehicles, and Sci-fi and horror
 - Fixed the screen sticking out through the roof in the cinema template
+- The fantasy group in the furniture list is now simply called Fantasy
 - Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape
 - Added 6 free-shape items: lawn, river, path, hedge, stone wall and railway. Rivers, paths, hedges and stone walls have an adjustable width, and Selection lets you retrace the shape or go back to the usual one
 - Templates now have detailed surroundings. The castle has curtain walls, turrets, a gatehouse, a moat and a drawbridge; the shrine a sacred fence, a long approach through two torii gates, a kagura stage, a roofed purification fountain, a pond and a sacred tree; the temple a main gate with a two-tier roof and guardian statues, a five-story pagoda, earthen walls, a pond and stepping stones; the samurai residence a white earthen wall with a gate, a pond and a dry rock garden; and the church a lawn, a graveyard and a lamp-lit path
@@ -1812,7 +1824,7 @@ The same history as "更新履歴" in the app, newest first.
 - Each roof can now be raised or lowered with Raise/lower (cm) under Selection, measured from the top of its floor's walls (negative to lower). Roofs on the same floor can sit at different heights, such as a lean-to below the main roof or stacked roofs
 - Reordered the furniture palette by how often things are used: openings, household furniture such as seating, tables and beds, then stairs, floors, outdoor items and roofs, then themed groups such as Japanese, school and shops, and shape walls last. Only openings and seating start open, and items shown in several groups appear once in search results
 - While placing furniture or text, or erasing, a double-click now selects whatever is there, in both 2D and 3D (double tap or long press on phones and tablets). Whatever the first click placed or erased is undone
-- Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy and TRPG
+- Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy
 - Added 17 floor materials: tatami, carpet, herringbone, wooden deck, mosaic tiles, checkerboard, marble, cobblestones, brick, concrete, asphalt, checker plate, soil, sand, gravel, snow and water. The 2D pattern and the 3D floor share the same pattern at the same scale
 - Roof colors can now be changed under Selection with swatches or a color code. Adding two digits for transparency makes the roof see-through in 3D
 - Roof edges over gardens and ground floors can now be clicked in 2D (ground-floor roofs could not be selected before). The roof of the floor being viewed is chosen first

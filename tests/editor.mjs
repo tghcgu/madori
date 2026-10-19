@@ -839,7 +839,7 @@ try {
 
   // Shards ("破片", formerly broken glass) are scattered along a dragged path; a click still places the cluster.
   await choose('[data-furniture="brokenGlass"]');
-  assert.equal((await page.locator('[data-furniture="brokenGlass"]').textContent()).trim(), '破片');
+  assert.equal((await page.locator('[data-furniture="brokenGlass"]').first().textContent()).trim(), '破片');
   await dragAlong([[100, 300], [500, 300]]);
   const shardItems = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'brokenGlass');
   let shards = (await shardItems())[0];
@@ -989,6 +989,30 @@ try {
   await page.locator('[data-pen-color="#1c7ed6"]').click();
   await page.locator('#penWidthInput').fill('20');
   await page.locator('#penWidthInput').press('Enter');
+  // The pen tip shows the width before drawing: a circle in the pen color follows the mouse and goes away when it leaves.
+  // Changing the width shows the circle in the middle of the plan for a moment.
+  const frames = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.waitForTimeout(1700);
+  const bare = shown(await pixelAt(700, 300));
+  const tipAt = await planPoint(700, 300);
+  await page.mouse.move(tipAt.x, tipAt.y);
+  await frames();
+  const tip = shown(await pixelAt(700, 300));
+  assert.ok(bare[0] - tip[0] > 40 && tip[2] > tip[0] + 30, `the pen tip is shown in the pen color: ${tip} over ${bare}`);
+  const beside = shown(await pixelAt(740, 300));
+  assert.ok(Math.abs(beside[0] - bare[0]) < 12, `the pen tip is only as wide as the pen: ${beside}`);
+  await page.locator('#penWidthInput').hover();
+  await frames();
+  assert.ok(Math.abs(shown(await pixelAt(700, 300))[0] - bare[0]) < 12, 'the pen tip goes away when the mouse leaves the plan');
+  const centerPixel = () => page.locator('#planCanvas').evaluate(canvas => [...canvas.getContext('2d').getImageData(Math.round(canvas.width / 2), Math.round(canvas.height / 2), 1, 1).data]);
+  await page.waitForTimeout(1700);
+  const middle = shown(await centerPixel());
+  await page.locator('#penWidthRange').fill('80');
+  await frames();
+  const preview = shown(await centerPixel());
+  assert.ok((preview[2] - preview[0]) - (middle[2] - middle[0]) > 30, `changing the width shows the pen tip in the middle: ${preview} over ${middle}`);
+  await page.locator('#penWidthInput').fill('20');
+  await page.locator('#penWidthInput').press('Enter');
   await dragAlong([[100, 100], [300, 300], [500, 100]]);
   const strokes = async () => (await saved()).floors[0].entities.filter(item => item.kind === 'paint');
   let stroke = (await strokes())[0];
@@ -1035,7 +1059,7 @@ try {
   assert.equal(await page.locator('[data-pen-mode="fill"]').getAttribute('aria-checked'), 'true');
   await page.locator('[data-pen-mode="line"]').click();
   await page.locator('[data-tool="select"]').click();
-  console.log('PASS: pen: color swatches, width, lines, dots, filled loops, 2D and 3D paint, selection on the line, undo, eraser and kept settings');
+  console.log('PASS: pen: color swatches, width shown as a pen tip that follows the mouse and in the middle while changing it, lines, dots, filled loops, 2D and 3D paint, selection on the line, undo, eraser and kept settings');
 
   // Images: the 2D plan (the current floor, or all floors in one image) and the 3D view are saved as PNG.
   await importPlan({ floors: [{ id: 's1', name: '', entities: [

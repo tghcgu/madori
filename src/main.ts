@@ -20,7 +20,7 @@ import {
   isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
 } from "./three-style";
 import {
-  FREE_WIDTH_RANGE, RAILWAY, defaultFreePath, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
+  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, defaultFreePath, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
   freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
   offsetFreeLine, pointInFreePolygon, type FreeKind,
 } from "./free-shapes";
@@ -43,7 +43,7 @@ import {
 import { translateSelection } from "./selection";
 import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
-import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
+import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
 import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, regularFloor, regularFloorOutline, regularFloorSize, regularFloorSides, type FloorPreset } from "./floor-editing";
 import { ROOF_LABELS, isRoofKind, isRadialRoof, roofOutline, roofSides, roofRise, regularRoofSize, radialRoofModel, type RoofKind } from "./roof-shapes";
@@ -454,7 +454,7 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   drum: "どらむかん ドラム缶 缶 かん 工場 こうじょう 倉庫 そうこ", bus: "ばす 乗り物 のりもの 車 くるま",
   cardboard: "だんぼーる 段ボール 箱 はこ 荷物 にもつ 引っ越し ひっこし 倉庫 そうこ", acOutdoor: "しつがいき 室外機 エアコン ベランダ 屋外 外 そと",
   fan: "せんぷうき 扇風機 夏 なつ 風 かぜ", stove: "すとーぶ 石油ストーブ 暖房 だんぼう やかん 冬 ふゆ",
-  curtain: "かーてん 窓 まど 布 ぬの 仕切り しきり", treasureChest: "たからばこ 宝 たから 箱 はこ ダンジョン TRPG",
+  curtain: "かーてん 窓 まど 布 ぬの 仕切り しきり", treasureChest: "たからばこ 宝 たから 箱 はこ ダンジョン",
   barrel: "たる 樽 酒樽 さかだる ワイン 倉庫 そうこ 酒場 さかば", crate: "きばこ 木箱 箱 はこ 荷物 にもつ 倉庫 そうこ",
   throne: "ぎょくざ 玉座 王 おう 椅子 いす 城 しろ 王座 おうざ", altar: "さいだん 祭壇 教会 きょうかい 神殿 しんでん 燭台 しょくだい ろうそく",
   coffin: "ひつぎ 棺 棺桶 かんおけ 葬儀 そうぎ 吸血鬼 きゅうけつき", cage: "おり 檻 牢 ろう 牢屋 ろうや 鉄格子 てつごうし 動物 どうぶつ",
@@ -583,6 +583,11 @@ const PEN_DEFAULT_COLOR = "#9b1c17";
 const DEFAULT_BRUSH = 15;
 const penSettings: { color: string; brush: number; filled: boolean } = { color: PEN_DEFAULT_COLOR, brush: DEFAULT_BRUSH, filled: false };
 const MAX_BRUSH = 300;
+// ペン先の見本（いまの太さ・色の丸）。マウスを乗せている間と描いている間はペン先に、太さを変えている間は少しのあいだ画面の真ん中に出す
+let penCursor: Point | null = null;
+let penSizePreview = false;
+let penSizePreviewTimer = 0;
+let penCursorFrame = 0;
 // 次になぞって描く破片の、まく幅と量（選んだ破片で変えると、次からもそれを使う）
 const shardSettings: { spread: number; density: number } = { spread: SHARD_SPREAD, density: 1 };
 const SHARD_DENSITIES: [number, string][] = [[0.5, "少なめ"], [1, "ふつう"], [2, "多め"]];
@@ -1073,6 +1078,7 @@ function setupUi(): void {
       floorEdit = null;
       floorEditError = "";
       pathRedrawId = null;
+      penCursor = null;
       // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
       if (activeTool === "paint" || activeTool === "floor") selectOnly(null);
       if (activeTool === "floor" && viewMode === "three") applyViewMode("split");
@@ -1246,6 +1252,11 @@ function setupUi(): void {
   planCanvas.addEventListener("pointermove", handlePointerMove);
   planCanvas.addEventListener("pointerup", handlePointerUp);
   planCanvas.addEventListener("pointercancel", cancelPlanDrag);
+  // 2Dから外れたら（タッチは指を離したら）ペン先の丸を消す
+  planCanvas.addEventListener("pointerleave", hidePenCursor);
+  planCanvas.addEventListener("pointerup", (event) => {
+    if (event.pointerType === "touch") hidePenCursor();
+  });
   planCanvas.addEventListener("lostpointercapture", cancelPlanDrag);
   window.addEventListener("blur", cancelPlanDrag);
   planCanvas.addEventListener("wheel", handleWheel, { passive: false });
@@ -1324,7 +1335,7 @@ function buildFurniturePicker(): void {
     sections.set(category.id, group.details);
   });
 
-  const surfaces = createPaletteGroup("床・地面", false, "ゆか 床 素材");
+  const surfaces = createPaletteGroup("床・地面", false, "ゆか 床 素材 なぞる");
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
@@ -1335,6 +1346,7 @@ function buildFurniturePicker(): void {
       syncPlanCursor();
     });
     button.dataset.surface = surface;
+    markTraceable(button);
     const swatch = document.createElement("span");
     swatch.className = "surface-swatch";
     swatch.style.backgroundImage = `url(${surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL()})`;
@@ -1342,6 +1354,20 @@ function buildFurniturePicker(): void {
     surfaces.items.appendChild(button);
   });
   sections.set("surfaces", surfaces.details);
+
+  // なぞって形を決められる物を1つの欄にまとめる（ほかの欄にもある物を重ねて出す）
+  const trace = createPaletteGroup("なぞって形を決める", false, "なぞる 形 かたち 自由 じゆう 囲む かこむ フリーハンド");
+  const pen = createPaletteButton("ペン", "ぺん 線 せん 描く かく 塗る ぬる", () => requiredElement<HTMLButtonElement>('.tool-button[data-tool="paint"]').click());
+  // ツールのペンのボタンと区別する（押したときは、ツールのペンを押したのと同じにする）
+  pen.dataset.penShortcut = "";
+  markTraceable(pen);
+  trace.items.appendChild(pen);
+  ([...FREE_AREA_KINDS, ...FREE_LINE_KINDS, "footprints", "brokenGlass"] as FurnitureKind[]).forEach((kind) => trace.items.appendChild(createFurnitureButton(kind)));
+  const note = document.createElement("p");
+  note.className = "palette-note";
+  note.textContent = "床・地面の素材と部屋も、2Dをぐるっとなぞると、その形の床になります";
+  trace.items.appendChild(note);
+  sections.set("trace", trace.details);
 
   const stairs = createPaletteGroup("階段", false, "かいだん");
   STAIR_KINDS.forEach((kind) => stairs.items.appendChild(createFurnitureButton(kind)));
@@ -1437,7 +1463,19 @@ function createFurnitureButton(kind: FurnitureKind): HTMLButtonElement {
   });
   button.dataset.furniture = kind;
   if (activeTool === "furniture" && kind === activeFurniture) button.classList.add("is-active");
+  if (isTraceableKind(kind)) markTraceable(button);
   return button;
+}
+
+// 2Dをなぞって形を決められる家具・設備（池・川などの自由な形と、足跡・破片）
+function isTraceableKind(kind: FurnitureKind): boolean {
+  return isFreeShapeKind(kind) || kind === "footprints" || kind === "brokenGlass";
+}
+
+// なぞって形を決められる物の印（ボタンの右の小さな波線）と説明
+function markTraceable(button: HTMLButtonElement): void {
+  button.classList.add("is-traceable");
+  button.title = `${button.textContent ?? ""}（2Dをなぞって形を決められます）`;
 }
 
 // カタカナをひらがなに、全角英数を半角にそろえ、「ソファ」と「そふぁ」などを同じ語として扱う
@@ -1798,6 +1836,7 @@ function syncPlanCursor(): void {
   setActiveButton("[data-surface]", activeTool === "room" || activeTool === "floor" ? activeRoomSurface : "");
   setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
   setActiveButton("[data-door-style]", activeTool === "door" ? activeDoorStyle : activeTool === "slidingDoor" ? "sliding" : "");
+  document.querySelector("[data-pen-shortcut]")?.classList.toggle("is-active", activeTool === "paint");
   if (drag.dragMode === "pan") {
     planCanvas.style.cursor = "grabbing";
     return;
@@ -2476,6 +2515,7 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   drag.dragMode = "draw";
+  drag.path = activeTool === "room" ? [point] : undefined;
   state.selectedId = null;
 
   if (activeTool === "furniture") {
@@ -2656,7 +2696,7 @@ function toolAction(): [string, string] | null {
     case "floor":
       return null;
     case "room":
-      return ["ドラッグで部屋を描く", click];
+      return ["ドラッグで四角、ぐるっとなぞるとその形の床", click];
     case "wall":
       return ["ドラッグで壁を描く", click];
     case "door":
@@ -2690,6 +2730,10 @@ function handlePointerMove(event: PointerEvent): void {
   }
 
   const point = screenToWorld(event);
+  if (activeTool === "paint" && (event.pointerType !== "touch" || drag.dragMode === "path")) {
+    penCursor = point;
+    if (drag.dragMode === "none") renderPenCursor();
+  }
   if (activeTool === "floor") {
     if (floorDraft) floorDraft.hover = draftFloorPoint(point, event.shiftKey);
     drag.currentWorld = point;
@@ -2720,6 +2764,12 @@ function handlePointerMove(event: PointerEvent): void {
   }
 
   drag.currentWorld = point;
+
+  // 部屋・床のツールでは、なぞった道すじも覚える（ぐるっと囲んだら、その形の床にする）
+  if (drag.dragMode === "draw" && activeTool === "room" && drag.path) {
+    const last = drag.path[drag.path.length - 1];
+    if (Math.hypot(point.x - last.x, point.y - last.y) >= Math.max(1, 2 / view.zoom)) drag.path.push(point);
+  }
 
   if (drag.dragMode === "marquee") {
     render2d();
@@ -2787,8 +2837,10 @@ function handlePointerUp(event: PointerEvent): void {
   const end = drag.currentWorld;
   const start = drag.startWorld;
   const distanceMoved = Math.hypot(end.x - start.x, end.y - start.y);
+  // ぐるっとなぞった床（始めの所に戻ってきても、クリックではない）
+  const traced = drag.dragMode === "draw" && activeTool === "room" && drag.path !== undefined && isFloorTrace(drag.path);
   // 長押しになる前に離した（クリック）
-  const clicked = Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
+  const clicked = !traced && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
   cancelLongPress();
   if (activeTool === "floor" && drag.dragMode !== "pan") addDraftFloorPoint(screenToWorld(event), event.shiftKey);
 
@@ -2835,8 +2887,11 @@ function handlePointerUp(event: PointerEvent): void {
     drag.dragMode = "none";
   }
 
-  if (drag.dragMode === "draw" && distanceMoved > 8) {
-    if (activeTool === "room") addRoomFromDrag(start, end);
+  if (drag.dragMode === "draw" && (distanceMoved > 8 || traced)) {
+    if (activeTool === "room") {
+      if (traced) addFloorFromTrace(drag.path!);
+      else addRoomFromDrag(start, end);
+    }
     if (activeTool === "wall") addLineFromDrag("wall", start, end);
     if (activeTool === "door") addLineFromDrag("door", start, end, false, activeDoorStyle);
     if (activeTool === "slidingDoor") addLineFromDrag("door", start, end, false, "sliding");
@@ -3504,6 +3559,32 @@ function addRoomFromDrag(start: Point, end: Point): void {
   };
   entities.push(newRoom);
   state.selectedId = newRoom.id;
+}
+
+// 部屋・床をなぞって描いたか。ぐるっと囲むように動かした線は、四角を描くときの斜めのドラッグより、ずっと長い
+function isFloorTrace(path: Point[]): boolean {
+  if (path.length < 6) return false;
+  let length = 0;
+  for (let i = 1; i < path.length; i += 1) length += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
+  const start = path[0], end = path[path.length - 1];
+  const xs = path.map((p) => p.x), ys = path.map((p) => p.y);
+  const size = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  return size >= GRID * 2 && length > 2 * Math.hypot(end.x - start.x, end.y - start.y) + GRID * 4;
+}
+
+// なぞって囲んだ形の床（いま選んでいる床材）。線の揺れをならし、交わった所はほどく
+function addFloorFromTrace(path: Point[]): void {
+  const points = tracedFloorPoints(path.map((p): [number, number] => [p.x, p.y]), Math.max(1, 1 / view.zoom));
+  const outline = points && outlineFromPoints(points);
+  if (!outline) return;
+  const entities = activeEntities();
+  const floor: Room = {
+    id: newId("room"), type: "room", name: "",
+    color: activeRoomSurface === "plain" ? ROOM_COLORS[entities.length % ROOM_COLORS.length] : SURFACE_DEFS[activeRoomSurface].color,
+    surface: activeRoomSurface, ...outline,
+  };
+  entities.push(floor);
+  state.selectedId = floor.id;
 }
 
 function addLineFromDrag(
@@ -4391,6 +4472,11 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
       else if (activeFurniture === "brokenGlass") drawShardPreview(drag.path);
       else if (isFreeShapeKind(activeFurniture)) drawFreeShapePreview(activeFurniture, drag.path);
       else drawFootprintPreview(drag.path);
+    }
+    // ペン先の丸は、描いている線の上に重ねる
+    if (activeTool === "paint") {
+      const tip = penCursor ?? (penSizePreview ? planCenter() : null);
+      if (tip) drawPenCursor(tip);
     }
     if (drag.dragMode === "draw" && activeTool !== "furniture") {
       drawPreview(drag.startWorld, drag.currentWorld);
@@ -6425,6 +6511,58 @@ function drawPaintPreview(points: Point[]): void {
   ctx.restore();
 }
 
+// ペン先の丸: いまのペンの太さの円を、色を薄く塗って描く。白と黒の二重の縁で、どんな床の上でも見えるようにする
+function drawPenCursor(point: Point): void {
+  if (deferOverlay(() => drawPenCursor(point))) return;
+  const parsed = parseColorCode(penSettings.color);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(point.x, point.y, Math.max(penSettings.brush / 2, 2 / view.zoom), 0, Math.PI * 2);
+  ctx.fillStyle = parsed?.rgb ?? PEN_DEFAULT_COLOR;
+  ctx.globalAlpha = 0.35 * (parsed?.alpha ?? 1);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 3 / view.zoom;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.stroke();
+  ctx.lineWidth = 1.2 / view.zoom;
+  ctx.strokeStyle = "rgba(24, 28, 33, 0.9)";
+  ctx.stroke();
+  ctx.restore();
+}
+
+// マウスを動かすたびに全体を描き直すと重いので、1コマに1回にまとめる
+function renderPenCursor(): void {
+  if (penCursorFrame) return;
+  penCursorFrame = requestAnimationFrame(() => {
+    penCursorFrame = 0;
+    render2d();
+  });
+}
+
+function hidePenCursor(): void {
+  if (!penCursor) return;
+  penCursor = null;
+  renderPenCursor();
+}
+
+// 太さを変えている間は、画面の真ん中にペン先の丸を少しのあいだ出す
+function previewPenSize(): void {
+  penSizePreview = true;
+  window.clearTimeout(penSizePreviewTimer);
+  penSizePreviewTimer = window.setTimeout(() => {
+    penSizePreview = false;
+    renderPenCursor();
+  }, 1500);
+  renderPenCursor();
+}
+
+// 2Dに見えている範囲の真ん中（cm）
+function planCenter(): Point {
+  const rect = planCanvas.getBoundingClientRect();
+  return { x: (rect.width / 2 - view.x) / view.zoom, y: (rect.height / 2 - view.y) / view.zoom };
+}
+
 // 3Dの床に貼る画像。2Dと同じ描き方で白く描き、色は材質で付ける（透明度も材質で）
 function applyPaintTexture(group: THREE.Group, item: Furniture): void {
   let decal: THREE.Mesh | undefined;
@@ -6505,11 +6643,13 @@ function bindPenControls(): void {
     penSettings.brush = clamp(Math.round(Number(range.value)), 1, MAX_BRUSH);
     if (number) number.value = String(penSettings.brush);
     scheduleViewStateSave();
+    previewPenSize();
   });
   number?.addEventListener("change", () => {
     if (!Number.isFinite(Number(number.value))) return;
     penSettings.brush = clamp(Math.round(Number(number.value)), 1, MAX_BRUSH);
     remember();
+    previewPenSize();
   });
   panel.querySelectorAll<HTMLButtonElement>("[data-pen-mode]").forEach((button) => button.addEventListener("click", () => {
     penSettings.filled = button.dataset.penMode === "fill";
@@ -8102,7 +8242,14 @@ function drawPreview(start: Point, current: Point): void {
   ctx.lineWidth = 2 / view.zoom;
   ctx.strokeStyle = "#2775d1";
   ctx.fillStyle = "rgba(39, 117, 209, 0.08)";
-  if (activeTool === "room") {
+  if (activeTool === "room" && drag.path && isFloorTrace(drag.path)) {
+    // なぞっている形（離すと、この形の床になる）
+    ctx.beginPath();
+    drag.path.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (activeTool === "room") {
     const x = Math.min(start.x, current.x);
     const y = Math.min(start.y, current.y);
     const w = Math.abs(current.x - start.x);

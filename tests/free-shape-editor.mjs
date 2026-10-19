@@ -98,7 +98,31 @@ export async function verifyFreeShapes({ open, plan, output }) {
     await page.waitForFunction(() => Boolean(window.__editorTest));
     const kept = (await items()).find(item => item.id === river.id);
     assert.deepEqual([kept.path, kept.brush], [redrawn.path, 220]);
-    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload');
+    // なぞれる物は、一覧で波線の印が付き、「なぞって形を決める」欄にまとまっている
+    for (const selector of ['[data-furniture="pond"]', '[data-furniture="river"]', '[data-furniture="footprints"]', '[data-surface="grass"]']) {
+      assert.ok(await page.locator(`${selector}.is-traceable`).count() >= 1, `${selector} is marked as traceable`);
+    }
+    assert.equal(await page.locator('[data-furniture="sofa"].is-traceable').count(), 0, 'other furniture is not marked');
+    const traceGroup = page.locator('details.palette-group', { has: page.locator('summary', { hasText: 'なぞって形を決める' }) });
+    assert.equal(await traceGroup.locator('[data-pen-shortcut].is-traceable').count(), 1, 'the pen is in the trace group');
+    assert.ok(await traceGroup.locator('[data-furniture]').count() >= 14, 'all traceable items are gathered in one group');
+
+    // 床・地面の素材: ぐるっとなぞると、その形の床。斜めのドラッグは、いつもどおりの四角
+    const rooms = async () => (await page.evaluate(() => window.__editorTest.snapshot())).floors[0].entities.filter(item => item.type === 'room');
+    const surfaces = page.locator('details.palette-group', { has: page.locator('summary', { hasText: '床・地面' }) });
+    if (await surfaces.getAttribute('open') === null) await surfaces.locator('summary').click();
+    await page.locator('[data-surface="gravel"]').click();
+    assert.match(await page.locator('#toolHint').textContent(), /ぐるっとなぞるとその形の床/);
+    await trace([[150, 450], [350, 420], [420, 560], [330, 720], [160, 700], [110, 560], [160, 455]]);
+    const traced = (await rooms()).find(room => room.surface === 'gravel');
+    assert.ok(traced?.outline?.length >= 6, `the traced floor keeps its outline: ${traced?.outline?.length}`);
+    assert.ok(traced.w > 260 && traced.w < 340 && traced.h > 260 && traced.h < 330, `the floor fits the traced loop: ${traced.w} x ${traced.h}`);
+    assert.deepEqual(await ids(), [traced.id], 'the new floor is selected');
+    await page.locator('[data-surface="sand"]').click();
+    await trace([[700, 100], [1000, 300]]);
+    const box = (await rooms()).find(room => room.surface === 'sand');
+    assert.ok(box && !box.outline && box.w === 300 && box.h === 200, 'a diagonal drag still draws a rectangle');
+    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape');
   } finally {
     await page.context().close();
   }

@@ -10,11 +10,26 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "ペンの太さが分かるように。描く前から、マウスの所にペン先の大きさの丸が出ます。太さを変えている間は、2Dの真ん中に同じ丸が出ます",
+      en: "The pen shows its width: a circle the size of the pen tip follows the mouse before you draw, and appears in the middle of the plan while you change the width",
+    }, {
+      ja: "床・地面の素材と部屋を、なぞって好きな形にできるように。2Dをぐるっとなぞると、その形の床になります（これまでどおり、斜めにドラッグすると四角）",
+      en: "Floors, ground and rooms can take any shape: trace around an area on the 2D plan to make a floor of that shape (a diagonal drag still makes a rectangle)",
+    }, {
+      ja: "なぞって形を決められる物が分かるように。一覧のボタンに波線の印を付け、ペン・池・川・小道・足跡などを「なぞって形を決める」の欄にまとめました",
+      en: "Items whose shape you can trace are easy to find: their buttons carry a wave mark, and the pen, ponds, rivers, paths, footprints and more are gathered in a new trace group",
+    }, {
+      ja: "テンプレートを見直しました。屋根のなかったカフェ・レストラン・ラーメン屋・居酒屋・バー・コンビニ・本屋・美容院・マンション・客船・寝台列車・宇宙船・地下牢・公園のトイレに屋根を付け、魔王城・潜水艦・京町家・二世帯住宅の屋根の抜けを直し、ドアの開く所をふさいでいた家具や重なっていた家具を動かしました。新幹線の座席は、進む向きにそろえた2席と2席の列にしました",
+      en: "Reviewed the templates: added roofs to the cafe, restaurant, ramen shop, izakaya, bar, convenience store, bookstore, hair salon, condominium, cruise ship, sleeper train, spaceship, dungeon and the park toilet; closed gaps in the roofs of the demon lord's castle, submarine, Kyoto townhouse and two-family house; and moved furniture that blocked doors or overlapped. Shinkansen seats now face forward in rows of two and two",
+    }, {
       ja: "テンプレートを153種類に。1K・タワーマンション・京町家・日本の城・温泉・寿司屋・スーパー・教室・診療所・水族館・駅・遊園地・新幹線・冒険者ギルド・魔王城・宇宙ステーション・廃病院など103種類を足し、「和風・歴史」「学校・仕事場」「公共・医療」「文化・娯楽」「乗り物」「SF・ホラー」など11の分類に分け直しました",
       en: "153 templates: added 103, including a 1K, a high-rise condominium, a Kyoto townhouse, a Japanese castle, a hot spring, a sushi restaurant, a supermarket, a classroom, a clinic, an aquarium, a train station, an amusement park, a shinkansen, an adventurers' guild, a demon lord's castle, a space station and an abandoned hospital, regrouped into 11 groups such as Japanese and historic, Schools and workplaces, Public and medical, Culture and entertainment, Vehicles, and Sci-fi and horror",
     }, {
       ja: "映画館のテンプレートで、スクリーンが屋根から突き出ていたのを直しました",
       en: "Fixed the screen sticking out through the roof in the cinema template",
+    }, {
+      ja: "家具・設備の一覧の分類名を「ファンタジー」だけにしました",
+      en: "The fantasy group in the furniture list is now simply called Fantasy",
     }, {
       ja: "池などを自由な形で作れるように。池・花壇・ラグは、選んで2Dをドラッグで囲むと、その形になります（クリックならいつもの形）。フェンス・竹垣・飛び石は、なぞった道すじに沿って置けます。3Dも同じ形です",
       en: "Ponds and more can now take any shape. Choose a pond, flower bed or rug and drag around an area in 2D to give it that shape (a click places the usual shape). Fences, bamboo fences and stepping stones follow the path you trace. The 3D view has the same shape",
@@ -70,8 +85,8 @@ export const CHANGELOG: ChangelogEntry[] = [
       ja: "家具を置く・文字を置く・消すツールのままでも、ダブルクリックでそこにある物を選べるように。2Dでも3Dでも同じで、スマホ・タブレットは2回タップか長押しです。1回目のクリックで置いた家具や消した物は取り消します",
       en: "While placing furniture or text, or erasing, a double-click now selects whatever is there, in both 2D and 3D (double tap or long press on phones and tablets). Whatever the first click placed or erased is undone",
     }, {
-      ja: "家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー・TRPG」の分類を足しました",
-      en: "Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy and TRPG",
+      ja: "家具・設備を65種類追加。鳥居・狛犬・賽銭箱・手水鉢、仏壇・神棚・床の間・かまど・提灯・竹垣・井戸・和式トイレ、黒板・ホワイトボード・教卓・学校の机と椅子・ロッカー・複合機・パーティション・金庫・消火器、カウンター・ショーケース・陳列棚・自動販売機・立て看板・カウンターチェア、病院のベッド・点滴スタンド・車椅子・診察台、すべり台・ジャングルジム・鉄棒・砂場・跳び箱・卓球台・ビリヤード台・ドラムセット・ステージ、噴水・石像・焚き火・テント・十字架の墓、カラーコーン・電柱・バス停・電話ボックス・マンホール・ドラム缶・バス、段ボール箱・室外機・扇風機・ストーブ・カーテン、宝箱・樽・木箱・玉座・祭壇・棺・檻・篝火。2Dの記号は、3Dと同じ部品を真上から見た形です。一覧に「神社・寺」「学校・オフィス」「お店・飲食店」「病院・介護」「遊具・スポーツ・音楽」「街・道路」「ファンタジー」の分類を足しました",
+      en: "Added 65 furniture and equipment items: torii gate, guardian lion-dogs, offering box and purification basin; Buddhist altar, household shrine, tokonoma alcove, kamado stove, paper lantern, bamboo fence, well and squat toilet; blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe and fire extinguisher; counter, showcase, store shelves, vending machine, A-frame sign and bar stool; hospital bed, IV stand, wheelchair and examination couch; slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit and stage; fountain, statue, campfire, tent and cross grave; traffic cone, utility pole, bus stop, phone booth, manhole, oil drum and bus; cardboard box, outdoor AC unit, fan, heater and curtain; treasure chest, barrel, crate, throne, altar, coffin, cage and brazier. Each 2D symbol is the same set of parts as the 3D model seen from above. New palette groups: shrines and temples, school and office, shops and restaurants, hospital and care, playground, sports and music, streets, and fantasy",
     }, {
       ja: "床材を17種類追加: 畳・カーペット・ヘリンボーン・ウッドデッキ（板張り）・モザイクタイル・市松（チェッカー）・大理石・石畳・レンガ・コンクリート・アスファルト・鉄板（縞鋼板）・土（土間）・砂・砂利・雪・水面。2Dの模様と3Dの床は同じ模様・同じ大きさです",
       en: "Added 17 floor materials: tatami, carpet, herringbone, wooden deck, mosaic tiles, checkerboard, marble, cobblestones, brick, concrete, asphalt, checker plate, soil, sand, gravel, snow and water. The 2D pattern and the 3D floor share the same pattern at the same scale",

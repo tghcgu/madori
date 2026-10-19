@@ -371,14 +371,14 @@ export const FURNITURE_GROUPS: FurnitureGroup[] = [
   { id: "street", label: "街・道路", keywords: "まち 街 町 どうろ 道路 みち 道 ろじょう 路上 こうじ 工事", kinds: ["trafficCone", "utilityPole", "busStop", "phoneBooth", "manhole", "drum", "railway"], also: ["pathway", "river", "car", "bus", "bicycle", "vendingMachine", "acOutdoor", "mailbox", "gardenLight", "fence", "bench", "tree", "trashCan", "signboard", "fireExtinguisher"] },
   { id: "shrine", label: "神社・寺", keywords: "じんじゃ 神社 てら 寺 お寺 おてら 神道 仏教 参道", kinds: ["torii", "komainu", "saisenBako", "chozubachi"], also: ["stoneLantern", "chochin", "kamidana", "butsudan", "brazier", "takegaki", "grave", "tsukubai"], doorStyles: ["gate"] },
   { id: "play", label: "遊具・スポーツ・音楽", keywords: "ゆうぐ 遊具 こうえん 公園 すぽーつ 運動 うんどう たいいく 体育 おんがく 音楽 がっき 楽器 あそび 遊び", kinds: ["slide", "jungleGym", "ironBar", "sandbox", "vaultingBox", "pingPongTable", "poolTable", "drumKit", "stage"], also: ["swing", "piano"] },
-  { id: "fantasy", label: "ファンタジー・TRPG", keywords: "ふぁんたじー ファンタジー 異世界 いせかい ダンジョン だんじょん 城 しろ 中世 ちゅうせい ぼうけん 冒険 TRPG", kinds: ["treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier"], also: ["statue", "campfire", "westernGrave", "fountain", "tent", "river", "stoneWall"] },
+  { id: "fantasy", label: "ファンタジー", keywords: "ふぁんたじー ファンタジー 異世界 いせかい ダンジョン だんじょん 城 しろ 中世 ちゅうせい ぼうけん 冒険", kinds: ["treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier"], also: ["statue", "campfire", "westernGrave", "fountain", "tent", "river", "stoneWall"] },
 ];
 
-// 左の一覧の並び（よく使う順）。家具の分類は FURNITURE_GROUPS の id、ほかは建具・階段・床材・屋根・図形の壁の欄
-export type PaletteSection = "fittings" | "stairs" | "surfaces" | "roofs" | "shapes";
+// 左の一覧の並び（よく使う順）。家具の分類は FURNITURE_GROUPS の id、ほかは建具・階段・なぞって形を決める物・床材・屋根・図形の壁の欄
+export type PaletteSection = "fittings" | "stairs" | "trace" | "surfaces" | "roofs" | "shapes";
 export const PALETTE_ORDER: string[] = [
   "fittings", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor",
-  "stairs", "surfaces", "outdoor", "roofs",
+  "stairs", "trace", "surfaces", "outdoor", "roofs",
   "japanese", "school", "shop", "people", "vehicles", "hospital", "street", "shrine", "play", "fantasy",
   "shapes",
 ];

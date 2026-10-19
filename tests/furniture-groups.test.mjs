@@ -22,7 +22,7 @@ test('every kind of furniture has exactly one home group, and groups may also sh
 });
 
 test('the palette is ordered by use: household furniture first, Japanese and themed groups lower down', () => {
-  const sections = ['fittings', 'stairs', 'surfaces', 'roofs', 'shapes'];
+  const sections = ['fittings', 'stairs', 'trace', 'surfaces', 'roofs', 'shapes'];
   assert.deepEqual([...PALETTE_ORDER].sort(), [...FURNITURE_GROUPS.map(group => group.id), ...sections].sort(), 'every group and section appears once');
   // 「種類」の選択欄（FURNITURE_GROUPS の並び）も、一覧と同じ順
   assert.deepEqual(FURNITURE_GROUPS.map(group => group.id), PALETTE_ORDER.filter(id => !sections.includes(id)));

@@ -572,18 +572,18 @@ function apartment(b: PlanBuilder): void {
       .room("", ux + 190, 340, 110, 260, C.tile, "tile");
   };
   const furnish = (f: FloorBuilder, ux: number) => {
-    f.door(ux + 30, 600, ux + 110, 600)
-      .door(ux + 60, 340, ux + 140, 340)
-      .door(ux + 190, 380, ux + 190, 450)
+    f.door(ux + 30, 600, ux + 110, 600, { flip: true })
+      .door(ux + 60, 340, ux + 140, 340, { sliding: true })
+      .door(ux + 190, 360, ux + 190, 430, { sliding: true })
       .window(ux + 50, 0, ux + 250, 0, true)
       .item("bed", ux + 190, 15)
       .item("desk", ux + 15, 15, { w: 100, h: 50 })
       .item("chair", ux + 43, 70, { rot: 180 })
       .item("table", ux + 60, 230, { w: 80, h: 50 })
-      .item("kitchen", ux + 5, 410, { w: 170, h: 60, rot: 270 })
+      .item("kitchen", ux + 5, 370, { w: 170, h: 60, rot: 270 })
       .item("fridge", ux + 115, 525)
       .item("washer", ux + 205, 525)
-      .item("toilet", ux + 225, 352)
+      .item("toilet", ux + 235, 352)
       .item("shower", ux + 200, 432, { w: 90, h: 85 });
   };
   const first = b.floor();
@@ -639,7 +639,7 @@ function westernMansion(b: PlanBuilder): void {
     .door(740, 1100, 860, 1100)
     .door(600, 240, 600, 360)
     .door(600, 800, 600, 890)
-    .door(1000, 240, 1000, 360)
+    .door(1000, 240, 1000, 360, { flip: true })
     .door(1000, 800, 1000, 890)
     .door(1250, 600, 1340, 600)
     .window(100, 0, 250, 0).window(350, 0, 500, 0).window(700, 0, 900, 0, true)
@@ -708,7 +708,7 @@ function westernMansion(b: PlanBuilder): void {
     .window(0, 150, 0, 450, true).window(1600, 150, 1600, 450, true)
     .window(150, 1100, 450, 1100).window(700, 1100, 900, 1100).window(1150, 1100, 1450, 1100)
     .item("stairsU", 650, 40, { w: 300, h: 300 })
-    .item("plantLarge", 930, 620)
+    .item("plantLarge", 930, 520)
     .item("bench", 700, 450, { w: 150, h: 45 })
     // 主寝室
     .item("bedDouble", 210, 30, { w: 180, h: 210 })
@@ -759,7 +759,7 @@ function lodge(b: PlanBuilder): void {
     .door(60, 800, 160, 800)
     .door(180, 500, 270, 500)
     .door(300, 700, 300, 780)
-    .door(800, 500, 890, 500)
+    .door(800, 500, 890, 500, { flip: true })
     .sliding(0, 180, 0, 320)
     .window(80, 0, 200, 0).window(400, 0, 520, 0).window(680, 0, 920, 0, true)
     .window(1000, 100, 1000, 400, true).window(700, 800, 900, 800).window(380, 800, 520, 800)
@@ -879,8 +879,8 @@ function ryokan(b: PlanBuilder): void {
     .item("armchair", 300, 800)
     .item("plantLarge", 330, 920)
     // 客室
-    .item("table", 490, 90, { w: 120, h: 70 }).item("zaisu", 522, 23).item("zaisu", 522, 162, { rot: 180 }).item("tv", 610, 5, { w: 80, h: 35 })
-    .item("table", 790, 90, { w: 120, h: 70 }).item("zaisu", 822, 23).item("zaisu", 822, 162, { rot: 180 }).item("tv", 910, 5, { w: 80, h: 35 })
+    .item("table", 490, 70, { w: 120, h: 70 }).item("zaisu", 522, 5).item("zaisu", 522, 142, { rot: 180 }).item("tv", 610, 5, { w: 80, h: 35 })
+    .item("table", 790, 70, { w: 120, h: 70 }).item("zaisu", 822, 5).item("zaisu", 822, 142, { rot: 180 }).item("tv", 910, 5, { w: 80, h: 35 })
     .item("table", 1120, 100, { w: 160, h: 90 })
     .row("zaisu", 1140, 33, 2, 80, 0)
     .row("zaisu", 1140, 192, 2, 80, 0, { rot: 180 })
@@ -942,8 +942,8 @@ function ryokan(b: PlanBuilder): void {
     .item("table", 150, 760, { w: 120, h: 70 }).item("zaisu", 182, 695).item("zaisu", 182, 835, { rot: 180 })
     .item("wardrobe", 30, 955, { rot: 180 })
     // 菊・椿
-    .item("table", 490, 90, { w: 120, h: 70 }).item("zaisu", 522, 23).item("zaisu", 522, 162, { rot: 180 }).item("tv", 610, 5, { w: 80, h: 35 })
-    .item("table", 790, 90, { w: 120, h: 70 }).item("zaisu", 822, 23).item("zaisu", 822, 162, { rot: 180 }).item("tv", 910, 5, { w: 80, h: 35 })
+    .item("table", 490, 70, { w: 120, h: 70 }).item("zaisu", 522, 5).item("zaisu", 522, 142, { rot: 180 }).item("tv", 610, 5, { w: 80, h: 35 })
+    .item("table", 790, 70, { w: 120, h: 70 }).item("zaisu", 822, 5).item("zaisu", 822, 142, { rot: 180 }).item("tv", 910, 5, { w: 80, h: 35 })
     // 藤・月
     .item("table", 1120, 100, { w: 160, h: 90 }).row("zaisu", 1140, 33, 2, 80, 0).row("zaisu", 1140, 192, 2, 80, 0, { rot: 180 })
     .row("futon", 1040, 270, 3, 110, 0)
@@ -1083,6 +1083,7 @@ function cafe(b: PlanBuilder): void {
     .item("chair", 425, 802, { rot: 270 })
     .item("chair", 550, 802, { rot: 90 })
     .item("flowerBed", 20, 880, { w: 160, h: 50 });
+  b.roof("gable", -30, -30, 1060, 760, f, "#6d4c41");
 }
 
 function bar(b: PlanBuilder): void {
@@ -1093,7 +1094,7 @@ function bar(b: PlanBuilder): void {
     .walls()
     .door(60, 600, 160, 600)
     .door(600, 180, 600, 260, { flip: true })
-    .door(600, 420, 600, 500, { flip: true })
+    .door(600, 420, 600, 500)
     .window(0, 400, 0, 520)
     .row("shelf", 120, 5, 3, 130, 0, { w: 120, h: 30 })
     .item("fridge", 480, 50, { w: 60, h: 60 })
@@ -1109,6 +1110,7 @@ function bar(b: PlanBuilder): void {
     .item("kitchen", 730, 30, { rot: 90 })
     .item("toilet", 730, 520, { rot: 180 })
     .item("washbasin", 620, 310, { w: 60, h: 45 });
+  b.roof("flat", -20, -20, 840, 640, f, "#4a4f5a");
 }
 
 function convenience(b: PlanBuilder): void {
@@ -1141,6 +1143,7 @@ function convenience(b: PlanBuilder): void {
     .item("car", 600, 830, { w: 170, h: 430, symbol: 1 })
     .item("car", 850, 830, { w: 170, h: 430 })
     .row("bicycle", 60, 900, 2, 80, 0);
+  b.roof("flat", -20, -20, 1240, 840, f, "#c9ced3");
 }
 
 // ---- 施設 ----
@@ -1301,7 +1304,7 @@ function school(b: PlanBuilder): void {
     .open(1850, 750, 2350, 750)
     .walls();
   classroomFurniture(f);
-  f.sliding(100, 750, 180, 750).sliding(600, 750, 680, 750)
+  f.sliding(100, 750, 180, 750).sliding(700, 750, 780, 750)
     .sliding(1000, 750, 1080, 750)
     .door(1300, 750, 1370, 750)
     .sliding(1900, 1200, 2050, 1200).sliding(2150, 1200, 2300, 1200)
@@ -1316,7 +1319,7 @@ function school(b: PlanBuilder): void {
   }
   f.row("shelf", 40, 1165, 5, 100, 0, { rot: 180 })
     .item("longTable", 600, 1060, { w: 160, h: 70 })
-    .item("copier", 700, 770)
+    .item("copier", 690, 1132)
     .item("locker", 560, 1145, { rot: 180 })
     // 保健室
     .item("bed", 1080, 1000, { w: 90, h: 190, rot: 180 }).item("bed", 970, 1000, { w: 90, h: 190, rot: 180 })
@@ -1394,8 +1397,8 @@ function office(b: PlanBuilder): void {
     .room("トイレ", 750, 700, 350, 300, C.tile, "tile")
     .walls()
     .door(180, 1000, 320, 1000)
-    .door(380, 700, 470, 700)
-    .door(580, 700, 660, 700)
+    .door(380, 700, 470, 700, { flip: true })
+    .door(580, 700, 660, 700, { flip: true })
     .door(850, 700, 930, 700)
     .door(1100, 300, 1100, 390)
     .door(1100, 520, 1100, 610)
@@ -1414,7 +1417,7 @@ function office(b: PlanBuilder): void {
     .item("longTable", 1200, 175, { w: 300, h: 100 })
     .row("officeChair", 1215, 112, 3, 90, 0)
     .row("officeChair", 1215, 278, 3, 90, 0, { rot: 180 })
-    .item("officeChair", 1135, 195, { rot: 270 }).item("officeChair", 1505, 195, { rot: 90 })
+    .item("officeChair", 1135, 195, { rot: 270 }).item("officeChair", 1490, 195, { rot: 90 })
     .item("tv", 1555, 145, { w: 160, h: 40, rot: 90, symbol: 1 })
     // 社長室
     .item("desk", 1330, 830, { w: 160, h: 80, symbol: 2 })
@@ -1444,7 +1447,7 @@ function library(b: PlanBuilder): void {
     .open(100, 800, 500, 800)
     .walls()
     .sliding(200, 1200, 360, 1200)
-    .door(700, 800, 780, 800, { flip: true })
+    .door(700, 800, 780, 800)
     .door(1200, 800, 1280, 800, { flip: true })
     .window(60, 0, 500, 0, true).window(600, 0, 1000, 0, true).window(1100, 0, 1540, 0, true)
     .window(1600, 60, 1600, 740, true);
@@ -1476,7 +1479,7 @@ function library(b: PlanBuilder): void {
     .open(1350, 650, 1600, 650)
     .walls()
     .door(300, 650, 380, 650)
-    .door(1000, 650, 1080, 650)
+    .door(1000, 650, 1080, 650, { flip: true })
     .window(60, 0, 740, 0, true).window(0, 100, 0, 550).window(860, 0, 1290, 0).window(1600, 60, 1600, 600)
     .item("stairs", 1470, 60)
     .row("desk", 60, 120, 5, 140, 0)
@@ -1559,7 +1562,7 @@ function shrine(b: PlanBuilder): void {
     .trace("stoneWall", [[640, 930], [430, 930], [430, 50], [1170, 50], [1170, 930], [960, 930]], { brush: 30, height: 80 })
     // 瑞垣（本殿を囲む木の垣）
     .trace("fence", [[740, 400], [625, 400], [625, 75], [975, 75], [975, 400], [860, 400]], { height: 120, color: "#8c3b2a" })
-    .item("shoeCabinet", 740, 690, { w: 120, h: 50, color: "#7a4a2a" })
+    .item("shoeCabinet", 520, 690, { w: 120, h: 50, color: "#7a4a2a" })
     .item("rug", 620, 500, { w: 360, h: 160, color: "#c9b27c" })
     .item("stage", 1340, 975, { w: 200, h: 110 })
     // 参道の石灯籠、二の鳥居、狛犬と賽銭箱
@@ -1567,7 +1570,7 @@ function shrine(b: PlanBuilder): void {
     .row("stoneLantern", 940, 950, 4, 0, 350)
     .item("torii", 650, 1500, { w: 300, h: 50, height: 330 })
     .item("komainu", 600, 1120).item("komainu", 950, 1120)
-    .item("saisenBako", 740, 770)
+    .item("saisenBako", 740, 800)
     // 鎮守の森と御神木
     .item("tree", 40, 40, { w: 280, h: 280 })
     .item("tree", 1280, 40, { w: 280, h: 280 })
@@ -1857,7 +1860,7 @@ function park(b: PlanBuilder): void {
     .item("pond", 1250, 150, { w: 500, h: 300 })
     .item("rock", 1220, 470)
     .item("tree", 1720, 120, { w: 260, h: 260 })
-    .item("tree", 500, 900, { w: 280, h: 280 })
+    .item("tree", 560, 980, { w: 280, h: 280 })
     .item("conifer", 1500, 1150, { w: 140, h: 140 })
     .row("flowerBed", 700, 540, 2, 400, 0)
     .item("flowerBed", 700, 760)
@@ -1873,6 +1876,7 @@ function park(b: PlanBuilder): void {
     .item("toilet", 240, 920)
     .item("washbasin", 330, 920, { w: 60, h: 45 })
     .row("shrub", 1100, 40, 2, 0, 200, { rot: 90 });
+  b.roof("gable", 100, 860, 340, 300, f, "#7a5a3a");
 }
 
 function factory(b: PlanBuilder): void {
@@ -1934,7 +1938,7 @@ function dungeon(b: PlanBuilder): void {
     .item("throne", 955, 20, { w: 90, h: 80 })
     .item("brazier", 670, 20, { w: 60, h: 60 }).item("brazier", 1270, 20, { w: 60, h: 60 }).item("brazier", 670, 500, { w: 60, h: 60 }).item("brazier", 1270, 500, { w: 60, h: 60 })
     .row("futon", 20, 20, 3, 200, 0, { w: 80, h: 180, color: "#b9a77d" })
-    .row("trashCan", 140, 230, 3, 200, 0)
+    .row("trashCan", 20, 20, 3, 200, 0)
     .item("desk", 250, 450)
     .item("chair", 288, 395)
     .item("brazier", 20, 520, { w: 60, h: 60 })
@@ -1949,6 +1953,7 @@ function dungeon(b: PlanBuilder): void {
     .row("shelf", 1470, 800, 3, 0, 100, { w: 360, h: 35 })
     .item("rock", 500, 620, { w: 60, h: 45 })
     .item("rock", 1250, 640, { w: 60, h: 45, symbol: 1 });
+  b.roof("flat", -20, -20, 1940, 1440, f, "#3a3530");
 }
 
 // ---- 住まい（つづき） ----
@@ -2039,10 +2044,10 @@ function mansion(b: PlanBuilder): void {
     .door(340, 0, 420, 0)
     .door(300, 200, 300, 280)
     .door(450, 200, 450, 280)
-    .door(300, 400, 300, 480)
+    .door(300, 430, 300, 510, { flip: true })
     .door(160, 420, 160, 500)
     .door(450, 380, 450, 450)
-    .door(620, 350, 700, 350)
+    .door(620, 350, 700, 350, { flip: true })
     .door(340, 600, 420, 600)
     .sliding(520, 700, 520, 860)
     .window(60, 0, 240, 0).window(500, 0, 760, 0).window(800, 100, 800, 280)
@@ -2054,14 +2059,14 @@ function mansion(b: PlanBuilder): void {
     .item("wardrobe", 150, 305, { rot: 180 })
     .item("desk", 560, 10)
     .item("officeChair", 590, 75, { rot: 180 })
-    .item("bedSemiDouble", 660, 130)
-    .item("wardrobe", 540, 305, { rot: 180 })
+    .item("bedSemiDouble", 660, 100)
+    .item("wardrobe", 460, 305, { rot: 180 })
     // 玄関・水回り・納戸
     .item("shoeCabinet", 300, 60, { rot: 270 })
     .item("bath", 0, 520)
-    .item("shower", 35, 410)
+    .item("shower", 25, 410)
     .item("washbasin", 190, 545, { rot: 180 })
-    .item("washer", 215, 420)
+    .item("washer", 235, 355)
     .item("toilet", 495, 500, { rot: 90 })
     .row("shelf", 590, 565, 2, 100, 0, { rot: 180 })
     // LDK
@@ -2080,6 +2085,7 @@ function mansion(b: PlanBuilder): void {
     .item("officeChair", 570, 970)
     .item("clothesDryer", 480, 1145)
     .item("plantLarge", 20, 1180);
+  b.roof("flat", -20, -20, 840, 1140, f, "#9aa1a8");
 }
 
 function shareHouse(b: PlanBuilder): void {
@@ -2170,7 +2176,7 @@ function oldFarmhouse(b: PlanBuilder): void {
     .shoji(850, 450, 1200, 450)
     .shoji(1300, 450, 1650, 450)
     .door(1740, 450, 1820, 450)
-    .door(1740, 250, 1820, 250)
+    .door(1740, 250, 1820, 250, { flip: true })
     .door(1580, 950, 1670, 950)
     .window(0, 100, 0, 300)
     .window(450, 0, 750, 0, true).window(880, 0, 1170, 0).window(1330, 0, 1620, 0)
@@ -2194,7 +2200,7 @@ function oldFarmhouse(b: PlanBuilder): void {
     .item("futon", 1430, 120)
     .item("wardrobe", 1560, 5)
     // 風呂・便所
-    .item("bath", 1720, 160)
+    .item("bath", 1720, 100)
     .item("toilet", 1840, 260)
     // 庭と蔵
     .item("tree", 60, 700)
@@ -2261,7 +2267,7 @@ function samuraiHouse(b: PlanBuilder): void {
     .item("zaisu", 1472, 50)
     .item("zaisu", 1472, 190, { rot: 180 })
     .item("cupboard", 1605, 330, { rot: 90 })
-    .item("washbasin", 1380, 445, { rot: 180 })
+    .item("washbasin", 1575, 445, { rot: 180 })
     // 庭: 自然な形の池、縁側から池への飛び石、石灯籠、松、枯山水の岩
     .trace("pond", [[470, 770], [680, 700], [900, 760], [930, 900], [780, 1010], [560, 990], [450, 890]])
     .trace("steppingStones", [[330, 640], [360, 760], [420, 900], [470, 1060]])
@@ -2297,7 +2303,7 @@ function dormitory(b: PlanBuilder): void {
     .door(0, 380, 0, 470)
     .door(80, 300, 170, 300)
     .door(100, 520, 180, 520)
-    .door(600, 400, 680, 400)
+    .door(720, 400, 800, 400, { flip: true })
     .door(900, 400, 980, 400)
     .door(1150, 400, 1230, 400)
     .door(800, 150, 800, 230)
@@ -2400,6 +2406,7 @@ function restaurant(b: PlanBuilder): void {
     .item("washbasin", 330, 845, { rot: 180 })
     .row("shelf", 620, 870, 3, 90, 0, { rot: 180 })
     .item("shelf", 870, 770, { rot: 90 });
+  b.roof("hip", -30, -30, 1360, 960, f, "#5a6670");
 }
 
 function ramen(b: PlanBuilder): void {
@@ -2429,6 +2436,7 @@ function ramen(b: PlanBuilder): void {
     .item("fridge", 735, 300)
     .item("longTable", 520, 150, { w: 160, h: 60 })
     .item("toilet", 725, 470, { rot: 90 });
+  b.roof("gable", -30, -30, 860, 760, f, "#3f4549");
 }
 
 function izakaya(b: PlanBuilder): void {
@@ -2471,6 +2479,7 @@ function izakaya(b: PlanBuilder): void {
     .row("zaisu", 640, 775, 2, 65, 0, { rot: 180 })
     .item("shelf", 970, 640, { rot: 90 })
     .item("shelf", 970, 740, { rot: 90 });
+  b.roof("gable", -30, -30, 1060, 910, f, "#3f4549");
 }
 
 function salon(b: PlanBuilder): void {
@@ -2501,6 +2510,8 @@ function salon(b: PlanBuilder): void {
     .item("stool", 640, 605)
     .item("stool", 700, 605)
     .item("washer", 735, 460);
+  b.roof("flat", -20, -20, 840, 470, f, "#c9ced3");
+  b.roof("flat", 330, 450, 490, 220, f, "#c9ced3");
 }
 
 function bookstore(b: PlanBuilder): void {
@@ -2532,6 +2543,7 @@ function bookstore(b: PlanBuilder): void {
     .item("desk", 1060, 470)
     .item("officeChair", 1090, 535, { rot: 180 })
     .row("shelf", 920, 765, 3, 90, 0, { rot: 180 });
+  b.roof("gable", -30, -30, 1260, 860, f, "#5a6670");
 }
 
 // ---- 施設（つづき） ----
@@ -2560,7 +2572,7 @@ function nursery(b: PlanBuilder): void {
     .item("table", 420, 330, { w: 120, h: 60, color: "#9ccc65" })
     .row("stool", 425, 285, 3, 40, 0)
     .row("stool", 425, 395, 3, 40, 0)
-    .row("shelf", 60, 465, 3, 95, 0, { rot: 180 })
+    .row("shelf", 10, 100, 3, 0, 95, { rot: 90 })
     .item("piano", 520, 440, { rot: 180 })
     // お昼寝室
     .row("futon", 740, 120, 4, 85, 0, { w: 70, h: 130 })
@@ -2597,7 +2609,7 @@ function gymnasium(b: PlanBuilder): void {
     .walls()
     .sliding(1050, 0, 1350, 0)
     .sliding(150, 1500, 400, 1500)
-    .door(1650, 1500, 1730, 1500)
+    .door(1650, 1500, 1730, 1500, { flip: true })
     .door(2050, 1500, 2130, 1500)
     .window(200, 0, 900, 0, true).window(1500, 0, 2200, 0, true)
     .window(0, 200, 0, 600, true).window(0, 900, 0, 1300, true)
@@ -2631,7 +2643,7 @@ function policeBox(b: PlanBuilder): void {
     .item("officeChair", 120, 135)
     .item("chair", 128, 270, { rot: 180 })
     .item("shelf", 200, 0)
-    .item("coatStand", 240, 330)
+    .item("coatStand", 20, 330)
     .item("table", 380, 100, { w: 80, h: 60 })
     .item("zaisu", 392, 165, { rot: 180 })
     .item("toilet", 425, 300, { rot: 90 })
@@ -2701,7 +2713,7 @@ function temple(b: PlanBuilder): void {
     .item("statue", 1095, 1965, { w: 50, h: 50, height: 240 })
     // 鐘楼・墓地・境内
     .item("roundTable", 360, 330, { w: 100, h: 100, color: "#8a6a3a" })
-    .item("saisenBako", 940, 670)
+    .item("saisenBako", 940, 700)
     .item("conifer", 60, 500)
     .item("conifer", 1720, 1700)
     .item("tree", 1300, 1500, { w: 260, h: 260 })
@@ -2810,6 +2822,8 @@ function cruiseShip(b: PlanBuilder): void {
       .door(x + 250, 420, x + 330, 420)
       .window(x + 80, 740, x + 260, 740);
   }
+  b.roof("flat", 280, -20, 1870, 780, f, "#e8eaee");
+  b.roof("flat", 2150, 150, 320, 440, f, "#e8eaee");
 }
 
 function sleeperTrain(b: PlanBuilder): void {
@@ -2817,7 +2831,7 @@ function sleeperTrain(b: PlanBuilder): void {
   // 1両目: 個室の寝台が7つと、トイレ・通路
   for (let i = 0; i < 7; i += 1) {
     const x = i * 250;
-    f.room(`${i + 1}号室`, x, 0, 250, 200, C.cream);
+    f.room(`${i + 1}号室`, x, 0, 250, 200, C.cream).label(10, 140);
   }
   f.room("トイレ", 1750, 0, 250, 200, C.tile, "tile")
     .room("", 0, 200, 2000, 100, C.wood, "wood")
@@ -2828,7 +2842,7 @@ function sleeperTrain(b: PlanBuilder): void {
     .room("", 1200, 600, 800, 100, C.wood, "wood")
     .walls()
     .door(0, 220, 0, 280).door(2000, 220, 2000, 280)
-    .door(1800, 200, 1880, 200)
+    .door(1800, 200, 1880, 200, { flip: true })
     .door(0, 520, 0, 580).door(1200, 620, 1200, 680).door(2000, 620, 2000, 680)
     .sliding(1240, 600, 1350, 600).sliding(1640, 600, 1750, 600)
     .window(100, 300, 600, 300).window(800, 300, 1300, 300).window(1450, 300, 1900, 300)
@@ -2840,7 +2854,7 @@ function sleeperTrain(b: PlanBuilder): void {
     .item("bedDouble", 1780, 450, { rot: 90 });
   for (let i = 0; i < 7; i += 1) {
     const x = i * 250;
-    f.item("bed", x + 25, 90, { rot: 90 })
+    f.item("bed", x + 25, 10, { rot: 90 })
       .sliding(x + 60, 200, x + 190, 200)
       .window(x + 40, 0, x + 210, 0);
   }
@@ -2849,6 +2863,8 @@ function sleeperTrain(b: PlanBuilder): void {
     f.item("table", x + 60, 410, { w: 70, h: 70 }).item("chair", x + 10, 422, { rot: 270 }).item("chair", x + 135, 422, { rot: 90 })
       .item("table", x + 60, 620, { w: 70, h: 70 }).item("chair", x + 10, 632, { rot: 270 }).item("chair", x + 135, 632, { rot: 90 });
   }
+  b.roof("flat", -10, -10, 2020, 320, f, "#3b4a7a");
+  b.roof("flat", -10, 390, 2020, 320, f, "#3b4a7a");
 }
 
 // ---- ファンタジー・SF ----
@@ -2917,7 +2933,7 @@ function castle(b: PlanBuilder): void {
     // 兵舎
     .item("longTable", 160, 720)
     .row("stool", 175, 785, 4, 45, 0)
-    .row("bunkBed", 30, 900, 4, 115, 0)
+    .row("bunkBed", 30, 900, 3, 115, 0)
     // 大広間
     .item("longTable", 700, 950, { w: 600, h: 80 })
     .row("chair", 720, 900, 10, 58, 0)
@@ -3104,6 +3120,8 @@ function spaceship(b: PlanBuilder): void {
       .sliding(x + 40, 350, x + 150, 350)
       .window(x + 100, 0, x + 200, 0);
   }
+  b.roof("flat", -20, -20, 2040, 840, f, "#c9ced3");
+  b.roof("flat", 2020, 130, 400, 540, f, "#c9ced3");
 }
 
 function oneK(b: PlanBuilder): void {
@@ -3116,22 +3134,22 @@ function oneK(b: PlanBuilder): void {
     .open(210, 580, 210, 670)
     .walls()
     .sliding(60, 0, 300, 0)
-    .door(60, 420, 140, 420)
-    .door(210, 450, 210, 520)
-    .door(240, 680, 330, 680)
+    .door(60, 420, 140, 420, { sliding: true })
+    .door(210, 450, 210, 520, { sliding: true })
+    .door(240, 680, 330, 680, { flip: true })
     .window(360, 100, 360, 300).window(0, 480, 0, 600)
     .item("bed", 240, 160)
-    .item("desk", 20, 330)
-    .item("chair", 57, 283)
+    .item("desk", 20, 320)
+    .item("chair", 57, 273)
     .item("tv", 10, 100, { rot: 90 })
     .item("rug", 90, 120, { w: 120, h: 100 })
     .item("kitchen", 10, 610, { w: 180, h: 60 })
-    .item("fridge", 130, 470)
+    .item("fridge", 90, 470)
     .item("washer", 20, 470)
     .item("unitBath", 210, 420, { w: 150, h: 150 })
     .item("shoeCabinet", 270, 585)
-    .item("clothesDryer", 90, -80, { w: 200, h: 50 })
-    .item("acOutdoor", 270, -110);
+    .item("clothesDryer", 90, -95, { w: 200, h: 50 })
+    .item("acOutdoor", 280, -50);
   b.roof("flat", -20, -20, 400, 720, f);
 }
 
@@ -3144,7 +3162,7 @@ function maisonette(b: PlanBuilder): void {
     .walls()
     .door(60, 500, 140, 500)
     .door(0, 560, 0, 650)
-    .door(240, 500, 320, 500)
+    .door(200, 520, 200, 600)
     .door(400, 560, 400, 640)
     .window(60, 0, 540, 0, true).window(0, 100, 0, 400)
     .item("tv", 85, 20)
@@ -3159,7 +3177,7 @@ function maisonette(b: PlanBuilder): void {
     .item("shoeCabinet", 110, 655)
     .item("washbasin", 300, 630, { rot: 180 })
     .item("washer", 220, 620)
-    .item("bath", 420, 610);
+    .item("bath", 520, 530, { rot: 90 });
   const upper = b.floor();
   upper.room("寝室", 0, 0, 450, 350, C.wood, "wood")
     .room("子ども部屋", 0, 350, 450, 350, C.wood, "wood")
@@ -3171,7 +3189,7 @@ function maisonette(b: PlanBuilder): void {
     .item("bedDouble", 150, 100)
     .item("sideTable", 90, 100).item("sideTable", 300, 100)
     .item("wardrobe", 310, 290)
-    .item("bed", 330, 380)
+    .item("bed", 230, 360, { rot: 90 })
     .item("desk", 20, 600)
     .item("chair", 57, 553)
     .item("shelf", 180, 660);
@@ -3198,7 +3216,7 @@ function towerMansion(b: PlanBuilder): void {
     .door(400, 850, 490, 850)
     .door(590, 620, 670, 620)
     .door(780, 620, 860, 620)
-    .door(1000, 500, 1080, 500)
+    .door(1000, 500, 1080, 500, { flip: true })
     .window(0, 60, 0, 440, true).window(0, 560, 0, 800).window(1300, 60, 1300, 440)
     .item("tv", 115, 120)
     .item("table", 125, 260, { w: 100, h: 50 })
@@ -3256,9 +3274,9 @@ function twoFamily(b: PlanBuilder): void {
     .row("chair", 780, 215, 2, 60, 0, { rot: 180 })
     .item("sofa", 460, 260, { rot: 180 })
     .item("tv", 485, 80)
-    .item("bed", 280, 460)
-    .item("bed", 160, 460)
-    .item("wardrobe", 20, 630)
+    .item("bed", 20, 450, { rot: 90 })
+    .item("bed", 20, 560, { rot: 90 })
+    .item("wardrobe", 250, 650)
     .item("stairsU", 440, 480)
     .item("bath", 820, 600)
     .item("washbasin", 700, 640, { rot: 180 })
@@ -3285,13 +3303,15 @@ function twoFamily(b: PlanBuilder): void {
     .item("sofa", 360, 200, { rot: 90 })
     .item("bedDouble", 760, 150)
     .item("sideTable", 700, 150)
-    .item("bunkBed", 280, 600)
+    .item("bunkBed", 160, 600)
     .item("desk", 20, 760)
     .item("chair", 57, 713)
     .item("bath", 820, 600)
     .item("washbasin", 700, 640, { rot: 180 })
     .item("desk", 500, 780, { w: 120, h: 60 });
-  b.roof("hip", -30, -30, 1060, 910, upper);
+  // 2階は子ども部屋と書斎の側だけが南に出ているので、本体と張り出しに分けて屋根を載せる（何もない所に屋根をかけない）
+  b.roof("hip", -30, -30, 1060, 760, upper);
+  b.roof("gable", -30, 700, 710, 180, upper);
 }
 
 function logHouse(b: PlanBuilder): void {
@@ -3308,7 +3328,7 @@ function logHouse(b: PlanBuilder): void {
     .door(150, 450, 230, 450)
     .door(460, 450, 540, 450)
     .door(600, 520, 600, 600)
-    .door(650, 700, 740, 700)
+    .door(650, 700, 740, 700, { flip: true })
     .door(800, 520, 800, 610)
     .window(80, 0, 480, 0, true).window(0, 80, 0, 380).window(0, 500, 0, 650).window(600, 0, 760, 0)
     .item("fireplace", 200, 0)
@@ -3338,7 +3358,7 @@ function garageHouse(b: PlanBuilder): void {
     .walls()
     .sliding(60, 600, 440, 600)
     .door(500, 100, 500, 180)
-    .door(600, 300, 680, 300)
+    .door(600, 300, 680, 300, { flip: true })
     .door(700, 600, 790, 600)
     .window(900, 60, 900, 240)
     .item("car", 160, 80)
@@ -3385,7 +3405,7 @@ function danchi(b: PlanBuilder): void {
     .fusuma(650, 100, 650, 280)
     .fusuma(400, 350, 600, 350)
     .door(350, 370, 350, 430)
-    .door(650, 370, 650, 430)
+    .door(650, 370, 650, 430, { flip: true })
     .door(400, 450, 470, 450)
     .open(550, 450, 640, 450)
     .door(780, 650, 870, 650)
@@ -3395,7 +3415,7 @@ function danchi(b: PlanBuilder): void {
     .item("stepTansu", 190, 300, { w: 150, h: 45 })
     .item("futon", 450, 80)
     .item("kitchen", 835, 140, { rot: 90 })
-    .item("fridge", 680, 370)
+    .item("fridge", 705, 380)
     .item("table", 690, 200, { w: 90, h: 70 })
     .item("chair", 700, 150).item("chair", 700, 275, { rot: 180 })
     .item("desk", 20, 580)
@@ -3422,7 +3442,7 @@ function courtyardHouse(b: PlanBuilder): void {
     .sliding(350, 400, 350, 650)
     .sliding(750, 400, 750, 470)
     .door(750, 150, 750, 230)
-    .door(150, 700, 230, 700)
+    .door(150, 700, 230, 700, { flip: true })
     .door(850, 700, 930, 700)
     .open(470, 850, 630, 850)
     .door(500, 1000, 600, 1000)
@@ -3458,9 +3478,9 @@ function bungalow(b: PlanBuilder): void {
     .room("玄関", 850, 400, 250, 200, C.stone, "stone")
     .walls()
     .sliding(100, 600, 500, 600)
-    .door(600, 150, 600, 230)
+    .door(600, 20, 600, 100)
     .door(650, 400, 730, 400)
-    .door(850, 450, 850, 530)
+    .door(850, 450, 850, 530, { flip: true })
     .door(950, 600, 1040, 600)
     .window(60, 0, 540, 0, true).window(0, 100, 0, 500).window(660, 0, 1040, 0).window(1100, 80, 1100, 320)
     .item("sofaCorner", 60, 330)
@@ -3614,7 +3634,7 @@ function machiya(b: PlanBuilder): void {
     .item("chabudai", 180, 420)
     .item("zabuton", 197, 360).item("zabuton", 197, 520, { rot: 180 })
     .item("kamado", 475, 650, { rot: 90 })
-    .item("ido", 455, 1020, { w: 110, h: 110 })
+    .item("ido", 455, 1085, { w: 110, h: 110 })
     .item("tsukubai", 200, 680)
     .item("stoneLantern", 330, 660)
     .item("tokonoma", 20, 1110)
@@ -3622,6 +3642,7 @@ function machiya(b: PlanBuilder): void {
     .item("butsudan", 350, 1135);
   b.roof("gable", -30, -30, 630, 660, f, "#3f4549");
   b.roof("gable", -30, 770, 630, 460, f, "#3f4549");
+  b.roof("flat", 450, 630, 150, 140, f, "#3f4549");
 }
 
 function nagaya(b: PlanBuilder): void {
@@ -3672,7 +3693,7 @@ function ninjaHouse(b: PlanBuilder): void {
     .item("butsudan", 700, 325)
     .item("treasureChest", 1000, 160)
     .item("crate", 900, 80)
-    .item("kamado", 200, 720)
+    .item("kamado", 10, 500, { rot: 90 })
     .item("irori", 150, 520)
     .item("crate", 650, 700).item("barrel", 720, 710)
     .item("stepTansu", 600, 450)
@@ -3715,8 +3736,8 @@ function onsen(b: PlanBuilder): void {
     .room("脱衣所", 0, 0, 800, 400, C.wood, "wood")
     .room("脱衣所", 800, 0, 800, 400, C.wood, "wood")
     .walls()
-    .door(350, 400, 450, 400).door(1150, 400, 1250, 400)
-    .sliding(300, 900, 500, 900).sliding(1100, 900, 1300, 900)
+    .door(350, 400, 450, 400, { flip: true }).door(1150, 400, 1250, 400, { flip: true })
+    .sliding(560, 900, 760, 900).sliding(840, 900, 1040, 900)
     .door(100, 0, 190, 0).door(1410, 0, 1500, 0)
     .window(0, 480, 0, 820).window(1600, 480, 1600, 820)
     .row("shoeCabinet", 300, 20, 3, 100, 0)
@@ -3726,7 +3747,7 @@ function onsen(b: PlanBuilder): void {
     .item("hinokiBath", 300, 600, { w: 300, h: 160 })
     .item("hinokiBath", 1000, 600, { w: 300, h: 160 })
     .row("washbasin", 40, 820, 4, 120, 0, { rot: 180 })
-    .row("washbasin", 1040, 820, 4, 120, 0, { rot: 180 })
+    .row("washbasin", 1125, 820, 4, 120, 0, { rot: 180 })
     .trace("pond", [[150, 1000], [600, 960], [750, 1150], [500, 1380], [150, 1300]], { color: "#6f8fa6" })
     .trace("pond", [[850, 1000], [1350, 980], [1450, 1200], [1100, 1400], [850, 1300]], { color: "#6f8fa6" })
     .item("rock", 650, 1300).item("rock", 1400, 1350, { symbol: 1 })
@@ -3778,9 +3799,9 @@ function guesthouse(b: PlanBuilder): void {
     .room("受付", 950, 450, 250, 450, C.warm)
     .walls()
     .door(600, 150, 600, 230)
-    .door(200, 450, 280, 450)
-    .door(650, 450, 730, 450)
-    .door(950, 100, 950, 180)
+    .door(380, 450, 460, 450)
+    .door(610, 450, 690, 450, { flip: true })
+    .door(950, 100, 950, 180, { flip: true })
     .door(950, 500, 950, 580)
     .door(1050, 900, 1140, 900)
     .window(60, 0, 540, 0, true).window(0, 520, 0, 820).window(1200, 520, 1200, 820)
@@ -3793,7 +3814,7 @@ function guesthouse(b: PlanBuilder): void {
     .row("bunkBed", 40, 600, 4, 115, 0)
     .row("bunkBed", 540, 600, 3, 130, 0)
     .row("locker", 60, 520, 2, 100, 0, { w: 90, h: 50 })
-    .row("shower", 980, 60, 3, 0, 120)
+    .row("shower", 1010, 60, 3, 0, 120)
     .item("counter", 990, 700, { w: 180, h: 60 });
   b.roof("gable", -30, -30, 1260, 960, f);
 }
@@ -3810,13 +3831,13 @@ function capsuleHotel(b: PlanBuilder): void {
     .door(150, 400, 230, 400)
     .door(500, 450, 500, 530)
     .door(300, 700, 380, 700)
-    .door(900, 700, 980, 700)
+    .door(900, 700, 980, 700, { flip: true })
     .window(1400, 760, 1400, 1000).window(0, 60, 0, 340)
     .item("counter", 150, 120, { w: 240, h: 60 })
     .item("vendingMachine", 380, 290)
     .row("locker", 30, 470, 4, 110, 0, { w: 90, h: 50 })
-    .row("bunkBed", 560, 100, 7, 115, 0)
-    .row("bunkBed", 560, 440, 7, 115, 0)
+    .row("bunkBed", 590, 100, 7, 115, 0)
+    .row("bunkBed", 590, 440, 7, 115, 0)
     .item("bath", 100, 900, { w: 300, h: 120 })
     .row("washbasin", 450, 990, 3, 80, 0, { rot: 180 })
     .row("armchair", 760, 800, 3, 110, 0)
@@ -3896,7 +3917,7 @@ function festival(b: PlanBuilder): void {
   f.area("", 0, 0, 2200, 1400, "soil", C.soil)
     .room("本部", 1900, 1200, 250, 180, C.wood, "wood")
     .walls()
-    .door(1950, 1200, 2030, 1200)
+    .door(1950, 1200, 2030, 1200, { flip: true })
     .item("longTable", 1940, 1300, { w: 180, h: 50 })
     .trace("pathway", [[100, 700], [2100, 700]], { brush: 260 });
   // 参道の両側に並ぶ屋台（提灯をつるす）
@@ -3922,7 +3943,7 @@ function beach(b: PlanBuilder): void {
     .walls()
     .sliding(150, 450, 650, 450)
     .window(100, 160, 100, 380).window(160, 100, 640, 100)
-    .item("counter", 150, 360, { w: 300, h: 60 })
+    .item("counter", 150, 300, { w: 300, h: 60 })
     .row("roundTable", 120, 200, 4, 140, 0, { w: 80, h: 80 })
     .item("vendingMachine", 580, 120)
     .row("parasol", 900, 500, 4, 350, 0, { w: 220, h: 220 })
@@ -3932,7 +3953,7 @@ function beach(b: PlanBuilder): void {
     .trace("pathway", [[800, 30], [800, 460], [1200, 900], [1300, 1050]], { brush: 120 })
     .item("signboard", 300, 520)
     .item("shower", 900, 320)
-    .item("campfire", 1900, 800);
+    .item("campfire", 2150, 880);
   b.roof("gable", 70, 70, 660, 410, f, "#2f6f8f");
 }
 
@@ -3969,16 +3990,16 @@ function kissaten(b: PlanBuilder): void {
     .room("厨房", 800, 0, 300, 400, C.tile, "tile")
     .room("", 800, 400, 300, 200, C.tile, "tile")
     .walls()
-    .door(350, 600, 450, 600)
+    .door(350, 600, 450, 600, { flip: true })
     .door(800, 150, 800, 230)
-    .door(880, 400, 960, 400)
+    .door(880, 400, 960, 400, { flip: true })
     .window(60, 0, 740, 0, true).window(0, 80, 0, 520)
     .item("counter", 560, 180, { w: 220, h: 60, rot: 90 })
     .row("barStool", 500, 200, 4, 0, 80)
     .item("shelf", 720, 470, { rot: 90 })
     .item("grandfatherClock", 20, 520)
     .item("plantLarge", 720, 20);
-  for (const [x, y] of [[80, 130], [80, 330], [300, 130], [300, 330]]) {
+  for (const [x, y] of [[80, 130], [80, 390], [300, 130], [300, 390]]) {
     f.item("table", x, y, { w: 90, h: 70, color: "#5b3a24" })
       .item("armchair", x + 5, y - 85, { color: "#8e3b2f" }).item("armchair", x + 5, y + 75, { rot: 180, color: "#8e3b2f" });
   }
@@ -4024,7 +4045,7 @@ function yakiniku(b: PlanBuilder): void {
     .walls()
     .door(1000, 150, 1000, 230)
     .open(1000, 470, 1000, 680)
-    .door(1150, 700, 1250, 700)
+    .door(1150, 700, 1250, 700, { flip: true })
     .window(60, 0, 940, 0).window(0, 80, 0, 620);
   for (const [x, y] of [[80, 120], [380, 120], [680, 120], [80, 420], [380, 420], [680, 420]]) {
     f.item("table", x, y, { w: 120, h: 80, color: "#3f3a36" })
@@ -4048,12 +4069,12 @@ function fastFood(b: PlanBuilder): void {
     .door(350, 700, 450, 700)
     .door(800, 150, 800, 230)
     .open(800, 470, 800, 680)
-    .door(1000, 450, 1080, 450)
+    .door(1180, 450, 1260, 450, { flip: true })
     .window(60, 0, 740, 0, true).window(0, 80, 0, 620, true).window(1300, 500, 1300, 650)
     .item("counter", 830, 560, { w: 300, h: 60 })
     .item("kitchen", 850, 370, { w: 300, h: 65 })
     .item("kitchenIsland", 900, 200, { w: 240, h: 100 })
-    .item("fridge", 1220, 360)
+    .item("fridge", 1220, 20)
     .item("vendingMachine", 650, 600)
     .item("trashCan", 50, 600);
   for (const [x, y] of [[100, 120], [350, 120], [100, 360], [350, 360], [580, 240]]) {
@@ -4094,7 +4115,7 @@ function florist(b: PlanBuilder): void {
     .room("作業場", 550, 0, 250, 500, C.wood, "wood")
     .walls()
     .sliding(150, 500, 400, 500)
-    .door(550, 150, 550, 230)
+    .door(550, 150, 550, 230, { flip: true })
     .window(60, 0, 490, 0, true)
     .row("plantLarge", 40, 150, 4, 0, 80)
     .row("plant", 200, 150, 4, 70, 0).row("plant", 200, 250, 4, 70, 0)
@@ -4164,15 +4185,15 @@ function pharmacy(b: PlanBuilder): void {
     .sliding(300, 600, 500, 600)
     .door(800, 150, 800, 230)
     .open(800, 420, 800, 580)
-    .door(950, 400, 1030, 400)
+    .door(950, 400, 1030, 400, { flip: true })
     .window(60, 0, 740, 0, true)
     .row("displayShelf", 80, 150, 3, 220, 0, { w: 180, h: 90 })
     .row("displayShelf", 80, 350, 3, 220, 0, { w: 180, h: 90 })
     .item("counter", 600, 500, { w: 180, h: 60 })
     .row("shelf", 830, 60, 3, 120, 0)
     .item("longTable", 880, 200, { w: 200, h: 60 })
-    .item("counter", 850, 330, { w: 300, h: 50 })
-    .row("bench", 900, 520, 2, 0, 0, { w: 200, h: 45 });
+    .item("counter", 850, 300, { w: 300, h: 50 })
+    .row("bench", 830, 535, 2, 180, 0, { w: 160, h: 45 });
   b.roof("flat", -20, -20, 1240, 640, f);
 }
 
@@ -4184,16 +4205,16 @@ function boutique(b: PlanBuilder): void {
     .walls()
     .sliding(350, 600, 550, 600)
     .door(900, 100, 900, 180)
-    .door(900, 350, 900, 430)
+    .door(900, 350, 900, 430, { flip: true })
     .window(60, 0, 840, 0, true)
     .row("closet", 60, 150, 3, 260, 0, { w: 200, h: 60 })
     .row("displayShelf", 100, 350, 2, 300, 0, { w: 180, h: 90 })
     .item("counter", 680, 480, { w: 180, h: 60 })
-    .item("person", 600, 200)
+    .item("person", 600, 260)
     .item("armchair", 760, 250)
     .row("curtain", 950, 120, 2, 120, 0, { w: 100, h: 15 })
-    .row("shelf", 930, 320, 3, 0, 90, { rot: 90 })
-    .item("crate", 1100, 500);
+    .row("shelf", 1150, 320, 3, 0, 90, { rot: 90 })
+    .item("crate", 960, 500);
   b.roof("flat", -20, -20, 1240, 640, f);
 }
 
@@ -4297,7 +4318,7 @@ function arcade(b: PlanBuilder): void {
     .room("両替", 1200, 400, 300, 400, C.gray)
     .walls()
     .sliding(400, 800, 700, 800)
-    .door(1200, 150, 1200, 230)
+    .door(1200, 150, 1200, 230, { flip: true })
     .open(1200, 450, 1200, 750)
     .row("vendingMachine", 300, 150, 7, 120, 0)
     .row("vendingMachine", 300, 400, 7, 120, 0, { rot: 180 })
@@ -4323,7 +4344,7 @@ function karaoke(b: PlanBuilder): void {
     .open(500, 440, 500, 660)
     .door(500, 800, 500, 880);
   for (let i = 0; i < 4; i += 1) {
-    f.door(650, i * 250 + 90, 650, i * 250 + 170)
+    f.door(650, i * 250 + 90, 650, i * 250 + 170, { flip: true })
       .item("sofaCorner", 700, i * 250 + 70, { w: 240, h: 160 })
       .item("table", 830, i * 250 + 120, { w: 100, h: 50 })
       .item("tv", 1050, i * 250 + 90, { rot: 90 });
@@ -4332,7 +4353,7 @@ function karaoke(b: PlanBuilder): void {
     .item("vendingMachine", 380, 450).item("vendingMachine", 380, 550)
     .item("longTable", 80, 550, { w: 200, h: 60 })
     .item("kitchen", 30, 920)
-    .item("fridge", 400, 780);
+    .item("fridge", 300, 720);
   b.roof("flat", -20, -20, 1140, 1040, f);
 }
 
@@ -4404,7 +4425,7 @@ function classroom(b: PlanBuilder): void {
   f.room("教室", 0, 0, 900, 800, C.wood, "wood").label(30, 120)
     .room("", 0, 800, 900, 200, C.gray)
     .walls()
-    .door(80, 800, 180, 800).door(720, 800, 820, 800)
+    .door(80, 800, 180, 800, { flip: true }).door(720, 800, 820, 800)
     .window(900, 80, 900, 720, true).window(80, 1000, 820, 1000)
     .item("blackboard", 270, 0)
     .item("lectern", 390, 60)
@@ -4421,7 +4442,7 @@ function lectureHall(b: PlanBuilder): void {
   f.room("講義室", 0, 0, 1400, 1100, C.wood, "wood").label(40, 1000)
     .room("", 1400, 0, 300, 1100, C.gray)
     .walls()
-    .door(1400, 150, 1400, 250).door(1400, 850, 1400, 950)
+    .door(1400, 150, 1400, 250, { flip: true }).door(1400, 850, 1400, 950)
     .window(0, 100, 0, 1000, true)
     .item("whiteboard", 500, 10, { w: 400, h: 50 })
     .item("lectern", 640, 90)
@@ -4430,7 +4451,7 @@ function lectureHall(b: PlanBuilder): void {
     f.item("longTable", 150, 280 + row * 100, { w: 500, h: 50 })
       .item("longTable", 750, 280 + row * 100, { w: 500, h: 50 });
   }
-  f.row("bench", 1450, 300, 4, 0, 160, { w: 200, h: 50, rot: 90 });
+  f.row("bench", 1450, 120, 3, 0, 230, { w: 200, h: 50, rot: 90 });
   b.roof("flat", -20, -20, 1740, 1140, f);
 }
 
@@ -4439,7 +4460,7 @@ function clubRoom(b: PlanBuilder): void {
   f.room("部室", 0, 0, 600, 500, C.wood, "wood").label(20, 20)
     .room("", 0, 500, 600, 150, C.gray)
     .walls()
-    .door(250, 500, 330, 500)
+    .door(250, 500, 330, 500, { flip: true })
     .window(600, 80, 600, 420).window(100, 0, 500, 0)
     .item("longTable", 150, 200, { w: 300, h: 90 })
     .row("chair", 170, 150, 4, 70, 0)
@@ -4477,7 +4498,7 @@ function mangaStudio(b: PlanBuilder): void {
     .walls()
     .door(800, 250, 800, 330)
     .door(150, 600, 230, 600)
-    .door(500, 600, 580, 600)
+    .door(500, 600, 580, 600, { flip: true })
     .door(1000, 900, 1090, 900)
     .window(60, 0, 740, 0, true).window(0, 100, 0, 500)
     .row("desk", 60, 150, 3, 180, 0, { w: 160, h: 70 })
@@ -4487,8 +4508,8 @@ function mangaStudio(b: PlanBuilder): void {
     .item("deskL", 620, 380)
     .row("shelf", 830, 100, 4, 0, 100, { w: 290, h: 40 })
     .item("futon", 100, 660).item("futon", 220, 660)
-    .item("kitchen", 860, 820)
-    .item("fridge", 1070, 650)
+    .item("kitchen", 820, 610)
+    .item("fridge", 1070, 610)
     .item("table", 600, 700, { w: 140, h: 80 });
   b.roof("flat", -20, -20, 1190, 940, f);
 }
@@ -4592,14 +4613,14 @@ function nursingHome(b: PlanBuilder): void {
       .item("wardrobe", i * 400 + 20, 940, { w: 120, h: 45 })
       .item("wheelchair", i * 400 + 60, 760);
   }
-  for (const [x, y] of [[120, 150], [420, 150], [120, 330], [420, 330]]) {
+  for (const [x, y] of [[120, 150], [420, 150], [120, 360], [420, 360]]) {
     f.item("diningTable", x, y, { w: 160, h: 90 }).row("chair", x + 20, y - 50, 2, 70, 0).row("chair", x + 20, y + 95, 2, 70, 0, { rot: 180 });
   }
   f.item("kitchen", 700, 400, { w: 90, h: 65 })
     .item("vaultingBox", 900, 150, { w: 80, h: 120 })
     .item("ironBar", 900, 350, { w: 240, h: 30 })
     .item("bath", 1300, 250, { w: 200, h: 90 })
-    .row("washbasin", 1250, 420, 3, 100, 0, { rot: 180 })
+    .row("washbasin", 1420, 420, 2, 90, 0, { rot: 180 })
     .trace("flowerBed", [[100, 1100], [600, 1080], [620, 1200], [100, 1220]])
     .row("bench", 900, 1120, 2, 300, 0, { w: 180, h: 50 })
     .item("tree", 1450, 1050, { w: 220, h: 220 });
@@ -4614,7 +4635,7 @@ function fireStation(b: PlanBuilder): void {
     .room("仮眠室", 1000, 450, 600, 450, C.wood, "wood")
     .walls()
     .sliding(60, 900, 460, 900).sliding(540, 900, 940, 900)
-    .door(1000, 150, 1000, 230)
+    .door(1000, 150, 1000, 230, { flip: true })
     .door(1000, 600, 1000, 680)
     .window(1600, 80, 1600, 380).window(1600, 520, 1600, 820)
     .item("bus", 200, 150, { w: 250, h: 700, color: "#c0392b", height: 250 })
@@ -4676,7 +4697,7 @@ function postOffice(b: PlanBuilder): void {
     .item("safe", 1200, 380)
     .row("longTable", 80, 600, 4, 290, 0, { w: 260, h: 70 })
     .row("crate", 100, 760, 6, 90, 0)
-    .item("bicycle", 1100, 620, { rot: 90 });
+    .item("bicycle", 1100, 520, { rot: 90 });
   b.roof("flat", -20, -20, 1340, 890, f, "#c0392b");
 }
 
@@ -4767,7 +4788,7 @@ function funeralHall(b: PlanBuilder): void {
     .room("控室", 1000, 0, 450, 400, C.tatami, "tatami")
     .room("受付", 1000, 400, 450, 400, C.warm)
     .walls()
-    .door(1000, 150, 1000, 230)
+    .door(1000, 150, 1000, 230, { flip: true })
     .door(1000, 550, 1000, 630)
     .door(1150, 800, 1300, 800)
     .window(1450, 80, 1450, 320)
@@ -4793,7 +4814,7 @@ function aquarium(b: PlanBuilder): void {
     .room("入口", 1200, 500, 400, 500, C.warm)
     .walls()
     .open(60, 700, 1140, 700)
-    .door(1200, 200, 1200, 280)
+    .door(1200, 200, 1200, 280, { flip: true })
     .open(1200, 760, 1200, 940)
     .door(1350, 1000, 1450, 1000)
     .item("pond", 150, 40, { w: 900, h: 400, color: "#3a7ca5" })
@@ -4854,9 +4875,9 @@ function danceStudio(b: PlanBuilder): void {
     .room("更衣室", 1000, 0, 400, 350, C.gray)
     .room("受付", 1000, 350, 400, 350, C.warm)
     .walls()
-    .door(1000, 120, 1000, 200)
+    .door(1000, 120, 1000, 200, { flip: true })
     .open(1000, 420, 1000, 640)
-    .door(1150, 700, 1250, 700)
+    .door(1150, 700, 1250, 700, { flip: true })
     .window(0, 80, 0, 620, true)
     .item("curtain", 100, 0, { w: 800, h: 15 })
     .item("ironBar", 100, 100, { w: 800, h: 30 })
@@ -4865,7 +4886,7 @@ function danceStudio(b: PlanBuilder): void {
     .item("bench", 1100, 260, { w: 200, h: 50 })
 
     .item("counter", 1100, 500, { w: 200, h: 60 })
-    .item("sofa2", 1120, 600);
+    .item("sofa2", 1255, 600);
   b.roof("flat", -20, -20, 1440, 740, f);
 }
 
@@ -4917,7 +4938,7 @@ function weddingChapel(b: PlanBuilder): void {
     .item("piano", 760, 100)
     .row("bench", 80, 350, 7, 0, 120, { w: 330, h: 50, rot: 180 })
     .row("bench", 590, 350, 7, 0, 120, { w: 330, h: 50, rot: 180 })
-    .row("plantLarge", 120, 60, 2, 700, 0)
+    .row("plantLarge", 120, 60, 2, 810, 0)
     .item("sofa", 100, 1400)
     .item("wardrobe", 700, 1400)
     .trace("pathway", [[500, 1610], [500, 1980]], { brush: 160 })
@@ -4939,7 +4960,7 @@ function indoorPool(b: PlanBuilder): void {
     .trace("pond", [[150, 150], [1450, 150], [1450, 750], [150, 750]], { color: "#3fa7c9" })
     .row("bench", 200, 840, 4, 300, 0, { w: 200, h: 50 })
     .row("locker", 1640, 120, 4, 110, 0, { w: 90, h: 50 })
-    .row("locker", 1640, 920, 4, 110, 0, { w: 90, h: 50, rot: 180 })
+    .row("locker", 1640, 920, 2, 110, 0, { w: 90, h: 50, rot: 180 })
     .row("shower", 1700, 250, 3, 110, 0)
     .row("shower", 1700, 600, 3, 110, 0);
   b.roof("gable", -40, -40, 2180, 1080, f);
@@ -5085,10 +5106,10 @@ function riverside(b: PlanBuilder): void {
     .row("tree", 100, 100, 4, 500, 0, { w: 260, h: 260 })
     .row("shrub", 300, 1450, 5, 450, 0)
     .item("campfire", 600, 1550)
-    .item("tent", 800, 1500)
-    .item("bicycle", 1500, 520, { rot: 90 })
+    .item("tent", 820, 1580)
+    .item("bicycle", 1720, 470, { rot: 90 })
     .row("crate", 2450, 260, 3, 100, 0)
-    .item("trashCan", 2200, 520);
+    .item("trashCan", 2300, 490);
   b.roof("gable", 2380, 80, 540, 340, f);
 }
 
@@ -5105,10 +5126,10 @@ function farm(b: PlanBuilder): void {
     .window(100, 300, 100, 600).window(200, 200, 700, 200)
     .item("irori", 300, 400)
     .item("kotatsu", 550, 350, { w: 140, h: 140 })
-    .item("kitchen", 140, 620, { w: 240, h: 60 })
-    .item("car", 450, 920)
-    .row("crate", 140, 1300, 3, 90, 0)
-    .item("barrel", 120, 1150);
+    .item("kitchen", 540, 210, { w: 240, h: 60 })
+    .item("car", 450, 900)
+    .row("crate", 140, 1150, 3, 90, 0)
+    .item("barrel", 120, 1290);
   for (let row = 0; row < 6; row += 1) f.trace("flowerBed", [[1150, 360 + row * 110], [2650, 360 + row * 110], [2650, 400 + row * 110], [1150, 400 + row * 110]]);
   f.trace("pathway", [[900, 0], [900, 2000]], { brush: 120 })
     .item("ido", 600, 1700)
@@ -5184,7 +5205,7 @@ function cemetery(b: PlanBuilder): void {
   f.row("tree", 1350, 1050, 2, 260, 0, { w: 240, h: 240 })
     .item("conifer", 1600, 1300)
     .item("ido", 1950, 1100)
-    .row("stoneLantern", 1040, 1000, 2, 260, 0)
+    .row("stoneLantern", 1040, 960, 2, 260, 0)
     .item("bench", 1300, 1600, { w: 180, h: 50 })
     .trace("hedge", [[20, 1780], [1100, 1780]], { brush: 40 })
     .trace("hedge", [[1300, 1780], [2380, 1780]], { brush: 40 });
@@ -5194,24 +5215,24 @@ function cemetery(b: PlanBuilder): void {
 function shinkansen(b: PlanBuilder): void {
   const f = b.floor();
   f.room("客室", 0, 0, 2000, 340, "#3d4a6b", "carpet").label(20, 140)
-    .room("デッキ", 2000, 0, 300, 340, C.gray)
+    .room("デッキ", 2000, 0, 300, 340, C.gray).label(100, 130)
     .room("", 2300, 0, 200, 170, C.tile, "tile")
     .room("", 2300, 170, 200, 170, C.tile, "tile")
     .walls()
     .open(2000, 20, 2000, 320)
-    .door(2300, 60, 2300, 130)
-    .door(2300, 210, 2300, 280)
+    .door(2300, 60, 2300, 130, { flip: true })
+    .door(2300, 210, 2300, 280, { flip: true })
     .sliding(2100, 0, 2240, 0).sliding(2100, 340, 2240, 340)
     .window(60, 0, 1940, 0, true).window(60, 340, 1940, 340, true);
   for (let i = 0; i < 18; i += 1) {
     const x = 120 + i * 100;
-    f.item("armchair", x, 20, { w: 55, h: 60, color: "#2f4f8f" }).item("armchair", x + 55, 20, { w: 55, h: 60, color: "#2f4f8f" })
-      .item("armchair", x, 220, { w: 55, h: 60, color: "#2f4f8f" }).item("armchair", x + 55, 220, { w: 55, h: 60, color: "#2f4f8f" });
+    // 進む向きにそろえた、通路をはさむ2席と2席
+    for (const y of [15, 72, 213, 270]) f.item("armchair", x, y, { w: 55, h: 60, rot: 90, color: "#2f4f8f" });
   }
   f.item("toilet", 2400, 60, { rot: 90 })
     .item("washbasin", 2390, 200)
     .item("trashCan", 2020, 270)
-    .item("vendingMachine", 2200, 200, { w: 80, h: 60 });
+    .item("vendingMachine", 2010, 20, { w: 80, h: 60 });
   b.roof("flat", -20, -20, 2540, 380, f, "#e8eaee");
 }
 
@@ -5258,8 +5279,8 @@ function submarine(b: PlanBuilder): void {
     .room("居住区", 1200, 0, 600, 400, "#3b4a52", "steelPlate")
     .room("機関室", 1800, 0, 600, 400, "#3b4a52", "steelPlate")
     .walls()
-    .door(600, 160, 600, 240).door(1200, 160, 1200, 240).door(1800, 160, 1800, 240)
-    .item("statue", 850, 160, { w: 60, h: 60, height: 300 })
+    .door(600, 160, 600, 240).door(1200, 160, 1200, 240, { flip: true }).door(1800, 160, 1800, 240)
+    .item("gardenLight", 865, 175, { w: 30, h: 30, height: 240, color: "#55595f" })
     .row("officeChair", 700, 100, 3, 120, 0)
     .item("counter", 680, 300, { w: 440, h: 60 })
     .row("drum", 100, 250, 4, 110, 0, { w: 60, h: 60 })
@@ -5267,7 +5288,7 @@ function submarine(b: PlanBuilder): void {
     .row("bunkBed", 1250, 100, 4, 130, 0)
     .item("stove", 1850, 120).item("drum", 1950, 120).item("drum", 2050, 120)
     .item("shelf", 2300, 300);
-  b.roof("dome", -20, -40, 2440, 480, f, "#3f4549");
+  b.roof("hip", -20, -40, 2440, 480, f, "#3f4549");
 }
 
 function guildHall(b: PlanBuilder): void {
@@ -5299,7 +5320,7 @@ function weaponShop(b: PlanBuilder): void {
   f.room("店", 0, 0, 700, 500, C.wood, "wood")
     .room("倉庫", 700, 0, 300, 500, C.wood, "wood")
     .walls()
-    .door(250, 500, 350, 500)
+    .door(250, 500, 350, 500, { flip: true })
     .door(700, 200, 700, 280)
     .window(60, 0, 640, 0)
     .item("counter", 400, 300, { w: 260, h: 60 })
@@ -5370,7 +5391,7 @@ function magicSchool(b: PlanBuilder): void {
     .row("longTable", 150, 250, 3, 0, 110, { w: 300, h: 60 })
     .row("longTable", 550, 250, 3, 0, 110, { w: 300, h: 60 })
     .item("brazier", 60, 60)
-    .row("shelf", 1030, 80, 5, 0, 110, { w: 440, h: 40 })
+    .row("shelf", 1110, 80, 5, 0, 110, { w: 360, h: 40 })
     .item("stairsSpiral", 1300, 730)
     .row("statue", 100, 760, 2, 600, 0);
   const upper = b.floor();
@@ -5480,10 +5501,13 @@ function demonCastle(b: PlanBuilder): void {
     .item("cage", 1800, 500)
     .trace("river", [[1000, -250], [2250, -250], [2250, 2200], [-250, 2200], [-250, -250], [1060, -250]], { brush: 200, color: "#7a1f2a" })
     .trace("pathway", [[1000, 1510], [1000, 2380]], { brush: 200 });
-  b.roof("cone", 360, -40, 1280, 980, f, "#2b2230");
-  b.roof("flat", 360, 880, 1280, 640, f, "#2b2230");
-  b.roof("cone", -40, -40, 480, 780, f, "#2b2230");
-  b.roof("cone", 1560, -40, 480, 780, f, "#2b2230");
+  b.roof("hip", 360, -40, 1280, 940, f, "#2b2230");
+  b.roof("cone", 850, 280, 300, 300, f, "#2b2230", { elevation: 280, rise: 900 });
+  b.roof("flat", 360, 900, 1280, 620, f, "#2b2230");
+  b.roof("hip", -40, -40, 480, 780, f, "#2b2230");
+  b.roof("cone", 120, 270, 160, 160, f, "#2b2230", { elevation: 140, rise: 500 });
+  b.roof("hip", 1560, -40, 480, 780, f, "#2b2230");
+  b.roof("cone", 1720, 270, 160, 160, f, "#2b2230", { elevation: 140, rise: 500 });
 }
 
 function labyrinth(b: PlanBuilder): void {
@@ -5668,7 +5692,7 @@ function abandonedHospital(b: PlanBuilder): void {
     .item("ivStand", 150, 800)
     .item("bloodPool", 400, 950)
     .row("coffin", 700, 750, 3, 150, 0)
-    .item("fallenPerson", 1000, 900, { w: 90, h: 160 });
+    .item("fallenPerson", 1080, 900, { w: 90, h: 160 });
   b.roof("flat", -20, -20, 1240, 1140, f, "#6a6a66");
 }
 
@@ -5708,7 +5732,7 @@ function sewer(b: PlanBuilder): void {
     .row("barrel", 800, 900, 3, 100, 0)
     .item("manhole", 1170, 100)
     .item("cage", 400, 900)
-    .item("fallenPerson", 1500, 150)
+    .item("fallenPerson", 1580, 110)
     .item("desk", 2000, 1100, { w: 120, h: 60 })
     .row("gardenLight", 300, 300, 4, 600, 0, { w: 30, h: 30 });
   b.roof("flat", 1880, 880, 540, 340, f);

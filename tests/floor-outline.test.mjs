@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, visibleFloorPolygons, signedArea } from '../src/floor-outline.ts';
+import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, signedArea, MAX_FLOOR_VERTICES } from '../src/floor-outline.ts';
 
 const room = { x: 0, y: 0, w: 600, h: 400 };
 const l = [[0, 0], [1, 0], [1, .5], [.5, .5], [.5, 1], [0, 1]];
@@ -10,6 +10,28 @@ test('floor outlines accept concave shapes but reject malformed and crossed path
   assert.equal(normalizeOutline(undefined), undefined);
   assert.deepEqual(normalizeOutline(l), l);
   for (const bad of [null, [], [[0, 0], [1, 1], [0, 1], [1, 0]], [[0, 0], [1, 1], [2, 0]], [[0, 0], [1, 0], [NaN, 1]], [[0, 0], [0, 0], [0, 0]]]) assert.throws(() => normalizeOutline(bad));
+});
+test('a traced loop becomes a valid floor outline: smoothed, reduced and untangled where the line crosses itself', () => {
+  // 手で描いた円（揺れつき、閉じ目で少し行き過ぎる）
+  const circle = Array.from({ length: 600 }, (_, i) => {
+    const a = (i / 600) * Math.PI * 2.08, r = 300 + Math.sin(i * 1.7) * 4;
+    return [500 + r * Math.cos(a), 400 + r * Math.sin(a)];
+  });
+  const points = tracedFloorPoints(circle, 1.5);
+  assert.ok(points.length >= 12 && points.length <= MAX_FLOOR_VERTICES, `${points.length} points`);
+  assert.ok(outlineFromPoints(points), 'the outline is a valid floor');
+  assert.ok(Math.abs(Math.abs(signedArea(points)) - Math.PI * 300 * 300) < 0.04 * Math.PI * 300 * 300, 'about the traced area');
+  // 8の字は、大きい方の輪だけを床にする
+  const eight = [[0, 0], [300, 300], [600, 0], [600, 300], [300, 0], [0, 300]];
+  const untangled = tracedFloorPoints(eight);
+  assert.ok(untangled && outlineFromPoints(untangled), 'a crossed loop is untangled');
+  // とても長い線でも、床の点の上限を超えない
+  const wiggle = Array.from({ length: 4000 }, (_, i) => {
+    const a = (i / 4000) * Math.PI * 2, r = 800 + 60 * Math.sin(a * 40);
+    return [r * Math.cos(a), r * Math.sin(a)];
+  });
+  assert.ok(tracedFloorPoints(wiggle).length <= MAX_FLOOR_VERTICES);
+  assert.equal(tracedFloorPoints([[0, 0], [10, 0]]), null, 'too few points');
 });
 test('resizing and translating use normalized vertices, not stale world coordinates', () => {
   const original = { ...room, outline: l };

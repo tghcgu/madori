@@ -721,6 +721,33 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+/* なぞって形を決められる物の印（右の小さな波線） */
+.furniture-items button.is-traceable {
+  position: relative;
+  padding-right: 20px;
+}
+
+.furniture-items button.is-traceable::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  width: 12px;
+  height: 8px;
+  margin-top: -4px;
+  background: #2775d1;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.5 6.5C3 2 5 2 6.5 5S10 8.5 11.5 4 14.5 2.5 15 4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 10'%3E%3Cpath d='M1.5 6.5C3 2 5 2 6.5 5S10 8.5 11.5 4 14.5 2.5 15 4' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.palette-note {
+  grid-column: 1 / -1;
+  margin: 2px 2px 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .furniture-items button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
