@@ -21,6 +21,7 @@ import { TEMPLATE_GROUPS } from '../src/templates.ts';
 import { verifyLiveThree } from './live-three-editor.mjs';
 import { verifyThreeStyles } from './three-style-editor.mjs';
 import { verifyFreeShapes } from './free-shape-editor.mjs';
+import { verifyWallStyles } from './wall-styles-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -215,6 +216,8 @@ try {
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await verifyFreeShapes({ open, plan, output });
   if (!process.argv.includes('--free-shapes-only')) {
+  await verifyWallStyles({ open, plan, output });
+  if (!process.argv.includes('--wall-styles-only')) {
   await verifyThreeStyles({ open, plan, output });
   if (!process.argv.includes('--three-style-only')) {
   await verifyLiveThree({ open, plan, output });
@@ -1660,6 +1663,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

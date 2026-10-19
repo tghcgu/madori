@@ -375,9 +375,9 @@ export const FURNITURE_GROUPS: FurnitureGroup[] = [
 ];
 
 // 左の一覧の並び（よく使う順）。家具の分類は FURNITURE_GROUPS の id、ほかは建具・階段・なぞって形を決める物・床材・屋根・図形の壁の欄
-export type PaletteSection = "fittings" | "stairs" | "trace" | "surfaces" | "roofs" | "shapes";
+export type PaletteSection = "fittings" | "walls" | "stairs" | "trace" | "surfaces" | "roofs" | "shapes";
 export const PALETTE_ORDER: string[] = [
-  "fittings", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor",
+  "fittings", "walls", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor",
   "stairs", "trace", "surfaces", "outdoor", "roofs",
   "japanese", "school", "shop", "people", "vehicles", "hospital", "street", "shrine", "play", "fantasy",
   "shapes",

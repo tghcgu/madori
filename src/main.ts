@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
+import { CAP_COLOR, WALL_STYLES, isWallStyle, wallJoints, wallStyleInfo, wallTopWidth, type WallStyle, type WallStyleInfo } from "./wall-styles";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
@@ -101,6 +102,8 @@ interface LinearElement {
   mullion?: boolean;
   // ドアの種類（開き戸のときは持たない）
   doorStyle?: DoorStyle;
+  // 壁の種類（ふつうの壁のときは持たない）
+  wallStyle?: WallStyle;
   locked?: boolean;
 }
 
@@ -559,6 +562,8 @@ let activeDoorStyle: DoorStyle = "swing";
 // 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（見ていた場所などと一緒にブラウザへ保存）
 const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
+// 壁のツールで次に描く壁の種類
+let activeWallStyle: WallStyle = "plain";
 // 形をなぞって描き直している床（部屋のツールで、次になぞった形・四角をこの床に当てる）
 let floorRetraceId: string | null = null;
 let floorDraft: { floorId: string; target: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
@@ -960,6 +965,8 @@ function normalizeEntity(value: unknown): Entity {
     const line = { ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d) } as LinearElement;
     // ドアの種類は知っている物だけ。開き戸（ふつうのドア）は持たない
     if (line.type !== "door" || !isDoorStyle(line.doorStyle) || line.doorStyle === "swing") delete line.doorStyle;
+    // 壁の種類も知っている物だけ。ふつうの壁は持たない
+    if (line.type !== "wall" || !isWallStyle(line.wallStyle) || line.wallStyle === "plain") delete line.wallStyle;
     return line;
   }
   if (entity.type === "shape" && ["circle", "ellipse", "arc", "polygon"].includes(entity.kind)) {
@@ -1343,6 +1350,26 @@ function buildFurniturePicker(): void {
     fittings.items.appendChild(button);
   });
   sections.set("fittings", fittings.details);
+
+  // 壁の種類。押すと壁のツールになり、2Dをドラッグすると、その種類の壁を描く
+  const walls = createPaletteGroup("壁", false, "かべ 塀 へい 垣 かき");
+  WALL_STYLES.forEach((style) => {
+    const button = createPaletteButton(style.label, "かべ へい", () => {
+      activeWallStyle = style.value;
+      activeTool = "wall";
+      floorRetraceId = null;
+      setActiveButton("[data-tool]", activeTool);
+      syncPlanCursor();
+      updatePropertiesPanel();
+    });
+    button.dataset.wallStyle = style.value;
+    const swatch = document.createElement("span");
+    swatch.className = "surface-swatch wall-swatch";
+    swatch.style.backgroundImage = `url(${wallStyleSwatchUrl(style.value)})`;
+    button.prepend(swatch);
+    walls.items.appendChild(button);
+  });
+  sections.set("walls", walls.details);
 
   FURNITURE_GROUPS.forEach((category) => {
     // はじめは、建具といちばんよく使う分類（並びの先頭の家具の分類）だけを開いておく
@@ -1853,6 +1880,7 @@ function setActiveButton(selector: string, value: string): void {
 function syncPlanCursor(): void {
   syncFloorEditing();
   setActiveButton("[data-surface]", activeTool === "room" || activeTool === "floor" ? activeRoomSurface : "");
+  setActiveButton("[data-wall-style]", activeTool === "wall" ? activeWallStyle : "");
   setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
   setActiveButton("[data-door-style]", activeTool === "door" ? activeDoorStyle : activeTool === "slidingDoor" ? "sliding" : "");
   document.querySelector("[data-pen-shortcut]")?.classList.toggle("is-active", activeTool === "paint");
@@ -3713,6 +3741,7 @@ function addLineFromDrag(
   };
   if (type === "window" && mullion) line.mullion = true;
   if (type === "door" && doorStyle && doorStyle !== "swing") line.doorStyle = doorStyle;
+  if (type === "wall" && activeWallStyle !== "plain") line.wallStyle = activeWallStyle;
   activeEntities().push(line);
   state.selectedId = line.id;
 }
@@ -5006,8 +5035,121 @@ function drawRoomLabelGuide(room: Room): void {
 }
 
 function drawWall2d(wallItem: LinearElement): void {
-  drawLineElement(wallItem, solidColor(wallItem.color) ?? INK, WALL_THICKNESS_2D);
+  drawWallBody2d(wallItem);
   if (state.selectedId === wallItem.id && !isLocked(wallItem)) drawLineHandles(wallItem);
+}
+
+// 壁の帯。種類のある壁は、3Dを真上から見た形（厚み・色・目地・瓦の笠）。石垣・生け垣・竹垣・フェンスは、その自由な形を壁の線に沿わせる
+function drawWallBody2d(wallItem: LinearElement): void {
+  const info = wallStyleInfo(wallItem.wallStyle);
+  if (info.value === "plain") {
+    drawLineElement(wallItem, solidColor(wallItem.color) ?? INK, WALL_THICKNESS_2D);
+    return;
+  }
+  const length = distance(wallItem);
+  if (length <= 0) return;
+  const selected = state.selectedId === wallItem.id;
+  const width = wallTopWidth(info);
+  ctx.save();
+  if (selected) {
+    ctx.lineCap = "square";
+    ctx.lineWidth = width + 6 / view.zoom;
+    ctx.strokeStyle = "rgba(39, 117, 209, 0.35)";
+    strokeLine(wallItem.x1, wallItem.y1, wallItem.x2, wallItem.y2);
+  }
+  if (info.freeKind) {
+    const item = freeWallItem(wallItem, info, 0, length);
+    ctx.translate(item.x + item.w / 2, item.y + item.h / 2);
+    ctx.lineWidth = 1.4 / view.zoom;
+    ctx.strokeStyle = solidColor(item.color) ?? INK;
+    ctx.fillStyle = furnitureFill(item);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    drawFreeShape2d(info.freeKind, item.w, item.h, item);
+    ctx.restore();
+    return;
+  }
+  // 端は2Dの壁と同じく、幅の半分だけ伸ばす（3Dも同じだけ伸ばす）
+  ctx.translate(wallItem.x1, wallItem.y1);
+  ctx.rotate(lineAngle(wallItem));
+  const fill = info.cap ? CAP_COLOR : solidColor(wallItem.color) ?? info.color;
+  ctx.fillStyle = info.glass ? withAlpha(fill, 0.45) : fill;
+  ctx.fillRect(-width / 2, -width / 2, length + width, width);
+  ctx.lineWidth = 1.2 / view.zoom;
+  // ガラスは、窓と同じく水色の細い線
+  ctx.strokeStyle = info.glass ? "#5f93ad" : INK;
+  ctx.strokeRect(-width / 2, -width / 2, length + width, width);
+  // 目地・板の継ぎ目（真上から見た線）
+  ctx.lineWidth = 0.9 / view.zoom;
+  ctx.strokeStyle = "rgba(30, 30, 30, 0.55)";
+  for (const d of wallJoints(info, length)) strokeLine(d, -width / 2, d, width / 2);
+  // 瓦の笠の棟、ガラスの2本線
+  if (info.cap) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+    strokeLine(-width / 2, 0, length + width / 2, 0);
+  }
+  if (info.glass) {
+    ctx.strokeStyle = "#5f93ad";
+    strokeLine(-width / 2, -width / 4, length + width / 2, -width / 4);
+    strokeLine(-width / 2, width / 4, length + width / 2, width / 4);
+  }
+  ctx.restore();
+}
+
+// 自由な形で作る壁（石垣など）の、壁の from〜to cm の部分を、自由な形の家具と同じデータにする（2Dも3Dもこれで作る）
+function freeWallItem(wallItem: LinearElement, info: WallStyleInfo, from: number, to: number): Furniture {
+  const length = distance(wallItem) || 1;
+  const at = (d: number): Point2 => [wallItem.x1 + ((wallItem.x2 - wallItem.x1) * d) / length, wallItem.y1 + ((wallItem.y2 - wallItem.y1) * d) / length];
+  const kind = info.freeKind!;
+  const frame = freeFrame([at(from), at(to)], freeMargin(kind));
+  return {
+    id: wallItem.id, type: "furniture", kind, x: frame.x, y: frame.y, w: frame.w, h: frame.h, rotation: 0, path: frame.path,
+    ...(wallItem.color ? { color: wallItem.color } : {}), ...(wallItem.color3d ? { color3d: wallItem.color3d } : {}),
+  };
+}
+
+// 壁の種類の見本の絵（一覧と選択中の欄）。2Dの壁と同じ描き方で、短い壁を描く
+const wallSwatchUrls = new Map<WallStyle, string>();
+function wallStyleSwatchUrl(style: WallStyle): string {
+  const cached = wallSwatchUrls.get(style);
+  if (cached) return cached;
+  const canvas = document.createElement("canvas");
+  canvas.width = 120;
+  canvas.height = 48;
+  const target = canvas.getContext("2d")!;
+  target.fillStyle = "#ffffff";
+  target.fillRect(0, 0, canvas.width, canvas.height);
+  const saved = ctx, zoom = view.zoom, selected = state.selectedId;
+  try {
+    ctx = target;
+    view.zoom = 0.4;
+    state.selectedId = null;
+    target.setTransform(0.4, 0, 0, 0.4, 0, 0);
+    drawWallBody2d({ id: "swatch", type: "wall", x1: 50, y1: 60, x2: 250, y2: 60, ...(style !== "plain" ? { wallStyle: style } : {}) });
+  } finally {
+    ctx = saved;
+    view.zoom = zoom;
+    state.selectedId = selected;
+  }
+  const url = canvas.toDataURL();
+  wallSwatchUrls.set(style, url);
+  return url;
+}
+
+// 壁の種類を絵で選ぶ欄
+function wallStylePickerHtml(id: string, current: WallStyle, disabled = ""): string {
+  return `<label>壁の種類</label>
+    <div class="wall-style-picker" id="${id}" role="radiogroup" aria-label="壁の種類">${WALL_STYLES.map((style) => {
+      const active = style.value === current;
+      return `<button type="button" role="radio" data-wall-style-choice="${style.value}" class="${active ? "is-active" : ""}" aria-checked="${active}" ${disabled}><img src="${wallStyleSwatchUrl(style.value)}" alt="" /><span>${escapeHtml(style.label)}</span></button>`;
+    }).join("")}</div>`;
+}
+
+function bindWallStylePicker(selector: string, choose: (style: WallStyle) => void): void {
+  propertiesPanel.querySelectorAll<HTMLButtonElement>(`${selector} [data-wall-style-choice]`).forEach((button) => button.addEventListener("click", () => {
+    const value = button.dataset.wallStyleChoice;
+    if (isWallStyle(value)) choose(value);
+  }));
 }
 
 function drawLineHandles(entity: LinearElement): void {
@@ -8920,10 +9062,67 @@ function seededRandom(key: string): () => number {
 }
 
 function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number, withCap = true): void {
+  const info = wallStyleInfo(wallItem.wallStyle);
+  const length = distance(wallItem);
+  const top = info.height !== undefined ? Math.min(WALL_HEIGHT, info.height * SCALE_3D) : WALL_HEIGHT;
   wallSections(wallItem, entities).forEach((section) => {
+    // 石垣などは、床から立つ部分だけを、その区切りの線に沿った自由な形で作る（ドアの所はあく）
+    if (info.freeKind) {
+      if (section.bottom <= 1e-6) addFurniture3d(freeWallItem(wallItem, info, section.from, section.to), center, yBase);
+      return;
+    }
+    if (section.bottom >= top - 1e-6) return;
     const segment = segmentInterval(wallItem, section.from, section.to);
-    addStraightWall3d(segment, center, yBase, wallItem.id, true, section.bottom, section.top, withCap);
+    if (info.value === "plain") addStraightWall3d(segment, center, yBase, wallItem.id, true, section.bottom, section.top, withCap);
+    else addStyledWall3d(segment, info, wallItem, center, yBase, section.bottom, Math.min(section.top, top), section.from <= 1e-6, section.to >= length - 1e-6);
   });
+}
+
+// 種類のある壁の3D: 厚み・高さ・色の箱（壁の端は2Dと同じく厚みの半分だけ伸ばす）と、土塀の瓦の笠
+const tileCapMaterial = new THREE.MeshStandardMaterial({ color: new THREE.Color(CAP_COLOR), roughness: 0.7, name: "roof-tile-cap" });
+const wallStyleMaterials = new Map<string, THREE.MeshStandardMaterial>();
+function wallStyleMaterial(info: WallStyleInfo, color: string): THREE.MeshStandardMaterial {
+  const key = `${info.value}-${color}`;
+  const cached = wallStyleMaterials.get(key);
+  if (cached) return cached;
+  // 名前は、リアルの絵柄で材質の模様を決めるのに使う（レンガ・ブロック・コンクリートは石、板塀は木、土塀は漆喰、ガラス）
+  const name = info.glass ? "glass-wall" : info.value === "wood" ? "wall-wood-plank" : info.value === "earthen" ? "plaster-earthen" : `wall-${info.value}`;
+  const material = new THREE.MeshStandardMaterial({ color: new THREE.Color(solidColor(color)), roughness: info.glass ? 0.08 : 0.85, name });
+  if (info.glass) {
+    material.transparent = true;
+    material.opacity = 0.35;
+    material.depthWrite = false;
+  } else makeTranslucent(material, colorAlpha(color));
+  wallStyleMaterials.set(key, material);
+  return material;
+}
+
+function addStyledWall3d(segment: LinearElement, info: WallStyleInfo, wallItem: LinearElement, center: Point, yBase: number, yFrom: number, yTo: number, extendStart: boolean, extendEnd: boolean): void {
+  const angle = Math.atan2(segment.y2 - segment.y1, segment.x2 - segment.x1);
+  const bottomExtension = yBase > floorBaseY(0) + 1e-6 && yFrom === 0 ? FLOOR_SLAB : 0;
+  const height = yTo - yFrom + bottomExtension;
+  const box = (width: number, boxHeight: number, y: number, material: THREE.Material) => {
+    // 端を伸ばす長さ（cm）。伸ばしたぶん中心をずらす
+    const ext0 = extendStart ? width / 2 : 0, ext1 = extendEnd ? width / 2 : 0;
+    const length = distance(segment) + ext0 + ext1;
+    if (length <= 2 || boxHeight <= 0.02) return;
+    const mid = midpoint(segment), shift = (ext1 - ext0) / 2;
+    const pos = to3d(mid.x + Math.cos(angle) * shift, mid.y + Math.sin(angle) * shift, center);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(length * SCALE_3D, boxHeight, width * SCALE_3D), material);
+    mesh.position.set(pos.x, y, pos.z);
+    mesh.rotation.y = -angle;
+    mesh.castShadow = !(material as THREE.MeshStandardMaterial).transparent;
+    mesh.receiveShadow = true;
+    markSelectable(mesh, wallItem.id);
+    planGroup.add(mesh);
+    addSelectionBox(mesh, wallItem.id);
+  };
+  box(info.thickness, height, yBase + yFrom - bottomExtension + height / 2, wallStyleMaterial(info, wallItem.color3d ?? wallItem.color ?? info.color));
+  // 瓦の笠: 壁の上に、両側へ張り出した薄い板と棟（真上から見ると、2Dの笠と同じ幅）
+  if (info.cap && info.height !== undefined && yTo >= info.height * SCALE_3D - 1e-6) {
+    box(wallTopWidth(info), 0.05, yBase + yTo + 0.025, tileCapMaterial);
+    box(8, 0.06, yBase + yTo + 0.08, tileCapMaterial);
+  }
 }
 
 function addStraightWall3d(
@@ -9715,6 +9914,19 @@ function updatePropertiesPanel(): void {
     bindDrawMethod();
     return;
   }
+  // 壁のツール: 次に描く壁の種類を絵で選ぶ
+  if (!selected && activeTool === "wall") {
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        <p class="empty-state">${escapeHtml(wallStyleInfo(activeWallStyle).label)}: 2Dをドラッグすると、この種類の壁を描きます。</p>
+        ${wallStylePickerHtml("wallToolStylePicker", activeWallStyle)}
+      </div>`;
+    bindWallStylePicker("#wallToolStylePicker", (style) => {
+      activeWallStyle = style;
+      syncPlanCursor();
+      updatePropertiesPanel();
+    });
+    return;
+  }
   // 床（部屋のツール）と、なぞれる物（池・川・足跡など）を置くとき: 描き方を選べる
   if (!selected && (activeTool === "room" || (activeTool === "furniture" && isTraceableKind(activeFurniture)))) {
     const label = activeTool === "room" ? "床" : FURNITURE_DEFS[activeFurniture].label;
@@ -9893,6 +10105,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <p class="empty-state">${typeLabel}</p>
+        ${selected.type === "wall" ? wallStylePickerHtml("wallStylePicker", selected.wallStyle ?? "plain", placementDisabled) : ""}
         ${doorStyleRow}
         <div class="two-col">
           <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" ${placementDisabled} /></label>
@@ -9921,6 +10134,14 @@ function updatePropertiesPanel(): void {
     bindSelect("#doorStyleInput", (value) => {
       if (!isDoorStyle(value) || value === "swing") delete selected.doorStyle;
       else selected.doorStyle = value;
+    });
+    bindWallStylePicker("#wallStylePicker", (style) => {
+      if (isLocked(selected)) return;
+      if (style === "plain") delete selected.wallStyle;
+      else selected.wallStyle = style;
+      activeWallStyle = style;
+      commitState();
+      redrawAll();
     });
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
@@ -11020,7 +11241,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
         if (endpoint) return { entity, corner: endpoint };
       }
       // ドア・窓は壁の厚みのぶんも当たりにする。開き戸は、開いた扉と開く範囲（4分の1の円）も当たり
-      const reach = entity.type === "wall" ? 12 / view.zoom : Math.max(12 / view.zoom, WALL_THICKNESS_2D);
+      const reach = entity.type === "wall" ? Math.max(12 / view.zoom, wallTopWidth(wallStyleInfo(entity.wallStyle)) / 2) : Math.max(12 / view.zoom, WALL_THICKNESS_2D);
       if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < reach || (entity.type === "door" && isPointInDoorSwing(point, entity))) {
         return { entity, corner: null };
       }

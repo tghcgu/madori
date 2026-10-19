@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "壁の種類を追加: コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンス。一覧の「壁」から選んで2Dをドラッグすると、その種類の壁になり、選んだ壁の種類も絵から変えられます。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです",
+      en: "Added wall types: concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence and fence. Pick one from the new Walls group and drag on the 2D plan to draw it, or change a selected wall's type from pictures. Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above",
+    }, {
       ja: "描き方に「直線で描く」と「曲線で描く」を用意しました（「囲って描く」は「直線で描く」になりました）。直線は角がとがり、点を打つ前にドラッグすると1本の直線（池などの閉じる形は四角）になります。曲線は、打った点を通るなめらかな線です。石垣・竹垣・フェンス・生け垣・線路は、はじめから直線で描けます。描き方は物ごとに覚えます",
       en: "The drawing method now offers straight lines (直線で描く) and curves (曲線で描く); \"囲って描く\" became straight lines. Straight lines keep sharp corners, and a drag before placing any point draws one straight line (a rectangle for closed shapes such as ponds). Curves pass smoothly through the clicked points. Stone walls, bamboo fences, fences, hedges and railways start as straight lines, and the method is remembered for each kind",
     }, {

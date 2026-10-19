@@ -721,6 +721,40 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+/* 壁の種類を絵で選ぶ欄 */
+.wall-style-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.wall-style-picker button {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 3px 6px 3px 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  text-align: left;
+}
+
+.wall-style-picker img {
+  width: 44px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.wall-style-picker button.is-active {
+  outline: 2px solid #2775d1;
+  outline-offset: 1px;
+  font-weight: 700;
+}
+
 /* 床材を絵で選ぶ欄 */
 .surface-field {
   display: grid;

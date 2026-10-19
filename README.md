@@ -85,7 +85,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
-- 壁を直線・斜線で作成
+- 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です
 - ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
@@ -218,6 +218,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 分類 | 収録要素 |
 | --- | --- |
 | 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、窓、中央区切り付き窓 |
+| 壁 | 壁、コンクリート、レンガ、ブロック塀、板塀、土塀、ガラス、石垣、生け垣、竹垣、フェンス |
 | 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、カウンターチェア、ベンチ（座布団、縁台、玉座、車椅子） |
 | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク（ちゃぶ台、カウンター、学校の机と椅子、教卓） |
 | ベッド・寝具 | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド（病院のベッド） |
@@ -799,6 +800,7 @@ npm.cmd run dev
 
 ### 2026年10月19日
 
+- 壁の種類を追加: コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンス。一覧の「壁」から選んで2Dをドラッグすると、その種類の壁になり、選んだ壁の種類も絵から変えられます。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです
 - 描き方に「直線で描く」と「曲線で描く」を用意しました（「囲って描く」は「直線で描く」になりました）。直線は角がとがり、点を打つ前にドラッグすると1本の直線（池などの閉じる形は四角）になります。曲線は、打った点を通るなめらかな線です。石垣・竹垣・フェンス・生け垣・線路は、はじめから直線で描けます。描き方は物ごとに覚えます
 - 床・地面、ペン、池・川・小道などの自由な形、足跡・破片のどれも、描き方を「ペンで描く」（なぞる）か「囲って描く」（クリックで点を打つ）から選べるように。囲って描くと、点と点のあいだはまっすぐになり、閉じる形は最初の点を押すと、線は Enter かダブルクリックで描き終えます
 - 3Dの移動モード（3Dの欄の十字の矢印のボタン）を直しました。1回押せば入り、何も選んでいなくても使えます。押した物（床・壁・ドア・窓・屋根・家具など）を、そのままドラッグで動かせます。もう一度押すか Esc で終わります
@@ -1109,7 +1111,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 ### 2D editing
 
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
-- Draw horizontal, vertical, and angled walls
+- Draw horizontal, vertical, and angled walls. Choose a wall type: plain, concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence or fence (pick one in the Walls group and drag on the 2D plan, or change a selected wall's type from pictures in the selection panel). Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above; stone walls, hedges, bamboo fences and fences look the same as the free shapes
 - Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, windows, and divided windows. The door type can be changed later under Selection
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture
@@ -1241,6 +1243,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Category | Objects |
 | --- | --- |
 | Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, window, divided window |
+| Walls | Plain wall, concrete, brick, block wall, board fence, earthen wall, glass, stone wall, hedge, bamboo fence, fence |
 | Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bar stool, bench (zabuton, veranda bench, throne, wheelchair) |
 | Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk (chabudai, counter, school desk and chair, lectern) |
 | Beds and bedding | Single bed, semi-double bed, double bed, bunk bed, futon, crib (hospital bed) |
@@ -1800,6 +1803,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-19
 
+- Added wall types: concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence and fence. Pick one from the new Walls group and drag on the 2D plan to draw it, or change a selected wall's type from pictures. Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above
 - The drawing method now offers straight lines (直線で描く) and curves (曲線で描く); "囲って描く" became straight lines. Straight lines keep sharp corners, and a drag before placing any point draws one straight line (a rectangle for closed shapes such as ponds). Curves pass smoothly through the clicked points. Stone walls, bamboo fences, fences, hedges and railways start as straight lines, and the method is remembered for each kind
 - Floors and ground, the pen, free shapes such as ponds, rivers and paths, footprints and shards can all be drawn either by tracing (ペンで描く) or by clicking points (囲って描く). With clicked points the edges are straight; closed shapes finish when you click the first point, and lines finish with Enter or a double-click
 - Fixed the 3D move mode (the cross-arrows button in the 3D bar): one press turns it on, even with nothing selected, and you can drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Esc to finish
