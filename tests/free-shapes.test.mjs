@@ -4,7 +4,7 @@ import {
   FREE_AREA_KINDS, FREE_LINE_KINDS, ALWAYS_FREE_KINDS, RAILWAY, bandOutline, defaultFreePath, distanceToFreeLine, freeBand, freeFlowerBed,
   freeLawn, freeLineLength, freeLineWidth, freeMargin, freeOutline, freePathPoints, freePond, freePosts, freeShapeLine, freeSteppingStones,
   curveThrough, freeCenterLine, isAlwaysFreeKind, sharpCorners, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
-  smoothFreeLine,
+  smoothFreeLine, freeFrame, freeHoleOutlines, freeHolePoints, normalizeFreeHoles, pointInFreeRegion, pointsInside,
 } from '../src/free-shapes.ts';
 
 const blob = [[0, -100], [80, -60], [100, 20], [40, 90], [-60, 80], [-100, 0], [-70, -70]];
@@ -95,6 +95,36 @@ test('ponds, flower beds and lawns put their pieces inside or along the outline'
   // 大きな芝生でも、株の数は増えすぎない
   const huge = freeLawn([[0, 0], [5000, 0], [5000, 5000], [0, 5000]]);
   assert.ok(huge.tufts.length <= 1600, `tufts: ${huge.tufts.length}`);
+});
+
+test('ponds, flower beds and lawns can have holes: nothing grows in a hole, and an island gets stones around it', () => {
+  const outer = [[-300, -300], [300, -300], [300, 300], [-300, 300]];
+  const island = [[-80, -80], [80, -80], [80, 80], [-80, 80]];
+  const pond = freePond(outer, [island]);
+  assert.equal(pond.holes.length, 1);
+  assert.ok(polygonArea(pond.water) > 0 && polygonArea(pond.holes[0]) < 0, 'holes turn the other way round');
+  assert.ok(!pointInFreeRegion(0, 0, pond.water, pond.holes), 'the island is not water');
+  assert.ok(pointInFreeRegion(200, 0, pond.water, pond.holes));
+  const islandStones = pond.stones.filter(stone => Math.abs(stone.x) < 120 && Math.abs(stone.y) < 120);
+  assert.ok(islandStones.length > 8, 'stones go around the island');
+  for (const stone of islandStones) assert.ok(pointInFreePolygon(stone.x, stone.y, pond.holes[0]), 'island stones sit on the island, not in the water');
+  for (const ripple of pond.ripples) assert.ok(pointInFreeRegion(ripple.x, ripple.y, pond.water, pond.holes));
+  const lawn = freeLawn(outer, [island]);
+  assert.ok(lawn.tufts.length > 100);
+  for (const [x, y] of lawn.tufts) assert.ok(!pointInFreePolygon(x, y, lawn.holes[0]), 'no grass in the hole');
+  const bed = freeFlowerBed(outer, [island]);
+  for (const plant of bed.plants) assert.ok(pointInFreeRegion(plant.x, plant.y, bed.outline, bed.holes));
+  assert.equal(pointsInside(outer, 30, 10, 400, freeHoleOutlines([island])).filter(([x, y]) => Math.abs(x) < 80 && Math.abs(y) < 80).length, 0);
+});
+
+test('holes keep the same frame as the outline, and broken holes are dropped when loading', () => {
+  const frame = freeFrame([[0, 0], [400, 0], [400, 200], [0, 200]], 10, [[[100, 50], [200, 50], [200, 150], [100, 150]]]);
+  assert.equal(frame.w, 420);
+  assert.deepEqual(freeHolePoints(frame.holes, frame.w, frame.h)[0].map(([x, y]) => [Math.round(x + frame.x + frame.w / 2), Math.round(y + frame.y + frame.h / 2)]), [[100, 50], [200, 50], [200, 150], [100, 150]]);
+  assert.equal(freeFrame([[0, 0], [100, 0], [100, 100]], 5).holes, undefined, 'no holes, no field');
+  assert.deepEqual(normalizeFreeHoles([[[0, 0], [0.1, 0], [0.1, 0.1]], [[0, 0], [1, 1]], [[0, 0], [2, 0], [0, 2]], 'x']), [[[0, 0], [0.1, 0], [0.1, 0.1]]]);
+  assert.equal(normalizeFreeHoles([]), undefined);
+  assert.equal(normalizeFreeHoles(null), undefined);
 });
 
 test('stepping stones follow the path, and railway sizes are real', () => {

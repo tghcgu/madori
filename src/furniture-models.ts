@@ -15,7 +15,7 @@ import {
   PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise,
 } from "./furniture-shapes.ts";
 import {
-  RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
+  RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeHoleOutlines, freeHolePoints, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
   freeRiverRipples, freeSteppingStones, isAlwaysFreeKind, isFreeShapeKind, offsetFreeLine, type FreeKind,
 } from "./free-shapes.ts";
 import { parseColorCode } from "./colors.ts";
@@ -41,6 +41,8 @@ export interface FurnitureModelOptions {
   density?: number;
   // 人: 姿勢と手足の角度
   pose?: PersonPose;
+  // 池・花壇・芝生・ラグの穴（道すじと同じ割合の輪）
+  holes?: number[][][];
 }
 
 const clamp = THREE.MathUtils.clamp;
@@ -354,8 +356,10 @@ function waterRibbon(m: Model, line: Point2[], width: number, top: number, tint:
 }
 
 // 閉じた輪郭（cm）を、上面 top・厚み thickness（m）の板にする
-function outlineSlab(m: Model, outline: Point2[], thickness: number, top: number, material: Material): THREE.Mesh {
-  return shapeSlab(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), thickness, top, m, material, 1);
+function outlineSlab(m: Model, outline: Point2[], thickness: number, top: number, material: Material, holes: Point2[][] = []): THREE.Mesh {
+  const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
+  for (const ring of holes) shape.holes.push(new THREE.Path(ring.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))));
+  return shapeSlab(shape, thickness, top, m, material, 1);
 }
 
 // 平たい楕円の石（少し丸み）。向きは2Dの回転と同じ
@@ -369,11 +373,13 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
   const path = item.path ?? defaultFreePath(kind);
   const points = freePathPoints(path, item.w, item.h);
   const line = freeCenterLine(points);
+  // 穴（ペンでけずった所・輪のように塗った真ん中）
+  const holes = item.path ? freeHolePoints(item.holes, item.w, item.h) : [];
   switch (kind) {
     case "pond": {
-      // 水面、縁に並ぶ石、さざ波（2Dと同じ輪郭・石の位置）
-      const pond = freePond(points);
-      outlineSlab(m, pond.water, 0.04, 0.05, m.material("water", 0x4a8aa3, 0.06, 0.15, true));
+      // 水面、縁に並ぶ石、さざ波（2Dと同じ輪郭・石の位置）。島（穴）の縁にも石
+      const pond = freePond(points, holes);
+      outlineSlab(m, pond.water, 0.04, 0.05, m.material("water", 0x4a8aa3, 0.06, 0.15, true), pond.holes);
       const rim = m.material("pond-stone", 0x9a968c, 0.95);
       for (const stone of pond.stones) freeStone(m, stone, Math.min(stone.rx, stone.ry) * 0.011, rim);
       const ripple = m.material("pond-ripple", 0xd6ecf2, 0.3);
@@ -386,9 +392,9 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
     }
     case "flowerBed": {
       // れんがの縁、土、株（葉の上に花）
-      const bed = freeFlowerBed(points);
-      outlineSlab(m, bed.outline, 0.2, 0.2, m.material("soil", 0x4a3b2c, 1));
-      strokeSolid(m, bed.outline, 8, 0, 0.25, m.material("bed-border", 0xa86f4c, 0.85, 0, true), true);
+      const bed = freeFlowerBed(points, holes);
+      outlineSlab(m, bed.outline, 0.2, 0.2, m.material("soil", 0x4a3b2c, 1), bed.holes);
+      for (const ring of [bed.outline, ...bed.holes]) strokeSolid(m, ring, 8, 0, 0.25, m.material("bed-border", 0xa86f4c, 0.85, 0, true), true);
       const leaf = m.material("foliage", 0x4f7a3d, 0.85);
       for (const plant of bed.plants) {
         const bush = m.mesh(new THREE.IcosahedronGeometry(1, 0), [plant.x / 100, 0.27, plant.y / 100], leaf);
@@ -399,17 +405,17 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
     }
     case "lawn": {
       // 薄い芝の板と、草の株（上から見ると小さな丸）
-      const lawn = freeLawn(points);
-      outlineSlab(m, lawn.outline, 0.02, 0.02, m.material("lawn-grass", 0x6f9f45, 0.95, 0, true));
+      const lawn = freeLawn(points, holes);
+      outlineSlab(m, lawn.outline, 0.02, 0.02, m.material("lawn-grass", 0x6f9f45, 0.95, 0, true), lawn.holes);
       const tuft = m.material("grass-tuft", 0x55863a, 0.9);
       for (const [x, y] of lawn.tufts) m.mesh(new THREE.CylinderGeometry(0, 0.03, 0.06, 5, 1, true), [x / 100, 0.05, y / 100], tuft);
       break;
     }
     case "rug": {
       // 床に敷いた薄い敷物と、縁取り
-      const outline = freeOutline(points);
-      outlineSlab(m, outline, 0.012, 0.012, m.material("rug", 0xb9785a, 0.95, 0, true));
-      strokeSolid(m, outline, 6, 0.012, 0.016, m.material("rug-border", 0x6f4a3a, 0.95), true);
+      const outline = freeOutline(points), rugHoles = freeHoleOutlines(holes);
+      outlineSlab(m, outline, 0.012, 0.012, m.material("rug", 0xb9785a, 0.95, 0, true), rugHoles);
+      for (const ring of [outline, ...rugHoles]) strokeSolid(m, ring, 6, 0.012, 0.016, m.material("rug-border", 0x6f4a3a, 0.95), true);
       break;
     }
     case "river": {

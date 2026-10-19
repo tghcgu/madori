@@ -10,8 +10,14 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
-      ja: "動きを軽くしました。選ぶだけのときは3Dを作り直さず、同じ家具・ドア・窓・草は前に作った物を使い回し、影は物や光が変わったときだけ描き直します。2Dだけを表示しているあいだは3Dを作りません",
-      en: "Editing is faster: selecting no longer rebuilds the 3D view, identical furniture, doors, windows and grass reuse what was already built, shadows are redrawn only when something or the light changes, and the 3D view is not built while only the 2D plan is shown",
+      ja: "床・地面と、池・花壇・芝生・ラグを、ペンで塗れるように。描き方の「ペンで塗る」を選んで2Dをドラッグすると、塗った所がその形になります。重ねて塗るとつながり、輪のように塗ると真ん中があいた形（ドーナツ）になります。「けずる」にすると、塗った所を消したり穴をあけたりできます。塗る幅も選べます。これまでの、ぐるっとなぞって囲む描き方は「囲んで描く」です。ペンのツールで池などを描くときは、はじめから「ペンで塗る」です",
+      en: "Floors and ground, ponds, flower beds, lawns and rugs can be painted: choose ペンで塗る (paint) as the drawing method and drag on the 2D plan, and the painted area takes that shape. Overlapping strokes join, painting a ring leaves the middle open like a donut, and けずる (cut) erases what you paint over or opens holes. The paint width is adjustable. Tracing around an area is now called 囲んで描く (enclose), and the Pen tool paints ponds and other areas from the start",
+    }, {
+      ja: "テンプレートの池や芝生を、なめらかな自然な形に。引いて見たときに、花壇の花や池の縁の石が黒くつぶれないようにしました",
+      en: "Ponds and lawns in the templates have smooth, natural outlines, and flower bed flowers and pond-edge stones no longer turn black when zoomed out",
+    }, {
+      ja: "動きを軽くしました。選ぶだけのときは3Dを作り直さず、同じ家具・ドア・窓・草は前に作った物を使い回し、影は物や光が変わったときだけ描き直します。2Dだけを表示しているあいだは3Dを作りません。起動も速くしました（一覧の見本の絵は、その欄を開いたときに作ります）",
+      en: "Editing is faster: selecting no longer rebuilds the 3D view, identical furniture, doors, windows and grass reuse what was already built, shadows are redrawn only when something or the light changes, and the 3D view is not built while only the 2D plan is shown. Startup is quicker too (palette pictures are drawn when their group is opened)",
     }, {
       ja: "川の見た目を直しました。真ん中の線をやめ、岸ほど深い色の水面に、流れに沿った小さな波の印（2Dと3Dで同じ所）を付けました",
       en: "Rivers look better: no line down the middle, water that deepens in color toward the banks, and small ripple marks along the flow in the same places in 2D and 3D",

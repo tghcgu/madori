@@ -59,17 +59,37 @@ export function defaultFreePath(kind: FreeKind): number[][] {
 
 const round4 = (value: number) => Math.round(value * 10000) / 10000;
 
-// なぞった点（間取りの cm）から、余白を付けた範囲と、範囲に対する割合の道すじを作る（編集画面でなぞったときも、テンプレートでも同じ）
-export function freeFrame(points: Point2[], margin: number): { x: number; y: number; w: number; h: number; path: number[][] } {
+// なぞった点（間取りの cm）から、余白を付けた範囲と、範囲に対する割合の道すじを作る（編集画面でなぞったときも、テンプレートでも同じ）。
+// 穴（holes、cm の輪）があれば、同じ割合にして返す
+export function freeFrame(points: Point2[], margin: number, holes?: Point2[][]): { x: number; y: number; w: number; h: number; path: number[][]; holes?: number[][][] } {
   const xs = points.map((point) => point[0]), ys = points.map((point) => point[1]);
   const tenth = (value: number) => Math.round(value * 10) / 10;
   const w = tenth(Math.max(20, Math.max(...xs) - Math.min(...xs) + margin * 2));
   const h = tenth(Math.max(20, Math.max(...ys) - Math.min(...ys) + margin * 2));
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  const fraction = (ring: Point2[]) => ring.map(([x, y]) => [round4((x - cx) / w), round4((y - cy) / h)]);
   return {
     x: tenth(cx - w / 2), y: tenth(cy - h / 2), w, h,
-    path: points.map(([x, y]) => [round4((x - cx) / w), round4((y - cy) / h)]),
+    path: fraction(points),
+    ...(holes?.length ? { holes: holes.map(fraction) } : {}),
   };
+}
+
+// 閉じた形の穴の数と、輪1つの点の数の上限
+export const MAX_FREE_HOLES = 32;
+const MAX_HOLE_POINTS = 2000;
+
+// 読み込んだ穴（割合の輪）を確かめる。点が3つ未満の輪や、範囲の外（割合が1を超える）の点がある輪は捨てる
+export function normalizeFreeHoles(value: unknown): number[][][] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const rings = value.slice(0, MAX_FREE_HOLES).filter((ring): ring is number[][] => Array.isArray(ring) && ring.length >= 3 && ring.length <= MAX_HOLE_POINTS
+    && ring.every((point) => Array.isArray(point) && point.length === 2 && point.every((part) => typeof part === "number" && Number.isFinite(part) && Math.abs(part) <= 1)));
+  return rings.length ? rings.map((ring) => ring.map(([u, v]) => [round4(u), round4(v)])) : undefined;
+}
+
+// 穴（割合の輪）を cm の点にする
+export function freeHolePoints(holes: number[][][] | undefined, w: number, h: number): Point2[][] {
+  return (holes ?? []).map((ring) => freePathPoints(ring, w, h)).filter((ring) => ring.length >= 3);
 }
 
 // 割合の道すじを cm の点にする
@@ -269,11 +289,26 @@ export function freeOutline(points: Point2[]): Point2[] {
   return polygonArea(outline) < 0 ? [...outline].reverse() : outline;
 }
 
-// 輪郭の内側に、間隔 spacing で並べた点（少しずらして自然に）。縁から inset より内側だけ。数が多すぎるときは間隔を広げる
-export function pointsInside(outline: Point2[], spacing: number, inset: number, limit = 1500): Point2[] {
+// 穴の輪郭（なめらかにしたもの）。向きは外側の輪郭と逆にそろえる。
+// こうすると、縁から内側（offsetFreeLine の負の向き）へずらしたとき、外側の輪郭も穴も、形の外（陸の側）へずれる
+export function freeHoleOutlines(holes: Point2[][]): Point2[][] {
+  return holes.map((ring) => {
+    const outline = simplifyFreeLine(smoothFreeLine(ring, true), 0.6);
+    return polygonArea(outline) > 0 ? [...outline].reverse() : outline;
+  }).filter((ring) => ring.length >= 3);
+}
+
+// 穴のある形の内側か（穴の中は外）
+export function pointInFreeRegion(x: number, y: number, outline: Point2[], holes: Point2[][] = []): boolean {
+  return pointInFreePolygon(x, y, outline) && !holes.some((ring) => pointInFreePolygon(x, y, ring));
+}
+
+// 輪郭の内側に、間隔 spacing で並べた点（少しずらして自然に）。縁から inset より内側だけ。数が多すぎるときは間隔を広げる。
+// 穴（holes）の中と、穴の縁の近くには置かない
+export function pointsInside(outline: Point2[], spacing: number, inset: number, limit = 1500, holes: Point2[][] = []): Point2[] {
   const xs = outline.map((point) => point[0]), ys = outline.map((point) => point[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
-  const area = Math.abs(polygonArea(outline));
+  const area = Math.max(1, Math.abs(polygonArea(outline)) - holes.reduce((sum, ring) => sum + Math.abs(polygonArea(ring)), 0));
   const step = Math.max(spacing, Math.sqrt(area / limit));
   const points: Point2[] = [];
   let index = 0;
@@ -282,45 +317,49 @@ export function pointsInside(outline: Point2[], spacing: number, inset: number, 
       index += 1;
       const px = x + (freeRandom(index, 1) - 0.5) * step * 0.6, py = y + (freeRandom(index, 2) - 0.5) * step * 0.6;
       if (!pointInFreePolygon(px, py, outline) || distanceToFreeLine(px, py, outline, true) < inset) continue;
+      if (holes.some((ring) => pointInFreePolygon(px, py, ring) || distanceToFreeLine(px, py, ring, true) < inset)) continue;
       points.push([px, py]);
     }
   }
   return points;
 }
 
-export interface FreePond { water: Point2[]; stones: StoneSlab[]; ripples: Ellipse[]; }
+export interface FreePond { water: Point2[]; holes: Point2[][]; stones: StoneSlab[]; ripples: Ellipse[]; }
 
-// 池: 水面の輪郭と、縁に並ぶ石、水面の波紋
-export function freePond(points: Point2[]): FreePond {
+// 池: 水面の輪郭と、縁に並ぶ石、水面の波紋。穴（島）があれば、島の縁にも石を並べる
+export function freePond(points: Point2[], holes: Point2[][] = []): FreePond {
   const water = freeOutline(points);
-  const rim = offsetFreeLine(water, -5, true);
-  const stones = samplesAlong(rim, 24, true, 0).map((sample, i): StoneSlab => ({
+  const islands = freeHoleOutlines(holes);
+  const rims = [water, ...islands].map((ring) => offsetFreeLine(ring, -5, true));
+  const stones = rims.flatMap((rim) => samplesAlong(rim, 24, true, 0)).map((sample, i): StoneSlab => ({
     x: sample.x, y: sample.y, rx: 13 * (0.85 + 0.3 * freeRandom(i, 3)), ry: 9 * (0.85 + 0.3 * freeRandom(i, 4)), angle: sample.angle,
   }));
-  const inside = pointsInside(water, 40, 30, 60);
+  const inside = pointsInside(water, 40, 30, 60, islands);
   const size = Math.sqrt(Math.abs(polygonArea(water)));
   const ripples = inside.length
     ? [inside[Math.floor(inside.length / 3)], inside[Math.floor((inside.length * 2) / 3)]].map(([x, y], i): Ellipse => ({ x, y, rx: size * (0.12 - i * 0.03), ry: size * (0.05 - i * 0.012) }))
     : [];
-  return { water, stones, ripples };
+  return { water, holes: islands, stones, ripples };
 }
 
 export interface FreeFlower { x: number; y: number; r: number; color: string; }
 export const FREE_FLOWER_COLORS = ["#e04f5f", "#f2c14e", "#f7f3ea", "#b06fd8", "#ef8bb7", "#ff8a3d"];
 
-// 花壇: 縁（レンガ）の輪郭と、土の上の株（葉と花）
-export function freeFlowerBed(points: Point2[]): { outline: Point2[]; plants: FreeFlower[] } {
+// 花壇: 縁（レンガ）の輪郭と、土の上の株（葉と花）。穴があれば、穴の縁にもレンガ
+export function freeFlowerBed(points: Point2[], holes: Point2[][] = []): { outline: Point2[]; holes: Point2[][]; plants: FreeFlower[] } {
   const outline = freeOutline(points);
-  const plants = pointsInside(outline, 30, 12, 400).map(([x, y], i) => ({
+  const holeOutlines = freeHoleOutlines(holes);
+  const plants = pointsInside(outline, 30, 12, 400, holeOutlines).map(([x, y], i) => ({
     x, y, r: 5 + freeRandom(i, 5) * 2.5, color: FREE_FLOWER_COLORS[Math.floor(freeRandom(i, 6) * FREE_FLOWER_COLORS.length)],
   }));
-  return { outline, plants };
+  return { outline, holes: holeOutlines, plants };
 }
 
-// 芝生: 輪郭と、草の株の位置
-export function freeLawn(points: Point2[]): { outline: Point2[]; tufts: Point2[] } {
+// 芝生: 輪郭と、草の株の位置。穴の所には生えない
+export function freeLawn(points: Point2[], holes: Point2[][] = []): { outline: Point2[]; holes: Point2[][]; tufts: Point2[] } {
   const outline = freeOutline(points);
-  return { outline, tufts: pointsInside(outline, 18, 4, 1500) };
+  const holeOutlines = freeHoleOutlines(holes);
+  return { outline, holes: holeOutlines, tufts: pointsInside(outline, 18, 4, 1500, holeOutlines) };
 }
 
 // ---- 線の形 ----

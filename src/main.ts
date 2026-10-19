@@ -23,7 +23,7 @@ import {
 import {
   FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, curveThrough, defaultFreePath, freeRiverRipples, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
   freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
-  offsetFreeLine, pointInFreePolygon, type FreeKind,
+  offsetFreeLine, freeHoleOutlines, freeHolePoints, normalizeFreeHoles, pointInFreeRegion, type FreeKind,
 } from "./free-shapes";
 import {
   CONIFER_TIERS, PALM_FROND_ANGLES, PETAL_ANGLES, PLANT_LEAF_ANGLES, RIPPLE_END, RIPPLE_START, ROUND_LEAF_CLUMPS,
@@ -46,6 +46,8 @@ import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow }
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
 import { floorPoints, floorPolygon, multiPolygonTester, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
+import { BRUSH_WIDTH_RANGE, MAX_FREE_RING_POINTS, brushStroke, clampBrushWidth, floorFromRegion, regionsOverlap, subtractRegion, tidyRegion, unionRegions, type FloorRegion } from "./brush-area";
+import clipping, { type MultiPolygon, type Pair } from "polygon-clipping";
 import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, regularFloor, regularFloorOutline, regularFloorSize, regularFloorSides, type FloorPreset } from "./floor-editing";
 import { ROOF_LABELS, isRoofKind, isRadialRoof, roofOutline, roofSides, roofRise, regularRoofSize, radialRoofModel, type RoofKind } from "./roof-shapes";
 
@@ -127,6 +129,8 @@ interface Furniture {
   markerLabel?: string;
   // 足跡: なぞった道すじ（家具の中心が原点、幅・奥行に対する割合）と歩幅 cm（標準のときは持たない）
   path?: number[][];
+  // 池・花壇・芝生・ラグの穴（道すじと同じ割合の輪）。穴がなければ持たない
+  holes?: number[][][];
   stride?: number;
   // 人: 姿勢と手足の角度（手足を動かすまでは持たない）
   pose?: PersonPose;
@@ -568,9 +572,14 @@ let activeWallStyle: WallStyle = "plain";
 let floorRetraceId: string | null = null;
 let floorDraft: { floorId: string; target: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
 // 描き方。ペン・なぞれる物（池・川・足跡など）・床を、ペンでなぞって描くか、点を打って直線か曲線でつなぐか。物ごとに覚える（ブラウザに保存）
-type DrawMethod = "trace" | "straight" | "curve";
-const DRAW_METHODS: DrawMethod[] = ["trace", "straight", "curve"];
+// 描き方: なぞる（線の物は道すじ、床や池などの閉じる形は囲む）、点を打つ直線・曲線、ペンで塗る（床と、池などの閉じる形だけ）
+type DrawMethod = "trace" | "straight" | "curve" | "brush";
+const DRAW_METHODS: DrawMethod[] = ["trace", "straight", "curve", "brush"];
 const drawMethods: Record<string, DrawMethod> = {};
+// ペンで塗る幅（cm）。床と、池・花壇・芝生・ラグの種類ごとに覚える
+const brushWidths: Record<string, number> = {};
+// ペンで塗るときに、塗るのではなく、塗った所をけずるか
+let brushCut = false;
 // まっすぐ描くことが多い物は、はじめから直線
 const STRAIGHT_DRAW_KINDS = new Set<string>(["stoneWall", "takegaki", "fence", "hedge", "railway"]);
 let floorEdit: { id: string; vertex: number | null } | null = null;
@@ -795,6 +804,7 @@ interface SavedViewState {
   combine?: string;
   pen?: { color?: string; brush?: number; filled?: boolean; kind?: string };
   drawMethods?: Record<string, string>;
+  brushes?: Record<string, number>;
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
   // 3Dの絵柄
@@ -944,6 +954,7 @@ function normalizeEntity(value: unknown): Entity {
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
       path: entity.kind === "footprints" || entity.kind === "brokenGlass" || isFreeShapeKind(entity.kind) ? normalizeFootprintPath(entity.path) : undefined,
+      holes: isFreeAreaKind(entity.kind) && normalizeFootprintPath(entity.path) ? normalizeFreeHoles(entity.holes) : undefined,
       stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
       pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
       ...(entity.kind === "brokenGlass" ? {
@@ -1369,7 +1380,7 @@ function buildFurniturePicker(): void {
     button.dataset.wallStyle = style.value;
     const swatch = document.createElement("span");
     swatch.className = "surface-swatch wall-swatch";
-    swatch.style.backgroundImage = `url(${wallStyleSwatchUrl(style.value)})`;
+    whenOpened(walls.details, () => { swatch.style.backgroundImage = `url(${wallStyleSwatchUrl(style.value)})`; });
     button.prepend(swatch);
     walls.items.appendChild(button);
   });
@@ -1389,7 +1400,7 @@ function buildFurniturePicker(): void {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
       floorRetraceId = null;
-      if (activeTool !== "floor") activeTool = drawMethodFor("floor") === "trace" ? "room" : "floor";
+      if (activeTool !== "floor") activeTool = drawMethodFor("floor") === "trace" || drawMethodFor("floor") === "brush" ? "room" : "floor";
       if (activeTool === "floor") updatePropertiesPanel();
       setActiveButton("[data-surface]", surface);
       setActiveButton("[data-tool]", activeTool);
@@ -1399,7 +1410,7 @@ function buildFurniturePicker(): void {
     markTraceable(button);
     const swatch = document.createElement("span");
     swatch.className = "surface-swatch";
-    swatch.style.backgroundImage = `url(${surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL()})`;
+    whenOpened(surfaces.details, () => { swatch.style.backgroundImage = `url(${surfaceSwatchUrl(surface)})`; });
     button.prepend(swatch);
     surfaces.items.appendChild(button);
   });
@@ -1464,6 +1475,20 @@ function buildFurniturePicker(): void {
   });
 
   applyPaletteSearch();
+}
+
+// 一覧の見本の絵は、その欄を開いたときに作る（閉じた欄の絵まで作ると、起動が重くなる）
+function whenOpened(details: HTMLDetailsElement, fill: () => void): void {
+  if (details.open) {
+    fill();
+    return;
+  }
+  const onToggle = () => {
+    if (!details.open) return;
+    details.removeEventListener("toggle", onToggle);
+    fill();
+  };
+  details.addEventListener("toggle", onToggle);
 }
 
 function createPaletteGroup(label: string, open: boolean, keywords = ""): { details: HTMLDetailsElement; items: HTMLDivElement } {
@@ -2192,6 +2217,9 @@ function applySavedDisplaySettings(): void {
   if (viewState.drawMethods && typeof viewState.drawMethods === "object") {
     for (const [key, method] of Object.entries(viewState.drawMethods)) if ((DRAW_METHODS as string[]).includes(method)) drawMethods[key] = method as DrawMethod;
   }
+  if (viewState.brushes && typeof viewState.brushes === "object") {
+    for (const [key, width] of Object.entries(viewState.brushes)) if (typeof width === "number" && Number.isFinite(width)) brushWidths[key] = clampBrushWidth(width);
+  }
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -2277,6 +2305,7 @@ function saveViewState(): void {
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
   viewState.drawMethods = { ...drawMethods };
+  viewState.brushes = { ...brushWidths };
   viewState.shards = { ...shardSettings };
   viewState.look = { style: planStyle, dot: pixelDot, background: planBackground };
   try {
@@ -2584,6 +2613,14 @@ function handlePointerDown(event: PointerEvent): void {
     return;
   }
 
+  // 床をペンで塗る（なぞった所が床になる）
+  if (activeTool === "room" && isBrushing()) {
+    drag.dragMode = "path";
+    drag.path = [point];
+    render2d();
+    return;
+  }
+
   drag.dragMode = "draw";
   drag.path = activeTool === "room" ? [point] : undefined;
   state.selectedId = null;
@@ -2767,7 +2804,9 @@ function toolAction(): [string, string] | null {
     case "floor":
       return null;
     case "room":
-      return floorRetraceId ? ["床の形を描き直す: ぐるっとなぞるとその形、斜めのドラッグで四角（Escでやめる）", click] : ["ドラッグで四角、ぐるっとなぞるとその形の床", click];
+      if (floorRetraceId) return ["床の形を描き直す: ぐるっとなぞるとその形、斜めのドラッグで四角（Escでやめる）", click];
+      if (isBrushing()) return [brushCut ? "ドラッグした所の床（同じ素材）をけずる" : "ドラッグで塗った所が床になる", hold];
+      return ["ドラッグで四角、ぐるっとなぞるとその形の床", click];
     case "wall":
       return ["ドラッグで壁を描く", click];
     case "door":
@@ -2781,12 +2820,14 @@ function toolAction(): [string, string] | null {
     case "polygon":
       return ["ドラッグで図形の壁を描く", click];
     case "furniture":
+      if (isBrushing()) return [brushCut ? `ドラッグした所の${FURNITURE_DEFS[activeFurniture].label}をけずる` : `ドラッグで塗った所が${FURNITURE_DEFS[activeFurniture].label}になる`, hold];
       if (currentDrawMethod() !== "trace" && isTraceableKind(activeFurniture)) return [isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture) ? "クリックで点を打ち、最初の点で閉じる" : "クリックで点を打ち、Enter・ダブルクリックで描き終える", hold];
       if (isFreeShapeKind(activeFurniture)) return [isFreeAreaKind(activeFurniture) ? "ドラッグで囲んで形を作る（クリックで置く）" : "ドラッグでなぞって置く（クリックで置く）", hold];
       return [activeFurniture === "footprints" || activeFurniture === "brokenGlass" ? "なぞって置く" : "クリックで置く", hold];
     case "text":
       return ["クリックで文字を置く", hold];
     case "paint":
+      if (isBrushing() && penSettings.kind !== "paint") return [brushCut ? `ドラッグした所の${FURNITURE_DEFS[penSettings.kind].label}をけずる` : `ドラッグで塗った所が${FURNITURE_DEFS[penSettings.kind].label}になる`, hold];
       if (currentDrawMethod() !== "trace") return [penSettings.kind === "paint" && !penSettings.filled || (penSettings.kind !== "paint" && !isFreeAreaKind(penSettings.kind)) ? "クリックで点を打ち、Enter・ダブルクリックで描き終える" : "クリックで点を打ち、最初の点で閉じる", hold];
       return [penSettings.kind === "paint" ? "ドラッグで描く" : `ドラッグで${FURNITURE_DEFS[penSettings.kind].label}を描く`, hold];
     case "erase":
@@ -2803,7 +2844,7 @@ function handlePointerMove(event: PointerEvent): void {
   }
 
   const point = screenToWorld(event);
-  if (activeTool === "paint" && (event.pointerType !== "touch" || drag.dragMode === "path")) {
+  if ((activeTool === "paint" || isBrushing()) && (event.pointerType !== "touch" || drag.dragMode === "path")) {
     penCursor = point;
     if (drag.dragMode === "none") renderPenCursor();
   }
@@ -2985,7 +3026,10 @@ function handlePointerUp(event: PointerEvent): void {
 
   // クリックで置いた自由な形（続けてもう1回押したら、取り消してそこにある物を選ぶ）
   let pathCreatedId: string | undefined;
-  if (drag.dragMode === "path" && drag.path) {
+  if (drag.dragMode === "path" && drag.path && isBrushing()) {
+    paintArea(drag.path);
+    commitState();
+  } else if (drag.dragMode === "path" && drag.path) {
     if (activeTool === "paint") {
       const kind = penSettings.kind;
       if (kind === "paint") placePaintStroke(drag.path);
@@ -3843,20 +3887,213 @@ function drawKey(): string | null {
 }
 
 function drawMethodFor(key: string): DrawMethod {
-  return drawMethods[key] ?? (STRAIGHT_DRAW_KINDS.has(key) ? "straight" : "trace");
+  const stored = drawMethods[key];
+  // ペンで塗れるのは、床と、池・花壇・芝生・ラグだけ
+  if (stored && (stored !== "brush" || isAreaKey(key))) return stored;
+  if (STRAIGHT_DRAW_KINDS.has(key)) return "straight";
+  // ペンのツールでは、閉じる形ははじめから塗る
+  return activeTool === "paint" && isAreaKey(key) ? "brush" : "trace";
 }
 
-// いまの描き方。床は、部屋のツールが「ペンで描く」、線で囲んで床を作成が「直線」か「曲線」
+// ペンで塗れる物（床と、池・花壇・芝生・ラグ）か
+function isAreaKey(key: string | null): boolean {
+  return key === "floor" || (key !== null && isFreeAreaKind(key));
+}
+
+// いまの描き方。床は、部屋のツールが「ペンで塗る」か「囲んで描く」、線で囲んで床を作成が「直線」か「曲線」。
+// なぞり直しているときは、塗らずになぞる
 function currentDrawMethod(): DrawMethod {
   const key = drawKey();
-  if (!key || activeTool === "room") return "trace";
-  if (activeTool === "floor") return drawMethods.floor === "curve" ? "curve" : "straight";
-  return drawMethodFor(key);
+  if (!key) return "trace";
+  const method = activeTool === "room" ? (drawMethods.floor === "brush" ? "brush" : "trace")
+    : activeTool === "floor" ? (drawMethods.floor === "curve" ? "curve" : "straight")
+    : drawMethodFor(key);
+  return method === "brush" && (floorRetraceId || pathRedrawId) ? "trace" : method;
+}
+
+// ペンで塗っているか（床・池などを、幅のある線で塗る・けずる）
+function isBrushing(): boolean {
+  return currentDrawMethod() === "brush";
+}
+
+// 塗る幅（cm）
+function brushWidthFor(key: string): number {
+  return clampBrushWidth(brushWidths[key]);
 }
 
 // 点を打って描いているか（線で囲んで床を作成と、描き方を「直線」「曲線」にしたペン・なぞれる物）
 function isPointDrafting(): boolean {
-  return activeTool === "floor" || ((activeTool === "paint" || (activeTool === "furniture" && isTraceableKind(activeFurniture))) && currentDrawMethod() !== "trace");
+  const method = currentDrawMethod();
+  return activeTool === "floor" || ((activeTool === "paint" || (activeTool === "furniture" && isTraceableKind(activeFurniture))) && (method === "straight" || method === "curve"));
+}
+
+// ---- ペンで塗る・けずる ----
+// 床（同じ素材）や、池・花壇・芝生・ラグ（同じ種類）を、幅のある線で塗る。重なった物とは1つにつながり、
+// 輪のように塗ると真ん中があいた形（ドーナツ）になる。けずるときは、重なった所をその物から取りのぞく
+const BRUSH_CUT_COLOR = "#d64545";
+
+// 塗っている所の色（床は素材の色、池などはその物の色）
+function brushFill(key: string): string {
+  if (key === "floor") return activeRoomSurface === "plain" ? "#9fb6cc" : SURFACE_DEFS[activeRoomSurface].color;
+  return key === "pond" ? OUTDOOR_WATER : key === "lawn" ? OUTDOOR_LEAF : key === "flowerBed" ? OUTDOOR_SOIL : furnitureSymbolFill(key as FurnitureKind);
+}
+
+// 塗っている線（離すと、この形が床・池などになる。けずるときは赤）
+function drawBrushPreview(points: Point[]): void {
+  if (deferOverlay(() => drawBrushPreview(points))) return;
+  const key = drawKey();
+  if (!key || !points.length) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = brushWidthFor(key);
+  ctx.strokeStyle = brushCut ? BRUSH_CUT_COLOR : brushFill(key);
+  ctx.globalAlpha = brushCut ? 0.4 : 0.6;
+  ctx.beginPath();
+  points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+  if (points.length === 1) ctx.lineTo(points[0].x + 0.01, points[0].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// 塗り終えたとき: 塗った形を、床か、池などの自由な形にする
+function paintArea(points: Point[]): void {
+  const key = drawKey();
+  if (!key || !isAreaKey(key)) return;
+  const stroke = brushStroke(points.map((p): Pair => [p.x, p.y]), brushWidthFor(key));
+  if (!stroke.length) return;
+  if (key === "floor") paintFloor(stroke);
+  else paintFreeArea(key as FreeKind, stroke);
+  // 続けて塗れるよう、選ばない
+  selectOnly(null);
+}
+
+function roomRegion(room: Room): MultiPolygon {
+  return [floorPolygon(room)];
+}
+
+// 床を塗る: いま選んでいる素材の床で、塗った所に重なる物とつなげる（なければ新しい床）。けずるときは、その床から取りのぞく。
+// 名前のある部屋（リビングなど）は、塗っても形を変えない（上に床が重なる）。けずるときは、名前があってもけずる
+function paintFloor(stroke: MultiPolygon): void {
+  const entities = activeEntities();
+  const targets = entities.filter((entity): entity is Room => isRoom(entity) && !isLocked(entity) && (entity.surface ?? "plain") === activeRoomSurface && regionsOverlap(roomRegion(entity), stroke));
+  const shapes = (region: MultiPolygon) => tidyRegion(region, { maxPoints: 2000 }).map((rings) => floorFromRegion(rings)).filter((shape): shape is FloorRegion => Boolean(shape));
+  if (brushCut) {
+    for (const room of targets) applyFloorPieces(room, shapes(subtractRegion(roomRegion(room), stroke)));
+    return;
+  }
+  const joined = targets.filter((room) => !room.name.trim());
+  const pieces = shapes(unionRegions(stroke, ...joined.map(roomRegion)));
+  if (!pieces.length) return;
+  const [first, ...others] = joined;
+  if (first) {
+    others.forEach((room) => removeEntityById(room.id));
+    applyFloorPieces(first, pieces);
+    return;
+  }
+  for (const piece of pieces) {
+    entities.push({
+      id: newId("room"), type: "room", name: "",
+      color: activeRoomSurface === "plain" ? ROOM_COLORS[entities.length % ROOM_COLORS.length] : SURFACE_DEFS[activeRoomSurface].color,
+      surface: activeRoomSurface, ...piece,
+    });
+  }
+}
+
+// 床に新しい形を当てる。なくなったら消し、いくつかに分かれたら、残りは同じ素材・色の新しい床（名前は付けない）
+function applyFloorPieces(room: Room, pieces: FloorRegion[]): void {
+  if (!pieces.length) {
+    removeEntityById(room.id);
+    return;
+  }
+  const [first, ...rest] = pieces;
+  const copy = cloneEntity(room) as Room;
+  Object.assign(room, { x: first.x, y: first.y, w: first.w, h: first.h, outline: first.outline });
+  if (first.holes) room.holes = first.holes;
+  else delete room.holes;
+  const entities = activeEntities();
+  let index = entities.indexOf(room);
+  for (const piece of rest) {
+    const extra: Room = { ...copy, id: newId("room"), name: "", x: piece.x, y: piece.y, w: piece.w, h: piece.h, outline: piece.outline };
+    delete extra.holes;
+    if (piece.holes) extra.holes = piece.holes;
+    delete extra.labelOffsetX;
+    delete extra.labelOffsetY;
+    entities.splice(++index, 0, extra);
+  }
+}
+
+// 自由な形（池など）の、間取りの上での形（cm）。なぞっていない池・花壇・ラグは、いつもの形（池は楕円、ほかは四角）
+function freeItemRegion(item: Furniture): MultiPolygon {
+  const kind = item.kind as FreeKind;
+  const local: Point2[][] = isFreeShapeItem(item)
+    ? [freeItemPoints(kind, item.w, item.h, item), ...freeItemHoles(kind, item.w, item.h, item)]
+    : [kind === "pond"
+      ? Array.from({ length: 32 }, (_, i): Point2 => [Math.cos((i / 32) * Math.PI * 2) * item.w / 2, Math.sin((i / 32) * Math.PI * 2) * item.h / 2])
+      : [[-item.w / 2, -item.h / 2], [item.w / 2, -item.h / 2], [item.w / 2, item.h / 2], [-item.w / 2, item.h / 2]]];
+  const rings = local.map((ring) => ring.map((point): Pair => {
+    const world = furnitureLocalToWorld(item, point);
+    return [world.x, world.y];
+  }));
+  // なぞった道すじは、交わっていることもある。いったん合わせてほどいてから、穴を引く
+  try {
+    const outer = clipping.union([rings[0]]);
+    return rings.length > 1 ? clipping.difference(outer, ...rings.slice(1).map((ring): [Pair[]] => [ring])) : outer;
+  } catch {
+    return [];
+  }
+}
+
+// 池などを塗る: 同じ種類で、塗った所に重なる物とつなげる（なければ新しく置く）。けずるときは、その物から取りのぞく
+function paintFreeArea(kind: FreeKind, stroke: MultiPolygon): void {
+  const entities = activeEntities();
+  const targets = entities.filter((entity): entity is Furniture => entity.type === "furniture" && entity.kind === kind && !isLocked(entity) && regionsOverlap(freeItemRegion(entity), stroke));
+  const pieces = (region: MultiPolygon) => tidyRegion(region, { maxPoints: MAX_FREE_RING_POINTS });
+  if (brushCut) {
+    for (const item of targets) applyFreePieces(item, pieces(subtractRegion(freeItemRegion(item), stroke)));
+    return;
+  }
+  const merged = pieces(unionRegions(stroke, ...targets.map(freeItemRegion)));
+  if (!merged.length) return;
+  const [first, ...others] = targets;
+  if (first) {
+    others.forEach((item) => removeEntityById(item.id));
+    applyFreePieces(first, merged);
+    return;
+  }
+  for (const rings of merged) {
+    const item: Furniture = { id: newId("furniture"), type: "furniture", kind, x: 0, y: 0, w: 1, h: 1, rotation: 0, ...newFurnitureDetails(kind) };
+    setFreeRegion(item, rings);
+    entities.push(item);
+  }
+}
+
+// 自由な形に、新しい形（cm の輪。1つ目が外側、残りが穴）を当てる。向きは0度にそろえる
+function setFreeRegion(item: Furniture, rings: Pair[][]): void {
+  const [outer, ...holes] = rings;
+  const frame = freeFrame(outer, freeMargin(item.kind as FreeKind), holes);
+  Object.assign(item, { x: frame.x, y: frame.y, w: frame.w, h: frame.h, rotation: 0, path: frame.path });
+  if (frame.holes) item.holes = frame.holes;
+  else delete item.holes;
+  delete item.flip;
+}
+
+// なくなったら消し、いくつかに分かれたら、残りは同じ種類・色の新しい物
+function applyFreePieces(item: Furniture, pieces: Pair[][][]): void {
+  if (!pieces.length) {
+    removeEntityById(item.id);
+    return;
+  }
+  const [first, ...rest] = pieces;
+  const copy = cloneEntity(item) as Furniture;
+  setFreeRegion(item, first);
+  const entities = activeEntities();
+  let index = entities.indexOf(item);
+  for (const rings of rest) {
+    const extra: Furniture = { ...copy, id: newId("furniture") };
+    setFreeRegion(extra, rings);
+    entities.splice(++index, 0, extra);
+  }
 }
 
 // 打った点から、描く物の道すじを作る。曲線は点を通るなめらかな線、直線の自由な形は角をとがらせる
@@ -4702,7 +4939,8 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
     drawMarquee();
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
-    if (drag.dragMode === "path" && drag.path) {
+    if (drag.dragMode === "path" && drag.path && isBrushing()) drawBrushPreview(drag.path);
+    else if (drag.dragMode === "path" && drag.path) {
       if (activeTool === "paint") {
         const kind = penSettings.kind;
         if (kind === "paint") drawPaintPreview(drag.path);
@@ -4713,7 +4951,7 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
       else drawFootprintPreview(drag.path);
     }
     // ペン先の丸は、描いている線の上に重ねる
-    if (activeTool === "paint") {
+    if (activeTool === "paint" || isBrushing()) {
       const tip = penCursor ?? (penSizePreview ? planCenter() : null);
       if (tip) drawPenCursor(tip);
     }
@@ -6868,13 +7106,15 @@ function drawPaintPreview(points: Point[], exact = false): void {
 function drawPenCursor(point: Point): void {
   if (deferOverlay(() => drawPenCursor(point))) return;
   const kind = penSettings.kind;
-  const parsed = kind === "paint" ? parseColorCode(penSettings.color) : null;
-  const width = kind === "paint" ? penSettings.brush : isFreeAreaKind(kind) ? 0 : freeBandWidth(kind, freeWidthByKind[kind]);
+  const brushKey = isBrushing() ? drawKey() : null;
+  const parsed = !brushKey && activeTool === "paint" && kind === "paint" ? parseColorCode(penSettings.color) : null;
+  // 塗る幅（床・池など）、ペンの太さ、川・小道などの幅。囲む形は点だけ
+  const width = brushKey ? brushWidthFor(brushKey) : kind === "paint" ? penSettings.brush : isFreeAreaKind(kind) ? 0 : freeBandWidth(kind, freeWidthByKind[kind]);
   ctx.save();
   ctx.beginPath();
   ctx.arc(point.x, point.y, Math.max(width / 2, 2 / view.zoom), 0, Math.PI * 2);
-  ctx.fillStyle = kind === "paint" ? parsed?.rgb ?? PEN_DEFAULT_COLOR : "#2775d1";
-  ctx.globalAlpha = (kind === "paint" ? 0.35 : 0.2) * (parsed?.alpha ?? 1);
+  ctx.fillStyle = brushKey ? (brushCut ? BRUSH_CUT_COLOR : brushFill(brushKey)) : parsed ? parsed.rgb : "#2775d1";
+  ctx.globalAlpha = brushKey ? 0.45 : (parsed ? 0.35 : 0.2) * (parsed?.alpha ?? 1);
   ctx.fill();
   ctx.globalAlpha = 1;
   ctx.lineWidth = 3 / view.zoom;
@@ -6970,9 +7210,40 @@ function penControlsHtml(prefix: string, color: string, brush: number, filled: b
 // 描き方を選ぶ欄（ペンでなぞる・点を打って囲う）。床は「部屋」と「線で囲んで床を作成」を切り替える
 function drawMethodHtml(): string {
   const method = currentDrawMethod();
+  const key = drawKey();
+  const area = isAreaKey(key);
   const item = (value: DrawMethod, label: string) => `<button type="button" role="radio" data-draw-method="${value}" class="${method === value ? "is-active" : ""}" aria-checked="${method === value}">${label}</button>`;
+  // 床・池などの閉じる形は、ペンで塗るか、囲むか。川・小道などの線の形は、ペンでなぞるか、点を打つか
+  const methods = area
+    ? item("brush", "ペンで塗る") + item("trace", "囲んで描く") + item("straight", "直線で囲む") + item("curve", "曲線で囲む")
+    : item("trace", "ペンで描く") + item("straight", "直線で描く") + item("curve", "曲線で描く");
   return `<label>描き方</label>
-    <div class="segmented draw-method" role="radiogroup" aria-label="描き方">${item("trace", "ペンで描く")}${item("straight", "直線で描く")}${item("curve", "曲線で描く")}</div>`;
+    <div class="segmented draw-method${area ? " is-area" : ""}" role="radiogroup" aria-label="描き方">${methods}</div>
+    ${key && area && method === "brush" ? brushControlsHtml(key) : ""}`;
+}
+
+// ペンで塗るときの幅と、塗るかけずるか
+function brushControlsHtml(key: string): string {
+  const width = brushWidthFor(key);
+  const mode = (value: "paint" | "cut", label: string) => {
+    const active = (value === "cut") === brushCut;
+    return `<button type="button" role="radio" data-brush-mode="${value}" class="${active ? "is-active" : ""}" aria-checked="${active}">${label}</button>`;
+  };
+  return `<label>塗る幅 cm
+      <span class="pen-width">
+        <input id="brushWidthRange" type="range" min="${BRUSH_WIDTH_RANGE.min}" max="600" step="10" value="${Math.min(600, width)}" aria-label="塗る幅" />
+        <input id="brushWidthInput" type="number" min="${BRUSH_WIDTH_RANGE.min}" max="${BRUSH_WIDTH_RANGE.max}" step="10" value="${width}" />
+      </span>
+    </label>
+    <div class="segmented pen-mode brush-mode" role="radiogroup" aria-label="塗るかけずるか">${mode("paint", "塗る")}${mode("cut", "けずる")}</div>`;
+}
+
+// ペンで塗るときの説明
+function brushHint(label: string): string {
+  const what = activeTool === "room" ? "同じ素材の床" : `${label}`;
+  return brushCut
+    ? `けずる: 2Dをドラッグした所の${what}をけずります。真ん中をけずると穴があきます。`
+    : `${label}: 2Dをドラッグして塗った所が${label}になります。${what}に重ねて塗るとつながり、輪のように塗ると真ん中があいた形（ドーナツ）になります。`;
 }
 
 function bindDrawMethod(): void {
@@ -6983,11 +7254,34 @@ function bindDrawMethod(): void {
     drawMethods[key] = method;
     floorDraft = null;
     floorEditError = "";
-    // 床: ペンで描くなら部屋のツール、直線・曲線なら線で囲んで床を作成
-    if (key === "floor") activeTool = method === "trace" ? "room" : "floor";
+    // 床: 塗る・囲むなら部屋のツール、直線・曲線なら線で囲んで床を作成
+    if (key === "floor") activeTool = method === "trace" || method === "brush" ? "room" : "floor";
     setActiveButton("[data-tool]", activeTool);
     scheduleViewStateSave();
     syncPlanCursor();
+    updatePropertiesPanel();
+    syncToolHint();
+    render2d();
+  }));
+  // 塗る幅と、塗るかけずるか（履歴には積まない）
+  const key = drawKey();
+  const range = propertiesPanel.querySelector<HTMLInputElement>("#brushWidthRange"), number = propertiesPanel.querySelector<HTMLInputElement>("#brushWidthInput");
+  const setWidth = (value: number) => {
+    if (!key || !Number.isFinite(value)) return;
+    brushWidths[key] = clampBrushWidth(value);
+    scheduleViewStateSave();
+    previewPenSize();
+  };
+  range?.addEventListener("input", () => {
+    setWidth(Number(range.value));
+    if (number && key) number.value = String(brushWidthFor(key));
+  });
+  number?.addEventListener("change", () => {
+    setWidth(Number(number.value));
+    if (range && key) range.value = String(Math.min(600, brushWidthFor(key)));
+  });
+  propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-brush-mode]").forEach((button) => button.addEventListener("click", () => {
+    brushCut = button.dataset.brushMode === "cut";
     updatePropertiesPanel();
     syncToolHint();
     render2d();
@@ -7196,10 +7490,20 @@ function freeItemPoints(kind: FreeKind, w: number, h: number, item?: Furniture):
   return freePathPoints(item?.path ?? defaultFreePath(kind), w, h);
 }
 
-function fillLoop(points: Point2[], fill: string, stroke = true): void {
+// 池・花壇・芝生・ラグの穴（cm）。なぞった形のときだけ持つ
+function freeItemHoles(kind: FreeKind, w: number, h: number, item?: Furniture): Point2[][] {
+  return isFreeAreaKind(kind) && item?.path ? freeHolePoints(item.holes, w, h) : [];
+}
+
+// 穴のある形を塗る（穴の所は塗らない）。縁の線は、外側の輪郭と穴の縁に引く
+function fillRegion(outline: Point2[], holes: Point2[][], fill: string, stroke = true): void {
   ctx.fillStyle = fill;
-  traceLoop(points);
-  ctx.fill();
+  ctx.beginPath();
+  for (const ring of [outline, ...holes]) {
+    ring.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+  }
+  ctx.fill("evenodd");
   if (stroke) ctx.stroke();
 }
 
@@ -7226,20 +7530,23 @@ function strokeFreeBand(line: Point2[], width: number, fill: string, closed = fa
 // 2Dの記号。点の位置は3D（furniture-models.ts の buildFreeShape）と同じ
 function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture): void {
   const points = freeItemPoints(kind, w, h, item);
+  const holes = freeItemHoles(kind, w, h, item);
   const line = freeCenterLine(points);
   const tint = item?.color ? solidColor(item.color) : undefined;
   ctx.save();
   ctx.lineJoin = "round";
   switch (kind) {
     case "pond": {
-      const pond = freePond(points);
-      fillLoop(pond.water, OUTDOOR_WATER);
+      const pond = freePond(points, holes);
+      fillRegion(pond.water, pond.holes, OUTDOOR_WATER);
       for (const ripple of pond.ripples) {
         ctx.beginPath();
         ctx.ellipse(ripple.x, ripple.y, ripple.rx, ripple.ry, 0, RIPPLE_START, RIPPLE_END);
         ctx.stroke();
       }
+      // 縁の石は小さいので、引いて見たときに縁取りで黒くつぶれないよう、縁取りを石の大きさに合わせて細くする
       ctx.fillStyle = OUTDOOR_STONE;
+      ctx.lineWidth = Math.min(ctx.lineWidth, 2.5);
       for (const stone of pond.stones) {
         ctx.save();
         ctx.translate(stone.x, stone.y);
@@ -7250,9 +7557,11 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
       break;
     }
     case "flowerBed": {
-      const bed = freeFlowerBed(points);
-      fillLoop(bed.outline, OUTDOOR_SOIL, false);
-      strokeFreeBand(bed.outline, 8, OUTDOOR_STONE, true);
+      const bed = freeFlowerBed(points, holes);
+      fillRegion(bed.outline, bed.holes, OUTDOOR_SOIL, false);
+      for (const ring of [bed.outline, ...bed.holes]) strokeFreeBand(ring, 8, OUTDOOR_STONE, true);
+      // 株は小さいので、縁取りを株の大きさに合わせて細くする（引いて見ても花の色が見える）
+      ctx.lineWidth = Math.min(ctx.lineWidth, 1.5);
       for (const plant of bed.plants) {
         ctx.fillStyle = OUTDOOR_LEAF;
         strokeCircle(plant.x, plant.y, plant.r + 3, true);
@@ -7262,18 +7571,18 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
       break;
     }
     case "lawn": {
-      const lawn = freeLawn(points);
-      fillLoop(lawn.outline, OUTDOOR_LEAF);
+      const lawn = freeLawn(points, holes);
+      fillRegion(lawn.outline, lawn.holes, OUTDOOR_LEAF);
       ctx.save();
-      ctx.lineWidth *= 0.6;
+      ctx.lineWidth = Math.min(ctx.lineWidth * 0.6, 1);
       for (const [x, y] of lawn.tufts) strokeCircle(x, y, 3);
       ctx.restore();
       break;
     }
     case "rug": {
-      const outline = freeOutline(points);
-      fillLoop(outline, tint ? withAlpha(tint, 0.25) : furnitureSymbolFill("rug"));
-      strokeFreeBand(outline, 6, tint ? withAlpha(tint, 0.55) : OUTDOOR_TRUNK, true);
+      const outline = freeOutline(points), rugHoles = freeHoleOutlines(holes);
+      fillRegion(outline, rugHoles, tint ? withAlpha(tint, 0.25) : furnitureSymbolFill("rug"));
+      for (const ring of [outline, ...rugHoles]) strokeFreeBand(ring, 6, tint ? withAlpha(tint, 0.55) : OUTDOOR_TRUNK, true);
       break;
     }
     case "river": {
@@ -7372,11 +7681,12 @@ function freeShapeTester(item: Furniture, reach: number): (point: Point) => bool
   const kind = item.kind as FreeKind;
   const points = freeItemPoints(kind, item.w, item.h, item);
   if (isFreeAreaKind(kind)) {
-    const outline = freeOutline(points);
+    // 穴の中は形の外。縁（外側の輪郭と穴の縁）の近くは形の上
+    const outline = freeOutline(points), holes = freeHoleOutlines(freeItemHoles(kind, item.w, item.h, item));
     const margin = reach + (kind === "pond" ? 18 : 4);
     return (point) => {
       const [x, y] = worldToFurnitureLocal(item, point);
-      return pointInFreePolygon(x, y, outline) || distanceToFreeLine(x, y, outline, true) <= margin;
+      return pointInFreeRegion(x, y, outline, holes) || [outline, ...holes].some((ring) => distanceToFreeLine(x, y, ring, true) <= margin);
     };
   }
   const line = freeCenterLine(points);
@@ -9370,8 +9680,8 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
     else applyPaintTexture(group, furnitureItem);
   } else {
     // 形を決める値が同じ家具は、作り置きを写して使う（リアルの絵柄では材質を変えるので分ける）
-    const { kind, w, h, color, color3d, rise, height, symbol, path, stride, brush, density, pose } = options;
-    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, stride, brush, density, pose]);
+    const { kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose } = options;
+    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose]);
     group = cachedModel(`furniture:${key}`, () => buildFurnitureModel(options));
   }
   placeFurniture3d(group, furnitureItem, center, yBase);
@@ -10045,10 +10355,11 @@ function updatePropertiesPanel(): void {
       : isFreeAreaKind(kind)
         ? `ペンで${FURNITURE_DEFS[kind].label}: 2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。`
         : `ペンで${FURNITURE_DEFS[kind].label}: 2Dをなぞると、その道すじに沿って描けます（クリックだけなら、まっすぐ）。`;
+    const method = currentDrawMethod();
     propertiesPanel.innerHTML = `<div class="property-grid">
-        <p class="empty-state">${currentDrawMethod() !== "trace" ? drawPointsHint(kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label, kind === "paint" ? penSettings.filled : isFreeAreaKind(kind)) : hint}</p>
-        ${drawMethodHtml()}
+        <p class="empty-state">${method === "brush" && kind !== "paint" ? brushHint(FURNITURE_DEFS[kind].label) : method !== "trace" ? drawPointsHint(kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label, kind === "paint" ? penSettings.filled : isFreeAreaKind(kind)) : hint}</p>
         ${penKindHtml()}
+        ${drawMethodHtml()}
         ${kind === "paint" ? penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled) : penShapeWidthHtml(kind)}
       </div>`;
     bindPenControls();
@@ -10072,9 +10383,10 @@ function updatePropertiesPanel(): void {
   if (!selected && (activeTool === "room" || (activeTool === "furniture" && isTraceableKind(activeFurniture)))) {
     const label = activeTool === "room" ? "床" : FURNITURE_DEFS[activeFurniture].label;
     const area = activeTool === "room" || (isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture));
-    const hint = activeTool === "room"
-      ? "床: 2Dを斜めにドラッグすると四角、ぐるっとなぞるとその形の床になります。"
-      : currentDrawMethod() !== "trace" ? drawPointsHint(label, area) : `${label}: ${area ? "2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。" : "2Dをなぞると、その道すじに沿って置けます（クリックだけなら、まっすぐ）。"}`;
+    const hint = isBrushing() ? brushHint(label)
+      : activeTool === "room"
+        ? "床: 2Dを斜めにドラッグすると四角、ぐるっとなぞるとその形の床になります。"
+        : currentDrawMethod() !== "trace" ? drawPointsHint(label, area) : `${label}: ${area ? "2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。" : "2Dをなぞると、その道すじに沿って置けます（クリックだけなら、まっすぐ）。"}`;
     propertiesPanel.innerHTML = `<div class="property-grid">
         <p class="empty-state">${hint}</p>
         ${drawMethodHtml()}
@@ -11536,7 +11848,11 @@ const surfaceSwatchUrls = new Map<RoomSurface, string>();
 function surfaceSwatchUrl(surface: RoomSurface): string {
   let url = surfaceSwatchUrls.get(surface);
   if (!url) {
-    url = surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL();
+    // 見本は小さいので、模様1枚（256px）を縮めてから画像にする（画像にする手間は大きさに比例する）
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 96;
+    canvas.getContext("2d")?.drawImage(surfaceCanvas(surface, SURFACE_DEFS[surface].color), 0, 0, 96, 96);
+    url = canvas.toDataURL();
     surfaceSwatchUrls.set(surface, url);
   }
   return url;

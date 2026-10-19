@@ -179,6 +179,8 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
   const target = await context.newPage();
   target.on('pageerror', error => errors.push(error.message));
   target.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  // サーバーのエラー（500 など）は、どのファイルかが分かるように記録する
+  target.on('response', response => { if (response.status() >= 500) errors.push(`HTTP ${response.status()} ${response.url()}`); });
   await target.addInitScript(({ key, raw }) => {
     if (sessionStorage.getItem('seeded')) return;
     localStorage.setItem(key, raw);

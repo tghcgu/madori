@@ -3,7 +3,7 @@ import { openTemplateStairwells } from "./template-floors.ts";
 import type { RoofKind } from "./roof-shapes.ts";
 import type { DoorStyle } from "./opening-shapes.ts";
 import type { RoomSurface } from "./surfaces.ts";
-import { freeFrame, freeMargin, isFreeShapeKind } from "./free-shapes.ts";
+import { curveThrough, freeFrame, freeMargin, isFreeAreaKind, isFreeShapeKind } from "./free-shapes.ts";
 
 // テンプレート（間取りの見本）。家・病院・洋館など153種類のうち、ここで作る物（住まいの4種類と作例は main.ts）。
 // 部屋・壁・建具・家具を、書き出しJSONと同じ形のデータで作る。読み込むときに main.ts の normalizePlan で確かめる。
@@ -380,9 +380,10 @@ function floorBuilder(id: string, newId: (prefix: TemplateIdPrefix) => string, s
       return f;
     },
     // 自由な形（free-shapes.ts）。池・花壇・芝生・ラグは囲む点、川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石はたどる点（cm）で置く
-    trace(kind: string, points: [number, number][], options: { brush?: number; height?: number; color?: string; color3d?: string } = {}) {
+    // curve: 点を通るなめらかな線にする（自然な形の池など。点が少なくても角ばらない）
+    trace(kind: string, points: [number, number][], options: { brush?: number; height?: number; color?: string; color3d?: string; curve?: boolean } = {}) {
       if (!sizes[kind] || !isFreeShapeKind(kind)) throw new Error(`Not a free shape: ${kind}`);
-      const frame = freeFrame(points, freeMargin(kind, options.brush));
+      const frame = freeFrame(options.curve ? curveThrough(points, isFreeAreaKind(kind), 30) : points, freeMargin(kind, options.brush));
       entities.push({
         id: newId("furniture"), type: "furniture", kind, ...frame, rotation: 0,
         ...(options.brush ? { brush: options.brush } : {}),
@@ -1533,7 +1534,7 @@ function church(b: PlanBuilder): void {
     .item("tree", -350, 1100, { w: 260, h: 260 })
     .item("conifer", 1200, 1850)
     .item("bench", -300, 1900, { w: 150, h: 55 })
-    .trace("flowerBed", [[750, 1950], [960, 1920], [1050, 2030], [900, 2120], [740, 2080]]);
+    .trace("flowerBed", [[750, 1950], [960, 1920], [1050, 2030], [900, 2120], [740, 2080]], { curve: true });
   b.roof("gable", -40, 360, 1080, 1480, f);
   b.roof("flat", -40, -40, 1080, 440, f);
 }
@@ -1581,7 +1582,7 @@ function shrine(b: PlanBuilder): void {
     .item("conifer", 1250, 1720, { w: 150, h: 150 })
     .item("chozubachi", 300, 1290)
     // 池と岩
-    .trace("pond", [[150, 1700], [300, 1640], [440, 1720], [430, 1880], [290, 1960], [140, 1880]])
+    .trace("pond", [[150, 1700], [300, 1640], [440, 1720], [430, 1880], [290, 1960], [140, 1880]], { curve: true })
     .item("rock", 330, 1500)
     .item("bench", 1180, 1680, { w: 150, h: 50 })
     .item("longTable", 1200, 1340, { w: 200, h: 50 })
@@ -2269,7 +2270,7 @@ function samuraiHouse(b: PlanBuilder): void {
     .item("cupboard", 1605, 330, { rot: 90 })
     .item("washbasin", 1575, 445, { rot: 180 })
     // 庭: 自然な形の池、縁側から池への飛び石、石灯籠、松、枯山水の岩
-    .trace("pond", [[470, 770], [680, 700], [900, 760], [930, 900], [780, 1010], [560, 990], [450, 890]])
+    .trace("pond", [[470, 770], [680, 700], [900, 760], [930, 900], [780, 1010], [560, 990], [450, 890]], { curve: true })
     .trace("steppingStones", [[330, 640], [360, 760], [420, 900], [470, 1060]])
     .item("stoneLantern", 960, 680)
     .item("stoneLantern", 300, 1080)
@@ -2722,7 +2723,7 @@ function temple(b: PlanBuilder): void {
     // 墓地を囲む生け垣（参道の側を開ける）
     .trace("hedge", [[850, 1575], [75, 1575], [75, 925], [850, 925]], { brush: 30, height: 90 })
     // 庫裏の前の池と飛び石
-    .trace("pond", [[1520, 720], [1700, 690], [1880, 740], [1870, 880], [1700, 920], [1540, 880]])
+    .trace("pond", [[1520, 720], [1700, 690], [1880, 740], [1870, 880], [1700, 920], [1540, 880]], { curve: true })
     .trace("steppingStones", [[1150, 700], [1300, 760], [1470, 800]])
     // 五重塔の芯（重ねた屋根の間に見える、黒っぽい木の塔身）
     .trace("stoneWall", [[1590, 1090], [1670, 1090], [1670, 1170], [1590, 1170], [1590, 1090]], { brush: 30, height: 820, color3d: "#5a3a26" })
@@ -3523,7 +3524,7 @@ function penthouse(b: PlanBuilder): void {
     .item("fountain", 820, 680, { w: 200, h: 200 })
     .item("parasol", 200, 700, { w: 200, h: 200 })
     .row("chair", 220, 940, 3, 70, 0)
-    .trace("lawn", [[450, 750], [700, 700], [760, 900], [520, 1000], [430, 900]])
+    .trace("lawn", [[450, 750], [700, 700], [760, 900], [520, 1000], [430, 900]], { curve: true })
     .trace("hedge", [[20, 1080], [1180, 1080]], { brush: 40, height: 90 });
   b.roof("flat", -20, -20, 1240, 640, f);
 }
@@ -3714,7 +3715,7 @@ function japaneseGarden(b: PlanBuilder): void {
     .door(1900, 400, 2100, 400, { style: "itado" })
     .item("zaisu", 300, 250).item("sideTable", 200, 260, { color: "#3f3a36" })
     .item("bench", 1880, 250, { w: 240, h: 50 })
-    .trace("pond", [[600, 500], [1000, 380], [1450, 520], [1500, 900], [1150, 1150], [700, 1080], [520, 820]])
+    .trace("pond", [[600, 500], [1000, 380], [1450, 520], [1500, 900], [1150, 1150], [700, 1080], [520, 820]], { curve: true })
     .trace("river", [[1300, 1700], [1450, 1300], [1380, 1000]], { brush: 80 })
     .trace("steppingStones", [[275, 460], [420, 700], [560, 1000], [800, 1300], [1100, 1450], [1500, 1450]])
     .trace("pathway", [[1600, 420], [1700, 800], [1550, 1150]], { brush: 90 })
@@ -3748,8 +3749,8 @@ function onsen(b: PlanBuilder): void {
     .item("hinokiBath", 1000, 600, { w: 300, h: 160 })
     .row("washbasin", 40, 820, 4, 120, 0, { rot: 180 })
     .row("washbasin", 1125, 820, 4, 120, 0, { rot: 180 })
-    .trace("pond", [[150, 1000], [600, 960], [750, 1150], [500, 1380], [150, 1300]], { color: "#6f8fa6" })
-    .trace("pond", [[850, 1000], [1350, 980], [1450, 1200], [1100, 1400], [850, 1300]], { color: "#6f8fa6" })
+    .trace("pond", [[150, 1000], [600, 960], [750, 1150], [500, 1380], [150, 1300]], { color: "#6f8fa6", curve: true })
+    .trace("pond", [[850, 1000], [1350, 980], [1450, 1200], [1100, 1400], [850, 1300]], { color: "#6f8fa6", curve: true })
     .item("rock", 650, 1300).item("rock", 1400, 1350, { symbol: 1 })
     .trace("takegaki", [[800, 920], [800, 1480]], { height: 200 })
     .item("stoneLantern", 40, 1420).item("stoneLantern", 1500, 1420);
@@ -5151,7 +5152,7 @@ function zoo(b: PlanBuilder): void {
     .trace("fence", [[100, 720], [900, 720]], { height: 150 })
     .trace("fence", [[1100, 720], [1800, 720]], { height: 150 })
     .trace("fence", [[2000, 720], [2900, 720]], { height: 150 })
-    .trace("pond", [[300, 300], [600, 260], [700, 450], [400, 550]])
+    .trace("pond", [[300, 300], [600, 260], [700, 450], [400, 550]], { curve: true })
     .item("rock", 1300, 300, { w: 300, h: 200 }).item("rock", 1500, 450, { symbol: 1 })
     .trace("pond", [[2100, 250], [2800, 250], [2800, 600], [2100, 600]], { color: "#3fa7c9" })
     .item("tree", 600, 150, { w: 250, h: 250 })

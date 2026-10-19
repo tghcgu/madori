@@ -157,11 +157,35 @@ export async function verifyFreeShapes({ open, plan, output }) {
     assert.ok(penRiver.path?.length >= 2, 'the pen river follows the traced path');
     assert.deepEqual(await ids(), [], 'the new river is not selected, so the pen keeps drawing');
     assert.equal(await page.locator('[data-pen-kind="river"]').getAttribute('aria-checked'), 'true');
+    // 池・花壇・芝生・ラグは、ペンで塗る（はじめから）。輪のように塗ると真ん中があき、重ねて塗るとつながり、けずると小さくなる
     await page.locator('[data-pen-kind="pond"]').click();
-    assert.equal(await page.locator('#penShapeWidthInput').count(), 0, 'ponds have no width setting');
+    assert.equal(await page.locator('#penShapeWidthInput').count(), 0, 'ponds have no line width setting');
+    assert.equal(await page.locator('[data-draw-method="brush"]').getAttribute('aria-checked'), 'true', 'the pen paints ponds');
+    assert.match(await page.locator('#toolHint').textContent(), /塗った所が池になる/);
+    await page.locator('#brushWidthInput').fill('80');
+    await page.locator('#brushWidthInput').press('Enter');
+    const pondsNow = async () => (await items()).filter(item => item.kind === 'pond');
+    const pondsBefore = (await pondsNow()).length;
     await trace([[900, 150], [1100, 140], [1120, 300], [920, 320], [900, 160]]);
-    const penPond = (await items()).filter(item => item.kind === 'pond').at(-1);
-    assert.ok(penPond.path?.length >= 3 && penPond.w > 160, 'the pen pond takes the traced shape');
+    let penPond = (await pondsNow()).at(-1);
+    assert.equal((await pondsNow()).length, pondsBefore + 1, 'painting makes a pond');
+    assert.equal(penPond.holes?.length, 1, 'painting a ring leaves the middle open');
+    assert.ok(penPond.w > 280 && penPond.w < 340, `the pond is as wide as the painted ring: ${penPond.w}`);
+    assert.deepEqual(await ids(), [], 'the painted pond is not selected, so the pen keeps painting');
+    assert.equal(await page.evaluate(([id, x, y]) => window.__editorTest.floorAt(id, x, y), [penPond.id, 1000, 145]), true, 'the painted band is water in 3D');
+    assert.equal(await page.evaluate(([id, x, y]) => window.__editorTest.floorAt(id, x, y), [penPond.id, 1010, 230]), false, 'the middle of the ring is open in 3D');
+    await trace([[1110, 300], [1150, 420]]);
+    assert.equal((await pondsNow()).length, pondsBefore + 1, 'painting over the pond joins it');
+    const joined = (await pondsNow()).find(item => item.id === penPond.id);
+    assert.ok(joined.h > penPond.h + 60, `the joined pond grows: ${penPond.h} -> ${joined.h}`);
+    await page.locator('[data-brush-mode="cut"]').click();
+    assert.match(await page.locator('#toolHint').textContent(), /池をけずる/);
+    await trace([[1080, 440], [1220, 440]]);
+    const cut = (await pondsNow()).find(item => item.id === penPond.id);
+    assert.ok(cut.h < joined.h - 20, `cutting trims the pond: ${joined.h} -> ${cut.h}`);
+    await page.locator('[data-brush-mode="paint"]').click();
+    const penPond2 = cut;
+    assert.ok(penPond2.path?.length >= 3, 'the painted pond keeps its outline');
     // 次に開いたときも、ペンで描く物を覚えている
     await page.waitForTimeout(400);
     await page.reload();
@@ -228,7 +252,36 @@ export async function verifyFreeShapes({ open, plan, output }) {
     assert.equal(await page.locator('[data-draw-method="curve"]').getAttribute('aria-checked'), 'true');
     await page.locator('[data-draw-method="trace"]').click();
     assert.equal(await page.locator('.tool-button[data-tool="room"]').getAttribute('aria-pressed'), 'true', 'tracing floors uses the room tool');
-    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and ponds; every shape can be drawn by tracing or by clicking points');
+    // 床もペンで塗れる: 輪のように塗ると真ん中があいた床。同じ素材の床に重ねるとつながり、けずると穴があく
+    await page.locator('[data-draw-method="brush"]').click();
+    assert.equal(await page.locator('.tool-button[data-tool="room"]').getAttribute('aria-pressed'), 'true', 'painting floors uses the room tool');
+    await page.locator('#roomToolSurfacePicker [data-surface-choice="snow"]').click();
+    await page.locator('#brushWidthInput').fill('60');
+    await page.locator('#brushWidthInput').press('Enter');
+    const snowFloors = async () => (await rooms()).filter(room => room.surface === 'snow');
+    await trace(Array.from({ length: 25 }, (_, i) => [600 + Math.cos((i / 24) * Math.PI * 2.1) * 120, 400 + Math.sin((i / 24) * Math.PI * 2.1) * 120]));
+    assert.equal((await snowFloors()).length, 1, 'painting makes one snow floor');
+    let ring = (await snowFloors())[0];
+    assert.equal(ring.holes?.length, 1, 'a painted ring is a floor with a hole');
+    assert.equal(ring.name, '', 'painted floors have no name');
+    assert.equal(await page.evaluate(([id, x, y]) => window.__editorTest.floorAt(id, x, y), [ring.id, 600, 400]), false, 'the hole is open in 3D');
+    assert.equal(await page.evaluate(([id, x, y]) => window.__editorTest.floorAt(id, x, y), [ring.id, 720, 400]), true);
+    // 重ねて塗るとつながる。けずると穴
+    await trace([[720, 400], [900, 400]]);
+    assert.equal((await snowFloors()).length, 1, 'painting over the floor joins it');
+    ring = (await snowFloors())[0];
+    assert.ok(ring.w > 400, `the joined floor grows: ${ring.w}`);
+    await page.locator('[data-brush-mode="cut"]').click();
+    const joinedWidth = ring.w;
+    await trace([[880, 400], [960, 400]]);
+    assert.equal((await snowFloors()).length, 1, 'cutting the end does not split the floor');
+    ring = (await snowFloors())[0];
+    assert.ok(ring.w < joinedWidth - 30, `cutting trims the floor: ${joinedWidth} -> ${ring.w}`);
+    assert.equal(ring.holes?.length, 1, 'the hole of the ring stays');
+    await page.locator('[data-brush-mode="paint"]').click();
+    await page.keyboard.press('Control+z');
+    assert.ok((await snowFloors())[0].w > ring.w, 'undo brings the cut part back');
+    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and paints ponds; floors and ponds can be painted with a hole, joined and cut; every shape can be drawn by tracing or by clicking points');
   } finally {
     await page.context().close();
   }

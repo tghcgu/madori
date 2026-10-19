@@ -1225,6 +1225,18 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+/* 床・池などの描き方（ペンで塗る・囲んで描く・直線で囲む・曲線で囲む）は、2つずつ2段に */
+.draw-method.is-area {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 塗るか、けずるか（描き方のボタンと同じ大きさ） */
+.brush-mode button {
+  min-height: 32px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 /* ペンで描く物（ペン・川・小道・池など） */
 .pen-kinds {
   display: grid;
