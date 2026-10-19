@@ -561,7 +561,9 @@ const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
 // 形をなぞって描き直している床（部屋のツールで、次になぞった形・四角をこの床に当てる）
 let floorRetraceId: string | null = null;
-let floorDraft: { floorId: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
+let floorDraft: { floorId: string; target: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
+// 描き方。ペン・なぞれる物（池・川・足跡など）・床を、ペンでなぞって描くか、点を打って囲って描くか（ブラウザに覚える）
+let drawMethod: "trace" | "points" = "trace";
 let floorEdit: { id: string; vertex: number | null } | null = null;
 let floorEditError = "";
 let floorToolbar: HTMLDivElement | null = null;
@@ -780,6 +782,7 @@ interface SavedViewState {
   // 「組み合わせ」の置き方
   combine?: string;
   pen?: { color?: string; brush?: number; filled?: boolean; kind?: string };
+  drawMethod?: string;
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
   // 3Dの絵柄
@@ -1351,7 +1354,7 @@ function buildFurniturePicker(): void {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
       floorRetraceId = null;
-      if (activeTool !== "floor") activeTool = "room";
+      if (activeTool !== "floor") activeTool = drawMethod === "points" ? "floor" : "room";
       if (activeTool === "floor") updatePropertiesPanel();
       setActiveButton("[data-surface]", surface);
       setActiveButton("[data-tool]", activeTool);
@@ -2142,6 +2145,7 @@ function applySavedDisplaySettings(): void {
     penSettings.filled = filled === true;
     penSettings.kind = (PEN_KINDS as readonly string[]).includes(kind ?? "") ? kind as PenKind : "paint";
   }
+  drawMethod = viewState.drawMethod === "points" ? "points" : "trace";
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
       if (Object.prototype.hasOwnProperty.call(FURNITURE_DEFS, kind)) {
@@ -2226,6 +2230,7 @@ function saveViewState(): void {
   viewState.symbols = { ...lastSymbolByKind };
   viewState.ghost = { ...ghostSettings };
   viewState.pen = { ...penSettings };
+  viewState.drawMethod = drawMethod;
   viewState.shards = { ...shardSettings };
   viewState.look = { style: planStyle, dot: pixelDot, background: planBackground };
   try {
@@ -2430,7 +2435,7 @@ function handlePointerDown(event: PointerEvent): void {
   }
 
   const point = screenToWorld(event);
-  if (activeTool === "floor") {
+  if (isPointDrafting()) {
     event.preventDefault();
     planCanvas.setPointerCapture(event.pointerId);
     drag = { ...drag, pointerId: event.pointerId, dragMode: "none", startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, currentWorld: point, originEntity: null, resizeCorner: null, pressedId: undefined, pending: undefined, createdId: undefined, origins: undefined };
@@ -2730,11 +2735,13 @@ function toolAction(): [string, string] | null {
     case "polygon":
       return ["ドラッグで図形の壁を描く", click];
     case "furniture":
+      if (drawMethod === "points" && isTraceableKind(activeFurniture)) return [isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture) ? "クリックで点を打ち、最初の点で閉じる" : "クリックで点を打ち、Enter・ダブルクリックで描き終える", hold];
       if (isFreeShapeKind(activeFurniture)) return [isFreeAreaKind(activeFurniture) ? "ドラッグで囲んで形を作る（クリックで置く）" : "ドラッグでなぞって置く（クリックで置く）", hold];
       return [activeFurniture === "footprints" || activeFurniture === "brokenGlass" ? "なぞって置く" : "クリックで置く", hold];
     case "text":
       return ["クリックで文字を置く", hold];
     case "paint":
+      if (drawMethod === "points") return [penSettings.kind === "paint" && !penSettings.filled || (penSettings.kind !== "paint" && !isFreeAreaKind(penSettings.kind)) ? "クリックで点を打ち、Enter・ダブルクリックで描き終える" : "クリックで点を打ち、最初の点で閉じる", hold];
       return [penSettings.kind === "paint" ? "ドラッグで描く" : `ドラッグで${FURNITURE_DEFS[penSettings.kind].label}を描く`, hold];
     case "erase":
       return ["クリックで消す", hold];
@@ -2754,7 +2761,7 @@ function handlePointerMove(event: PointerEvent): void {
     penCursor = point;
     if (drag.dragMode === "none") renderPenCursor();
   }
-  if (activeTool === "floor") {
+  if (isPointDrafting()) {
     if (floorDraft) floorDraft.hover = draftFloorPoint(point, event.shiftKey);
     drag.currentWorld = point;
     render2d();
@@ -2862,7 +2869,7 @@ function handlePointerUp(event: PointerEvent): void {
   // 長押しになる前に離した（クリック）
   const clicked = !traced && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP;
   cancelLongPress();
-  if (activeTool === "floor" && drag.dragMode !== "pan") addDraftFloorPoint(screenToWorld(event), event.shiftKey);
+  if (isPointDrafting() && drag.dragMode !== "pan") addDraftFloorPoint(screenToWorld(event), event.shiftKey);
 
   // Ctrl+クリックは選ぶ物を足す・外す、Ctrl+ドラッグは囲んだ物を足す
   if (drag.dragMode === "marquee") {
@@ -2983,7 +2990,7 @@ function handlePointerUp(event: PointerEvent): void {
 }
 
 function handleDoubleClick(event: MouseEvent): void {
-  if (activeTool === "floor") { finishFloorDraft(); return; }
+  if (isPointDrafting()) { finishFloorDraft(); return; }
   if (event.ctrlKey || event.metaKey) return;
   const hit = hitTest(screenToWorld(event));
   if (!hit.entity) return;
@@ -3412,7 +3419,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT" || target?.tagName === "TEXTAREA" || Boolean(target?.isContentEditable);
   if (isEditing) return;
-  if (activeTool === "floor") {
+  if (isPointDrafting()) {
     if (event.key === "Enter") { event.preventDefault(); finishFloorDraft(); return; }
     if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "y" || (event.shiftKey && event.key.toLowerCase() === "z"))) { event.preventDefault(); redoFloorPoint(); return; }
     if (event.key === "Backspace" || event.key === "Delete" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z")) {
@@ -3775,8 +3782,22 @@ function floorHandles(room: Room): { key: string; x: number; y: number }[] {
   ];
 }
 
+// 点を打って描いているか（「線で囲んで床を作成」と、描き方を「囲って描く」にしたペン・なぞれる物）
+function isPointDrafting(): boolean {
+  return activeTool === "floor" || (drawMethod === "points" && (activeTool === "paint" || (activeTool === "furniture" && isTraceableKind(activeFurniture))));
+}
+
+// 点を打って描く物。閉じた形（床・池・塗りつぶすペンなど）は最初の点に戻って閉じ、線（川・小道・ペンの線・足跡など）は Enter かダブルクリックで終える
+function draftTarget(): { key: string; label: string; closed: boolean; min: number } {
+  if (activeTool === "floor") return { key: "floor", label: "床", closed: true, min: 3 };
+  const kind = activeTool === "paint" ? penSettings.kind : activeFurniture;
+  if (kind === "paint") return { key: penSettings.filled ? "paint-fill" : "paint", label: "ペン", closed: penSettings.filled, min: penSettings.filled ? 3 : 2 };
+  const closed = isFreeShapeKind(kind) && isFreeAreaKind(kind);
+  return { key: kind, label: FURNITURE_DEFS[kind].label, closed, min: closed ? 3 : 2 };
+}
+
 function syncFloorEditing(): void {
-  if (floorDraft && (activeTool !== "floor" || floorDraft.floorId !== activeFloor().id)) { floorDraft = null; floorEditError = ""; }
+  if (floorDraft && (!isPointDrafting() || floorDraft.floorId !== activeFloor().id || floorDraft.target !== draftTarget().key)) { floorDraft = null; floorEditError = ""; }
   const room = floorEdit ? findEntity(floorEdit.id) : null;
   if (floorEdit && (activeTool !== "select" || room?.type !== "room" || state.selectedId !== room.id || selectedEntities().length !== 1 || isLocked(room))) {
     floorEdit = null;
@@ -3797,11 +3818,16 @@ function draftFloorPoint(point: Point, orthogonal = false): Point {
 }
 
 function addDraftFloorPoint(point: Point, orthogonal: boolean): void {
-  floorDraft ??= { floorId: activeFloor().id, points: [], undone: [], hover: null };
+  const target = draftTarget();
+  floorDraft ??= { floorId: activeFloor().id, target: target.key, points: [], undone: [], hover: null };
   const points = floorDraft.points, first = points[0], last = points[points.length - 1];
-  if (points.length >= 3 && Math.hypot(point.x - first[0], point.y - first[1]) <= 14 / view.zoom) { finishFloorDraft(); return; }
+  if (target.closed && points.length >= 3 && Math.hypot(point.x - first[0], point.y - first[1]) <= 14 / view.zoom) { finishFloorDraft(); return; }
   const p = draftFloorPoint(point, orthogonal);
-  if (last && last[0] === p.x && last[1] === p.y) return;
+  // 線は、最後の点をもう一度押しても終える
+  if (last && last[0] === p.x && last[1] === p.y) {
+    if (!target.closed && points.length >= target.min) finishFloorDraft();
+    return;
+  }
   if (points.length >= MAX_FLOOR_VERTICES) { floorEditError = `頂点は${MAX_FLOOR_VERTICES}個までです`; syncFloorToolbar(); return; }
   points.push([p.x, p.y]);
   floorDraft.undone = [];
@@ -3827,9 +3853,14 @@ function redoFloorPoint(): void {
 }
 
 function finishFloorDraft(): void {
-  if (!floorDraft || floorDraft.points.length < 3) {
-    floorEditError = "床には3点以上必要です";
+  const target = draftTarget();
+  if (!floorDraft || floorDraft.points.length < target.min) {
+    floorEditError = `${target.label}には${target.min}点以上必要です`;
     syncFloorToolbar();
+    return;
+  }
+  if (activeTool !== "floor") {
+    finishShapeDraft();
     return;
   }
   const outline = outlineFromPoints(floorDraft.points);
@@ -3846,6 +3877,26 @@ function finishFloorDraft(): void {
   redrawAll();
 }
 
+// 点を打って描いたペンの線・自由な形・足跡・破片を置く（点と点のあいだはまっすぐ）。描くツールのまま続けて描ける
+function finishShapeDraft(): void {
+  if (!floorDraft) return;
+  const points = floorDraft.points.map(([x, y]): Point => ({ x, y }));
+  floorDraft = null;
+  floorEditError = "";
+  if (activeTool === "paint") {
+    const kind = penSettings.kind;
+    if (kind === "paint") placePaintStroke(points, true);
+    else {
+      placeFreeShapePath(kind, points, true);
+      state.selectedId = null;
+    }
+  } else if (activeFurniture === "footprints") placeFootprintPath(points);
+  else if (activeFurniture === "brokenGlass") placeShardPath(points);
+  else if (isFreeShapeKind(activeFurniture)) placeFreeShapePath(activeFurniture, points, true);
+  commitState();
+  redrawAll();
+}
+
 function syncFloorToolbar(): void {
   syncHistoryButtons();
   const pane = planCanvas.parentElement;
@@ -3856,7 +3907,8 @@ function syncFloorToolbar(): void {
     floorToolbar.id = "floorToolbar";
     pane.appendChild(floorToolbar);
   }
-  const drawing = activeTool === "floor";
+  const drawing = isPointDrafting();
+  const target = drawing ? draftTarget() : null;
   floorToolbar.hidden = !drawing && !floorEdit && !floorEditError;
   if (floorToolbar.hidden) return;
   floorToolbar.style.top = `${planCanvas.offsetTop + 10}px`;
@@ -3864,8 +3916,8 @@ function syncFloorToolbar(): void {
   const room = floorEdit ? findEntity(floorEdit.id) : state.selectedId ? findEntity(state.selectedId) : null;
   const count = drawing ? floorDraft?.points.length ?? 0 : room?.type === "room" ? floorPoints(room).length : 0;
   // ドラッグの描き直しでフォーカス中のボタンを取り替えない。
-  const html = `<div class="floor-toolbar-row"><strong>${drawing ? "床の作図" : "床の輪郭"}</strong><span>${count}点</span>${drawing
-    ? button("floorDraftUndo", "undo-2", "1点戻す（Backspace）", count === 0) + button("floorDraftRedo", "redo-2", "頂点をやり直す（Ctrl+Y）", !floorDraft?.undone.length) + button("floorDraftFinish", "check", "閉じて床を作成（Enter）", count < 3) + button("floorDraftCancel", "x", "作図を中止（Esc）")
+  const html = `<div class="floor-toolbar-row"><strong>${target ? `${target.label}の作図` : "床の輪郭"}</strong><span>${count}点</span>${target
+    ? button("floorDraftUndo", "undo-2", "1点戻す（Backspace）", count === 0) + button("floorDraftRedo", "redo-2", "頂点をやり直す（Ctrl+Y）", !floorDraft?.undone.length) + button("floorDraftFinish", "check", target.closed ? `閉じて${target.label}を作る（Enter）` : `${target.label}を描き終える（Enter・ダブルクリック）`, count < target.min) + button("floorDraftCancel", "x", "作図を中止（Esc）")
     : (floorEdit ? button("floorPointDelete", "minus", "選択した頂点を削除（Delete）", count <= 3 || floorEdit.vertex === null) + button("floorEditDone", "check", "輪郭の編集を完了（Esc）") : button("floorErrorClose", "x", "閉じる"))}</div>${floorEditError ? `<div class="floor-error" role="alert">${escapeHtml(floorEditError)}</div>` : ""}`;
   if (floorToolbar.dataset.markup === html) return;
   floorToolbar.dataset.markup = html;
@@ -3874,7 +3926,10 @@ function syncFloorToolbar(): void {
   floorToolbar.querySelector("#floorDraftRedo")?.addEventListener("click", redoFloorPoint);
   floorToolbar.querySelector("#floorDraftFinish")?.addEventListener("click", finishFloorDraft);
   floorToolbar.querySelector("#floorDraftCancel")?.addEventListener("click", () => {
-    floorDraft = null; floorEditError = ""; activeTool = "select"; setActiveButton("[data-tool]", activeTool); syncPlanCursor(); redrawAll(false);
+    floorDraft = null; floorEditError = "";
+    // 床の作図はツールごとやめる。ペンなどは、打った点だけを捨てて続けて描ける
+    if (activeTool === "floor") { activeTool = "select"; setActiveButton("[data-tool]", activeTool); }
+    syncPlanCursor(); redrawAll(false);
   });
   floorToolbar.querySelector("#floorPointDelete")?.addEventListener("click", removeFloorVertex);
   floorToolbar.querySelector("#floorEditDone")?.addEventListener("click", () => { floorEdit = null; floorEditError = ""; redrawAll(false); });
@@ -4550,7 +4605,7 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
     const selectedFloor = activeEntities().find(entity => entity.id === state.selectedId);
     if (selectedFloor?.type === "room" && !isLocked(selectedFloor)) drawResizeHandles(selectedFloor);
     if (selectedFloor?.type === "shape" && !isLocked(selectedFloor)) drawShapeHandle(selectedFloor);
-    if (activeTool === "floor" && floorDraft) drawFloorDraft();
+    if (isPointDrafting() && floorDraft) drawFloorDraft();
     drawMarquee();
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
@@ -6564,8 +6619,9 @@ function tidyPaintPath(points: Point[]): Point2[] {
   return simplifyPath(smooth, 0.5);
 }
 
-function placePaintStroke(points: Point[]): void {
-  const path = tidyPaintPath(points);
+// exact: 点を打って描いた線（点と点のあいだをまっすぐのまま、なめらかにしない）
+function placePaintStroke(points: Point[], exact = false): void {
+  const path = exact ? points.map((point): Point2 => [point.x, point.y]) : tidyPaintPath(points);
   if (!path.length) return;
   const brush = penSettings.brush;
   const filled = penSettings.filled && path.length >= 3 && pathLength(path) > brush;
@@ -6588,10 +6644,10 @@ function refitPaint(item: Furniture): void {
   item.y = roundTenth(center.y - frame.h / 2);
 }
 
-// なぞっている間の見本: いまのペンの色・太さで描く
-function drawPaintPreview(points: Point[]): void {
-  if (deferOverlay(() => drawPaintPreview(points))) return;
-  const path = tidyPaintPath(points);
+// なぞっている間の見本: いまのペンの色・太さで描く（exact: 点を打って描いている線は、打った点のまま）
+function drawPaintPreview(points: Point[], exact = false): void {
+  if (deferOverlay(() => drawPaintPreview(points, exact))) return;
+  const path = exact ? points.map((point): Point2 => [point.x, point.y]) : tidyPaintPath(points);
   if (!path.length) return;
   const parsed = parseColorCode(penSettings.color);
   const filled = penSettings.filled && path.length >= 3;
@@ -6703,6 +6759,30 @@ function penControlsHtml(prefix: string, color: string, brush: number, filled: b
       <button type="button" data-pen-mode="line" class="${filled ? "" : "is-active"}" aria-checked="${!filled}" role="radio" ${disabled}>線で描く</button>
       <button type="button" data-pen-mode="fill" class="${filled ? "is-active" : ""}" aria-checked="${filled}" role="radio" ${disabled}>囲んで塗る</button>
     </div>`;
+}
+
+// 描き方を選ぶ欄（ペンでなぞる・点を打って囲う）。床は「部屋」と「線で囲んで床を作成」を切り替える
+function drawMethodHtml(): string {
+  const method = activeTool === "floor" ? "points" : activeTool === "room" ? "trace" : drawMethod;
+  const item = (value: "trace" | "points", label: string) => `<button type="button" role="radio" data-draw-method="${value}" class="${method === value ? "is-active" : ""}" aria-checked="${method === value}">${label}</button>`;
+  return `<label>描き方</label>
+    <div class="segmented pen-mode draw-method" role="radiogroup" aria-label="描き方">${item("trace", "ペンで描く")}${item("points", "囲って描く")}</div>`;
+}
+
+function bindDrawMethod(): void {
+  propertiesPanel.querySelectorAll<HTMLButtonElement>("[data-draw-method]").forEach((button) => button.addEventListener("click", () => {
+    drawMethod = button.dataset.drawMethod === "points" ? "points" : "trace";
+    floorDraft = null;
+    floorEditError = "";
+    if (activeTool === "room" && drawMethod === "points") activeTool = "floor";
+    else if (activeTool === "floor" && drawMethod === "trace") activeTool = "room";
+    setActiveButton("[data-tool]", activeTool);
+    scheduleViewStateSave();
+    syncPlanCursor();
+    updatePropertiesPanel();
+    syncToolHint();
+    render2d();
+  }));
 }
 
 // ペンで描く物を選ぶ欄（ペンの線と、なぞって描ける自由な形）
@@ -7084,11 +7164,12 @@ function freeBandWidth(kind: FreeKind, brush?: number): number {
   return kind === "railway" ? 300 : kind === "river" ? freeLineWidth(line, brush) + 28 : kind === "pathway" ? freeLineWidth(line, brush) + 8 : Math.max(freeLineWidth(line, brush), 12);
 }
 
-// なぞり終えたとき。短ければ（クリック）いつもの形で置き、長ければ、なぞった形で作る（または「なぞり直す」の物を描き直す）
-function placeFreeShapePath(kind: FreeKind, points: Point[]): Furniture | null {
+// なぞり終えたとき。短ければ（クリック）いつもの形で置き、長ければ、なぞった形で作る（または「なぞり直す」の物を描き直す）。
+// exact: 点を打って描いた形（打った点をそのまま使い、なめらかにしない）
+function placeFreeShapePath(kind: FreeKind, points: Point[], exact = false): Furniture | null {
   const redraw = pathRedrawTarget(kind);
   pathRedrawId = null;
-  const path = tidyPath(points);
+  const path = exact ? points.map((point): Point2 => [point.x, point.y]) : tidyPath(points);
   const area = isFreeAreaKind(kind);
   if (path.length < (area ? 3 : 2) || pathLength(path) < (area ? 60 : 30)) {
     if (redraw) return null;
@@ -7117,10 +7198,10 @@ function placeFreeShapePath(kind: FreeKind, points: Point[]): Furniture | null {
   return item;
 }
 
-// なぞっている間の見本: 離したときにできる形を、うすく描く
-function drawFreeShapePreview(kind: FreeKind, points: Point[]): void {
-  if (deferOverlay(() => drawFreeShapePreview(kind, points))) return;
-  const path = tidyPath(points);
+// なぞっている間の見本: 離したときにできる形を、うすく描く（exact: 点を打って描いている形は、打った点のまま）
+function drawFreeShapePreview(kind: FreeKind, points: Point[], exact = false): void {
+  if (deferOverlay(() => drawFreeShapePreview(kind, points, exact))) return;
+  const path = exact ? points.map((point): Point2 => [point.x, point.y]) : tidyPath(points);
   ctx.save();
   ctx.strokeStyle = "rgba(39, 117, 209, 0.55)";
   ctx.lineWidth = 1.5 / view.zoom;
@@ -8355,8 +8436,17 @@ function drawSizeBadge(x: number, y: number, text: string): void {
 function drawFloorDraft(): void {
   if (!floorDraft?.points.length) return;
   if (deferOverlay(drawFloorDraft)) return;
+  const target = draftTarget();
   const points = floorDraft.points, hover = floorDraft.hover;
-  const closing = points.length >= 3 && hover && Math.hypot(hover.x - points[0][0], hover.y - points[0][1]) <= 14 / view.zoom;
+  const closing = target.closed && points.length >= 3 && hover && Math.hypot(hover.x - points[0][0], hover.y - points[0][1]) <= 14 / view.zoom;
+  if (activeTool !== "floor") {
+    const path = [...points.map(([x, y]): Point => ({ x, y })), ...(hover && !closing ? [hover] : [])];
+    if (activeTool === "paint" && penSettings.kind === "paint") drawPaintPreview(path, true);
+    else {
+      const kind = activeTool === "paint" ? penSettings.kind : activeFurniture;
+      if (kind !== "paint" && isFreeShapeKind(kind)) drawFreeShapePreview(kind, path, true);
+    }
+  }
   ctx.save();
   ctx.lineWidth = 2 / view.zoom;
   ctx.strokeStyle = "#2775d1";
@@ -8364,9 +8454,12 @@ function drawFloorDraft(): void {
   ctx.beginPath();
   points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
   if (hover) ctx.lineTo(closing ? points[0][0] : hover.x, closing ? points[0][1] : hover.y);
-  ctx.fill(); ctx.stroke();
-  ctx.setLineDash([5 / view.zoom, 5 / view.zoom]);
-  ctx.lineTo(points[0][0], points[0][1]); ctx.stroke(); ctx.setLineDash([]);
+  if (target.closed) ctx.fill();
+  ctx.stroke();
+  if (target.closed) {
+    ctx.setLineDash([5 / view.zoom, 5 / view.zoom]);
+    ctx.lineTo(points[0][0], points[0][1]); ctx.stroke(); ctx.setLineDash([]);
+  }
   points.forEach(([x, y], i) => {
     ctx.beginPath(); ctx.arc(x, y, (i === 0 ? 7 : 4) / view.zoom, 0, Math.PI * 2);
     ctx.fillStyle = i === 0 && closing ? "#2775d1" : "#ffffff"; ctx.fill(); ctx.stroke();
@@ -9462,8 +9555,8 @@ function updateUi(): void {
 }
 
 function syncHistoryButtons(): void {
-  document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", activeTool === "floor" ? !floorDraft?.points.length : historyIndex <= 0);
-  document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", activeTool === "floor" ? !floorDraft?.undone.length : historyIndex >= history.length - 1);
+  document.querySelector<HTMLButtonElement>("#undoButton")?.toggleAttribute("disabled", isPointDrafting() && floorDraft ? !floorDraft.points.length : activeTool === "floor" ? true : historyIndex <= 0);
+  document.querySelector<HTMLButtonElement>("#redoButton")?.toggleAttribute("disabled", isPointDrafting() && floorDraft ? !floorDraft.undone.length : activeTool === "floor" ? true : historyIndex >= history.length - 1);
 }
 
 function updateStats(): void {
@@ -9487,9 +9580,17 @@ function describeSelection(entities: Entity[]): string {
     .filter(([, count]) => count > 0).map(([name, count]) => `${name} ${count}`).join("・");
 }
 
+// 点を打って描くときの案内
+function drawPointsHint(label: string, closed: boolean): string {
+  return closed
+    ? `${label}: 2Dをクリックして点を打ち、最初の点を押すと閉じて${label}になります（Enter でも閉じます。Backspace で1点戻す）。`
+    : `${label}: 2Dをクリックして点を打ち、Enter かダブルクリックで描き終えます（Backspace で1点戻す）。`;
+}
+
 function updatePropertiesPanel(): void {
   if (activeTool === "floor") {
-    propertiesPanel.innerHTML = `<div class="property-grid">${surfacePickerHtml("draftSurfacePicker", activeRoomSurface)}</div>`;
+    propertiesPanel.innerHTML = `<div class="property-grid"><p class="empty-state">${drawPointsHint("床", true)}</p>${drawMethodHtml()}${surfacePickerHtml("draftSurfacePicker", activeRoomSurface)}</div>`;
+    bindDrawMethod();
     bindSurfacePicker("#draftSurfacePicker", (value) => {
       activeRoomSurface = value;
       syncPlanCursor();
@@ -9538,11 +9639,33 @@ function updatePropertiesPanel(): void {
         ? `ペンで${FURNITURE_DEFS[kind].label}: 2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。`
         : `ペンで${FURNITURE_DEFS[kind].label}: 2Dをなぞると、その道すじに沿って描けます（クリックだけなら、まっすぐ）。`;
     propertiesPanel.innerHTML = `<div class="property-grid">
-        <p class="empty-state">${hint}</p>
+        <p class="empty-state">${drawMethod === "points" ? drawPointsHint(kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label, kind === "paint" ? penSettings.filled : isFreeAreaKind(kind)) : hint}</p>
+        ${drawMethodHtml()}
         ${penKindHtml()}
         ${kind === "paint" ? penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled) : penShapeWidthHtml(kind)}
       </div>`;
     bindPenControls();
+    bindDrawMethod();
+    return;
+  }
+  // 床（部屋のツール）と、なぞれる物（池・川・足跡など）を置くとき: 描き方を選べる
+  if (!selected && (activeTool === "room" || (activeTool === "furniture" && isTraceableKind(activeFurniture)))) {
+    const label = activeTool === "room" ? "床" : FURNITURE_DEFS[activeFurniture].label;
+    const area = activeTool === "room" || (isFreeShapeKind(activeFurniture) && isFreeAreaKind(activeFurniture));
+    const hint = activeTool === "room"
+      ? "床: 2Dを斜めにドラッグすると四角、ぐるっとなぞるとその形の床になります。"
+      : drawMethod === "points" ? drawPointsHint(label, area) : `${label}: ${area ? "2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。" : "2Dをなぞると、その道すじに沿って置けます（クリックだけなら、まっすぐ）。"}`;
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        <p class="empty-state">${hint}</p>
+        ${drawMethodHtml()}
+        ${activeTool === "room" ? surfacePickerHtml("roomToolSurfacePicker", activeRoomSurface) : ""}
+      </div>`;
+    bindDrawMethod();
+    bindSurfacePicker("#roomToolSurfacePicker", (value) => {
+      activeRoomSurface = value;
+      syncPlanCursor();
+      updatePropertiesPanel();
+    });
     return;
   }
   if (!selected) {
@@ -10148,7 +10271,7 @@ function replaceState(next: PlanState, pushHistory: boolean): void {
 }
 
 function undo(): void {
-  if (activeTool === "floor") { undoFloorPoint(); return; }
+  if (activeTool === "floor" || (isPointDrafting() && floorDraft?.points.length)) { undoFloorPoint(); return; }
   if (historyIndex <= 0) return;
   const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex -= 1;
@@ -10159,7 +10282,7 @@ function undo(): void {
 }
 
 function redo(): void {
-  if (activeTool === "floor") { redoFloorPoint(); return; }
+  if (activeTool === "floor" || (isPointDrafting() && floorDraft?.undone.length)) { redoFloorPoint(); return; }
   if (historyIndex >= history.length - 1) return;
   const ids = selectedEntities().map((item) => item.id), floorId = activeFloor().id;
   historyIndex += 1;

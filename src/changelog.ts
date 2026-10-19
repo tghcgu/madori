@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "床・地面、ペン、池・川・小道などの自由な形、足跡・破片のどれも、描き方を「ペンで描く」（なぞる）か「囲って描く」（クリックで点を打つ）から選べるように。囲って描くと、点と点のあいだはまっすぐになり、閉じる形は最初の点を押すと、線は Enter かダブルクリックで描き終えます",
+      en: "Floors and ground, the pen, free shapes such as ponds, rivers and paths, footprints and shards can all be drawn either by tracing (ペンで描く) or by clicking points (囲って描く). With clicked points the edges are straight; closed shapes finish when you click the first point, and lines finish with Enter or a double-click",
+    }, {
       ja: "3Dの移動モード（3Dの欄の十字の矢印のボタン）を直しました。1回押せば入り、何も選んでいなくても使えます。押した物（床・壁・ドア・窓・屋根・家具など）を、そのままドラッグで動かせます。もう一度押すか Esc で終わります",
       en: "Fixed the 3D move mode (the cross-arrows button in the 3D bar): one press turns it on, even with nothing selected, and you can drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Esc to finish",
     }, {

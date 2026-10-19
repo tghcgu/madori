@@ -169,7 +169,40 @@ export async function verifyFreeShapes({ open, plan, output }) {
     await page.locator('.tool-button[data-tool="paint"]').click();
     assert.equal(await page.locator('[data-pen-kind="pond"]').getAttribute('aria-checked'), 'true', 'the pen remembers what it draws');
     await page.locator('[data-pen-kind="paint"]').click();
-    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and ponds');
+    // 描き方「囲って描く」: クリックで点を打って描く。線は Enter で終え、閉じた形は最初の点で閉じる。点と点のあいだはまっすぐ
+    await page.locator('[data-pen-kind="river"]').click();
+    await page.locator('[data-draw-method="points"]').click();
+    assert.equal(await page.locator('[data-draw-method="points"]').getAttribute('aria-checked'), 'true');
+    assert.match(await page.locator('#toolHint').textContent(), /クリックで点を打ち/);
+    const clickAt = async (x, y) => { const at = await point(x, y); await page.mouse.click(at.x, at.y); await page.waitForTimeout(80); };
+    const riverTotal = (await rivers()).length;
+    for (const [x, y] of [[200, 600], [500, 520], [800, 600]]) await clickAt(x, y);
+    assert.match(await page.locator('#floorToolbar').textContent(), /川の作図/);
+    assert.match(await page.locator('#floorToolbar').textContent(), /3点/);
+    await page.keyboard.press('Enter');
+    assert.equal((await rivers()).length, riverTotal + 1, 'the river is drawn through the clicked points');
+    assert.equal((await rivers()).at(-1).path.length, 3, 'the river follows the three clicked points');
+    await page.locator('[data-pen-kind="pond"]').click();
+    const ponds = async () => (await items()).filter(item => item.kind === 'pond');
+    const pondTotal = (await ponds()).length;
+    for (const [x, y] of [[900, 420], [1100, 420], [1100, 560], [900, 560], [900, 420]]) await clickAt(x, y);
+    assert.equal((await ponds()).length, pondTotal + 1, 'clicking the first point again closes the pond');
+    assert.equal((await ponds()).at(-1).path.length, 4);
+    await page.locator('[data-pen-kind="paint"]').click();
+    const strokes = async () => (await items()).filter(item => item.kind === 'paint');
+    const strokeTotal = (await strokes()).length;
+    for (const [x, y] of [[100, 100], [300, 100], [300, 250]]) await clickAt(x, y);
+    await page.keyboard.press('Enter');
+    assert.equal((await strokes()).length, strokeTotal + 1);
+    assert.equal((await strokes()).at(-1).path.length, 3, 'the pen line keeps its corners');
+    // 床: 部屋のツールで「囲って描く」を選ぶと「線で囲んで床を作成」、「ペンで描く」で部屋のツールに戻る
+    await page.locator('.tool-button[data-tool="room"]').click();
+    assert.equal(await page.locator('[data-draw-method="trace"]').getAttribute('aria-checked'), 'true');
+    await page.locator('[data-draw-method="points"]').click();
+    assert.equal(await page.locator('.tool-button[data-tool="floor"]').getAttribute('aria-pressed'), 'true', 'enclosing floors uses the floor drawing tool');
+    await page.locator('[data-draw-method="trace"]').click();
+    assert.equal(await page.locator('.tool-button[data-tool="room"]').getAttribute('aria-pressed'), 'true', 'tracing floors uses the room tool');
+    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and ponds; every shape can be drawn by tracing or by clicking points');
   } finally {
     await page.context().close();
   }

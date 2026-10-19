@@ -1192,7 +1192,8 @@ select:focus-visible {
 }
 
 .pen-kinds button.is-active,
-.pen-mode button.is-active {
+.pen-mode button.is-active,
+.draw-method button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
   color: #145da8;
