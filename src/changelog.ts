@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "ペンで川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも描けるように。ペンの欄の「描く物」で選びます。川・小道・生け垣・石垣は幅も決められ、描いたあともペンのまま続けて描けます",
+      en: "The pen can also draw rivers, paths, hedges, stone walls, fences, bamboo fences, railways, stepping stones, ponds, flower beds, lawns and rugs: choose one under 描く物 (what to draw) in the pen settings. Rivers, paths, hedges and stone walls have a width setting, and the pen stays ready to keep drawing",
+    }, {
       ja: "ペンの太さが分かるように。描く前から、マウスの所にペン先の大きさの丸が出ます。太さを変えている間は、2Dの真ん中に同じ丸が出ます",
       en: "The pen shows its width: a circle the size of the pen tip follows the mouse before you draw, and appears in the middle of the plan while you change the width",
     }, {

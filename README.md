@@ -93,7 +93,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 3Dを真上から見た形は、2Dの記号と同じになるように作っています。岩の輪郭と稜線、池の輪郭と石の位置、飛び石・花壇の花の並び、木目、ラグの柄、植物の葉の向きなどは、2Dと3Dが同じデータから作られます（冷蔵庫の雪の結晶や靴箱の靴のように、見分けるための図柄は2Dだけに描きます）
 - 部屋名を本文とは別にドラッグして自由配置
 - 部屋名の「文字サイズ cm」を変更できます（空欄で自動）。部屋名と自由テキストは「横書き」「縦書き」を切り替えられ、縦書きの改行は右から左へ列を増やします。保存・Undo/Redo・PNGにも反映されます
-- 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。描く前から、マウスの所にペン先の大きさの丸が出るので、太さが分かります（太さを変えている間は、2Dの真ん中に同じ丸が出ます）。ペンの色や太さはブラウザに記憶されます
+- 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。描く前から、マウスの所にペン先の大きさの丸が出るので、太さが分かります（太さを変えている間は、2Dの真ん中に同じ丸が出ます）。ペンの欄の「描く物」で、川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも選べ、なぞった形で描けます（川・小道・生け垣・石垣は幅も決められます）。ペンの色や太さ、描く物はブラウザに記憶されます
 - 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定。見本から選ぶほか、カラーコード（`#RRGGBB`）を直接入力できます。末尾に2桁足した`#RRGGBBAA`では透明度も決められ（`00`で透明〜`ff`で不透明。例: `#2775d180`で半分透ける）、2Dでは同じ色の要素をまとめて1回で透かすので重なった所や壁の角も同じ濃さ、3Dでは床・壁・建具・家具がまるごと透けます（透けている物は影を落としません）。見本では透明度が市松模様で分かり、見本で色を選び直しても透明度はそのまま。カラーコードを空にすると標準の色に戻ります
@@ -799,6 +799,7 @@ npm.cmd run dev
 
 ### 2026年10月19日
 
+- ペンで川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも描けるように。ペンの欄の「描く物」で選びます。川・小道・生け垣・石垣は幅も決められ、描いたあともペンのまま続けて描けます
 - ペンの太さが分かるように。描く前から、マウスの所にペン先の大きさの丸が出ます。太さを変えている間は、2Dの真ん中に同じ丸が出ます
 - 床・地面の素材と部屋を、なぞって好きな形にできるように。2Dをぐるっとなぞると、その形の床になります（これまでどおり、斜めにドラッグすると四角）
 - なぞって形を決められる物が分かるように。一覧のボタンに波線の印を付け、ペン・池・川・小道・足跡などを「なぞって形を決める」の欄にまとめました
@@ -1110,7 +1111,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Drag room labels independently from room geometry
 - Choose a different design for furniture from the thumbnails under Selection (43 types, including chairs, sofas, beds, tables, fridges, washers, toilets, plants, rugs, rocks, garden lights, flower beds, fences, stools, numbered markers, footprints, the fallen person, and blood; the plant's "spiral leaves" design keeps the previous standard 3D shape). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked. Designs marked "2D symbol only" (such as the hatched closet) keep the standard 3D model
 - Seen from directly above, each 3D model matches its 2D symbol. Rock outlines and ridges, pond outlines and rim stones, stepping stone and flower layouts, wood grain, rug patterns, and plant leaf directions are generated from the same data for 2D and 3D (identifying marks such as the fridge snowflake or the shoes on the shoe cabinet appear only in 2D)
-- Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. A circle the size of the pen tip follows the mouse before you draw, so you can see the width (while you change the width, the same circle appears in the middle of the plan). The pen settings are remembered in the browser.
+- Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. A circle the size of the pen tip follows the mouse before you draw, so you can see the width (while you change the width, the same circle appears in the middle of the plan). Under 描く物 (what to draw) in the pen settings you can also choose a river, path, hedge, stone wall, fence, bamboo fence, railway, stepping stones, pond, flower bed, lawn or rug and draw it in the traced shape (rivers, paths, hedges and stone walls have a width setting). The pen color, width and what it draws are remembered in the browser.
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
@@ -1794,6 +1795,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-19
 
+- The pen can also draw rivers, paths, hedges, stone walls, fences, bamboo fences, railways, stepping stones, ponds, flower beds, lawns and rugs: choose one under 描く物 (what to draw) in the pen settings. Rivers, paths, hedges and stone walls have a width setting, and the pen stays ready to keep drawing
 - The pen shows its width: a circle the size of the pen tip follows the mouse before you draw, and appears in the middle of the plan while you change the width
 - Floors, ground and rooms can take any shape: trace around an area on the 2D plan to make a floor of that shape (a diagonal drag still makes a rectangle)
 - Items whose shape you can trace are easy to find: their buttons carry a wave mark, and the pen, ponds, rivers, paths, footprints and more are gathered in a new trace group

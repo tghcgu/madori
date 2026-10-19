@@ -581,7 +581,10 @@ let threeRefreshQueued = false;
 // ペンの色・太さ・描き方（見ていた場所などと一緒にブラウザへ保存）
 const PEN_DEFAULT_COLOR = "#9b1c17";
 const DEFAULT_BRUSH = 15;
-const penSettings: { color: string; brush: number; filled: boolean } = { color: PEN_DEFAULT_COLOR, brush: DEFAULT_BRUSH, filled: false };
+// ペンで描く物。ペンの線のほかに、川・小道・池などの自由な形もペンでなぞって描ける（「描く物」の欄の並び）
+const PEN_KINDS = ["paint", "river", "pathway", "hedge", "stoneWall", "fence", "takegaki", "railway", "steppingStones", "pond", "flowerBed", "lawn", "rug"] as const;
+type PenKind = (typeof PEN_KINDS)[number];
+const penSettings: { color: string; brush: number; filled: boolean; kind: PenKind } = { color: PEN_DEFAULT_COLOR, brush: DEFAULT_BRUSH, filled: false, kind: "paint" };
 const MAX_BRUSH = 300;
 // ペン先の見本（いまの太さ・色の丸）。マウスを乗せている間と描いている間はペン先に、太さを変えている間は少しのあいだ画面の真ん中に出す
 let penCursor: Point | null = null;
@@ -772,7 +775,7 @@ interface SavedViewState {
   imageExport?: { floors?: string; grid?: boolean; names?: boolean };
   // 「組み合わせ」の置き方
   combine?: string;
-  pen?: { color?: string; brush?: number; filled?: boolean };
+  pen?: { color?: string; brush?: number; filled?: boolean; kind?: string };
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
   // 3Dの絵柄
@@ -2118,10 +2121,11 @@ function applySavedDisplaySettings(): void {
     if (SHARD_DENSITIES.some(([value]) => value === density)) shardSettings.density = density as number;
   }
   if (viewState.pen && typeof viewState.pen === "object") {
-    const { color, brush, filled } = viewState.pen;
+    const { color, brush, filled, kind } = viewState.pen;
     penSettings.color = parseColorCode(color)?.code ?? PEN_DEFAULT_COLOR;
     if (typeof brush === "number" && Number.isFinite(brush)) penSettings.brush = clamp(Math.round(brush), 1, MAX_BRUSH);
     penSettings.filled = filled === true;
+    penSettings.kind = (PEN_KINDS as readonly string[]).includes(kind ?? "") ? kind as PenKind : "paint";
   }
   if (viewState.symbols && typeof viewState.symbols === "object") {
     for (const [kind, symbol] of Object.entries(viewState.symbols)) {
@@ -2715,7 +2719,7 @@ function toolAction(): [string, string] | null {
     case "text":
       return ["クリックで文字を置く", hold];
     case "paint":
-      return ["ドラッグで描く", hold];
+      return [penSettings.kind === "paint" ? "ドラッグで描く" : `ドラッグで${FURNITURE_DEFS[penSettings.kind].label}を描く`, hold];
     case "erase":
       return ["クリックで消す", hold];
   }
@@ -2907,7 +2911,15 @@ function handlePointerUp(event: PointerEvent): void {
   // クリックで置いた自由な形（続けてもう1回押したら、取り消してそこにある物を選ぶ）
   let pathCreatedId: string | undefined;
   if (drag.dragMode === "path" && drag.path) {
-    if (activeTool === "paint") placePaintStroke(drag.path);
+    if (activeTool === "paint") {
+      const kind = penSettings.kind;
+      if (kind === "paint") placePaintStroke(drag.path);
+      else {
+        // ペンで描いた川・小道など。ペンのまま続けて描けるよう、選ばない
+        placeFreeShapePath(kind, drag.path);
+        state.selectedId = null;
+      }
+    }
     else if (activeFurniture === "brokenGlass") placeShardPath(drag.path);
     else if (isFreeShapeKind(activeFurniture)) {
       const created = placeFreeShapePath(activeFurniture, drag.path);
@@ -4468,7 +4480,11 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
     entities.filter(isLocked).forEach(drawLockedIndicator);
     if (roofsOn2d()) state.roofs.filter(isLocked).forEach(drawLockedIndicator);
     if (drag.dragMode === "path" && drag.path) {
-      if (activeTool === "paint") drawPaintPreview(drag.path);
+      if (activeTool === "paint") {
+        const kind = penSettings.kind;
+        if (kind === "paint") drawPaintPreview(drag.path);
+        else drawFreeShapePreview(kind, drag.path);
+      }
       else if (activeFurniture === "brokenGlass") drawShardPreview(drag.path);
       else if (isFreeShapeKind(activeFurniture)) drawFreeShapePreview(activeFurniture, drag.path);
       else drawFootprintPreview(drag.path);
@@ -6514,12 +6530,14 @@ function drawPaintPreview(points: Point[]): void {
 // ペン先の丸: いまのペンの太さの円を、色を薄く塗って描く。白と黒の二重の縁で、どんな床の上でも見えるようにする
 function drawPenCursor(point: Point): void {
   if (deferOverlay(() => drawPenCursor(point))) return;
-  const parsed = parseColorCode(penSettings.color);
+  const kind = penSettings.kind;
+  const parsed = kind === "paint" ? parseColorCode(penSettings.color) : null;
+  const width = kind === "paint" ? penSettings.brush : isFreeAreaKind(kind) ? 0 : freeBandWidth(kind, freeWidthByKind[kind]);
   ctx.save();
   ctx.beginPath();
-  ctx.arc(point.x, point.y, Math.max(penSettings.brush / 2, 2 / view.zoom), 0, Math.PI * 2);
-  ctx.fillStyle = parsed?.rgb ?? PEN_DEFAULT_COLOR;
-  ctx.globalAlpha = 0.35 * (parsed?.alpha ?? 1);
+  ctx.arc(point.x, point.y, Math.max(width / 2, 2 / view.zoom), 0, Math.PI * 2);
+  ctx.fillStyle = kind === "paint" ? parsed?.rgb ?? PEN_DEFAULT_COLOR : "#2775d1";
+  ctx.globalAlpha = (kind === "paint" ? 0.35 : 0.2) * (parsed?.alpha ?? 1);
   ctx.fill();
   ctx.globalAlpha = 1;
   ctx.lineWidth = 3 / view.zoom;
@@ -6612,6 +6630,28 @@ function penControlsHtml(prefix: string, color: string, brush: number, filled: b
     </div>`;
 }
 
+// ペンで描く物を選ぶ欄（ペンの線と、なぞって描ける自由な形）
+function penKindHtml(): string {
+  return `<label>描く物</label>
+    <div class="segmented pen-kinds" role="radiogroup" aria-label="描く物">${PEN_KINDS.map((kind) => {
+      const active = penSettings.kind === kind;
+      return `<button type="button" role="radio" data-pen-kind="${kind}" class="${active ? "is-active" : ""}" aria-checked="${active}">${kind === "paint" ? "ペン" : FURNITURE_DEFS[kind].label}</button>`;
+    }).join("")}</div>`;
+}
+
+// 自由な形をペンで描くときの幅（川・小道・生け垣・石垣）。一覧から置くときと同じ「最後に使った幅」を使う
+function penShapeWidthHtml(kind: FreeKind): string {
+  if (isFreeAreaKind(kind)) return "";
+  if (!isFreeWidthAdjustable(kind)) return `<p class="pose-hint">${FURNITURE_DEFS[kind].label}の幅は決まっています。</p>`;
+  const width = freeLineWidth(kind as Parameters<typeof freeLineWidth>[0], freeWidthByKind[kind]);
+  return `<label>幅 cm
+      <span class="pen-width">
+        <input id="penShapeWidthRange" type="range" min="${FREE_WIDTH_RANGE.min}" max="600" step="10" value="${Math.min(600, width)}" aria-label="幅" />
+        <input id="penShapeWidthInput" type="number" min="${FREE_WIDTH_RANGE.min}" max="${FREE_WIDTH_RANGE.max}" step="10" value="${width}" />
+      </span>
+    </label>`;
+}
+
 // ペンの設定（まだ描いていない線の色・太さ）。履歴には積まない
 function bindPenControls(): void {
   const panel = propertiesPanel;
@@ -6655,6 +6695,26 @@ function bindPenControls(): void {
     penSettings.filled = button.dataset.penMode === "fill";
     remember();
   }));
+  panel.querySelectorAll<HTMLButtonElement>("[data-pen-kind]").forEach((button) => button.addEventListener("click", () => {
+    penSettings.kind = button.dataset.penKind as PenKind;
+    remember();
+    syncToolHint();
+  }));
+  // 自由な形の幅は、一覧から置くときと同じ「最後に使った幅」に入れる
+  const shapeRange = panel.querySelector<HTMLInputElement>("#penShapeWidthRange"), shapeNumber = panel.querySelector<HTMLInputElement>("#penShapeWidthInput");
+  const setShapeWidth = (value: number) => {
+    if (penSettings.kind === "paint" || !Number.isFinite(value)) return;
+    freeWidthByKind[penSettings.kind] = clamp(Math.round(value), FREE_WIDTH_RANGE.min, FREE_WIDTH_RANGE.max);
+    previewPenSize();
+  };
+  shapeRange?.addEventListener("input", () => {
+    setShapeWidth(Number(shapeRange.value));
+    if (shapeNumber && penSettings.kind !== "paint") shapeNumber.value = String(freeWidthByKind[penSettings.kind]);
+  });
+  shapeNumber?.addEventListener("change", () => {
+    setShapeWidth(Number(shapeNumber.value));
+    if (shapeRange && penSettings.kind !== "paint") shapeRange.value = String(Math.min(600, freeWidthByKind[penSettings.kind] ?? 0));
+  });
 }
 
 // 選んだ線の色・太さ・描き方を変える（履歴に積む）
@@ -6939,8 +6999,14 @@ function isPointOnFreeShape(item: Furniture, point: Point, reach = 6 / view.zoom
     const outline = freeOutline(points);
     return pointInFreePolygon(x, y, outline) || distanceToFreeLine(x, y, outline, true) <= reach + (kind === "pond" ? 18 : 4);
   }
-  const width = kind === "railway" ? 300 : kind === "river" ? freeLineWidth(kind, item.brush) + 28 : kind === "pathway" ? freeLineWidth(kind, item.brush) + 8 : Math.max(freeLineWidth(kind, item.brush), 12);
-  return distanceToFreeLine(x, y, freeCenterLine(points), false) <= width / 2 + reach;
+  return distanceToFreeLine(x, y, freeCenterLine(points), false) <= freeBandWidth(kind, item.brush) / 2 + reach;
+}
+
+// 線の形の、見えている帯の幅（川は岸、小道は縁石も含める。線路は枕木の長さ）
+function freeBandWidth(kind: FreeKind, brush?: number): number {
+  if (isFreeAreaKind(kind)) return 0;
+  const line = kind as Parameters<typeof freeLineWidth>[0];
+  return kind === "railway" ? 300 : kind === "river" ? freeLineWidth(line, brush) + 28 : kind === "pathway" ? freeLineWidth(line, brush) + 8 : Math.max(freeLineWidth(line, brush), 12);
 }
 
 // なぞり終えたとき。短ければ（クリック）いつもの形で置き、長ければ、なぞった形で作る（または「なぞり直す」の物を描き直す）
@@ -9389,9 +9455,16 @@ function updatePropertiesPanel(): void {
   }
   const selected = state.selectedId ? findEntity(state.selectedId) : null;
   if (!selected && activeTool === "paint") {
+    const kind = penSettings.kind;
+    const hint = kind === "paint"
+      ? "ペン: 2Dの上をドラッグすると、この色で描けます。クリックで点、「囲んで塗る」なら囲んだ所を塗りつぶします。"
+      : isFreeAreaKind(kind)
+        ? `ペンで${FURNITURE_DEFS[kind].label}: 2Dをドラッグで囲むと、その形になります（クリックだけなら、いつもの形）。`
+        : `ペンで${FURNITURE_DEFS[kind].label}: 2Dをなぞると、その道すじに沿って描けます（クリックだけなら、まっすぐ）。`;
     propertiesPanel.innerHTML = `<div class="property-grid">
-        <p class="empty-state">ペン: 2Dの上をドラッグすると、この色で描けます。クリックで点、「囲んで塗る」なら囲んだ所を塗りつぶします。</p>
-        ${penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled)}
+        <p class="empty-state">${hint}</p>
+        ${penKindHtml()}
+        ${kind === "paint" ? penControlsHtml("pen", penSettings.color, penSettings.brush, penSettings.filled) : penShapeWidthHtml(kind)}
       </div>`;
     bindPenControls();
     return;

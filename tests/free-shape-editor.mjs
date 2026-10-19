@@ -122,7 +122,34 @@ export async function verifyFreeShapes({ open, plan, output }) {
     await trace([[700, 100], [1000, 300]]);
     const box = (await rooms()).find(room => room.surface === 'sand');
     assert.ok(box && !box.outline && box.w === 300 && box.h === 200, 'a diagonal drag still draws a rectangle');
-    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape');
+    // ペンでも川・池などを描ける（描く物を選ぶ）。川の幅は一覧から置くときと同じ「最後に使った幅」で、描いたあともペンのまま
+    await page.locator('.tool-button[data-tool="paint"]').click();
+    await page.locator('[data-pen-kind="river"]').click();
+    assert.match(await page.locator('#toolHint').textContent(), /ドラッグで川を描く/);
+    await page.locator('#penShapeWidthInput').fill('260');
+    await page.locator('#penShapeWidthInput').press('Enter');
+    const rivers = async () => (await items()).filter(item => item.kind === 'river');
+    const riverCount = (await rivers()).length;
+    await trace([[150, 760], [500, 700], [900, 760]]);
+    assert.equal((await rivers()).length, riverCount + 1, 'the pen draws a river');
+    const penRiver = (await rivers()).at(-1);
+    assert.equal(penRiver.brush, 260, 'the pen river has the chosen width');
+    assert.ok(penRiver.path?.length >= 2, 'the pen river follows the traced path');
+    assert.deepEqual(await ids(), [], 'the new river is not selected, so the pen keeps drawing');
+    assert.equal(await page.locator('[data-pen-kind="river"]').getAttribute('aria-checked'), 'true');
+    await page.locator('[data-pen-kind="pond"]').click();
+    assert.equal(await page.locator('#penShapeWidthInput').count(), 0, 'ponds have no width setting');
+    await trace([[900, 150], [1100, 140], [1120, 300], [920, 320], [900, 160]]);
+    const penPond = (await items()).filter(item => item.kind === 'pond').at(-1);
+    assert.ok(penPond.path?.length >= 3 && penPond.w > 160, 'the pen pond takes the traced shape');
+    // 次に開いたときも、ペンで描く物を覚えている
+    await page.waitForTimeout(400);
+    await page.reload();
+    await page.waitForFunction(() => Boolean(window.__editorTest));
+    await page.locator('.tool-button[data-tool="paint"]').click();
+    assert.equal(await page.locator('[data-pen-kind="pond"]').getAttribute('aria-checked'), 'true', 'the pen remembers what it draws');
+    await page.locator('[data-pen-kind="paint"]').click();
+    console.log('PASS: free shapes: trace ponds and rivers in 2D, click for the usual shape, width, redraw, reset, select by shape, 3D and reload; traceable items are marked and gathered; floors and grounds take a traced shape; the pen draws rivers and ponds');
   } finally {
     await page.context().close();
   }

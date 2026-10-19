@@ -1139,6 +1139,22 @@ select:focus-visible {
   gap: 4px;
 }
 
+/* ペンで描く物（ペン・川・小道・池など） */
+.pen-kinds {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.pen-kinds button {
+  min-height: 30px;
+  padding: 0 2px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pen-kinds button.is-active,
 .pen-mode button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
