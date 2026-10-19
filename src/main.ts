@@ -227,7 +227,7 @@ interface ThreeDrag {
   pointerId: number;
   startScreen: Point;
   startWorld: Point;
-  origin: Furniture;
+  origin: Entity;
   planeY: number;
   created: boolean;
   moved: boolean;
@@ -559,6 +559,8 @@ let activeDoorStyle: DoorStyle = "swing";
 // 種類ごとに最後に選んだ2D記号。続けて置く家具も同じ描き方にそろえる（見ていた場所などと一緒にブラウザへ保存）
 const lastSymbolByKind: Partial<Record<FurnitureKind, number>> = {};
 let activeRoomSurface: RoomSurface = "plain";
+// 形をなぞって描き直している床（部屋のツールで、次になぞった形・四角をこの床に当てる）
+let floorRetraceId: string | null = null;
 let floorDraft: { floorId: string; points: [number, number][]; undone: [number, number][]; hover: Point | null } | null = null;
 let floorEdit: { id: string; vertex: number | null } | null = null;
 let floorEditError = "";
@@ -683,6 +685,8 @@ let clipboard: { floorId: string; entities: Entity[]; pastes: number } | null = 
 let threePointerDown: Point | null = null;
 let threeDrag: ThreeDrag | null = null;
 let threeMoveId: string | null = null;
+// 3Dの移動モード（ボタンで入れる）。押した物（床・壁・ドア・窓・屋根・家具など）を、そのままドラッグで動かす
+let threeMoveMode = false;
 let threeSceneCenter: Point = { x: 0, y: 0 };
 let threeNeedsRender = true;
 let pendingCameraFrame = true;
@@ -1081,6 +1085,7 @@ function setupUi(): void {
       floorEdit = null;
       floorEditError = "";
       pathRedrawId = null;
+      floorRetraceId = null;
       penCursor = null;
       // ペンでは選択を外し、選択中の欄にペンの色・太さを出す
       if (activeTool === "paint" || activeTool === "floor") selectOnly(null);
@@ -1280,12 +1285,15 @@ function setupUi(): void {
   threeCanvas.addEventListener("pointercancel", cancelThreeDrag);
   threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
   window.addEventListener("blur", () => { cancelThreeDrag(); threeMoveId = null; syncThreeMoveMode(); });
+  // 移動モードを入れる・切る（何も選んでいなくても入れられる）
   document.querySelector("#threeMoveToggle")?.addEventListener("click", () => {
-    const selected = state.selectedId ? findEntity(state.selectedId) : undefined;
-    threeMoveId = !threeMoveId && selected?.type === "furniture" && !isLocked(selected) ? selected.id : null;
+    threeMoveMode = !threeMoveMode;
+    threeMoveId = null;
     activeTool = "select";
     setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
     syncThreeMoveMode();
+    if (threeMoveMode) showThreeHint("移動モード: 動かしたい物（床・壁・屋根・家具など）をドラッグします。もう一度押すか Esc で終わります");
   });
   window.addEventListener("keydown", handleKeyDown);
 
@@ -1342,6 +1350,7 @@ function buildFurniturePicker(): void {
   (Object.keys(SURFACE_DEFS) as RoomSurface[]).forEach((surface) => {
     const button = createPaletteButton(SURFACE_DEFS[surface].label, "ゆか 床", () => {
       activeRoomSurface = surface;
+      floorRetraceId = null;
       if (activeTool !== "floor") activeTool = "room";
       if (activeTool === "floor") updatePropertiesPanel();
       setActiveButton("[data-surface]", surface);
@@ -1840,6 +1849,12 @@ function syncPlanCursor(): void {
   setActiveButton("[data-furniture]", activeTool === "furniture" ? activeFurniture : "");
   setActiveButton("[data-door-style]", activeTool === "door" ? activeDoorStyle : activeTool === "slidingDoor" ? "sliding" : "");
   document.querySelector("[data-pen-shortcut]")?.classList.toggle("is-active", activeTool === "paint");
+  if (threeMoveMode && activeTool !== "select") {
+    threeMoveMode = false;
+    syncThreeMoveMode();
+  }
+  // 部屋のツールから離れたら、床の描き直しはやめる
+  if (activeTool !== "room") floorRetraceId = null;
   if (drag.dragMode === "pan") {
     planCanvas.style.cursor = "grabbing";
     return;
@@ -2600,6 +2615,7 @@ function selectFromOtherTool(entityId: string, holding: boolean): void {
   selectOnly(entityId);
   activeTool = "select";
   pathRedrawId = null;
+  floorRetraceId = null;
   setActiveButton("[data-tool]", activeTool);
   drag.pending = undefined;
   drag.path = undefined;
@@ -2700,7 +2716,7 @@ function toolAction(): [string, string] | null {
     case "floor":
       return null;
     case "room":
-      return ["ドラッグで四角、ぐるっとなぞるとその形の床", click];
+      return floorRetraceId ? ["床の形を描き直す: ぐるっとなぞるとその形、斜めのドラッグで四角（Escでやめる）", click] : ["ドラッグで四角、ぐるっとなぞるとその形の床", click];
     case "wall":
       return ["ドラッグで壁を描く", click];
     case "door":
@@ -2892,7 +2908,8 @@ function handlePointerUp(event: PointerEvent): void {
   }
 
   if (drag.dragMode === "draw" && (distanceMoved > 8 || traced)) {
-    if (activeTool === "room") {
+    if (activeTool === "room" && floorRetraceId) retraceFloor(floorRetraceId, traced ? drag.path! : null, start, end);
+    else if (activeTool === "room") {
       if (traced) addFloorFromTrace(drag.path!);
       else addRoomFromDrag(start, end);
     }
@@ -3004,6 +3021,14 @@ function handleThreePointerDown(event: PointerEvent): void {
   threePointerDown = { x: event.clientX, y: event.clientY };
   const id = pickThreeEntity(event);
   const selected = id ? findEntity(id) : undefined;
+  // 移動モード: 押した物を、そのままドラッグで動かす（固定した物は動かさない）
+  if (threeMoveMode && activeTool === "select" && selected && !isLocked(selected) && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    threePointerDown = null;
+    beginThreeMove(event, selected);
+    return;
+  }
   // タッチの長押しで物を選ぶ（指を動かせば、ふつうに視点が回る）。家具を置くツールのままでも選べる
   if (event.pointerType !== "mouse" && !event.ctrlKey && !event.metaKey
     && ((activeTool === "select" && isThreeDoubleSelect(selected) && !(selected?.type === "furniture" && threeMoveId)) || (activeTool === "furniture" && selected))) {
@@ -3241,7 +3266,7 @@ function startThreeLongPress(event: PointerEvent, id: string): void {
       selectThreeEntity(press.id);
       threeMoveId = isLocked(entity) ? null : press.id;
       syncThreeMoveMode();
-      if (threeMoveId) beginThreeMove(press.last, entity, state.floors.findIndex((floor) => floor.entities.some((item) => item.id === entity.id)));
+      if (threeMoveId) beginThreeMove(press.last, entity);
     }, LONG_PRESS_MS),
     pointerId: event.pointerId,
     x: event.clientX,
@@ -3264,18 +3289,25 @@ function trackThreeLongPress(event: PointerEvent): void {
   if (event.type !== "pointermove" || Math.hypot(event.clientX - threeLongPress.x, event.clientY - threeLongPress.y) > 8) cancelThreeLongPress();
 }
 
-// 家具を3Dでつかんで動かし始める（まとめて選んでいる家具なら、まとめて動かす）
-function beginThreeMove(event: PointerEvent, furnitureItem: Furniture, floorIndex: number): void {
-  const planeY = floorBaseY(floorIndex) + floorTopOffset(floorIndex);
+// 3Dでつかんだ物を動かし始める（まとめて選んでいる物の1つなら、まとめて動かす）。
+// 屋根は屋根の高さ、ほかは床の高さの水平な面の上で動かすので、つかんだ所がマウスについてくる
+function beginThreeMove(event: PointerEvent, entity: Entity): void {
+  const floorIndex = entity.type === "roof"
+    ? state.floors.findIndex((floor) => floor.id === entity.floorId)
+    : state.floors.findIndex((floor) => floor.entities.some((item) => item.id === entity.id));
+  if (floorIndex < 0) return;
+  const planeY = entity.type === "roof"
+    ? floorBaseY(floorIndex) + WALL_HEIGHT + (entity.elevation ?? 0) * SCALE_3D
+    : floorBaseY(floorIndex) + floorTopOffset(floorIndex);
   const point = threeFloorPoint(event, planeY);
   if (!point) return;
   controls.enabled = false;
   if (!threeCanvas.hasPointerCapture(event.pointerId)) threeCanvas.setPointerCapture(event.pointerId);
   state.activeFloor = floorIndex;
   const members = selectedEntities();
-  const origins = members.length > 1 && members.some((item) => item.id === furnitureItem.id) ? members.map(cloneEntity) : undefined;
-  if (!origins) selectOnly(furnitureItem.id);
-  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(furnitureItem) as Furniture, origins, planeY, created: false, moved: false };
+  const origins = members.length > 1 && members.some((item) => item.id === entity.id) ? members.map(cloneEntity) : undefined;
+  if (!origins) selectOnly(entity.id);
+  threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(entity), origins, planeY, created: false, moved: false };
   threeCanvas.style.cursor = "grabbing";
   redrawAll();
 }
@@ -3352,16 +3384,16 @@ function handleThreeDoubleClick(event: MouseEvent): void {
   selectThreePress(id);
 }
 
+// 移動モードのボタンと、3Dのカーソル。ダブルクリックで選んだ家具（threeMoveId）も、そのままドラッグで動かせる
 function syncThreeMoveMode(): void {
   const members = selectedEntities();
   if (threeMoveId && !members.some(item => item.id === threeMoveId && !isLocked(item))) threeMoveId = null;
   const button = document.querySelector<HTMLButtonElement>("#threeMoveToggle");
   if (button) {
-    button.disabled = !members.some(item => item.type === "furniture" && !isLocked(item));
-    button.classList.toggle("is-active", Boolean(threeMoveId));
-    button.setAttribute("aria-pressed", String(Boolean(threeMoveId)));
+    button.classList.toggle("is-active", threeMoveMode);
+    button.setAttribute("aria-pressed", String(threeMoveMode));
   }
-  if (!threeDrag) threeCanvas.style.cursor = threeMoveId ? "move" : "grab";
+  if (!threeDrag) threeCanvas.style.cursor = threeMoveMode || threeMoveId ? "move" : "grab";
 }
 
 function handleWheel(event: WheelEvent): void {
@@ -3407,13 +3439,20 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (event.key === "Escape" && threeDrag) {
     cancelThreeDrag();
     threeMoveId = null;
+    threeMoveMode = false;
     syncThreeMoveMode();
     return;
   }
   if (event.key === "Escape") {
     event.preventDefault();
     threeMoveId = null;
+    threeMoveMode = false;
     syncThreeMoveMode();
+    if (floorRetraceId) {
+      floorRetraceId = null;
+      activeTool = "select";
+      setActiveButton("[data-tool]", activeTool);
+    }
     const gesturing = drag.pointerId !== null;
     cancelPlanDrag();
     floorDraft = null;
@@ -3582,6 +3621,42 @@ function isFloorTrace(path: Point[]): boolean {
   const xs = path.map((p) => p.x), ys = path.map((p) => p.y);
   const size = Math.min(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
   return size >= GRID * 2 && length > 2 * Math.hypot(end.x - start.x, end.y - start.y) + GRID * 4;
+}
+
+// 選んでいた床の形を描き直す。ぐるっとなぞったらその形、斜めにドラッグしたら四角。床材・名前・色などはそのまま。
+// 階段の穴は、新しい形の中に収まるならそのまま残す
+function retraceFloor(id: string, path: Point[] | null, start: Point, end: Point): void {
+  const room = findEntity(id);
+  floorRetraceId = null;
+  if (room?.type !== "room" || isLocked(room)) return;
+  let frame: { x: number; y: number; w: number; h: number; outline?: [number, number][] } | null;
+  if (path) {
+    const points = tracedFloorPoints(path.map((p): [number, number] => [p.x, p.y]), Math.max(1, 1 / view.zoom));
+    frame = points && outlineFromPoints(points);
+  } else {
+    const x = snap(Math.min(start.x, end.x)), y = snap(Math.min(start.y, end.y));
+    const w = snap(Math.abs(end.x - start.x)), h = snap(Math.abs(end.y - start.y));
+    frame = w >= GRID * 2 && h >= GRID * 2 ? { x, y, w, h } : null;
+  }
+  if (!frame) return;
+  const holes = room.holes?.map((ring) => ring.map(([u, v]): [number, number] => [(room.x + u * room.w - frame!.x) / frame!.w, (room.y + v * room.h - frame!.y) / frame!.h]));
+  Object.assign(room, { x: frame.x, y: frame.y, w: frame.w, h: frame.h });
+  if (frame.outline) room.outline = frame.outline;
+  else delete room.outline;
+  delete room.holes;
+  if (holes?.length) {
+    try {
+      room.holes = normalizeFloorHoles(holes, room.outline);
+    } catch {
+      delete room.holes;
+    }
+  }
+  // 名前の位置は、新しい形の左上から測り直す
+  delete room.labelOffsetX;
+  delete room.labelOffsetY;
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  selectOnly(room.id);
 }
 
 // なぞって囲んだ形の床（いま選んでいる床材）。線の揺れをならし、交わった所はほどく
@@ -9414,10 +9489,11 @@ function describeSelection(entities: Entity[]): string {
 
 function updatePropertiesPanel(): void {
   if (activeTool === "floor") {
-    propertiesPanel.innerHTML = `<div class="property-grid"><label>床材<select id="draftSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map(surface => `<option value="${surface}" ${surface === activeRoomSurface ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label></div>`;
-    requiredElement<HTMLSelectElement>("#draftSurfaceInput").addEventListener("change", event => {
-      activeRoomSurface = (event.target as HTMLSelectElement).value as RoomSurface;
+    propertiesPanel.innerHTML = `<div class="property-grid">${surfacePickerHtml("draftSurfacePicker", activeRoomSurface)}</div>`;
+    bindSurfacePicker("#draftSurfacePicker", (value) => {
+      activeRoomSurface = value;
       syncPlanCursor();
+      updatePropertiesPanel();
     });
     return;
   }
@@ -9553,7 +9629,10 @@ function updatePropertiesPanel(): void {
         <div class="floor-shapes" role="group" aria-label="床の形">
           ${(["rectangle", "circle", "ellipse", "polygon", "l"] as FloorPreset[]).map(preset => { const label = { rectangle: "長方形", circle: "円", ellipse: "楕円", polygon: "正多角形", l: "L字" }[preset]; return `<button type="button" data-floor-preset="${preset}" title="${label}の床に変更" aria-label="${label}" aria-pressed="${floorPreset(selected) === preset}" ${placementDisabled}><canvas width="88" height="64"></canvas></button>`; }).join("")}
         </div>
-        <button type="button" class="prop-button" id="floorEditToggle" aria-pressed="${editing}" ${placementDisabled}><i data-lucide="${editing ? "check" : "square-pen"}"></i>${editing ? "輪郭の編集を完了" : "輪郭を編集"}</button>
+        <div class="two-col">
+          <button type="button" class="prop-button" id="floorRetraceButton" aria-pressed="${floorRetraceId === selected.id}" title="床の形を、2Dをなぞって描き直す" ${placementDisabled}><i data-lucide="pen-line"></i>なぞり直す</button>
+          <button type="button" class="prop-button" id="floorEditToggle" aria-pressed="${editing}" ${placementDisabled}><i data-lucide="${editing ? "check" : "square-pen"}"></i>${editing ? "輪郭の編集を完了" : "輪郭を編集"}</button>
+        </div>
         ${editing && floorEdit?.vertex != null ? `<div class="floor-vertices"><div class="vertex-heading"><span>頂点 ${floorEdit.vertex + 1}</span><button class="prop-button" type="button" id="floorVertexAdd" title="次の辺に頂点を追加" aria-label="頂点を追加" ${placementDisabled}><i data-lucide="plus"></i></button><button class="prop-button" type="button" id="floorVertexRemove" title="選択した頂点を削除" aria-label="頂点を削除" ${placementDisabled}><i data-lucide="minus"></i></button></div>
           <div class="two-col"><label>X cm<input id="floorVertexX" type="number" step="1" ${placementDisabled} /></label><label>Y cm<input id="floorVertexY" type="number" step="1" ${placementDisabled} /></label></div></div>` : ""}
         ${round && !editing ? diameterControl("floor", selected.w, placementDisabled) : ""}
@@ -9562,7 +9641,7 @@ function updatePropertiesPanel(): void {
           <label>幅 cm<input id="roomWInput" type="number" min="40" step="1" value="${Math.round((polygon?.w ?? selected.w) * 10) / 10}" ${placementDisabled} /></label>
           <label>奥行 cm<input id="roomHInput" type="number" min="40" step="1" value="${Math.round((polygon?.h ?? selected.h) * 10) / 10}" ${placementDisabled} /></label>
         </div>
-        <label>床材<select id="roomSurfaceInput">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => `<option value="${surface}" ${surface === (selected.surface ?? "plain") ? "selected" : ""}>${SURFACE_DEFS[surface].label}</option>`).join("")}</select></label>
+        ${surfacePickerHtml("roomSurfacePicker", selected.surface ?? "plain")}
         <label>名前<input id="roomNameInput" value="${escapeHtml(selected.name)}" placeholder="なし" /></label>
         <label>文字サイズ cm<input id="roomLabelSizeInput" type="number" min="5" max="500" step="1" value="${selected.labelSize ?? ""}" placeholder="自動" ${placementDisabled} /></label>
         ${writingModeControl(selected.writingMode, placementDisabled)}
@@ -9583,12 +9662,13 @@ function updatePropertiesPanel(): void {
       bindNumber("#floorRotationInput", value => changeRegularFloor(selected, regularFloor(selected)!.sides, value));
     }
     bindFloorVertices(selected);
-    bindSelect("#roomSurfaceInput", (value) => {
-      if (!isRoomSurface(value)) return;
+    bindSurfacePicker("#roomSurfacePicker", (value) => {
       selected.surface = value;
       // 床材を変えても、カラーコードで決めた透明度はそのまま
       selected.color3d = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color3d ?? selected.color));
       selected.color = withAlpha(SURFACE_DEFS[value].color, colorAlpha(selected.color));
+      commitState();
+      redrawAll();
     });
     bindNumber("#roomWInput", value => { const w = Math.max(GRID * 2, value), p = regularFloor(selected); if (p) Object.assign(selected, regularFloorSize(selected, p.diameter * w / p.w)); else if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, w, selected.h)); else selected.w = w; });
     bindNumber("#roomHInput", value => { const h = Math.max(GRID * 2, value), p = regularFloor(selected); if (p) Object.assign(selected, regularFloorSize(selected, p.diameter * h / p.h)); else if (isEllipseFloor(selected)) Object.assign(selected, centeredFloorSize(selected, selected.w, h)); else selected.h = h; });
@@ -10874,8 +10954,20 @@ function bindFloorShapeControls(room: Room): void {
       commitState(); redrawAll();
     });
   });
+  // なぞって描き直す: 部屋のツールにして、次になぞった形（または四角）をこの床に当てる
+  requiredElement("#floorRetraceButton").addEventListener("click", () => {
+    if (isLocked(room)) return;
+    floorEdit = null;
+    floorRetraceId = floorRetraceId === room.id ? null : room.id;
+    activeTool = floorRetraceId ? "room" : "select";
+    if (floorRetraceId && viewMode === "three") applyViewMode("split");
+    setActiveButton("[data-tool]", activeTool);
+    syncPlanCursor();
+    redrawAll(false);
+  });
   requiredElement("#floorEditToggle").addEventListener("click", () => {
     if (isLocked(room)) return;
+    floorRetraceId = null;
     floorEdit = floorEdit?.id === room.id ? null : { id: room.id, vertex: null };
     activeTool = "select";
     if (floorEdit && viewMode === "three") applyViewMode("split");
@@ -10884,6 +10976,34 @@ function bindFloorShapeControls(room: Room): void {
     redrawAll(false);
   });
   createIcons({ icons });
+}
+
+// 床材を絵で選ぶ欄。選んでいる床材の名前と、模様の見本を並べる（見本の絵は一度だけ作る）
+const surfaceSwatchUrls = new Map<RoomSurface, string>();
+function surfaceSwatchUrl(surface: RoomSurface): string {
+  let url = surfaceSwatchUrls.get(surface);
+  if (!url) {
+    url = surfaceCanvas(surface, SURFACE_DEFS[surface].color).toDataURL();
+    surfaceSwatchUrls.set(surface, url);
+  }
+  return url;
+}
+
+function surfacePickerHtml(id: string, current: RoomSurface): string {
+  return `<div class="surface-field">
+      <span class="surface-field-label">床材 <strong>${escapeHtml(SURFACE_DEFS[current].label)}</strong></span>
+      <div class="surface-picker" id="${id}" role="radiogroup" aria-label="床材">${(Object.keys(SURFACE_DEFS) as RoomSurface[]).map((surface) => {
+        const active = surface === current;
+        return `<button type="button" role="radio" data-surface-choice="${surface}" class="${active ? "is-active" : ""}" aria-checked="${active}" title="${escapeHtml(SURFACE_DEFS[surface].label)}" aria-label="${escapeHtml(SURFACE_DEFS[surface].label)}" style="background-image:url(${surfaceSwatchUrl(surface)})"></button>`;
+      }).join("")}</div>
+    </div>`;
+}
+
+function bindSurfacePicker(selector: string, choose: (surface: RoomSurface) => void): void {
+  propertiesPanel.querySelectorAll<HTMLButtonElement>(`${selector} [data-surface-choice]`).forEach((button) => button.addEventListener("click", () => {
+    const value = button.dataset.surfaceChoice ?? "";
+    if (isRoomSurface(value)) choose(value);
+  }));
 }
 
 function diameterControl(prefix: string, diameter: number, disabled: string, label = "直径 cm"): string {

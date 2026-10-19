@@ -122,6 +122,26 @@ export async function verifyFreeShapes({ open, plan, output }) {
     await trace([[700, 100], [1000, 300]]);
     const box = (await rooms()).find(room => room.surface === 'sand');
     assert.ok(box && !box.outline && box.w === 300 && box.h === 200, 'a diagonal drag still draws a rectangle');
+    // 選んだ床の形を、なぞって描き直す（床材・IDはそのまま）。Escでやめられる
+    await page.locator('[data-tool="select"]').first().click();
+    const boxAt = await point(850, 200);
+    await page.mouse.click(boxAt.x, boxAt.y);
+    assert.deepEqual(await ids(), [box.id]);
+    await page.locator('#floorRetraceButton').click();
+    assert.match(await page.locator('#toolHint').textContent(), /床の形を描き直す/);
+    await page.keyboard.press('Escape');
+    assert.equal((await rooms()).find(room => room.id === box.id).outline, undefined, 'Escape leaves the floor as it was');
+    await page.mouse.click(boxAt.x, boxAt.y);
+    await page.locator('#floorRetraceButton').click();
+    await trace([[720, 120], [960, 90], [1040, 260], [900, 380], [740, 330], [700, 200], [722, 125]]);
+    const retraced = (await rooms()).find(room => room.id === box.id);
+    assert.ok(retraced.outline?.length >= 5, 'the floor takes the traced shape');
+    assert.equal(retraced.surface, 'sand', 'the floor keeps its material');
+    assert.equal((await rooms()).filter(room => room.surface === 'sand').length, 1, 'no new floor is added');
+    assert.deepEqual(await ids(), [box.id], 'the retraced floor stays selected');
+    await page.keyboard.press('Control+z');
+    assert.equal((await rooms()).find(room => room.id === box.id).outline, undefined, 'undo brings the rectangle back');
+
     // ペンでも川・池などを描ける（描く物を選ぶ）。川の幅は一覧から置くときと同じ「最後に使った幅」で、描いたあともペンのまま
     await page.locator('.tool-button[data-tool="paint"]').click();
     await page.locator('[data-pen-kind="river"]').click();

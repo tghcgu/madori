@@ -72,7 +72,14 @@ export async function verifyDoublePress({ open, plan }) {
     await page.waitForTimeout(200);
     assert.deepEqual(await ids(), ['table'], 'double-click in 3D selects the table under the chair tool');
     assert.equal((await furniture()).length, 1, 'no chair is placed in 3D');
-    assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true', 'the table can be dragged right away');
+    assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'false', 'a double-click does not turn on the move mode button');
+    const placed = (await furniture())[0];
+    await page.mouse.move(center.x, center.y);
+    await page.mouse.down();
+    await page.mouse.move(center.x + 40, center.y + 12, { steps: 6 });
+    await page.mouse.up();
+    assert.notDeepEqual([(await furniture())[0].x, (await furniture())[0].y], [placed.x, placed.y], 'the table can be dragged right away');
+    await page.locator('#undoButton').click();
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
 

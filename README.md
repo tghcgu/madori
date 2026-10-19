@@ -131,7 +131,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 屋根全体の一時表示・非表示（屋根ごとに色も変えられ、透かせば中が見えます）
 - 3D上の家具・ドア・窓はダブルクリックで選択（スマホ・タブレットは長押し）。1回クリックでは選択を変えず、選び方を案内します。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。床・壁・屋根などは1回クリックで選択します
 - 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
-- 「選択」ツールで家具をダブルクリックすると移動モードになり、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動アイコンでも切り替え可能です。空白クリック・Escで解除し、移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
+- 「選択」ツールで家具をダブルクリックすると、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動ボタン（十字の矢印）を押すと移動モードになり、何も選んでいなくても、押した物（床・壁・ドア・窓・屋根・家具など）をそのままドラッグで動かせます。移動モードは、もう一度押すか Esc で終わります。移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
 - 右ドラッグ／Shift＋左ドラッグは、画面に沿った上下左右の平行移動です。上下ドラッグで高さも変わり、2階・3階の室内まで視点を持ち上げられます
 
 ### 複数階
@@ -266,13 +266,13 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 幅・奥行は3Dの設置範囲にも反映され、回転・反転後も保持されます。既存の保存JSONはそのまま利用できます。
 - 不透明な部品は材質ごとにまとめて描画し、細部を増やした際の描画負荷を抑えています。実製品を再現したCADモデルではありません。
 
-「床・地面」で素材（22種類）を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。斜めにドラッグすると四角、ぐるっとなぞると、その形の床になります（部屋のツールも同じです）。畳は180×90cmの畳を半畳ずつずらして敷いた模様、レンガ・石畳・モザイクタイル・市松などは実際の大きさの目地で描きます。既存の部屋は「選択中」の「床材」から変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
+「床・地面」で素材（22種類）を選び、2Dキャンバスをドラッグすると、その床材の領域を配置できます。斜めにドラッグすると四角、ぐるっとなぞると、その形の床になります（部屋のツールも同じです）。畳は180×90cmの畳を半畳ずつずらして敷いた模様、レンガ・石畳・モザイクタイル・市松などは実際の大きさの目地で描きます。既存の部屋は「選択中」の「床材」の模様の絵から選んで変更できます。幅・奥行、2Dと3Dの色を調整でき、素材は上階にも反映されます。模様は寸法に合わせて繰り返すため、広げても引き伸ばされません。床材も自動保存・JSON書き出し・Undo/Redoに対応し、従来のデータは標準床として読み込まれます。
 
 ラグは家具の下に表示されます。床やラグを後から追加した場合も、上に見えている家具を選択できます。
 
 「線で囲んで床を作成」を選び、2Dで角になる点を順にクリック（タップ）します。始点をもう一度押す・`Enter`・キャンバス上のチェックボタンで閉じると、その形の床ができます。`Shift`で最後の点から水平・垂直に、`Backspace`または戻るボタンで1点戻し、やり直しボタンで復元、`Esc`または×で中止できます。交差した輪郭は確定せず、理由を表示します。作図だけでは壁は作られません。
 
-既存の床は長方形・円・楕円・正多角形・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「輪郭を編集」で頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
+既存の床は長方形・円・楕円・正多角形・L字の見本で形を変更できます。通常の選択では全体のサイズを変更し、「なぞり直す」で2Dをぐるっとなぞるとその形（斜めにドラッグすると四角）に描き直せます（床材・名前・色はそのまま）。「輪郭を編集」では頂点をドラッグ、辺の中央の＋をクリック・ドラッグで点を追加します。選んだ頂点は青く表示され、座標欄、矢印キー（1cm、Shift付きで20cm）、`Delete`で調整・削除できます。完了ボタンまたは`Esc`で通常の選択に戻ります。階段の穴が床の外に出る変更は、穴を消さずに止めます。
 
 正多角形の床は、床を選んで形の見本の六角形を押すと作れます。「辺の数」で三角形〜十二角形、「向き」で角度、「外接円の直径」で大きさを指定できます。頂点のつまみや幅・奥行を変更しても、辺の長さがそろうように縦横を一緒に拡大縮小します。「輪郭を編集」で頂点を個別に動かすと自由な形に変更できます。正多角形の床を選んで正多角形の屋根を追加すると、辺数・向き・中心がそろいます。床材・名前・色はそのまま引き継ぎ、階段の開口が床の外に出る形への変更は止めます。
 
@@ -467,10 +467,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 2D | ホイール | 拡大・縮小 |
 | 2D | ダブルクリック | 要素を選択してプロパティを表示 |
 | 2D | 四隅・端点をドラッグ | 部屋、家具、屋根、線要素のサイズ変更 |
-| 3D | 左ドラッグ | 押した所を中心に視点回転（上下の制限なし）。家具をダブルクリックして移動モードにすると家具移動 |
+| 3D | 左ドラッグ | 押した所を中心に視点回転（上下の制限なし）。ダブルクリックで選んだ家具は移動。移動モードでは押した物（床・壁・屋根・家具など）を移動 |
 | 3D | 右ドラッグ | 画面に沿って視点を上下左右へ平行移動（高さも変更） |
 | 3D | ホイール | 拡大・縮小。拡大を続けると室内へ前進、逆回転で後退 |
-| 3D | ダブルクリック | 家具・ドア・窓を選択。家具は、固定されていなければ移動モードへ |
+| 3D | ダブルクリック | 家具・ドア・窓を選択。家具は、固定されていなければ、そのままドラッグで移動できる |
 | 3D | クリック | 床・壁・屋根などを選択。家具ツールでは編集中の階へ配置 |
 
 ### キーボードショートカット
@@ -799,6 +799,9 @@ npm.cmd run dev
 
 ### 2026年10月19日
 
+- 3Dの移動モード（3Dの欄の十字の矢印のボタン）を直しました。1回押せば入り、何も選んでいなくても使えます。押した物（床・壁・ドア・窓・屋根・家具など）を、そのままドラッグで動かせます。もう一度押すか Esc で終わります
+- 選んだ床の形を、なぞって描き直せるように（「なぞり直す」）。ぐるっとなぞるとその形、斜めにドラッグすると四角になります。床材・名前・色はそのままです
+- 床材を、名前だけでなく模様の絵から選べるように
 - ペンで川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも描けるように。ペンの欄の「描く物」で選びます。川・小道・生け垣・石垣は幅も決められ、描いたあともペンのまま続けて描けます
 - ペンの太さが分かるように。描く前から、マウスの所にペン先の大きさの丸が出ます。太さを変えている間は、2Dの真ん中に同じ丸が出ます
 - 床・地面の素材と部屋を、なぞって好きな形にできるように。2Dをぐるっとなぞると、その形の床になります（これまでどおり、斜めにドラッグすると四角）
@@ -1115,7 +1118,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
-- Existing floors have rectangle, circle, ellipse, regular polygon and L-shaped previews. Normal selection resizes the whole floor; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
+- Existing floors have rectangle, circle, ellipse, regular polygon and L-shaped previews. Normal selection resizes the whole floor; "なぞり直す" (retrace) lets you trace around an area in 2D for a new shape (or drag diagonally for a rectangle), keeping its material, name and colors; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
 - To make a regular polygon floor, select a floor and press the hexagonal preset. Choose 3 to 12 sides, rotation and circumcircle diameter. Perimeter handles and width/depth inputs resize proportionally to keep all sides equal. Contour editing can turn it into a freeform floor. Adding a polygon roof while the floor is selected matches its sides, orientation and center. Materials, names and colors are retained; shape changes that would expose stairwell holes are blocked
 - Circle walls and circular floors have four perimeter handles, an exact diameter field, increment/decrement buttons and a live slider. Resizing keeps the center fixed; a slider gesture is one undo step. Changing a circular floor's width and depth independently makes an ellipse. Arc and polygon walls also have radial size handles and a diameter control. Shape walls can add matching floors while keeping the wall; arcs produce sector floors. 2D, 3D, PNG and JSON share the same outline, including concave cutouts and overlap clipping
 - Draw an ellipse wall by choosing "楕円" under Shape walls and dragging a bounding rectangle. Alternatively, edit an existing circle's width and depth independently. Ellipse wall and floor handles change only their own axis while keeping the center fixed. Add a matching ellipse floor from the wall properties, switch the wall shape back to Circle to restore equal axes, or press R to swap the ellipse's axes
@@ -1151,7 +1154,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Per-floor visibility controls
 - Temporary roof visibility toggle
 - Double-click furniture, doors and windows in 3D to select and edit them (long press on phones and tablets); a single click does not change the selection and explains how to select instead. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Floors, walls, roofs and other objects use a single click
-- In Select mode, double-click furniture to enter move mode, then drag it (or its selected group). The move icon also toggles the mode. Click empty space or press Escape to leave; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
+- In Select mode, double-click furniture, then drag it (or its selected group). The move button (cross arrows) in the 3D bar turns on the move mode: even with nothing selected, drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Escape to finish; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
 
 ### Multiple floors
 
@@ -1284,7 +1287,7 @@ Japanese furnishings, the torii, school and shop equipment, playground equipment
 - The 3D footprint follows the specified width and depth, including rotation and mirroring. Existing saved JSON files remain compatible.
 - Opaque parts are batched by material to limit drawing overhead. These are simplified layout models, not CAD replicas of real products.
 
-Choose one of the 22 materials under **床・地面** (floors and ground), then drag on the 2D canvas to place an area: a diagonal drag makes a rectangle, and tracing around an area makes a floor of that shape (the room tool works the same way). Tatami are laid as 180 x 90 cm mats offset by half a mat, and brick, cobblestones, mosaic tiles and checkerboard use joints at their real size. For existing rooms, change **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
+Choose one of the 22 materials under **床・地面** (floors and ground), then drag on the 2D canvas to place an area: a diagonal drag makes a rectangle, and tracing around an area makes a floor of that shape (the room tool works the same way). Tatami are laid as 180 x 90 cm mats offset by half a mat, and brick, cobblestones, mosaic tiles and checkerboard use joints at their real size. For existing rooms, pick a pattern picture under **床材** (floor material) in the selection panel. Width, depth, and separate 2D/3D colors remain editable, including on upper floors. Textures repeat at a consistent physical scale instead of stretching. Materials support autosave, JSON export/import, and Undo/Redo. Older files use plain floors by default.
 
 Rugs render below furniture. Adding a floor or rug afterward does not prevent selecting furniture placed on top.
 
@@ -1475,10 +1478,10 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | 2D | Mouse wheel | Zoom |
 | 2D | Double-click | Select an item and show its properties |
 | 2D | Drag handles | Resize rooms, furniture, roofs, and line endpoints |
-| 3D | Left-drag | Orbit around the pressed point with no vertical limit, including over furniture; move selected furniture after entering move mode |
+| 3D | Left-drag | Orbit around the pressed point with no vertical limit, including over furniture; drag furniture selected by double-click; in the move mode, drag whatever you press (floors, walls, roofs, furniture, ...) |
 | 3D | Right-drag | Pan along the screen, including camera elevation |
 | 3D | Mouse wheel | Zoom; keep zooming in to enter rooms, reverse to move back |
-| 3D | Double-click | Select furniture, doors and windows; furniture enters move mode unless locked |
+| 3D | Double-click | Select furniture, doors and windows; unlocked furniture can then be dragged |
 | 3D | Click | Select floors, walls, roofs and other objects, or place furniture on the active floor with a furniture tool |
 
 ### Keyboard
@@ -1795,6 +1798,9 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-19
 
+- Fixed the 3D move mode (the cross-arrows button in the 3D bar): one press turns it on, even with nothing selected, and you can drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Esc to finish
+- A selected floor can be reshaped by tracing (なぞり直す): trace around an area for that shape, or drag diagonally for a rectangle. Its material, name and colors stay the same
+- Floor materials are chosen from pictures of their patterns, not just from a list of names
 - The pen can also draw rivers, paths, hedges, stone walls, fences, bamboo fences, railways, stepping stones, ponds, flower beds, lawns and rugs: choose one under 描く物 (what to draw) in the pen settings. Rivers, paths, hedges and stone walls have a width setting, and the pen stays ready to keep drawing
 - The pen shows its width: a circle the size of the pen tip follows the mouse before you draw, and appears in the middle of the plan while you change the width
 - Floors, ground and rooms can take any shape: trace around an area on the 2D plan to make a floor of that shape (a diagonal drag still makes a rectangle)

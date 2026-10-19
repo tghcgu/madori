@@ -34,7 +34,7 @@ export async function verifyThreeSelection({ page, importPlan, project, planPoin
   await click(await point(), true);
   assert.deepEqual(await ids(), ['table']);
   assert.equal(await page.locator('#furnitureWInput').inputValue(), '160');
-  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'false', 'a double-click does not turn on the move mode button');
   await click(await point(second));
   assert.deepEqual(await ids(), ['table'], 'single click on another piece preserves selection');
   await click(await point(second), true);
@@ -55,11 +55,15 @@ export async function verifyThreeSelection({ page, importPlan, project, planPoin
   await click(await point(), true);
   assert.deepEqual(await ids(), ['table'], 'locked furniture can still be selected to unlock it');
   assert.equal(await page.locator('#entityLockedInput').isChecked(), true);
-  assert.equal(await page.locator('#threeMoveToggle').isDisabled(), true);
   assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'false');
   const locked = await snapshot();
   await move(await point(), 45, 20);
   assert.deepEqual((await snapshot()).floors, locked.floors);
+  // 移動モードでも、固定した物は動かない
+  await page.locator('#threeMoveToggle').click();
+  await move(await point(), 45, 20);
+  assert.deepEqual((await snapshot()).floors, locked.floors, 'locked furniture stays put in the move mode');
+  await page.locator('#threeMoveToggle').click();
   await refit();
   await page.locator('#entityLockedInput').uncheck();
   await page.keyboard.down('Control'); await click(await point(second)); await page.keyboard.up('Control');
@@ -73,9 +77,38 @@ export async function verifyThreeSelection({ page, importPlan, project, planPoin
   await click(await planPoint(200, 220));
   assert.deepEqual(await ids(), ['table'], '2D still selects with one click');
 
+  // 移動モード: 何も選んでいなくても1回押せば入り、押した物（床・壁・家具）をそのままドラッグで動かせる。Escでやめる
+  const wall = { id: 'wall', type: 'wall', x1: 0, y1: 600, x2: 800, y2: 600 };
+  await importPlan({ ...plan, floors: [{ ...plan.floors[0], entities: [floor, table, wall] }] });
+  await page.locator('button[data-view-mode="three"]').click();
+  await page.waitForTimeout(400);
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await ids(), []);
+  assert.equal(await page.locator('#threeMoveToggle').isDisabled(), false, 'the move mode can be turned on with nothing selected');
+  await page.locator('#threeMoveToggle').click();
+  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true', 'one press turns the move mode on');
+  const entity = async id => (await snapshot()).floors[0].entities.find(item => item.id === id);
+  await move(await project(600, 100, 0.03), 50, 25);
+  const movedFloor = await entity('floor');
+  assert.ok(movedFloor.x !== 0 || movedFloor.y !== 0, `the floor moves in 3D: ${movedFloor.x}, ${movedFloor.y}`);
+  assert.deepEqual(await ids(), ['floor'], 'the moved floor is selected');
+  await move(await project(400, 600, 1.2), 0, 40);
+  const movedWall = await entity('wall');
+  assert.ok(movedWall.y1 !== 600 && movedWall.y1 === movedWall.y2, `the wall moves in 3D: ${movedWall.y1}`);
+  await move(await point(), 40, 0);
+  assert.notEqual((await entity('table')).x, table.x, 'furniture moves with a single drag in the move mode');
+  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true', 'the move mode stays on for the next piece');
+  await page.locator('#undoButton').click();
+  assert.equal((await entity('table')).x, table.x, 'undo puts the furniture back');
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'false', 'Escape ends the move mode');
+  const settled = await snapshot();
+  await move(await project(600, 100, 0.03), 50, 25);
+  assert.deepEqual((await snapshot()).floors, settled.floors, 'without the move mode, dragging the floor turns the camera');
+
   const upper = { ...table, id: 'upper-table' };
   await importPlan({ ...plan, floors: [plan.floors[0], { id: 'f2', name: '2F', entities: [{ ...floor, id: 'upper-floor' }, upper] }] });
-  await page.locator('[data-view-mode="three"]').click();
+  await page.locator('button[data-view-mode="three"]').click();
   await page.waitForTimeout(400);
   await click(await point(upper, 3.17));
   assert.equal((await snapshot()).activeFloor, 0, 'single click does not switch floors');
@@ -95,5 +128,5 @@ export async function verifyThreeSelection({ page, importPlan, project, planPoin
   assert.ok((await pixels()).colors > 20);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: `${output}/three-double-selection-mobile.png` });
-  console.log('PASS: 3D double-click selection, no single-click/hold selection, orbit, editing, locks, groups, upper floors, 2D clicks and mobile layout');
+  console.log('PASS: 3D double-click selection, no single-click/hold selection, orbit, editing, locks, groups, the move mode for floors, walls and furniture, upper floors, 2D clicks and mobile layout');
 }

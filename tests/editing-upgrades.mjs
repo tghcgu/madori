@@ -93,7 +93,6 @@ export async function verifyEditingUpgrades({ page, importPlan, planPoint, proje
   await page.waitForTimeout(600);
   p = await project(280, 200, .41);
   await page.mouse.dblclick(p.x, p.y);
-  assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true');
   await move(p, 70, 30);
   assert.notDeepEqual(await item('chair'), before);
   await page.locator('#undoButton').click();
@@ -103,7 +102,6 @@ export async function verifyEditingUpgrades({ page, importPlan, planPoint, proje
   p = await project(280, 200, .41);
   await page.mouse.dblclick(p.x, p.y);
   await page.locator('#entityLockedInput').check();
-  assert.equal(await page.locator('#threeMoveToggle').isDisabled(), true);
   assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'false');
 
   const viewKey = 'madori-quick-3d-view-state';

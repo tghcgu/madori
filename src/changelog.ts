@@ -10,6 +10,15 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "3Dの移動モード（3Dの欄の十字の矢印のボタン）を直しました。1回押せば入り、何も選んでいなくても使えます。押した物（床・壁・ドア・窓・屋根・家具など）を、そのままドラッグで動かせます。もう一度押すか Esc で終わります",
+      en: "Fixed the 3D move mode (the cross-arrows button in the 3D bar): one press turns it on, even with nothing selected, and you can drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Esc to finish",
+    }, {
+      ja: "選んだ床の形を、なぞって描き直せるように（「なぞり直す」）。ぐるっとなぞるとその形、斜めにドラッグすると四角になります。床材・名前・色はそのままです",
+      en: "A selected floor can be reshaped by tracing (なぞり直す): trace around an area for that shape, or drag diagonally for a rectangle. Its material, name and colors stay the same",
+    }, {
+      ja: "床材を、名前だけでなく模様の絵から選べるように",
+      en: "Floor materials are chosen from pictures of their patterns, not just from a list of names",
+    }, {
       ja: "ペンで川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも描けるように。ペンの欄の「描く物」で選びます。川・小道・生け垣・石垣は幅も決められ、描いたあともペンのまま続けて描けます",
       en: "The pen can also draw rivers, paths, hedges, stone walls, fences, bamboo fences, railways, stepping stones, ponds, flower beds, lawns and rugs: choose one under 描く物 (what to draw) in the pen settings. Rivers, paths, hedges and stone walls have a width setting, and the pen stays ready to keep drawing",
     }, {

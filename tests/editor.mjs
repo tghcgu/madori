@@ -444,7 +444,14 @@ try {
   const ground = (await saved()).floors[0].entities.find(e => e.type === 'room' && e.id !== 'room');
   assert.deepEqual([ground.name, ground.surface, ground.w, ground.h], ['', 'grass', 400, 300]);
   assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), Math.round(400 * 300 / 10000 * 70));
-  await page.locator('#roomSurfaceInput').selectOption('stone');
+  // 床材は名前だけでなく模様の絵で並ぶ
+  const swatches = page.locator('#roomSurfacePicker [data-surface-choice]');
+  assert.ok(await swatches.count() >= 20, 'every floor material is shown');
+  assert.match(await swatches.first().evaluate(button => getComputedStyle(button).backgroundImage), /^url\(/, 'each material is shown as a picture');
+  assert.equal(await page.locator('#roomSurfacePicker [data-surface-choice="grass"]').getAttribute('aria-checked'), 'true');
+  await page.locator('#roomSurfacePicker [data-surface-choice="stone"]').click();
+  assert.equal((await saved()).floors[0].entities.find(e => e.id === ground.id).surface, 'stone');
+  assert.equal(await page.locator('#roomSurfacePicker [data-surface-choice="stone"]').getAttribute('aria-checked'), 'true');
   assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), 0);
   await page.locator('#undoButton').click();
   assert.equal(await page.evaluate(() => window.__editorTest.grassTufts()), 840);
@@ -749,7 +756,7 @@ try {
   await pick(850, 200);
   assert.equal(await page.locator('#roomColorInputCode').inputValue(), '#ffffff', 'the room is selected');
   await setCode('#roomColorInputCode', '#2775d180');
-  await page.locator('#roomSurfaceInput').selectOption('wood');
+  await page.locator('#roomSurfacePicker [data-surface-choice="wood"]').click();
   const tintedRoom = await colorOf('cr');
   assert.match(tintedRoom.color, /^#[0-9a-f]{6}80$/);
   assert.match(tintedRoom.color3d, /^#[0-9a-f]{6}80$/);

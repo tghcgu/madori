@@ -12,7 +12,7 @@ export async function verifyFloorUi({ page, importPlan, planPoint, move, change,
   await page.locator('button[data-view-mode="split"]').click();
   await importPlan(plan([base]));
   await start();
-  await page.locator('#draftSurfaceInput').selectOption('wood');
+  await page.locator('#draftSurfacePicker [data-surface-choice="wood"]').click();
   for (const p of l.slice(0, 3)) await click(...p);
   await page.locator('#floorDraftUndo').click();
   assert.match(await page.locator('#floorToolbar').textContent(), /2点/);

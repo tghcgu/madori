@@ -721,6 +721,43 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+/* 床材を絵で選ぶ欄 */
+.surface-field {
+  display: grid;
+  gap: 6px;
+}
+
+.surface-field-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.surface-field-label strong {
+  margin-left: 4px;
+  color: var(--ink);
+}
+
+.surface-picker {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.surface-picker button {
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+}
+
+.surface-picker button.is-active {
+  outline: 2px solid #2775d1;
+  outline-offset: 1px;
+}
+
 /* なぞって形を決められる物の印（右の小さな波線） */
 .furniture-items button.is-traceable {
   position: relative;
