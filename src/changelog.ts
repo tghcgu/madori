@@ -10,6 +10,12 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-19",
     items: [{
+      ja: "動きを軽くしました。選ぶだけのときは3Dを作り直さず、同じ家具・ドア・窓・草は前に作った物を使い回し、影は物や光が変わったときだけ描き直します。2Dだけを表示しているあいだは3Dを作りません",
+      en: "Editing is faster: selecting no longer rebuilds the 3D view, identical furniture, doors, windows and grass reuse what was already built, shadows are redrawn only when something or the light changes, and the 3D view is not built while only the 2D plan is shown",
+    }, {
+      ja: "川の見た目を直しました。真ん中の線をやめ、岸ほど深い色の水面に、流れに沿った小さな波の印（2Dと3Dで同じ所）を付けました",
+      en: "Rivers look better: no line down the middle, water that deepens in color toward the banks, and small ripple marks along the flow in the same places in 2D and 3D",
+    }, {
       ja: "壁の種類を追加: コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンス。一覧の「壁」から選んで2Dをドラッグすると、その種類の壁になり、選んだ壁の種類も絵から変えられます。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです",
       en: "Added wall types: concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence and fence. Pick one from the new Walls group and drag on the 2D plan to draw it, or change a selected wall's type from pictures. Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above",
     }, {

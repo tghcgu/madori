@@ -35,18 +35,19 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       catalog: FURNITURE_DEFS,
       variants: FURNITURE_VARIANTS,
       selection() { return selectedEntities().map(item => item.id); },
-      openingNames(id) { return planGroup.children.filter(object => object.userData.entityId === id).map(object => object.name); },
+      openingNames(id) { ensureThreeScene(); return planGroup.children.filter(object => object.userData.entityId === id).map(object => object.name); },
       snapshot() { return cloneState(state); },
       templateSnapshot(key) { return makeTemplate(key); },
       textBounds(id) { return measureTextLabel(findEntity(id)); },
       hit(x, y) { return hitTest({ x, y }).entity?.id ?? null; },
       floorAt(id, x, y) {
+        ensureThreeScene();
         const ray = new THREE.Raycaster(new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D, 100, (y-threeSceneCenter.y)*SCALE_3D), new THREE.Vector3(0,-1,0));
         planGroup.updateMatrixWorld(true);
         return ray.intersectObjects(planGroup.children.filter(o => o.userData.entityId === id && !o.userData.ignoreSelection), true).some(hit => hit.object.isMesh);
       },
       incomingStairIds() { return incomingStairs(state.floors, state.activeFloor).map(item => item.id); },
-      stairModelIds() { return planGroup.children.filter(o => !o.userData.ignoreSelection && isStair(findEntity(o.userData.entityId))).map(o => o.userData.entityId); },
+      stairModelIds() { ensureThreeScene(); return planGroup.children.filter(o => !o.userData.ignoreSelection && isStair(findEntity(o.userData.entityId))).map(o => o.userData.entityId); },
       roomLabelBounds(id) {
         const room = findEntity(id);
         return room?.type === 'room' ? getRoomLabelBounds(room) : null;
@@ -66,6 +67,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         return { x:r.left+(p.x+1)*r.width/2, y:r.top+(1-p.y)*r.height/2 };
       },
       bounds(id) {
+        ensureThreeScene();
         const objects = planGroup.children.filter(o => o.userData.entityId === id);
         if (!objects.length) return null;
         const box = new THREE.Box3();
@@ -87,6 +89,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       },
       cameraPose() { return { position: camera.position.toArray(), target: controls.target.toArray() }; },
       pickPoint(x, y) {
+        ensureThreeScene();
         setThreeRay({ clientX: x, clientY: y });
         planGroup.updateMatrixWorld(true);
         const hit = raycaster.intersectObjects(planGroup.children, true).find(h => h.object.isMesh && h.object.visible);
@@ -97,6 +100,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         return { x: r.left + (v.x + 1) * r.width / 2, y: r.top + (1 - v.y) * r.height / 2 };
       },
       materials(id) {
+        ensureThreeScene();
         const found = [];
         planGroup.traverse(o => {
           if (!o.isMesh || entityIdFromObject(o) !== id) return;
@@ -109,9 +113,11 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         return personLayoutOf(item).handles.map(handle => furnitureLocalToWorld(item, handle));
       },
       grassTufts() {
+        ensureThreeScene();
         return planGroup.children.filter(o => o.isInstancedMesh).reduce((sum, o) => sum + o.count, 0);
       },
       floorPieces(id) {
+        ensureThreeScene();
         return planGroup.children.filter(o => o.userData.entityId===id).flatMap(o => o.children.filter(c=>c.isMesh).map(c=>{
           const b = new THREE.Box3().setFromObject(c); return { min:b.min.toArray(),max:b.max.toArray() };
         }));

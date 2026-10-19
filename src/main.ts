@@ -21,7 +21,7 @@ import {
   isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
 } from "./three-style";
 import {
-  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, curveThrough, defaultFreePath, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
+  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, curveThrough, defaultFreePath, freeRiverRipples, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
   freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
   offsetFreeLine, pointInFreePolygon, type FreeKind,
 } from "./free-shapes";
@@ -44,7 +44,7 @@ import {
 import { translateSelection } from "./selection";
 import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
-import { floorPoints, floorPolygon, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
+import { floorPoints, floorPolygon, multiPolygonTester, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
 import { centeredFloorSize, floorPreset, isEllipseFloor, presetOutline, regularFloor, regularFloorOutline, regularFloorSize, regularFloorSides, type FloorPreset } from "./floor-editing";
 import { ROOF_LABELS, isRoofKind, isRadialRoof, roofOutline, roofSides, roofRise, regularRoofSize, radialRoofModel, type RoofKind } from "./roof-shapes";
@@ -716,6 +716,9 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// 影は、物や光が変わったときだけ描き直す（視点を動かすだけなら前の影をそのまま使う）
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xe9edf3);
@@ -1053,6 +1056,7 @@ function loadLightLevel(): number {
 
 function applyLightSettings(): void {
   threeNeedsRender = true;
+  renderer.shadowMap.needsUpdate = true;
   const [x, y, z] = LIGHT_POSITIONS[lightDirection];
   sunLight.position.set(x, y, z);
   // castShadow の切替はシェーダー再構築が必要で確実に効かないため、影の濃度を0にする方式にする
@@ -1577,7 +1581,13 @@ function applyPaletteSearch(): void {
   paletteEmpty.hidden = !searching || anyMatch;
 }
 
+// 階のタブを作り直すのは、階・編集中の階・数の表示が変わったときだけ（作り直すと欄の大きさを測り直すので重い）
+let floorTabsKey = "";
+
 function renderFloorTabs(): void {
+  const key = JSON.stringify([state.floors.map((floor) => floor.name), state.activeFloor, planStats.textContent]);
+  if (key === floorTabsKey && floorTabs.childElementCount) return;
+  floorTabsKey = key;
   floorTabs.innerHTML = "";
   const basement = document.createElement("button");
   basement.type = "button";
@@ -2119,6 +2129,8 @@ function applyViewMode(nextMode: ViewMode, persist = true, restore = false): voi
       render2d();
     }
     if (viewMode !== "plan") {
+      // 2Dだけを見ていた間は3Dを作らないので、ここで作る
+      ensureThreeScene();
       if (!cameraRestored) frameCamera(getGlobalBounds());
       render3dOnce();
     }
@@ -7265,10 +7277,18 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
       break;
     }
     case "river": {
+      // 土手と水面。流れに沿った小さな波の印（3Dの筋と同じ所）。真ん中に線は引かない
       const width = freeLineWidth("river", item?.brush);
       strokeFreeBand(line, width + 28, OUTDOOR_SOIL);
       strokeFreeBand(line, width, OUTDOOR_WATER);
-      strokeFreeBand(line, width * 0.3, "#eef6fa", false, false);
+      ctx.save();
+      ctx.strokeStyle = tint ?? "#8fb9cf";
+      ctx.lineCap = "round";
+      for (const ripple of freeRiverRipples(line, width)) {
+        const dx = (Math.cos(ripple.angle) * ripple.length) / 2, dy = (Math.sin(ripple.angle) * ripple.length) / 2;
+        strokeLine(ripple.x - dx, ripple.y - dy, ripple.x + dx, ripple.y + dy);
+      }
+      ctx.restore();
       break;
     }
     case "pathway": {
@@ -7344,14 +7364,27 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
 
 // 形の上か（閉じた形は内側か縁の近く、線の形は帯の上）
 function isPointOnFreeShape(item: Furniture, point: Point, reach = 6 / view.zoom): boolean {
+  return freeShapeTester(item, reach)(point);
+}
+
+// 形の上かを調べる関数。道すじは1回だけ計算するので、同じ物をたくさんの点で調べるときに使う
+function freeShapeTester(item: Furniture, reach: number): (point: Point) => boolean {
   const kind = item.kind as FreeKind;
-  const [x, y] = worldToFurnitureLocal(item, point);
   const points = freeItemPoints(kind, item.w, item.h, item);
   if (isFreeAreaKind(kind)) {
     const outline = freeOutline(points);
-    return pointInFreePolygon(x, y, outline) || distanceToFreeLine(x, y, outline, true) <= reach + (kind === "pond" ? 18 : 4);
+    const margin = reach + (kind === "pond" ? 18 : 4);
+    return (point) => {
+      const [x, y] = worldToFurnitureLocal(item, point);
+      return pointInFreePolygon(x, y, outline) || distanceToFreeLine(x, y, outline, true) <= margin;
+    };
   }
-  return distanceToFreeLine(x, y, freeCenterLine(points), false) <= freeBandWidth(kind, item.brush) / 2 + reach;
+  const line = freeCenterLine(points);
+  const half = freeBandWidth(kind, item.brush) / 2 + reach;
+  return (point) => {
+    const [x, y] = worldToFurnitureLocal(item, point);
+    return distanceToFreeLine(x, y, line, false) <= half;
+  };
 }
 
 // 線の形の、見えている帯の幅（川は岸、小道は縁石も含める。線路は枕木の長さ）
@@ -8886,11 +8919,70 @@ function scheduleThreeRefresh(): void {
   });
 }
 
+// 3Dの元になる物（間取り・屋根・隠した階・屋根の表示・絵柄）。前に作ったときと同じなら作り直さない
+let threeSceneKey: string | null = null;
+// 作り直しの間だけ使う、選んでいる物の id（物ごとに選択を調べ直さないように）
+let buildSelection: Set<string> | null = null;
+
+function threeSceneSignature(): string {
+  return JSON.stringify([state.floors, state.roofs, [...hiddenFloorIds], roofVisible3d, threeStyle]);
+}
+
 function rebuildThreeScene(): void {
-  // 間取り専用版では3Dを作らない
+  // 間取り専用版では3Dを作らない。2Dだけを見ているときは、3Dを見るときに作る
   if (PLAN_EDITION) return;
+  if (viewMode === "plan") {
+    threeSceneKey = null;
+    return;
+  }
+  ensureThreeScene();
+}
+
+// 3Dを、いまの間取りに合わせる。変わっていなければ選択の枠だけを直す（選ぶだけで全部を作り直さない）
+function ensureThreeScene(): void {
+  if (PLAN_EDITION) return;
+  const key = threeSceneSignature();
+  if (key === threeSceneKey && !pendingCameraFrame) {
+    refreshSelectionBoxes();
+    return;
+  }
+  threeSceneKey = key;
+  buildThreeScene();
+}
+
+// 選択の枠だけを付け直す
+function refreshSelectionBoxes(): void {
+  for (const helper of planGroup.children.filter((object) => object instanceof THREE.BoxHelper)) {
+    planGroup.remove(helper);
+    collectDisposables(helper, pendingDisposal);
+  }
+  buildSelection = new Set(selectedEntities().map((item) => item.id));
+  try {
+    for (const object of [...planGroup.children]) {
+      const id = object.userData.selectionTarget;
+      if (typeof id === "string" && buildSelection.has(id)) addSelectionBox(object, id);
+    }
+  } finally {
+    buildSelection = null;
+  }
   threeNeedsRender = true;
+}
+
+function buildThreeScene(): void {
+  threeNeedsRender = true;
+  renderer.shadowMap.needsUpdate = true;
   disposeGroup(planGroup);
+  modelCacheRound += 1;
+  buildSelection = new Set(selectedEntities().map((item) => item.id));
+  try {
+    buildThreeObjects();
+  } finally {
+    buildSelection = null;
+  }
+  trimModelCache();
+}
+
+function buildThreeObjects(): void {
   const bounds = getGlobalBounds();
   const center = bounds ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 } : { x: 0, y: 0 };
   const shift = new THREE.Vector3((threeSceneCenter.x - center.x) * SCALE_3D, 0, (threeSceneCenter.y - center.y) * SCALE_3D);
@@ -8968,7 +9060,7 @@ function addRoom3d(roomItem: Room, center: Point, yBase: number, floorIndex: num
       mesh.castShadow = floorIndex > 0 && alpha >= 1;
       group.add(mesh);
     }
-    if (polygons.length && roomItem.surface === "grass") addGrass3d(roomItem, roomItem, center, top, state.floors[floorIndex].entities, (x, y) => polygons.some(polygon => pointInPolygon(x, y, polygon)));
+    if (polygons.length && roomItem.surface === "grass") addGrass3d(roomItem, roomItem, center, top, state.floors[floorIndex].entities, polygons);
   } else for (const rect of visibleRectangles(footprint(roomItem), laterRooms.map(footprint))) {
     const geometry = new THREE.BoxGeometry(rect.w * SCALE_3D, thickness, rect.h * SCALE_3D);
     const mesh = new THREE.Mesh(geometry, [side, side, roomMaterial(roomItem, rect), side, side, side]);
@@ -9010,22 +9102,58 @@ function createGrassTuftGeometry(): THREE.BufferGeometry {
   return geometry;
 }
 
-function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number, entities: Entity[], within?: (x: number, y: number) => boolean): void {
+// 草の束の置き場所と色の作り置き。部屋・範囲・草を生やさない物が同じなら、前に決めた置き場所をそのまま使う
+const grassCache = new Map<string, { matrices: Float32Array; colors: Float32Array; count: number; used: number }>();
+let grassTuftGeometry: THREE.BufferGeometry | null = null;
+
+function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number, entities: Entity[], polygons?: ReturnType<typeof visibleFloorPolygons>): void {
   const count = Math.min(GRASS_MAX_TUFTS, Math.round(((rect.w * rect.h) / 10000) * GRASS_TUFTS_PER_M2));
   if (count <= 0) return;
-  const bare = entities.filter((entity): entity is Furniture => entity.type === "furniture" && GRASS_FREE_KINDS.includes(entity.kind));
-  const isBare = (x: number, y: number) => bare.some((item) => {
-    // 自由な形は、形そのもの（川や小道は帯の上）。ほかは家具の回転を戻した座標で、池は楕円、それ以外は長方形の内側かどうかを見る
-    if (isFreeShapeItem(item)) return isPointOnFreeShape(item, { x, y }, 0);
-    const angle = degreesToRadians(-item.rotation);
-    const dx = x - (item.x + item.w / 2), dy = y - (item.y + item.h / 2);
-    const lx = (dx * Math.cos(angle) - dy * Math.sin(angle)) / (item.w / 2);
-    const ly = (dx * Math.sin(angle) + dy * Math.cos(angle)) / (item.h / 2);
-    return item.kind === "pond" ? lx * lx + ly * ly <= 1 : Math.abs(lx) <= 1 && Math.abs(ly) <= 1;
-  });
+  const bareItems = entities.filter((entity): entity is Furniture => entity.type === "furniture" && GRASS_FREE_KINDS.includes(entity.kind));
+  const key = JSON.stringify([roomItem.id, roomItem.color, roomItem.color3d, rect.x, rect.y, rect.w, rect.h, top, center.x, center.y, polygons ?? null,
+    bareItems.map((item) => [item.kind, item.x, item.y, item.w, item.h, item.rotation, item.path, item.brush])]);
+  let placement = grassCache.get(key);
+  if (!placement) {
+    placement = { ...placeGrass(roomItem, rect, center, top, bareItems, count, polygons ? multiPolygonTester(polygons) : undefined), used: 0 };
+    grassCache.set(key, placement);
+  }
+  placement.used = modelCacheRound;
+  if (!placement.count) return;
   const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true, side: THREE.DoubleSide, name: "grass-blades" });
   makeTranslucent(material, colorAlpha(roomItem.color3d ?? roomItem.color));
-  const mesh = new THREE.InstancedMesh(createGrassTuftGeometry(), material, count);
+  if (!grassTuftGeometry) {
+    grassTuftGeometry = createGrassTuftGeometry();
+    cachedResources.add(grassTuftGeometry);
+  }
+  const mesh = new THREE.InstancedMesh(grassTuftGeometry, material, placement.count);
+  mesh.instanceMatrix.array.set(placement.matrices);
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(placement.colors.slice(), 3);
+  // 草は見た目だけ。クリックが下の床に届くよう、当たり判定から外す
+  mesh.raycast = () => {};
+  mesh.receiveShadow = true;
+  planGroup.add(mesh);
+}
+
+// 草の束の置き場所と色を決める。草を生やさない物の上と、範囲（穴のある床の形）の外には置かない
+function placeGrass(roomItem: Room, rect: Rectangle, center: Point, top: number, bareItems: Furniture[], count: number, within?: (x: number, y: number) => boolean): { matrices: Float32Array; colors: Float32Array; count: number } {
+  const bare = bareItems.map((item) => {
+    // 自由な形は、形そのもの（川や小道は帯の上）。ほかは家具の回転を戻した座標で、池は楕円、それ以外は長方形の内側かどうかを見る。
+    // 草の束ごとに道すじを計算し直さないよう、調べ方は先に1回だけ作り、家具の外側の点はすぐに外す
+    const angle = degreesToRadians(-item.rotation), cos = Math.cos(angle), sin = Math.sin(angle);
+    const cx = item.x + item.w / 2, cy = item.y + item.h / 2;
+    const ex = (Math.abs(cos) * item.w + Math.abs(sin) * item.h) / 2, ey = (Math.abs(sin) * item.w + Math.abs(cos) * item.h) / 2;
+    const onShape = isFreeShapeItem(item) ? freeShapeTester(item, 0) : null;
+    return (x: number, y: number) => {
+      const dx = x - cx, dy = y - cy;
+      if (Math.abs(dx) > ex || Math.abs(dy) > ey) return false;
+      if (onShape) return onShape({ x, y });
+      const lx = (dx * cos - dy * sin) / (item.w / 2);
+      const ly = (dx * sin + dy * cos) / (item.h / 2);
+      return item.kind === "pond" ? lx * lx + ly * ly <= 1 : Math.abs(lx) <= 1 && Math.abs(ly) <= 1;
+    };
+  });
+  const isBare = (x: number, y: number) => bare.some((test) => test(x, y));
+  const matrices = new Float32Array(count * 16), colors = new Float32Array(count * 3);
   // 描き直すたびに草の位置が変わらないよう、部屋と範囲から決まる乱数を使う
   const random = seededRandom(`${roomItem.id}:${Math.round(rect.x)}:${Math.round(rect.y)}`);
   const base = new THREE.Color(solidColor(roomItem.color3d ?? roomItem.color));
@@ -9041,15 +9169,11 @@ function addGrass3d(roomItem: Room, rect: Rectangle, center: Point, top: number,
     const spread = 0.8 + random() * 0.6;
     placement.scale.set(spread, 0.05 + random() * 0.08, spread);
     placement.updateMatrix();
-    mesh.setMatrixAt(placed, placement.matrix);
-    mesh.setColorAt(placed, tint.copy(base).offsetHSL((random() - 0.5) * 0.04, 0, (random() - 0.5) * 0.1));
+    placement.matrix.toArray(matrices, placed * 16);
+    tint.copy(base).offsetHSL((random() - 0.5) * 0.04, 0, (random() - 0.5) * 0.1).toArray(colors, placed * 3);
     placed += 1;
   }
-  mesh.count = placed;
-  // 草は見た目だけ。クリックが下の床に届くよう、当たり判定から外す
-  mesh.raycast = () => {};
-  mesh.receiveShadow = true;
-  planGroup.add(mesh);
+  return { matrices: matrices.slice(0, placed * 16), colors: colors.slice(0, placed * 3), count: placed };
 }
 
 function seededRandom(key: string): () => number {
@@ -9220,7 +9344,10 @@ function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): voi
 
 function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   if (item.type === "wall") return;
-  const group = buildOpeningModel({ ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0 });
+  const options = { ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0 };
+  const { type, doorStyle, color, color3d, flip, floorTop, length, mullion } = options;
+  const key = JSON.stringify([threeStyle === "real", type, doorStyle, color, color3d, flip, floorTop, length, mullion]);
+  const group = cachedModel(`opening:${key}`, () => buildOpeningModel(options));
   const mid = midpoint(item);
   const position = to3d(mid.x, mid.y, center);
   group.position.set(position.x, yBase, position.z);
@@ -9234,9 +9361,19 @@ function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
 
 function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
   const floorTop = yBase === 0 ? 0.08 : 0;
-  const group = buildFurnitureModel({ ...furnitureItem, rise: FLOOR_SPACING - floorTop });
-  if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
-  if (furnitureItem.kind === "paint") applyPaintTexture(group, furnitureItem);
+  const options = { ...furnitureItem, rise: FLOOR_SPACING - floorTop };
+  let group: THREE.Group;
+  if (furnitureItem.kind === "evidenceMarker" || furnitureItem.kind === "paint") {
+    // 文字や描いた絵を貼る物は、1つずつ作る
+    group = buildFurnitureModel(options);
+    if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
+    else applyPaintTexture(group, furnitureItem);
+  } else {
+    // 形を決める値が同じ家具は、作り置きを写して使う（リアルの絵柄では材質を変えるので分ける）
+    const { kind, w, h, color, color3d, rise, height, symbol, path, stride, brush, density, pose } = options;
+    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, stride, brush, density, pose]);
+    group = cachedModel(`furniture:${key}`, () => buildFurnitureModel(options));
+  }
   placeFurniture3d(group, furnitureItem, center, yBase);
   if (furnitureItem.flip) group.scale.x *= -1;
   markSelectable(group, furnitureItem.id);
@@ -9260,6 +9397,9 @@ let threeDragRefreshCost = 0;
 function syncThreeWhileDragging(entities: Entity[], rebuild = false): void {
   if (PLAN_EDITION || viewMode === "plan" || !entities.length) return;
   if (entities.every((entity) => entity.type === "furniture" && !isStair(entity))) {
+    // シーンを作り直さずに変えるので、次の作り直しは省かない
+    threeSceneKey = null;
+    renderer.shadowMap.needsUpdate = true;
     for (const entity of entities as Furniture[]) {
       const floorIndex = state.floors.findIndex((floor) => floor.entities.includes(entity));
       if (floorIndex < 0 || hiddenFloorIds.has(state.floors[floorIndex].id)) continue;
@@ -9285,23 +9425,17 @@ function syncThreeWhileDragging(entities: Entity[], rebuild = false): void {
   });
 }
 
-// その物の3D（選択の枠も）をシーンから外して捨てる。ほかの物と共有している材質は残す
+// その物の3D（選択の枠も）をシーンから外して捨てる。ほかの物と共有している材質と、作り置きの物は残す
 function removeThreeObjects(entityId: string): void {
   const objects = planGroup.children.filter((object) => object.userData.entityId === entityId && !object.userData.ignoreSelection);
   const helpers = planGroup.children.filter((object) => object instanceof THREE.BoxHelper && objects.includes(object.object));
-  const shared = new Set<THREE.Material>([...sharedMaterials, ...coloredMaterialCache.values()]);
+  const shared = new Set<object>(coloredMaterialCache.values());
+  const disposables = new Set<{ dispose(): void }>();
   for (const object of [...objects, ...helpers]) {
     planGroup.remove(object);
-    object.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      mesh.geometry?.dispose();
-      (Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []).forEach((material) => {
-        if (shared.has(material)) return;
-        (material as THREE.MeshStandardMaterial).map?.dispose();
-        material.dispose();
-      });
-    });
+    object.traverse((child) => collectDisposables(child, disposables));
   }
+  disposables.forEach((item) => { if (!shared.has(item)) pendingDisposal.add(item); });
 }
 
 // ---- Roof ----
@@ -9414,7 +9548,9 @@ function markSelectable(object: THREE.Object3D, entityId: string): void {
 }
 
 function addSelectionBox(object: THREE.Object3D, entityId: string): void {
-  if (!selectedEntities().some((item) => item.id === entityId)) return;
+  // 選択が変わったときに枠だけを付け直せるよう、枠を付ける物に印を付けておく
+  object.userData.selectionTarget = entityId;
+  if (!(buildSelection ? buildSelection.has(entityId) : selectedEntities().some((item) => item.id === entityId))) return;
   const selected = findEntity(entityId);
   const helper = new THREE.BoxHelper(object, selected && isLocked(selected) ? 0x9b6714 : 0x2775d1);
   helper.userData.ignoreSelection = true;
@@ -9469,7 +9605,10 @@ function frameCamera(bounds: Bounds | null): void {
 
 function render3dOnce(): void {
   const rect = threeCanvas.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return;
+  if (rect.width <= 0 || rect.height <= 0) {
+    flushDisposal();
+    return;
+  }
   renderer.setSize(rect.width, rect.height, false);
   camera.aspect = rect.width / rect.height;
   // 寄ったときに手前が切れず、引いたときに奥が消えないよう、見える範囲をカメラの距離に合わせる
@@ -9480,6 +9619,8 @@ function render3dOnce(): void {
   controls.update();
   renderThreeView();
   threeNeedsRender = false;
+  // 作り直す前の形・材質は、作り直した物を描いた後で捨てる
+  flushDisposal();
 }
 
 // ---- 3Dの絵柄 ----
@@ -9798,7 +9939,7 @@ function animate3d(): void {
 
 function redrawAll(rebuild = true): void {
   render2d();
-  if (rebuild) rebuildThree();
+  if (rebuild) rebuildThreeScene();
   updateUi();
 }
 
@@ -10940,6 +11081,7 @@ function exportThreeImage(): void {
     window.setTimeout(() => (saveStatus.textContent = "保存済み"), 2000);
     return;
   }
+  ensureThreeScene();
   const pixelRatio = renderer.getPixelRatio();
   const ratio = Math.min(pixelRatio * 2, EXPORT_MAX_SIDE / size.x, EXPORT_MAX_SIDE / size.y, renderer.capabilities.maxTextureSize / Math.max(size.x, size.y));
   renderer.setPixelRatio(ratio);
@@ -12008,7 +12150,14 @@ function cloneEntity(value: Entity): Entity {
 }
 
 function findEntity(id: string): Entity | undefined {
-  return state.roofs.find((item) => item.id === id) ?? state.floors.flatMap((floor) => floor.entities).find((entity) => entity.id === id);
+  const roof = state.roofs.find((item) => item.id === id);
+  if (roof) return roof;
+  // 階ごとの配列をつなげずに探す（よく呼ばれるので、大きな間取りでも軽く）
+  for (const floor of state.floors) {
+    const entity = floor.entities.find((item) => item.id === id);
+    if (entity) return entity;
+  }
+  return undefined;
 }
 
 function removeEntityById(id: string): void {
@@ -12163,29 +12312,80 @@ function translucentSlabMaterial(alpha: number): THREE.MeshStandardMaterial {
   return material;
 }
 
+// 捨てる形・材質・模様。次に3Dを描いた後で捨てる。先に捨てると、作り直した同じ作りの材質のために
+// 描く準備（シェーダーの組み立て）をやり直すことになり、作り直すたびに重くなる
+const pendingDisposal = new Set<{ dispose(): void }>();
+
 function disposeGroup(group: THREE.Group): void {
-  const geometries = new Set<THREE.BufferGeometry>();
-  const materials = new Set<THREE.Material>();
-  const textures = new Set<THREE.Texture>();
   const instanced: THREE.InstancedMesh[] = [];
   group.traverse((object) => {
     if ((object as THREE.InstancedMesh).isInstancedMesh) instanced.push(object as THREE.InstancedMesh);
-    const mesh = object as THREE.Mesh;
-    if (mesh.geometry) geometries.add(mesh.geometry);
-    const items = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-    items.forEach((material) => {
-      if (sharedMaterials.has(material)) return;
-      materials.add(material);
-      const map = (material as THREE.MeshStandardMaterial).map;
-      if (map) textures.add(map);
-    });
+    collectDisposables(object, pendingDisposal);
   });
   group.clear();
   instanced.forEach((mesh) => mesh.dispose());
-  geometries.forEach((geometry) => geometry.dispose());
-  materials.forEach((material) => material.dispose());
-  textures.forEach((texture) => texture.dispose());
   coloredMaterialCache.clear();
+}
+
+// 捨ててよい形・材質・模様を集める（ほかの物と共有している材質と、作り置きの物は残す）
+function collectDisposables(object: THREE.Object3D, into: Set<{ dispose(): void }>): void {
+  const mesh = object as THREE.Mesh;
+  if (mesh.geometry && !cachedResources.has(mesh.geometry)) into.add(mesh.geometry);
+  const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+  for (const material of materials) {
+    if (sharedMaterials.has(material) || cachedResources.has(material)) continue;
+    into.add(material);
+    const map = (material as THREE.MeshStandardMaterial).map;
+    if (map && !cachedResources.has(map)) into.add(map);
+  }
+}
+
+function flushDisposal(): void {
+  pendingDisposal.forEach((item) => item.dispose());
+  pendingDisposal.clear();
+}
+
+// ---- 3Dの作り置き ----
+// 同じ種類・大きさ・色の家具やドア・窓は、一度作った立体（形と材質）を写して使う。
+// 作り置きはシーンを作り直しても捨てず、しばらく（作り直し数回のあいだ）使われなかったら捨てる
+const MODEL_CACHE_KEEP = 3;
+const modelCache = new Map<string, { model: THREE.Object3D; used: number }>();
+const cachedResources = new WeakSet<object>();
+let modelCacheRound = 0;
+
+function cachedModel<T extends THREE.Object3D>(key: string, build: () => T): T {
+  let entry = modelCache.get(key);
+  if (!entry) {
+    const model = build();
+    model.traverse((object) => {
+      const owned = new Set<{ dispose(): void }>();
+      collectDisposables(object, owned);
+      owned.forEach((item) => cachedResources.add(item));
+    });
+    entry = { model, used: modelCacheRound };
+    modelCache.set(key, entry);
+  }
+  entry.used = modelCacheRound;
+  return entry.model.clone() as T;
+}
+
+// しばらく使われなかった作り置きを捨てる。シーンにある物は、いまの作り直しで使った物だけなので、残る
+function trimModelCache(): void {
+  for (const [key, entry] of grassCache) if (modelCacheRound - entry.used >= MODEL_CACHE_KEEP) grassCache.delete(key);
+  for (const [key, entry] of modelCache) {
+    if (modelCacheRound - entry.used < MODEL_CACHE_KEEP) continue;
+    modelCache.delete(key);
+    entry.model.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) pendingDisposal.add(mesh.geometry);
+      for (const material of Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : []) {
+        if (sharedMaterials.has(material)) continue;
+        pendingDisposal.add(material);
+        const map = (material as THREE.MeshStandardMaterial).map;
+        if (map) pendingDisposal.add(map);
+      }
+    });
+  }
 }
 
 function distanceToSegment(point: Point, start: Point, end: Point): number {

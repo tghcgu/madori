@@ -16,7 +16,7 @@ import {
 } from "./furniture-shapes.ts";
 import {
   RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
-  freeSteppingStones, isAlwaysFreeKind, isFreeShapeKind, offsetFreeLine, type FreeKind,
+  freeRiverRipples, freeSteppingStones, isAlwaysFreeKind, isFreeShapeKind, offsetFreeLine, type FreeKind,
 } from "./free-shapes.ts";
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
@@ -320,6 +320,39 @@ function strokeSolid(m: Model, line: Point2[], width: number, bottom: number, to
   });
 }
 
+// 川の水面: 道すじに沿った帯を、岸・真ん中・岸の3列の点でつなぎ、頂点の色で岸ほど深く、真ん中ほど明るくする
+function waterRibbon(m: Model, line: Point2[], width: number, top: number, tint: string | undefined, material: Material): void {
+  if (line.length < 2) return;
+  const left = offsetFreeLine(line, width / 2, false), right = offsetFreeLine(line, -width / 2, false);
+  const base = new THREE.Color(parseColorCode(tint)?.rgb ?? "#3f7f9c");
+  const edge = base.clone().multiplyScalar(0.82), middle = base.clone().lerp(new THREE.Color("#9fd0e4"), 0.38);
+  const positions: number[] = [], colors: number[] = [], index: number[] = [];
+  line.forEach((point, i) => {
+    for (const [p, c] of [[left[i], edge], [point, middle], [right[i], edge]] as [Point2, THREE.Color][]) {
+      positions.push(p[0] / 100, top, p[1] / 100);
+      colors.push(c.r, c.g, c.b);
+    }
+  });
+  for (let i = 0; i < line.length - 1; i += 1) {
+    const a = i * 3, b = (i + 1) * 3;
+    index.push(a, a + 1, b, b, a + 1, b + 1, a + 1, a + 2, b + 1, b + 1, a + 2, b + 2);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  // 上を向いていなければ、面の向きを裏返す（道すじの向きで左右が入れ替わるため）
+  const normal = geometry.getAttribute("normal");
+  if (normal.count && normal.getY(1) < 0) {
+    for (let i = 0; i < index.length; i += 3) [index[i + 1], index[i + 2]] = [index[i + 2], index[i + 1]];
+    geometry.setIndex(index);
+    geometry.computeVertexNormals();
+  }
+  const mesh = m.mesh(geometry, [0, 0, 0], material);
+  mesh.castShadow = false;
+}
+
 // 閉じた輪郭（cm）を、上面 top・厚み thickness（m）の板にする
 function outlineSlab(m: Model, outline: Point2[], thickness: number, top: number, material: Material): THREE.Mesh {
   return shapeSlab(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), thickness, top, m, material, 1);
@@ -380,11 +413,17 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
       break;
     }
     case "river": {
-      // 土手、水面、流れの明るい筋
+      // 土手と、岸ほど深い色から真ん中へ少しずつ明るくなる水面（線は引かない）。流れに沿った小さな波の筋は2Dの印と同じ所
       const width = freeLineWidth("river", item.brush);
       strokeSolid(m, line, width + 28, 0, 0.006, m.material("riverbank-soil", 0x8c7a5a, 0.95));
-      strokeSolid(m, line, width, 0.006, 0.012, m.material("water", 0x4a8aa3, 0.06, 0.15, true));
-      strokeSolid(m, line, width * 0.3, 0.012, 0.014, m.material("water-glint", 0x8cc3dc, 0.05, 0.1));
+      const water = m.material("river-water", 0xffffff, 0.06, 0.15);
+      water.vertexColors = true;
+      waterRibbon(m, line, width, 0.012, item.color3d ?? item.color, water);
+      const ripple = m.material("river-ripple", 0xcfe6f0, 0.2);
+      for (const wave of freeRiverRipples(line, width)) {
+        const mark = m.box(wave.length / 100, 0.002, 0.018, wave.x / 100, 0.0135, wave.y / 100, ripple, 0);
+        mark.rotation.y = -wave.angle;
+      }
       break;
     }
     case "pathway": {

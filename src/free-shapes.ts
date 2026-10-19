@@ -346,6 +346,17 @@ export function freePosts(line: Point2[], spacing: number): FreeSample[] {
   return samplesAlong(line, step, false, 0);
 }
 
+export interface FreeRipple { x: number; y: number; angle: number; length: number; }
+
+// 川の水面の小さな波の印。流れに沿って、左右に少しずつずらして置く（2Dの線と3Dの細い筋が同じ所）
+export function freeRiverRipples(line: Point2[], width: number): FreeRipple[] {
+  return samplesAlong(line, 110, false, 55).map((sample, i) => {
+    const side = (i % 3 === 0 ? -0.24 : i % 3 === 1 ? 0.18 : -0.02) * width;
+    const nx = -Math.sin(sample.angle), ny = Math.cos(sample.angle);
+    return { x: sample.x + nx * side, y: sample.y + ny * side, angle: sample.angle, length: Math.min(60, Math.max(18, width * 0.28)) * (0.8 + 0.4 * freeRandom(i, 9)) };
+  });
+}
+
 // 飛び石: 道すじに沿って、少し左右にずらした楕円の石
 export function freeSteppingStones(line: Point2[]): StoneSlab[] {
   return samplesAlong(line, 55, false, 22).map((sample, i) => {

@@ -96,6 +96,21 @@ export function pointInPolygon(x: number, y: number, polygon: Polygon): boolean 
   return pointInRing(x, y, polygon[0]) && !polygon.slice(1).some(ring => pointInRing(x, y, ring));
 }
 
+// 穴のある多角形（いくつか）の内側かを調べる関数。たくさんの点を調べるときのために、輪ごとの外枠で遠い輪をすぐに外す
+export function multiPolygonTester(polygons: MultiPolygon): (x: number, y: number) => boolean {
+  const boxed = polygons.map(polygon => polygon.map(ring => {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [x, y] of ring) {
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    }
+    return { ring, minX, minY, maxX, maxY };
+  }));
+  type Boxed = (typeof boxed)[number][number];
+  const inside = (x: number, y: number, box: Boxed) => x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY && pointInRing(x, y, box.ring);
+  return (x, y) => boxed.some(([outer, ...holes]) => inside(x, y, outer) && !holes.some(hole => inside(x, y, hole)));
+}
+
 // 後から置いた床を差し引き、凹形や穴のある床でも面がちらつかないようにする。
 export function visibleFloorPolygons(floor: FloorOutline, later: FloorOutline[]): MultiPolygon {
   const shape = floorPolygon(floor);
