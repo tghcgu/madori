@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
-import { CAP_COLOR, WALL_STYLES, isWallStyle, wallJoints, wallStyleInfo, wallTopWidth, type WallStyle, type WallStyleInfo } from "./wall-styles";
+import { CAP_COLOR, WALL_STYLES, WALL_THICKNESS_RANGE, isWallStyle, isWallThicknessAdjustable, wallJoints, wallStyleInfo, wallStyleWithThickness, wallTopWidth, type WallStyle, type WallStyleInfo } from "./wall-styles";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
@@ -106,6 +106,8 @@ interface LinearElement {
   doorStyle?: DoorStyle;
   // 壁の種類（ふつうの壁のときは持たない）
   wallStyle?: WallStyle;
+  // 壁の厚み cm（種類の標準の厚みのときは持たない）
+  thickness?: number;
   locked?: boolean;
 }
 
@@ -131,6 +133,9 @@ interface Furniture {
   path?: number[][];
   // 池・花壇・芝生・ラグの穴（道すじと同じ割合の輪）。穴がなければ持たない
   holes?: number[][][];
+  // 取り込んだ画像（data URL）と、その濃さ（1 より小さいと透ける。1 のときは持たない）
+  image?: string;
+  opacity?: number;
   stride?: number;
   // 人: 姿勢と手足の角度（手足を動かすまでは持たない）
   pose?: PersonPose;
@@ -542,9 +547,21 @@ interface ImageExportSettings {
   floors: "current" | "all" | "each";
   grid: boolean;
   names: boolean;
+  // 方眼の大きさを決めたときの、画像の1マスの px（0 ならおまかせ）
+  cell: number;
+  // 背景を透明にする
+  transparent: boolean;
 }
 
-const imageExportSettings: ImageExportSettings = { floors: "current", grid: true, names: true };
+const imageExportSettings: ImageExportSettings = { floors: "current", grid: true, names: true, cell: 0, transparent: false };
+const EXPORT_CELLS = [0, 50, 64, 70, 100, 128, 140];
+
+// 表示の切り替え（部屋名・部屋の広さ・方眼の表示と大きさ）。ブラウザに覚える
+type RoomAreaUnit = "none" | "jo" | "m2";
+const GRID_SIZES = [0, 25, 50, 91, 100, 150, 182, 200, 300];
+const displaySettings: { names: boolean; area: RoomAreaUnit; grid: boolean; gridSize: number } = { names: true, area: "none", grid: true, gridSize: 0 };
+// 書き出しでは、方眼の大きさをまとめずにそのまま使う（画像のマス目をきっちり合わせる）
+let exactGrid = false;
 
 // 2D画面の上が北（3Dの-z）。値は「光が差す方角」に太陽を置く位置。
 const LIGHT_POSITIONS: Record<LightDirection, [number, number, number]> = {
@@ -799,12 +816,13 @@ interface SavedViewState {
   panels?: Record<string, boolean>;
   symbols?: Partial<Record<FurnitureKind, number>>;
   ghost?: { target?: string; color?: string; opacity?: number };
-  imageExport?: { floors?: string; grid?: boolean; names?: boolean };
+  imageExport?: { floors?: string; grid?: boolean; names?: boolean; cell?: number; transparent?: boolean };
   // 「組み合わせ」の置き方
   combine?: string;
   pen?: { color?: string; brush?: number; filled?: boolean; kind?: string };
   drawMethods?: Record<string, string>;
   brushes?: Record<string, number>;
+  display?: { names?: boolean; area?: string; grid?: boolean; gridSize?: number };
   shards?: { spread?: number; density?: number };
   look?: { style?: string; dot?: number; background?: string };
   // 3Dの絵柄
@@ -955,6 +973,8 @@ function normalizeEntity(value: unknown): Entity {
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
       path: entity.kind === "footprints" || entity.kind === "brokenGlass" || isFreeShapeKind(entity.kind) ? normalizeFootprintPath(entity.path) : undefined,
       holes: isFreeAreaKind(entity.kind) && normalizeFootprintPath(entity.path) ? normalizeFreeHoles(entity.holes) : undefined,
+      image: entity.kind === "image" && typeof entity.image === "string" && IMAGE_DATA_URL.test(entity.image) && entity.image.length <= MAX_IMAGE_DATA ? entity.image : undefined,
+      opacity: entity.kind === "image" && finite(entity.opacity) && entity.opacity! < 1 ? clamp(entity.opacity!, 0.05, 1) : undefined,
       stride: entity.kind === "footprints" && finite(entity.stride) ? clamp(Math.round(entity.stride!), MIN_STRIDE, MAX_STRIDE) : undefined,
       pose: isPersonKind(entity.kind) ? normalizePersonPose(entity.pose) : undefined,
       ...(entity.kind === "brokenGlass" ? {
@@ -981,6 +1001,12 @@ function normalizeEntity(value: unknown): Entity {
     if (line.type !== "door" || !isDoorStyle(line.doorStyle) || line.doorStyle === "swing") delete line.doorStyle;
     // 壁の種類も知っている物だけ。ふつうの壁は持たない
     if (line.type !== "wall" || !isWallStyle(line.wallStyle) || line.wallStyle === "plain") delete line.wallStyle;
+    // 厚みは壁だけ。範囲に収め、種類の標準と同じなら持たない
+    if (line.type === "wall" && finite(line.thickness)) {
+      const thickness = clamp(Math.round(line.thickness!), WALL_THICKNESS_RANGE.min, WALL_THICKNESS_RANGE.max);
+      if (thickness === wallStyleInfo(line.wallStyle).thickness || !isWallThicknessAdjustable(wallStyleInfo(line.wallStyle))) delete line.thickness;
+      else line.thickness = thickness;
+    } else delete line.thickness;
     return line;
   }
   if (entity.type === "shape" && ["circle", "ellipse", "arc", "polygon"].includes(entity.kind)) {
@@ -1145,9 +1171,11 @@ function setupUi(): void {
       if (!window.confirm("現在の間取りをテンプレートで置き換えます。実行しますか？")) {
         return;
       }
-      replaceState(makeTemplate(key), true);
+      const plan = makeTemplate(key);
+      replaceState(document.querySelector<HTMLInputElement>("#templateStructureOnly")?.checked ? structureOnly(plan) : plan, true);
     });
   });
+  document.querySelector<HTMLInputElement>("#templateSearch")?.addEventListener("input", applyTemplateSearch);
 
   dimensionToggle.addEventListener("click", () => {
     showDimensions = !showDimensions;
@@ -1167,6 +1195,9 @@ function setupUi(): void {
   });
 
   setupGhostMenu();
+  setupViewMenu();
+  setupImageImport();
+  document.querySelector<HTMLButtonElement>("#imageImportButton")?.addEventListener("click", () => document.querySelector<HTMLInputElement>("#imageImportInput")?.click());
   setupPlanStyleMenu();
   setupImageExport();
   setupThreeStyle();
@@ -1467,6 +1498,7 @@ function buildFurniturePicker(): void {
   for (const id of PALETTE_ORDER) {
     const section = sections.get(id);
     if (section) furniturePicker.appendChild(section);
+    if (section instanceof HTMLDetailsElement) addPaletteThumbs(section);
   }
   const roofKeywords: Record<RoofKind, string> = { gable: "きりづま", hip: "よせむね", flat: "ろくやね りくやね フラット", cone: "えんすい 円形 丸 まる 塔", dome: "どーむ 円形 丸 まる 半球", polygon: "せいたかっけい 多角形 三角 四角 五角 六角 八角" };
   roofPicker.querySelectorAll<HTMLButtonElement>("[data-roof-add]").forEach((button) => {
@@ -1475,6 +1507,26 @@ function buildFurniturePicker(): void {
   });
 
   applyPaletteSearch();
+}
+
+// 一覧の家具のボタンに、2Dの記号の小さな絵を付ける（その欄を開いたときに描く）
+const PALETTE_THUMB_SIZE = 30;
+function addPaletteThumbs(details: HTMLDetailsElement): void {
+  whenOpened(details, () => {
+    details.querySelectorAll<HTMLButtonElement>("button[data-furniture]").forEach((button) => {
+      if (button.querySelector(".furniture-thumb")) return;
+      const kind = button.dataset.furniture as FurnitureKind;
+      const def = FURNITURE_DEFS[kind];
+      if (!def) return;
+      const canvas = document.createElement("canvas");
+      canvas.className = "furniture-thumb";
+      canvas.setAttribute("aria-hidden", "true");
+      const symbol = validSymbol(kind, lastSymbolByKind[kind]) || 0;
+      drawSymbolPreview(canvas, { id: "thumb", type: "furniture", kind, x: 0, y: 0, w: def.w, h: def.h, rotation: 0, ...(symbol ? { symbol } : {}) }, symbol, PALETTE_THUMB_SIZE);
+      button.prepend(canvas);
+      button.classList.add("has-thumb");
+    });
+  });
 }
 
 // 一覧の見本の絵は、その欄を開いたときに作る（閉じた欄の絵まで作ると、起動が重くなる）
@@ -1647,6 +1699,15 @@ function renderFloorTabs(): void {
   add.title = "上の階を追加";
   add.addEventListener("click", addFloorAbove);
   floorTabs.appendChild(add);
+  // この階を複製（2つ重ねた四角の絵）
+  const duplicate = document.createElement("button");
+  duplicate.type = "button";
+  duplicate.className = "floor-tab floor-tab-ghost floor-tab-duplicate";
+  duplicate.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="5.5" width="9" height="9" rx="1.5" fill="#fff" stroke="currentColor" stroke-width="1.4"/></svg>`;
+  duplicate.title = `${activeFloor().name}を複製（すぐ上に同じ階を足す）`;
+  duplicate.setAttribute("aria-label", "この階を複製");
+  duplicate.addEventListener("click", duplicateActiveFloor);
+  floorTabs.appendChild(duplicate);
   if (state.floors.length > 1) {
     const remove = document.createElement("button");
     remove.type = "button";
@@ -1880,6 +1941,24 @@ function addFloorAbove(): void {
   redrawAll();
 }
 
+// いまの階を複製して、すぐ上に足す（部屋・壁・家具などを新しい id で写す）。この階に付いている屋根は、上の写しへ移す
+function duplicateActiveFloor(): void {
+  const index = state.activeFloor;
+  const source = state.floors[index];
+  const basements = basementCount();
+  const copy: Floor = { id: newId("floor"), name: "", entities: source.entities.map((entity) => ({ ...cloneEntity(entity), id: newId(entity.type) })) };
+  state.floors.splice(index + 1, 0, copy);
+  // 地下の階を複製したときは、写しも地下にする
+  if (index < basements) state.basements = basements + 1;
+  state.roofs.forEach((roofItem) => { if (roofItem.floorId === source.id) roofItem.floorId = copy.id; });
+  renameFloors();
+  state.activeFloor = index + 1;
+  selectOnly(null);
+  commitState();
+  fitPlanToCanvas();
+  redrawAll();
+}
+
 function removeActiveFloor(): void {
   if (state.floors.length <= 1) return;
   const floor = activeFloor();
@@ -1947,6 +2026,68 @@ function updateShadowToggle(): void {
 }
 
 // ---- 透かす階と色のメニュー ----
+
+// 表示メニュー（部屋名・部屋の広さ・方眼の表示と大きさ）
+function setupViewMenu(): void {
+  const button = document.querySelector<HTMLButtonElement>("#viewMenuButton");
+  const menu = document.querySelector<HTMLDivElement>("#viewMenu");
+  const names = document.querySelector<HTMLInputElement>("#roomNamesInput");
+  const area = document.querySelector<HTMLSelectElement>("#roomAreaSelect");
+  const grid = document.querySelector<HTMLInputElement>("#gridVisibleInput");
+  const size = document.querySelector<HTMLSelectElement>("#gridSizeSelect");
+  if (!button || !menu || !names || !area || !grid || !size) return;
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+    menu.hidden = true;
+    button.setAttribute("aria-expanded", "false");
+  });
+  names.addEventListener("change", () => {
+    displaySettings.names = names.checked;
+    hideRoomNames = !names.checked;
+    applyDisplaySettings();
+  });
+  area.addEventListener("change", () => {
+    displaySettings.area = area.value === "jo" || area.value === "m2" ? area.value : "none";
+    applyDisplaySettings();
+  });
+  grid.addEventListener("change", () => {
+    displaySettings.grid = grid.checked;
+    applyDisplaySettings();
+  });
+  size.addEventListener("change", () => {
+    const value = Number(size.value);
+    displaySettings.gridSize = GRID_SIZES.includes(value) ? value : 0;
+    // 大きさを選んだら、方眼も表示する
+    displaySettings.grid = true;
+    applyDisplaySettings();
+  });
+  syncViewMenu();
+}
+
+function syncViewMenu(): void {
+  const set = <T extends HTMLInputElement | HTMLSelectElement>(selector: string, apply: (element: T) => void) => {
+    const element = document.querySelector<T>(selector);
+    if (element) apply(element);
+  };
+  set<HTMLInputElement>("#roomNamesInput", (input) => (input.checked = displaySettings.names));
+  set<HTMLSelectElement>("#roomAreaSelect", (select) => (select.value = displaySettings.area));
+  set<HTMLInputElement>("#gridVisibleInput", (input) => (input.checked = displaySettings.grid));
+  set<HTMLSelectElement>("#gridSizeSelect", (select) => (select.value = String(displaySettings.gridSize)));
+  const button = document.querySelector<HTMLButtonElement>("#viewMenuButton");
+  // 初めの表示（部屋名あり・広さなし・方眼あり・おまかせ）から変えていれば、ボタンを押した見た目にする
+  button?.classList.toggle("is-active", !displaySettings.names || displaySettings.area !== "none" || !displaySettings.grid || displaySettings.gridSize > 0);
+}
+
+function applyDisplaySettings(): void {
+  syncViewMenu();
+  scheduleViewStateSave();
+  render2d();
+  updatePropertiesPanel();
+}
 
 function setupGhostMenu(): void {
   const button = document.querySelector<HTMLButtonElement>("#ghostMenuButton");
@@ -2190,6 +2331,14 @@ function applySavedDisplaySettings(): void {
     workspace.dataset.panel = "hidden";
     document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", "true");
   }
+  if (viewState.display && typeof viewState.display === "object") {
+    const { names, area, grid, gridSize } = viewState.display;
+    if (typeof names === "boolean") displaySettings.names = names;
+    if (area === "none" || area === "jo" || area === "m2") displaySettings.area = area;
+    if (typeof grid === "boolean") displaySettings.grid = grid;
+    if (typeof gridSize === "number" && GRID_SIZES.includes(gridSize)) displaySettings.gridSize = gridSize;
+  }
+  hideRoomNames = !displaySettings.names;
   if (viewState.ghost && typeof viewState.ghost === "object") {
     const { target, color, opacity } = viewState.ghost;
     if (typeof target === "string" && target) ghostSettings.target = target;
@@ -2306,6 +2455,7 @@ function saveViewState(): void {
   viewState.pen = { ...penSettings };
   viewState.drawMethods = { ...drawMethods };
   viewState.brushes = { ...brushWidths };
+  viewState.display = { ...displaySettings };
   viewState.shards = { ...shardSettings };
   viewState.look = { style: planStyle, dot: pixelDot, background: planBackground };
   try {
@@ -3510,6 +3660,17 @@ function handleWheel(event: WheelEvent): void {
   render2d();
 }
 
+// 2Dを、画面の真ん中を中心に拡大・縮小する
+function zoomPlanBy(factor: number): void {
+  const rect = planCanvas.getBoundingClientRect();
+  const cx = rect.width / 2, cy = rect.height / 2;
+  const before = { x: (cx - view.x) / view.zoom, y: (cy - view.y) / view.zoom };
+  view.zoom = clamp(view.zoom * factor, MIN_PLAN_ZOOM, MAX_PLAN_ZOOM);
+  view.x = cx - before.x * view.zoom;
+  view.y = cy - before.y * view.zoom;
+  render2d();
+}
+
 function handleKeyDown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   const isEditing = target?.tagName === "INPUT" || target?.tagName === "SELECT" || target?.tagName === "TEXTAREA" || Boolean(target?.isContentEditable);
@@ -3627,6 +3788,34 @@ function handleKeyDown(event: KeyboardEvent): void {
     cancelPlanDrag();
     redo();
     return;
+  }
+  // ファイルに保存（Ctrl+S）。ブラウザのページ保存の代わりに、間取りのファイルを書き出す
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    exportPlan();
+    return;
+  }
+  // 階の切り替え（[ 下の階・] 上の階）、方眼の表示（G）、全体を表示（0）、拡大・縮小（+ / -）
+  if (!event.ctrlKey && !event.metaKey && !event.altKey && drag.pointerId === null) {
+    if (event.key === "[" || event.key === "]") {
+      const next = state.activeFloor + (event.key === "]" ? 1 : -1);
+      if (next >= 0 && next < state.floors.length) setActiveFloorIndex(next);
+      return;
+    }
+    if (event.key === "g" || event.key === "G") {
+      displaySettings.grid = !displaySettings.grid;
+      applyDisplaySettings();
+      return;
+    }
+    if (event.key === "0") {
+      fitPlanToCanvas();
+      render2d();
+      return;
+    }
+    if (event.key === "+" || event.key === "=" || event.key === "-") {
+      zoomPlanBy(event.key === "-" ? 1 / 1.25 : 1.25);
+      return;
+    }
   }
   if (!isEditing && event.key.toLowerCase() === "l" && state.selectedId) {
     const members = selectedEntities();
@@ -4534,7 +4723,7 @@ function render2d(): void {
   const ratio = getCanvasPixelRatio();
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  drawStyledPlan(ctx, width, height, ratio, { grid: true, ghost: true, editing: true });
+  drawStyledPlan(ctx, width, height, ratio, { grid: displaySettings.grid, ghost: true, editing: true });
   scheduleViewStateSave();
 }
 
@@ -4845,12 +5034,13 @@ function refreshStyleThumbnails(menu: HTMLElement): void {
 // メニューの見本を、それぞれの線画と背景で描く。描いている間だけ、間取り・見ている所・絵柄を見本の物に差し替える
 function drawStyleThumbnails(items: { canvas: HTMLCanvasElement; style: PlanStyle; background: PlanBackground }[]): void {
   if (!items.length) return;
-  const saved = { state, view: { ...view }, planStyle, planBackground, ctx, hideRoomNames, showDimensions };
+  const saved = { state, view: { ...view }, planStyle, planBackground, ctx, hideRoomNames, showDimensions, area: displaySettings.area };
   const ratio = 2;
   try {
     state = styleSamplePlan();
     hideRoomNames = true;
     showDimensions = false;
+    displaySettings.area = "none";
     for (const { canvas, style, background } of items) {
       const target = canvas.getContext("2d");
       if (!target) continue;
@@ -4874,6 +5064,7 @@ function drawStyleThumbnails(items: { canvas: HTMLCanvasElement; style: PlanStyl
     ctx = saved.ctx;
     hideRoomNames = saved.hideRoomNames;
     showDimensions = saved.showDimensions;
+    displaySettings.area = saved.area;
   }
 }
 
@@ -4908,7 +5099,9 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
 
   const entities = activeEntities();
   drawLayer(entities.filter(isRoom), drawRoom);
-  if (options.grid && view.zoom > GRID_OVER_ROOMS_ZOOM) {
+  // 方眼の大きさを決めたとき（コマを置くマス目）は、いつも部屋の上にもはっきり重ねる
+  if (options.grid && displaySettings.gridSize > 0) drawGrid(width, height, true);
+  else if (options.grid && view.zoom > GRID_OVER_ROOMS_ZOOM) {
     ctx.save();
     ctx.globalAlpha = 0.7;
     drawGrid(width, height);
@@ -4965,13 +5158,27 @@ function drawPlan(width: number, height: number, options: PlanDrawOptions): void
 
 // 方眼の間隔。20cmを基準に、画面上で狭すぎれば5倍ずつ広げ、広すぎれば1/5ずつ細かくする
 function gridStep(): number {
+  // 方眼の大きさを決めたときは、その大きさ（引いて細かすぎるときだけ5つずつまとめる。書き出しではまとめない）
+  if (displaySettings.gridSize > 0) {
+    let step = displaySettings.gridSize;
+    while (!exactGrid && step * view.zoom < MIN_GRID_PIXELS) step *= 5;
+    return step;
+  }
   let step = GRID;
   while (step * view.zoom < MIN_GRID_PIXELS) step *= 5;
   while ((step / 5) * view.zoom >= MIN_GRID_PIXELS) step /= 5;
   return step;
 }
 
-function drawGrid(canvasWidth: number, canvasHeight: number): void {
+// 部屋の上に重ねる方眼の色（地が暗い絵柄では明るい線）
+function overGridColors(): [string, string] {
+  const background = STYLE_LOOKS[planLook()].background;
+  const parsed = background ? parseColorCode(background) : null;
+  const dark = parsed ? (() => { const n = Number.parseInt(parsed.rgb.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) < 128; })() : false;
+  return dark ? ["rgba(255, 255, 255, 0.22)", "rgba(255, 255, 255, 0.4)"] : ["rgba(30, 40, 55, 0.2)", "rgba(30, 40, 55, 0.36)"];
+}
+
+function drawGrid(canvasWidth: number, canvasHeight: number, over = false): void {
   const left = -view.x / view.zoom;
   const top = -view.y / view.zoom;
   const right = left + canvasWidth / view.zoom;
@@ -4984,7 +5191,7 @@ function drawGrid(canvasWidth: number, canvasHeight: number): void {
   // ドットでは線をドットのます目に合わせた1ドットの線（ドットにまとめたときに、とぎれとぎれにならないように）
   const g = stylePass?.raw ?? ctx;
   const dot = stylePass?.style === "pixel" ? pixelDot : 0;
-  const [minor, major] = STYLE_LOOKS[stylePass?.look ?? "standard"].grid;
+  const [minor, major] = over ? overGridColors() : STYLE_LOOKS[stylePass?.look ?? "standard"].grid;
   const snap = (value: number, offset: number) => (dot ? (Math.floor((value * view.zoom + offset) / dot) * dot + dot / 2 - offset) / view.zoom : value);
 
   g.lineWidth = (dot || 1) / view.zoom;
@@ -5259,13 +5466,15 @@ function drawRoom(room: Room): void {
   ctx.font = `${size}px ${TEXT_FONT}`;
   const named = room.name.trim() !== "" && !hideRoomNames;
   if (named) paintLabel(layout, label.x, label.y);
-  if (showDimensions) {
-    // 名前がないときは、寸法を名前の位置へ詰める
+  // 寸法と広さ（名前がないときは、名前の位置へ詰める）
+  const details = roomDetailLines(room);
+  if (details.length) {
+    const size = Math.max(10, 11 / view.zoom);
     ctx.fillStyle = INK_SOFT;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.font = `${Math.max(10, 11 / view.zoom)}px "Yu Gothic UI", sans-serif`;
-    ctx.fillText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`, label.x, label.y + (named ? layout.h + 4 : 0));
+    ctx.font = `${size}px "Yu Gothic UI", sans-serif`;
+    details.forEach((text, i) => ctx.fillText(text, label.x, label.y + (named ? layout.h + 4 : 0) + i * (size + 3)));
   }
   if (selected) drawRoomLabelGuide(room);
   if (selected && !isLocked(room)) drawResizeHandles(room);
@@ -5291,9 +5500,9 @@ function drawWall2d(wallItem: LinearElement): void {
 
 // 壁の帯。種類のある壁は、3Dを真上から見た形（厚み・色・目地・瓦の笠）。石垣・生け垣・竹垣・フェンスは、その自由な形を壁の線に沿わせる
 function drawWallBody2d(wallItem: LinearElement): void {
-  const info = wallStyleInfo(wallItem.wallStyle);
+  const info = wallInfoOf(wallItem);
   if (info.value === "plain") {
-    drawLineElement(wallItem, solidColor(wallItem.color) ?? INK, WALL_THICKNESS_2D);
+    drawLineElement(wallItem, solidColor(wallItem.color) ?? INK, info.thickness);
     return;
   }
   const length = distance(wallItem);
@@ -5346,14 +5555,22 @@ function drawWallBody2d(wallItem: LinearElement): void {
   ctx.restore();
 }
 
-// 自由な形で作る壁（石垣など）の、壁の from〜to cm の部分を、自由な形の家具と同じデータにする（2Dも3Dもこれで作る）
+// 壁の種類の決まりに、その壁で変えた厚みを重ねた物（2D・3D・当たり判定で使う）
+function wallInfoOf(wallItem: LinearElement): WallStyleInfo {
+  return wallStyleWithThickness(wallStyleInfo(wallItem.wallStyle), wallItem.thickness);
+}
+
+// 自由な形で作る壁（石垣など）の、壁の from〜to cm の部分を、自由な形の家具と同じデータにする（2Dも3Dもこれで作る）。
+// 厚みを変えた石垣・生け垣は、その厚みを自由な形の幅にする
 function freeWallItem(wallItem: LinearElement, info: WallStyleInfo, from: number, to: number): Furniture {
   const length = distance(wallItem) || 1;
   const at = (d: number): Point2 => [wallItem.x1 + ((wallItem.x2 - wallItem.x1) * d) / length, wallItem.y1 + ((wallItem.y2 - wallItem.y1) * d) / length];
   const kind = info.freeKind!;
-  const frame = freeFrame([at(from), at(to)], freeMargin(kind));
+  const brush = isFreeWidthAdjustable(kind) && wallItem.thickness !== undefined ? info.thickness : undefined;
+  const frame = freeFrame([at(from), at(to)], freeMargin(kind, brush));
   return {
     id: wallItem.id, type: "furniture", kind, x: frame.x, y: frame.y, w: frame.w, h: frame.h, rotation: 0, path: frame.path,
+    ...(brush !== undefined ? { brush } : {}),
     ...(wallItem.color ? { color: wallItem.color } : {}), ...(wallItem.color3d ? { color3d: wallItem.color3d } : {}),
   };
 }
@@ -5384,6 +5601,44 @@ function wallStyleSwatchUrl(style: WallStyle): string {
   const url = canvas.toDataURL();
   wallSwatchUrls.set(style, url);
   return url;
+}
+
+// 壁の厚み（cm）。変えられない種類（フェンス・竹垣）は出さない
+function wallThicknessHtml(wall: LinearElement, disabled: string): string {
+  const info = wallInfoOf(wall);
+  if (!isWallThicknessAdjustable(info)) return "";
+  return `<label>厚み cm
+      <span class="pen-width">
+        <input id="wallThicknessRange" type="range" min="${WALL_THICKNESS_RANGE.min}" max="100" step="1" value="${Math.min(100, info.thickness)}" aria-label="厚み" ${disabled} />
+        <input id="wallThicknessInput" type="number" min="${WALL_THICKNESS_RANGE.min}" max="${WALL_THICKNESS_RANGE.max}" step="1" value="${info.thickness}" ${disabled} />
+      </span>
+    </label>`;
+}
+
+// 厚みを変える。スライダーを動かしている間は2Dと3Dだけ描き直し、離したときに履歴に積む
+function bindWallThickness(wall: LinearElement): void {
+  const range = propertiesPanel.querySelector<HTMLInputElement>("#wallThicknessRange"), number = propertiesPanel.querySelector<HTMLInputElement>("#wallThicknessInput");
+  const set = (value: number) => {
+    if (!Number.isFinite(value) || isLocked(wall)) return;
+    const thickness = clamp(Math.round(value), WALL_THICKNESS_RANGE.min, WALL_THICKNESS_RANGE.max);
+    if (thickness === wallStyleInfo(wall.wallStyle).thickness) delete wall.thickness;
+    else wall.thickness = thickness;
+  };
+  range?.addEventListener("input", () => {
+    set(Number(range.value));
+    if (number) number.value = String(wallInfoOf(wall).thickness);
+    render2d();
+    scheduleThreeRefresh();
+  });
+  range?.addEventListener("change", () => {
+    commitState();
+    redrawAll();
+  });
+  number?.addEventListener("change", () => {
+    set(Number(number.value));
+    commitState();
+    redrawAll();
+  });
 }
 
 // 壁の種類を絵で選ぶ欄
@@ -5787,7 +6042,207 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
   return "#ffffff";
 }
 
+// ---- 取り込んだ画像 ----
+// 画像は data URL のまま間取りに入れる（自動保存・書き出しのファイルにも入る）。大きすぎる画像は、取り込むときに縮める
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp|gif);base64,/;
+const MAX_IMAGE_DATA = 12_000_000;
+const IMAGE_MAX_SIDE = 1600;
+const imageElements = new Map<string, HTMLImageElement>();
+
+// 読み込み済みの画像（まだなら読み込みを始め、読めたら2Dと3Dを描き直す）
+function loadedImage(src: string): HTMLImageElement | null {
+  let image = imageElements.get(src);
+  if (!image) {
+    image = new Image();
+    image.addEventListener("load", () => {
+      render2d();
+      threeSceneKey = null;
+      scheduleThreeRefresh();
+    });
+    image.src = src;
+    imageElements.set(src, image);
+  }
+  return image.complete && image.naturalWidth > 0 ? image : null;
+}
+
+// 2D: 範囲いっぱいに画像を描く。読めていない間は、山と太陽の絵の入った四角
+function drawImageItem(w: number, h: number, item?: Furniture): void {
+  const image = item?.image ? loadedImage(item.image) : null;
+  ctx.save();
+  ctx.globalAlpha *= item?.opacity ?? 1;
+  if (image) ctx.drawImage(image, -w / 2, -h / 2, w, h);
+  else {
+    ctx.fillStyle = "#eef1f5";
+    strokeRoundedRect(-w / 2, -h / 2, w, h, 2, true);
+    const s = Math.min(w, h) * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(-s, s * 0.6);
+    ctx.lineTo(-s * 0.3, -s * 0.2);
+    ctx.lineTo(s * 0.1, s * 0.25);
+    ctx.lineTo(s * 0.45, -s * 0.05);
+    ctx.lineTo(s, s * 0.6);
+    ctx.stroke();
+    strokeCircle(s * 0.45, -s * 0.5, s * 0.15);
+  }
+  ctx.restore();
+}
+
+// 3D: 床に貼った板に、2Dと同じ画像を貼る（反転は家具と同じく、置くときに鏡に映す）
+function applyImageTexture(group: THREE.Group, item: Furniture): void {
+  const image = item.image ? loadedImage(item.image) : null;
+  group.traverse((object) => {
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (material.name !== "image-decal") return;
+    if (image) {
+      const texture = new THREE.Texture(image);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      texture.needsUpdate = true;
+      material.map = texture;
+    } else material.color.set(0xdfe4ea);
+    material.opacity = item.opacity ?? 1;
+    material.depthWrite = (item.opacity ?? 1) >= 1;
+    material.needsUpdate = true;
+  });
+}
+
+// 画像のファイルを読み、縮めて data URL にする。透ける所がありそうな形式（PNG・GIF・WebP）は WebP（使えなければ PNG）、写真は JPEG
+async function imageFileToDataUrl(file: File): Promise<{ url: string; width: number; height: number } | null> {
+  const source = await new Promise<string | null>((resolve) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(typeof reader.result === "string" ? reader.result : null));
+    reader.addEventListener("error", () => resolve(null));
+    reader.readAsDataURL(file);
+  });
+  if (!source) return null;
+  const image = await new Promise<HTMLImageElement | null>((resolve) => {
+    const element = new Image();
+    element.addEventListener("load", () => resolve(element));
+    element.addEventListener("error", () => resolve(null));
+    element.src = source;
+  });
+  if (!image || !image.naturalWidth || !image.naturalHeight) return null;
+  const scale = Math.min(1, IMAGE_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale)), height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const target = canvas.getContext("2d");
+  if (!target) return null;
+  target.drawImage(image, 0, 0, width, height);
+  const photo = file.type === "image/jpeg";
+  let url = photo ? canvas.toDataURL("image/jpeg", 0.88) : canvas.toDataURL("image/webp", 0.88);
+  if (!IMAGE_DATA_URL.test(url)) url = canvas.toDataURL("image/png");
+  return { url, width, height };
+}
+
+// 画像を取り込んで、point（なければ2Dの真ん中）に置く。長い辺を3mにする
+async function importImageFile(file: File, point?: Point): Promise<void> {
+  if (!file.type.startsWith("image/")) return;
+  const result = await imageFileToDataUrl(file);
+  if (!result) {
+    saveStatus.textContent = "画像を読み込めませんでした";
+    window.setTimeout(() => (saveStatus.textContent = "保存済み"), 2000);
+    return;
+  }
+  const longest = 300;
+  const w = result.width >= result.height ? longest : roundTenth((longest * result.width) / result.height);
+  const h = result.width >= result.height ? roundTenth((longest * result.height) / result.width) : longest;
+  const center = point ?? planCenter();
+  const item: Furniture = { id: newId("furniture"), type: "furniture", kind: "image", x: snap(center.x - w / 2), y: snap(center.y - h / 2), w, h, rotation: 0, image: result.url };
+  activeEntities().push(item);
+  activeTool = "select";
+  setActiveButton("[data-tool]", activeTool);
+  selectOnly(item.id);
+  commitState();
+  redrawAll();
+}
+
+// 「画像を取り込む」のファイル選択と、2Dへのドラッグ＆ドロップ
+function setupImageImport(): void {
+  const input = document.querySelector<HTMLInputElement>("#imageImportInput");
+  input?.addEventListener("change", () => {
+    const file = input.files?.[0];
+    if (file) void importImageFile(file);
+    input.value = "";
+  });
+  planCanvas.addEventListener("dragover", (event) => {
+    if ([...(event.dataTransfer?.items ?? [])].some((item) => item.kind === "file" && item.type.startsWith("image/"))) event.preventDefault();
+  });
+  planCanvas.addEventListener("drop", (event) => {
+    const files = [...(event.dataTransfer?.files ?? [])].filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+    event.preventDefault();
+    const point = screenToWorld(event);
+    files.forEach((file, i) => void importImageFile(file, { x: point.x + i * 40, y: point.y + i * 40 }));
+  });
+}
+
+// 選んだ画像の欄: 大きさ（縦横の比を保てる）・濃さ・回転・反転・重なりの順・差し替え
+function imageEditorHtml(item: Furniture, disabled: string): string {
+  return `<div class="two-col">
+      <label>幅 cm<input id="imageWInput" type="number" min="10" step="10" value="${item.w}" ${disabled} /></label>
+      <label>奥行 cm<input id="imageHInput" type="number" min="10" step="10" value="${item.h}" ${disabled} /></label>
+    </div>
+    <label class="check"><input id="imageAspectInput" type="checkbox" checked ${disabled} /> 縦横の比を保つ</label>
+    <label>濃さ <span id="imageOpacityValue">${Math.round((item.opacity ?? 1) * 100)}%</span><input id="imageOpacityInput" type="range" min="5" max="100" step="5" value="${Math.round((item.opacity ?? 1) * 100)}" /></label>
+    <button type="button" class="prop-button" id="imageReplaceButton" ${disabled}>画像を差し替える</button>
+    <p class="pose-hint">画像は間取りのデータに入ります（自動保存・書き出しのファイルにも入ります）。大きな画像をたくさん入れると、ブラウザに自動保存できなくなることがあります。下絵にするときは、濃さを下げて「配置を固定」すると便利です。</p>`;
+}
+
+function bindImageEditor(item: Furniture): void {
+  const keep = () => propertiesPanel.querySelector<HTMLInputElement>("#imageAspectInput")?.checked !== false;
+  bindNumber("#imageWInput", (value) => {
+    const w = Math.max(10, value), ratio = item.h / item.w;
+    if (keep()) item.h = roundTenth(w * ratio);
+    item.w = w;
+  });
+  bindNumber("#imageHInput", (value) => {
+    const h = Math.max(10, value), ratio = item.w / item.h;
+    if (keep()) item.w = roundTenth(h * ratio);
+    item.h = h;
+  });
+  const opacity = propertiesPanel.querySelector<HTMLInputElement>("#imageOpacityInput");
+  opacity?.addEventListener("input", () => {
+    const value = clamp(Number(opacity.value) / 100, 0.05, 1);
+    if (value >= 1) delete item.opacity;
+    else item.opacity = value;
+    const label = propertiesPanel.querySelector("#imageOpacityValue");
+    if (label) label.textContent = `${Math.round(value * 100)}%`;
+    render2d();
+    threeSceneKey = null;
+    scheduleThreeRefresh();
+  });
+  opacity?.addEventListener("change", () => {
+    commitState();
+    redrawAll();
+  });
+  propertiesPanel.querySelector<HTMLButtonElement>("#imageReplaceButton")?.addEventListener("click", () => {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/*";
+    picker.addEventListener("change", async () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      const result = await imageFileToDataUrl(file);
+      if (!result || isLocked(item)) return;
+      item.image = result.url;
+      // 新しい画像の縦横の比に合わせる（幅はそのまま）
+      item.h = roundTenth((item.w * result.height) / result.width);
+      commitState();
+      redrawAll();
+    });
+    picker.click();
+  });
+}
+
 function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol = 0, item?: Furniture, fromAbove = false): void {
+  if (kind === "image") {
+    drawImageItem(w, h, item);
+    return;
+  }
   // 自由な形（なぞった形、または決まった形の道すじ）。3Dと同じ輪郭・帯・石や杭の位置で描く
   if (isFreeShapeKind(kind) && (item?.path || isAlwaysFreeKind(kind))) {
     drawFreeShape2d(kind, w, h, item);
@@ -8202,18 +8657,18 @@ function rememberedSymbol(kind: FurnitureKind): { symbol?: number } {
   return symbol ? { symbol } : {};
 }
 
-// 選択中パネルで記号を見比べるための見本。回転はせず、反転と2Dの色は反映する
-function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: number): void {
+// 選択中パネルで記号を見比べるための見本（一覧のボタンの小さな絵も）。回転はせず、反転と2Dの色は反映する
+function drawSymbolPreview(canvas: HTMLCanvasElement, item: Furniture, symbol: number, size = SYMBOL_PREVIEW_SIZE): void {
   const target = canvas.getContext("2d");
   if (!target) return;
   const ratio = window.devicePixelRatio || 1;
-  const size = SYMBOL_PREVIEW_SIZE;
   canvas.width = Math.round(size * ratio);
   canvas.height = Math.round(size * ratio);
   // 倒れた人の前からある形の見本は、その形の標準の大きさで見せる（手足を動かした後の範囲だと小さくなるため）
   const legacyPreview = item.kind === "fallenPerson" && symbol !== 2 && Boolean(item.pose);
   const w = legacyPreview ? FURNITURE_DEFS.fallenPerson.w : item.w, h = legacyPreview ? FURNITURE_DEFS.fallenPerson.h : item.h;
-  const scale = Math.min((size - 8) / w, (size - 8) / h);
+  const pad = size >= 40 ? 8 : 3;
+  const scale = Math.min((size - pad) / w, (size - pad) / h);
   const planContext = ctx;
   ctx = target;
   symbolPreview = true;
@@ -9496,7 +9951,9 @@ function seededRandom(key: string): () => number {
 }
 
 function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, yBase: number, withCap = true): void {
-  const info = wallStyleInfo(wallItem.wallStyle);
+  const info = wallInfoOf(wallItem);
+  // 厚みを変えたふつうの壁は、2Dと同じく端を厚みの半分だけ伸ばす（角がすき間なくつながる）
+  const extend = wallItem.thickness !== undefined;
   const length = distance(wallItem);
   const top = info.height !== undefined ? Math.min(WALL_HEIGHT, info.height * SCALE_3D) : WALL_HEIGHT;
   wallSections(wallItem, entities).forEach((section) => {
@@ -9507,7 +9964,7 @@ function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, y
     }
     if (section.bottom >= top - 1e-6) return;
     const segment = segmentInterval(wallItem, section.from, section.to);
-    if (info.value === "plain") addStraightWall3d(segment, center, yBase, wallItem.id, true, section.bottom, section.top, withCap);
+    if (info.value === "plain") addStraightWall3d(segment, center, yBase, wallItem.id, true, section.bottom, section.top, withCap, info.thickness, extend && section.from <= 1e-6, extend && section.to >= length - 1e-6);
     else addStyledWall3d(segment, info, wallItem, center, yBase, section.bottom, Math.min(section.top, top), section.from <= 1e-6, section.to >= length - 1e-6);
   });
 }
@@ -9568,21 +10025,26 @@ function addStraightWall3d(
   yFrom = 0,
   yTo = WALL_HEIGHT,
   withCap = true,
+  thicknessCm = WALL_THICKNESS_2D,
+  extendStart = false,
+  extendEnd = false,
 ): void {
-  const length = distance(wallItem) * SCALE_3D;
+  // 端を伸ばす長さ（cm）。伸ばしたぶん中心をずらす
+  const ext0 = extendStart ? thicknessCm / 2 : 0, ext1 = extendEnd ? thicknessCm / 2 : 0;
+  const length = (distance(wallItem) + ext0 + ext1) * SCALE_3D;
   // 上階の壁は床スラブの厚みぶん下へ延長し、下階の壁と外面が連続するようにする
   // いちばん下の階でなければ、下の階の壁の上端まで伸ばす（地下があるときの1Fも同じ）
   const bottomExtension = yBase > floorBaseY(0) + 1e-6 && yFrom === 0 ? FLOOR_SLAB : 0;
   const height = yTo - yFrom + bottomExtension;
   if (length <= 0.02 || height <= 0.02) return;
-  const thickness = WALL_THICKNESS_2D * SCALE_3D;
+  const thickness = thicknessCm * SCALE_3D;
   const angle = Math.atan2(wallItem.y2 - wallItem.y1, wallItem.x2 - wallItem.x1);
   const customWallColor = wallItem.color3d ?? wallItem.color;
   const bodyMaterial = customWallColor ? coloredMaterial(customWallColor, 0.78) : wallMaterial;
   const geometry = new THREE.BoxGeometry(length, height, thickness);
   const mesh = new THREE.Mesh(geometry, bodyMaterial);
-  const mid = midpoint(wallItem);
-  const pos = to3d(mid.x, mid.y, center);
+  const mid = midpoint(wallItem), shift = (ext1 - ext0) / 2;
+  const pos = to3d(mid.x + Math.cos(angle) * shift, mid.y + Math.sin(angle) * shift, center);
   mesh.position.set(pos.x, yBase + yFrom - bottomExtension + height / 2, pos.z);
   mesh.rotation.y = -angle;
   // 透明度のある色の壁は、ガラスと同じく影を落とさない
@@ -9673,10 +10135,11 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
   const floorTop = yBase === 0 ? 0.08 : 0;
   const options = { ...furnitureItem, rise: FLOOR_SPACING - floorTop };
   let group: THREE.Group;
-  if (furnitureItem.kind === "evidenceMarker" || furnitureItem.kind === "paint") {
-    // 文字や描いた絵を貼る物は、1つずつ作る
+  if (furnitureItem.kind === "evidenceMarker" || furnitureItem.kind === "paint" || furnitureItem.kind === "image") {
+    // 文字・描いた絵・取り込んだ画像を貼る物は、1つずつ作る
     group = buildFurnitureModel(options);
     if (furnitureItem.kind === "evidenceMarker") applyMarkerLabel(group, furnitureItem);
+    else if (furnitureItem.kind === "image") applyImageTexture(group, furnitureItem);
     else applyPaintTexture(group, furnitureItem);
   } else {
     // 形を決める値が同じ家具は、作り置きを写して使う（リアルの絵柄では材質を変えるので分ける）
@@ -10559,6 +11022,7 @@ function updatePropertiesPanel(): void {
         ${lockRow}
         <p class="empty-state">${typeLabel}</p>
         ${selected.type === "wall" ? wallStylePickerHtml("wallStylePicker", selected.wallStyle ?? "plain", placementDisabled) : ""}
+        ${selected.type === "wall" ? wallThicknessHtml(selected, placementDisabled) : ""}
         ${doorStyleRow}
         <div class="two-col">
           <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" ${placementDisabled} /></label>
@@ -10592,10 +11056,13 @@ function updatePropertiesPanel(): void {
       if (isLocked(selected)) return;
       if (style === "plain") delete selected.wallStyle;
       else selected.wallStyle = style;
+      // 種類を変えたら、その種類の標準の厚みに戻す
+      delete selected.thickness;
       activeWallStyle = style;
       commitState();
       redrawAll();
     });
+    bindWallThickness(selected);
     bindNumber("#lineXInput", (value) => {
       const dx = snap(value) - selected.x1;
       selected.x1 += dx;
@@ -10753,6 +11220,23 @@ function updatePropertiesPanel(): void {
   const only2d = FURNITURE_VARIANTS_2D_ONLY[selectedFurniture.kind] ?? [];
   const symbolLabels = ["標準", ...(SYMBOL_VARIANTS[selectedFurniture.kind] ?? []).map((variant, index) => (only2d.includes(index + 1) ? `${variant.label}（2Dの記号のみ・3Dは標準）` : variant.label))];
   const currentSymbol = selectedFurniture.symbol ?? 0;
+  // 取り込んだ画像は、大きさ・濃さ・向き・重なりの順だけを変える
+  if (selectedFurniture.kind === "image") {
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        ${lockRow}
+        <p class="empty-state">画像</p>
+        ${imageEditorHtml(selectedFurniture, placementDisabled)}
+        <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
+        <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
+        ${orderRowHtml()}
+      </div>`;
+    bindEntityLock(selectedFurniture);
+    bindOrderButtons(selectedFurniture);
+    bindImageEditor(selectedFurniture);
+    bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
+    bindCheckbox("#furnitureFlipInput", (checked) => (selectedFurniture.flip = checked));
+    return;
+  }
   // 見た目だけの設定なので、配置を固定していても選べる
   const symbolPicker = symbolLabels.length > 1
     ? `<div class="symbol-picker">
@@ -10782,11 +11266,13 @@ function updatePropertiesPanel(): void {
       ${isFreeShapeKind(selectedFurniture.kind) ? freeShapeEditorHtml(selectedFurniture, placementDisabled) : ""}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
+      ${orderRowHtml()}
       ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
       ${PLAN_EDITION ? "" : colorField("furnitureColor3dInput", "色 3D", selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8")}
     </div>
   `;
   bindEntityLock(selectedFurniture);
+  bindOrderButtons(selectedFurniture);
   propertiesPanel.querySelector<HTMLButtonElement>("#useLowerStairButton")?.addEventListener("click", () => {
     if (isLocked(selectedFurniture) || !isStair(selectedFurniture)
       || !stairsBelow(state.floors, state.activeFloor).some((item) => sameStairPlacement(selectedFurniture, item))) return;
@@ -10923,6 +11409,29 @@ function bindCheckbox(selector: string, update: (checked: boolean) => void): voi
     commitState();
     redrawAll();
   });
+}
+
+// 重なりの順（最前面へ・最背面へ）。見た目の順なので、配置を固定していても変えられる
+function orderRowHtml(): string {
+  return `<div class="two-col">
+      <button type="button" class="prop-button" id="bringFrontButton" title="重なっている物より手前（上）に描く">最前面へ</button>
+      <button type="button" class="prop-button" id="sendBackButton" title="重なっている物より奥（下）に描く">最背面へ</button>
+    </div>`;
+}
+
+function bindOrderButtons(entity: Entity): void {
+  bindButton("#bringFrontButton", () => moveEntityOrder(entity, true));
+  bindButton("#sendBackButton", () => moveEntityOrder(entity, false));
+}
+
+// 同じ階の並びの最後（いちばん手前）か最初（いちばん奥）へ移す
+function moveEntityOrder(entity: Entity, front: boolean): void {
+  const entities = activeEntities();
+  const index = entities.indexOf(entity);
+  if (index < 0) return;
+  entities.splice(index, 1);
+  if (front) entities.push(entity);
+  else entities.unshift(entity);
 }
 
 function bindButton(selector: string, action: () => void): void {
@@ -11208,24 +11717,32 @@ function setupImageExport(): void {
   const floors = document.querySelector<HTMLSelectElement>("#imageExportFloors");
   const grid = document.querySelector<HTMLInputElement>("#imageExportGrid");
   const names = document.querySelector<HTMLInputElement>("#imageExportNames");
-  if (!button || !menu || !floors || !grid || !names) return;
+  const cell = document.querySelector<HTMLSelectElement>("#imageExportCell");
+  const transparent = document.querySelector<HTMLInputElement>("#imageExportTransparent");
+  if (!button || !menu || !floors || !grid || !names || !cell || !transparent) return;
   const saved = viewState.imageExport;
   if (saved && typeof saved === "object") {
     if (saved.floors === "current" || saved.floors === "all" || saved.floors === "each") imageExportSettings.floors = saved.floors;
     if (typeof saved.grid === "boolean") imageExportSettings.grid = saved.grid;
     if (typeof saved.names === "boolean") imageExportSettings.names = saved.names;
+    if (typeof saved.cell === "number" && EXPORT_CELLS.includes(saved.cell)) imageExportSettings.cell = saved.cell;
+    if (typeof saved.transparent === "boolean") imageExportSettings.transparent = saved.transparent;
   }
   floors.value = imageExportSettings.floors;
   grid.checked = imageExportSettings.grid;
   names.checked = imageExportSettings.names;
+  cell.value = String(imageExportSettings.cell);
+  transparent.checked = imageExportSettings.transparent;
   const remember = () => {
     imageExportSettings.floors = floors.value as ImageExportSettings["floors"];
     imageExportSettings.grid = grid.checked;
     imageExportSettings.names = names.checked;
+    imageExportSettings.cell = EXPORT_CELLS.includes(Number(cell.value)) ? Number(cell.value) : 0;
+    imageExportSettings.transparent = transparent.checked;
     viewState.imageExport = { ...imageExportSettings };
     scheduleViewStateSave();
   };
-  [floors, grid, names].forEach((input) => input.addEventListener("change", remember));
+  [floors, grid, names, cell, transparent].forEach((input) => input.addEventListener("change", remember));
   const close = () => {
     menu.hidden = true;
     button.setAttribute("aria-expanded", "false");
@@ -11247,6 +11764,38 @@ function setupImageExport(): void {
     close();
     exportThreeImage();
   });
+  document.querySelector<HTMLButtonElement>("#imageExportCopy")?.addEventListener("click", () => {
+    remember();
+    close();
+    copyPlanImage();
+  });
+}
+
+// 間取りの画像を、クリップボードにコピーする（階ごとにするときは表示中の階）
+function copyPlanImage(): void {
+  const floorIndexes = imageExportSettings.floors === "all" ? state.floors.map((_, index) => index).filter((index) => exportBounds([index])) : [state.activeFloor];
+  const bounds = exportBounds(floorIndexes);
+  const notify = (text: string) => {
+    saveStatus.textContent = text;
+    window.setTimeout(() => (saveStatus.textContent = "保存済み"), 2000);
+  };
+  if (!bounds || !floorIndexes.length) {
+    notify("書き出す物がありません");
+    return;
+  }
+  const canvas = renderPlanImage(floorIndexes, bounds);
+  canvas.toBlob(async (blob) => {
+    if (!blob || !navigator.clipboard || typeof ClipboardItem === "undefined") {
+      notify("このブラウザでは画像をコピーできません。書き出してください");
+      return;
+    }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      notify("画像をコピーしました");
+    } catch {
+      notify("画像をコピーできませんでした。書き出してください");
+    }
+  }, "image/png");
 }
 
 // 書き出す階の、物が入る範囲（屋根は含めない）
@@ -11258,7 +11807,7 @@ function exportBounds(floorIndexes: number[]): Bounds | null {
   for (const room of entities.filter(isRoom)) {
     if (!room.labelSize || !room.name.trim()) continue;
     const pos = getRoomLabelPosition(room), label = measureLabel(room.name, room.labelSize, room.writingMode);
-    const right = Math.max(bounds.x + bounds.w, pos.x + label.w), bottom = Math.max(bounds.y + bounds.h, pos.y + label.h + (showDimensions ? 20 : 0));
+    const right = Math.max(bounds.x + bounds.w, pos.x + label.w), bottom = Math.max(bounds.y + bounds.h, pos.y + label.h + roomDetailLines(room).length * 20);
     bounds.x = Math.min(bounds.x, pos.x); bounds.y = Math.min(bounds.y, pos.y);
     bounds.w = right - bounds.x; bounds.h = bottom - bounds.y;
   }
@@ -11276,6 +11825,7 @@ function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number
   state.activeFloor = floorIndex;
   state.selectedId = null;
   hideRoomNames = !imageExportSettings.names;
+  exactGrid = true;
   try {
     target.save();
     target.setTransform(ratio, 0, 0, ratio, left * ratio, top * ratio);
@@ -11294,6 +11844,7 @@ function drawFloorForExport(target: CanvasRenderingContext2D, floorIndex: number
     selection.forEach((id) => multiSelection.add(id));
     selectionFloor = originalSelectionFloor;
     hideRoomNames = saved.hideRoomNames;
+    exactGrid = false;
   }
 }
 
@@ -11312,8 +11863,18 @@ function exportScale(layoutW: number, layoutH: number, headings: number): { rati
   return { ratio, zoom };
 }
 
+// 方眼の大きさを決めて方眼を入れるときは、画像の端（余白を含めた範囲）を方眼の線に合わせる。画像の左上から方眼が並ぶ
+function gridAlignedBounds(bounds: Bounds): Bounds {
+  const cell = displaySettings.gridSize;
+  if (!(cell > 0) || !imageExportSettings.grid) return bounds;
+  const left = Math.floor((bounds.x - EXPORT_MARGIN) / cell) * cell, top = Math.floor((bounds.y - EXPORT_MARGIN) / cell) * cell;
+  const right = Math.ceil((bounds.x + bounds.w + EXPORT_MARGIN) / cell) * cell, bottom = Math.ceil((bounds.y + bounds.h + EXPORT_MARGIN) / cell) * cell;
+  return { x: left + EXPORT_MARGIN, y: top + EXPORT_MARGIN, w: right - left - EXPORT_MARGIN * 2, h: bottom - top - EXPORT_MARGIN * 2 };
+}
+
 // 階の画像を並べた1枚（階が1つなら、その階だけ）。複数の階は、階の名前を上に書く
-function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElement {
+function renderPlanImage(floorIndexes: number[], original: Bounds): HTMLCanvasElement {
+  const bounds = gridAlignedBounds(original);
   const labelled = floorIndexes.length > 1;
   const heading = labelled ? 44 : 0;
   const cellWcm = bounds.w + EXPORT_MARGIN * 2;
@@ -11321,7 +11882,15 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
   // 横に長くなりすぎるときは、何段かに折り返す
   const columns = labelled ? Math.max(1, Math.min(floorIndexes.length, Math.round(Math.sqrt((floorIndexes.length * cellHcm * 1.6) / cellWcm)) || 1)) : 1;
   const rows = Math.ceil(floorIndexes.length / columns);
-  const { ratio, zoom } = exportScale(cellWcm * columns, cellHcm * rows, heading * rows);
+  const scale = exportScale(cellWcm * columns, cellHcm * rows, heading * rows);
+  const { zoom } = scale;
+  let { ratio } = scale;
+  // 1マスの大きさを決めたときは、方眼1つがちょうどその px になる細かさにする（作れる大きさまで）
+  if (imageExportSettings.cell > 0 && displaySettings.gridSize > 0 && imageExportSettings.grid) {
+    const wanted = imageExportSettings.cell / (displaySettings.gridSize * zoom);
+    const widthCss = cellWcm * columns * zoom, heightCss = cellHcm * rows * zoom + heading * rows;
+    ratio = Math.min(wanted, EXPORT_MAX_SIDE / widthCss, EXPORT_MAX_SIDE / heightCss, Math.sqrt(EXPORT_MAX_PIXELS / (widthCss * heightCss)));
+  }
   const cellW = cellWcm * zoom;
   const cellH = cellHcm * zoom + heading;
   const canvas = document.createElement("canvas");
@@ -11329,8 +11898,12 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
   canvas.height = Math.max(1, Math.round(cellH * rows * ratio));
   const target = canvas.getContext("2d");
   if (!target) return canvas;
-  target.fillStyle = STYLE_LOOKS[planLook()].background ?? "#ffffff";
-  target.fillRect(0, 0, canvas.width, canvas.height);
+  // 背景を透明にするときは、地の色も紙の模様も描かない
+  const transparent = imageExportSettings.transparent;
+  if (!transparent) {
+    target.fillStyle = STYLE_LOOKS[planLook()].background ?? "#ffffff";
+    target.fillRect(0, 0, canvas.width, canvas.height);
+  }
   floorIndexes.forEach((floorIndex, i) => {
     const left = (i % columns) * cellW;
     const top = Math.floor(i / columns) * cellH;
@@ -11338,10 +11911,12 @@ function renderPlanImage(floorIndexes: number[], bounds: Bounds): HTMLCanvasElem
     drawFloorForExport(target, floorIndex, bounds, left, top + heading, ratio, zoom);
   });
   // 紙の模様などの仕上げは、画像全体にまとめて重ねる
-  target.save();
-  target.setTransform(ratio, 0, 0, ratio, 0, 0);
-  styleFinish(planLook(), target, cellW * columns, cellH * rows, 0, 0);
-  target.restore();
+  if (!transparent) {
+    target.save();
+    target.setTransform(ratio, 0, 0, ratio, 0, 0);
+    styleFinish(planLook(), target, cellW * columns, cellH * rows, 0, 0);
+    target.restore();
+  }
   return canvas;
 }
 
@@ -11695,7 +12270,7 @@ function hitTest(point: Point): { entity: Entity | null; corner: string | null }
         if (endpoint) return { entity, corner: endpoint };
       }
       // ドア・窓は壁の厚みのぶんも当たりにする。開き戸は、開いた扉と開く範囲（4分の1の円）も当たり
-      const reach = entity.type === "wall" ? Math.max(12 / view.zoom, wallTopWidth(wallStyleInfo(entity.wallStyle)) / 2) : Math.max(12 / view.zoom, WALL_THICKNESS_2D);
+      const reach = entity.type === "wall" ? Math.max(12 / view.zoom, wallTopWidth(wallInfoOf(entity)) / 2) : Math.max(12 / view.zoom, WALL_THICKNESS_2D);
       if (distanceToSegment(point, { x: entity.x1, y: entity.y1 }, { x: entity.x2, y: entity.y2 }) < reach || (entity.type === "door" && isPointInDoorSwing(point, entity))) {
         return { entity, corner: null };
       }
@@ -11960,20 +12535,42 @@ function getRoomLabelPosition(room: Room): Point {
 
 function getRoomLabelBounds(room: Room): { x: number; y: number; w: number; h: number } | null {
   const named = room.name.trim() !== "" && !hideRoomNames;
-  if (!named && !showDimensions) return null;
+  const details = roomDetailLines(room);
+  if (!named && !details.length) return null;
   const position = getRoomLabelPosition(room);
   const layout = measureLabel(room.name, room.labelSize ?? Math.max(12, 13 / view.zoom), room.writingMode);
   ctx.save();
   const dimSize = Math.max(10, 11 / view.zoom);
   ctx.font = styledFont(`${dimSize}px ${TEXT_FONT}`, planStyle);
-  const dimensionWidth = showDimensions ? ctx.measureText(`${formatMeters(room.w)} x ${formatMeters(room.h)}`).width : 0;
+  const dimensionWidth = Math.max(0, ...details.map((text) => ctx.measureText(text).width));
   ctx.restore();
   return {
     x: position.x - 6,
     y: position.y - 5,
     w: Math.max(named ? layout.w : 0, dimensionWidth) + 12,
-    h: (named ? layout.h : 0) + (showDimensions ? dimSize + (named ? 4 : 0) : 0) + 10,
+    h: (named ? layout.h : 0) + (details.length ? details.length * (dimSize + 3) - 3 + (named ? 4 : 0) : 0) + 10,
   };
+}
+
+// 部屋の名前の下に出す、寸法（幅 x 奥行）と広さ（帖・㎡）
+function roomDetailLines(room: Room): string[] {
+  const lines: string[] = [];
+  if (showDimensions) lines.push(`${formatMeters(room.w)} x ${formatMeters(room.h)}`);
+  const area = roomAreaText(room);
+  if (area) lines.push(area);
+  return lines;
+}
+
+// 部屋の広さ。穴（階段など）は引く。1帖は 1.62㎡
+function roomAreaText(room: Room): string | null {
+  if (displaySettings.area === "none") return null;
+  const [outer, ...holes] = floorPolygon(room);
+  const ring = (points: [number, number][]) => Math.abs(points.reduce((sum, [x, y], i) => {
+    const [nx, ny] = points[(i + 1) % points.length];
+    return sum + x * ny - nx * y;
+  }, 0)) / 2;
+  const m2 = Math.max(0, ring(outer) - holes.reduce((sum, hole) => sum + ring(hole), 0)) / 10000;
+  return displaySettings.area === "jo" ? `${(m2 / 1.62).toFixed(1)}帖` : `${m2.toFixed(1)}㎡`;
 }
 
 function isPointInRoomLabel(point: Point, room: Room): boolean {
@@ -12184,6 +12781,32 @@ function makeTemplate(key: string): PlanState {
   if (!hasTemplatePlan(key)) openTemplateStairwells(plan.floors, () => newId("room"));
   plan.roofs.forEach((item) => { item.floorId ??= plan.floors[plan.floors.length - 1].id; });
   return plan;
+}
+
+// 家具なし（間取りだけ）: 家具・小物を外す。階段と、川・小道・池・塀などの外まわりの形は残す
+function structureOnly(plan: PlanState): PlanState {
+  plan.floors.forEach((floor) => {
+    floor.entities = floor.entities.filter((entity) => entity.type !== "furniture" || isStair(entity) || isFreeShapeKind(entity.kind));
+  });
+  return plan;
+}
+
+// テンプレートを名前で探す（ひらがな・カタカナ、全角・半角は同じに扱う）
+function applyTemplateSearch(): void {
+  const query = normalizeSearchText(document.querySelector<HTMLInputElement>("#templateSearch")?.value ?? "").trim();
+  let shown = 0;
+  document.querySelectorAll<HTMLElement>("#templateList .template-group").forEach((group) => {
+    let visible = 0;
+    group.querySelectorAll<HTMLButtonElement>("[data-template]").forEach((button) => {
+      const match = !query || normalizeSearchText(`${button.textContent ?? ""} ${button.title} ${group.querySelector(".template-group-label")?.textContent ?? ""}`).includes(query);
+      button.hidden = !match;
+      if (match) visible += 1;
+    });
+    group.hidden = visible === 0;
+    shown += visible;
+  });
+  const empty = document.querySelector<HTMLParagraphElement>("#templateEmpty");
+  if (empty) empty.hidden = shown > 0;
 }
 
 // 左の「テンプレート」の一覧。種類ごとに見出しを付けて並べる
@@ -12457,12 +13080,24 @@ function roof(kind: RoofKind, x: number, y: number, w: number, h: number): Roof 
   return { id: newId("roof"), type: "roof", kind, x, y, w, h };
 }
 
+// 物と配列だけを写し、文字列はそのまま共有する（取り込んだ画像のような長い文字列を、取り消しの履歴の数だけ持たない）。
+// JSON に書けない値（undefined）は、JSON で写したときと同じく落とす
+function deepCopy<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((item) => deepCopy(item)) as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) if (item !== undefined) out[key] = deepCopy(item);
+    return out as T;
+  }
+  return value;
+}
+
 function cloneState(value: PlanState): PlanState {
-  return JSON.parse(JSON.stringify(value)) as PlanState;
+  return deepCopy(value);
 }
 
 function cloneEntity(value: Entity): Entity {
-  return JSON.parse(JSON.stringify(value)) as Entity;
+  return deepCopy(value);
 }
 
 function findEntity(id: string): Entity | undefined {

@@ -4,10 +4,10 @@
 // 筆・和風・墨絵・古地図・黒板・水彩・クレヨン: 線を筆の運び（入り・ゆらぎ・止めや払い・かすれ）で描き、塗りを紙や板になじませる
 // 鉛筆: 線を2本の手描きの線に、濃い塗りを斜線（ハッチング）にする
 // マンガ: 線を黒にし、塗りを濃さに合わせたスクリーントーンにする。ポップ: 太い黒い線と、色の網点
-// 設計図・ネオン・CAD・ホラー・コピー: 線と塗りの色を置き換える（ネオンは線を光らせる）
+// 設計図・ネオン・CAD・ホラー・コピー・モノクロ: 線と塗りの色を置き換える（ネオンは線を光らせる。モノクロは色を白黒の濃淡にするだけ）
 
 export type PlanStyle =
-  | "standard" | "pixel" | "brush" | "pencil" | "manga" | "blueprint" | "parchment" | "chalk" | "neon"
+  | "standard" | "mono" | "pixel" | "brush" | "pencil" | "manga" | "blueprint" | "parchment" | "chalk" | "neon"
   | "watercolor" | "sumie" | "crayon" | "pop" | "cad" | "horror" | "copy" | "retro";
 
 // 絵柄の分類（メニューの見出し）。メニューはこの順に並べる
@@ -15,6 +15,7 @@ export const PLAN_STYLE_GROUPS = ["線画", "手描き", "和・古風", "マン
 
 export const PLAN_STYLES: { value: PlanStyle; label: string; hint: string; group: string }[] = [
   { value: "standard", label: "標準", hint: "くっきりした線画", group: "線画" },
+  { value: "mono", label: "モノクロ", hint: "白黒の濃淡", group: "線画" },
   { value: "blueprint", label: "設計図", hint: "青焼きの図面", group: "線画" },
   { value: "cad", label: "CAD", hint: "黒地に色の線", group: "線画" },
   { value: "copy", label: "コピー", hint: "コピーした資料", group: "線画" },
@@ -86,6 +87,7 @@ const BRUSH_FONT = '"HG正楷書体-PRO", "HGSeikaishotaiPRO", "UD デジタル 
 const MINCHO = '"Yu Mincho", YuMincho, "Hiragino Mincho ProN", "MS Mincho", serif';
 const FONT_FAMILIES: Record<PlanStyle, string | null> = {
   standard: null,
+  mono: null,
   pixel: PIXEL_FONT,
   brush: BRUSH_FONT,
   pencil: HANDWRITING,
@@ -107,6 +109,7 @@ const FONT_FAMILIES: Record<PlanStyle, string | null> = {
 // 絵柄ごとの地の色と方眼の色（細い線・5本ごとの線）。地の色が null なら透明（標準）
 export const STYLE_LOOKS: Record<PlanStyle, { background: string | null; grid: [string, string] }> = {
   standard: { background: null, grid: ["#f2f4f7", "#e2e6ec"] },
+  mono: { background: "#ffffff", grid: ["rgba(0, 0, 0, 0.05)", "rgba(0, 0, 0, 0.1)"] },
   pixel: { background: "#ffffff", grid: ["#f5f6f8", "#e9ecf0"] },
   brush: { background: PAPER_COLOR, grid: ["rgba(150, 118, 76, 0.11)", "rgba(150, 118, 76, 0.22)"] },
   pencil: { background: "#fbfaf6", grid: ["rgba(96, 132, 170, 0.12)", "rgba(96, 132, 170, 0.24)"] },
@@ -1923,6 +1926,24 @@ const COPY: RecolorPalette = {
   font: "copy",
 };
 
+// モノクロ: 線も塗りも、明るさをそのままに白黒の濃淡にする（紙の模様や汚れは付けない）。床の模様も色を抜いて残す
+function grayOf(value: string): string {
+  const parsed = parseCssColor(value);
+  if (!parsed) return value;
+  const [r, g, b, a] = parsed;
+  const v = Math.round(lightnessOf(r, g, b));
+  return cssColor([v, v, v], a);
+}
+
+const MONO: RecolorPalette = {
+  stroke: (value) => cachedColor(`m${value}`, () => grayOf(value)),
+  fill: (value) => cachedColor(`mf${value}`, () => grayOf(value)),
+  text: "#1a1a1a",
+  pattern: "#d0d0d0",
+  grayPattern: true,
+  font: "mono",
+};
+
 // 線・塗り・文字の色だけを置き換える描き先。形はそのまま（ネオンは線のまわりを光らせる）
 function createRecolorContext(base: CanvasRenderingContext2D, palette: RecolorPalette, unit: number): CanvasRenderingContext2D {
   const overrides = new Map<PropertyKey, unknown>();
@@ -2488,6 +2509,8 @@ export function styleContext(style: PlanStyle, raw: CanvasRenderingContext2D, op
       return createRecolorContext(raw, HORROR, options.unit);
     case "copy":
       return createRecolorContext(raw, COPY, options.unit);
+    case "mono":
+      return createRecolorContext(raw, MONO, options.unit);
     case "pencil":
       return createSketchContext(raw, options);
     case "manga":

@@ -96,6 +96,8 @@ export type FurnitureKind =
   | "paint"
   | "bloodPool"
   | "brokenGlass"
+  // 取り込んだ画像（床に貼る。一覧には出さず、「画像を取り込む」から置く）
+  | "image"
   // 自由な形（なぞって作る。free-shapes.ts）
   | "lawn" | "river" | "pathway" | "hedge" | "stoneWall" | "railway";
 export interface FurnitureDef {
@@ -268,6 +270,7 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   person: { label: "人", w: 52.2, h: 27.2 },
   // ペンで描いた線・塗り（パーツの一覧には出さず、ツールの「ペン」で描く）
   paint: { label: "ペンで描いた線", w: 30, h: 30 },
+  image: { label: "画像", w: 300, h: 200 },
   bloodPool: { label: "血だまり", w: 90, h: 70 },
   // 割れたガラスなどの破片。なぞった道すじに沿ってまける（クリックだけなら、ひとまとまり）
   brokenGlass: { label: "破片", w: 80, h: 60 },

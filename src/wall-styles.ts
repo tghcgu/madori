@@ -49,6 +49,20 @@ export function wallStyleInfo(style: WallStyle | undefined): WallStyleInfo {
   return WALL_STYLES.find((item) => item.value === style) ?? WALL_STYLES[0];
 }
 
+// 壁の厚みの範囲（cm）
+export const WALL_THICKNESS_RANGE = { min: 2, max: 200 };
+
+// 厚みを変えられる種類か（フェンス・竹垣は、決まった細さ）
+export function isWallThicknessAdjustable(info: WallStyleInfo): boolean {
+  return !info.freeKind || info.freeKind === "stoneWall" || info.freeKind === "hedge";
+}
+
+// 壁ごとに変えた厚み（cm）を重ねた、その壁の決まり。厚みを変えられない種類は、そのまま
+export function wallStyleWithThickness(info: WallStyleInfo, thickness: number | undefined): WallStyleInfo {
+  if (thickness === undefined || !Number.isFinite(thickness) || !isWallThicknessAdjustable(info)) return info;
+  return { ...info, thickness: Math.min(WALL_THICKNESS_RANGE.max, Math.max(WALL_THICKNESS_RANGE.min, thickness)) };
+}
+
 // 真上から見たときの幅（cm）。瓦の笠があれば笠の幅
 export function wallTopWidth(info: WallStyleInfo): number {
   return info.cap ? info.thickness + CAP_OVERHANG * 2 : info.thickness;

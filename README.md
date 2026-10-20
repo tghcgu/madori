@@ -85,7 +85,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
-- 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です
+- 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です。厚みは、選んだ壁の欄の「厚み」で変えられます（フェンス・竹垣を除く。厚くした壁も角がすき間なくつながります）
 - ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転
@@ -98,9 +98,12 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定。見本から選ぶほか、カラーコード（`#RRGGBB`）を直接入力できます。末尾に2桁足した`#RRGGBBAA`では透明度も決められ（`00`で透明〜`ff`で不透明。例: `#2775d180`で半分透ける）、2Dでは同じ色の要素をまとめて1回で透かすので重なった所や壁の角も同じ濃さ、3Dでは床・壁・建具・家具がまるごと透けます（透けている物は影を落としません）。見本では透明度が市松模様で分かり、見本で色を選び直しても透明度はそのまま。カラーコードを空にすると標準の色に戻ります
 - 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
+- 2Dの上の「表示」で、部屋名の表示・部屋の広さ（帖・㎡。1帖は1.62㎡、階段の穴は引きます）・方眼の表示と大きさ（おまかせ・25cm・50cm・91cm（半間）・1m・1.5m・182cm（1間）・2m・3m）を切り替え。方眼の大きさを決めると、部屋の上にも方眼をはっきり重ねます。`G`キーで方眼の表示を切り替えられます
+- 好きな画像（PNG・JPEG・WebP・GIF）を取り込めます。「画像を取り込む」を押すか、2Dに画像のファイルをドラッグすると、長い辺3mで置きます。2Dに描き、3Dでは床に貼ります（2Dと同じ向き・大きさ）。大きさ（縦横の比を保てる）・回転・反転・濃さを変えられ、濃さを下げて「配置を固定」すれば下絵にもできます。画像は長い辺1600pxまでに縮めて、間取りのデータ（自動保存・書き出しのファイル）に入ります
+- 家具・画像を「最前面へ」「最背面へ」動かして、重なりの順を変えられます
 - ほかの階を半透明で重ねる「透過」表示。横の▼から、透かす階（すぐ下・すぐ上・ほかの階すべて・階を名前で指定）、透かす色（カラーコード。空欄なら元の色）、濃さを選べます。透かした階は一度ふつうに描いてから1回だけ半透明で重ねるので、壁の角や重なった所も同じ濃さです
 - 2D上の屋根の一時表示・非表示
-- 2Dの「絵柄」で、間取り全体の描き方を切り替え（標準・設計図・CAD・コピー・鉛筆・水彩・クレヨン・黒板・筆と和風・墨絵・古地図・マンガ・ポップ・ドット・レトロゲーム・ネオン・ホラーの17種類）。詳しくは下の「2Dの絵柄」
+- 2Dの「絵柄」で、間取り全体の描き方を切り替え（標準・モノクロ・設計図・CAD・コピー・鉛筆・水彩・クレヨン・黒板・筆と和風・墨絵・古地図・マンガ・ポップ・ドット・レトロゲーム・ネオン・ホラーの18種類）。詳しくは下の「2Dの絵柄」
 - パーツ検索（ひらがな・カタカナ・別名でも検索可。例: いす、まど、れいぞうこ）
 - 選択した要素の配置固定
 - マウスホイールによるズーム（0.0001倍〜1万倍まで、ほぼ無限に拡大・縮小。遠くまで引くと方眼の間隔も自動で広がり、大きく拡大したときは部屋の中にも方眼を薄く表示して、右ドラッグで動かしていることが分かるようにします）
@@ -122,7 +125,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 階段は出発する下の階に1つ配置すれば、到着する上の階の2D図とPNGにも下り向きの記号で自動表示します（下階の透過表示がオフでも表示）。上の階に同じ階段を複製する必要はありません。記号の位置・大きさは下階の階段に追従し、編集は下階で行います
 - すでに上下階へ同じ階段を重ねていた場合は、上階の階段を選択して「下階の階段表示に切り替え」を押すと、上階の実物だけを削除して下階の記号表示にできます。固定中は操作できず、取り消しにも対応します。上階からさらに上へ登る階段は、そのまま残せます
 - 草地・芝生の床には、細い草の葉が立ち上がって見えるように生やします（池・飛び石・ラグの下には生やしません）
-- 3Dの絵柄を15種類から選べます（標準・リアル・白模型・線画・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラー）。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます
+- 3Dの絵柄を16種類から選べます（標準・リアル・白模型・線画・モノクロ・古写真・鉛筆・水彩・墨絵・アニメ・マンガ・ドット・レトロゲーム・設計図・ネオン・ホラー）。選んだ絵柄は記憶され、3Dの画像の書き出しにも使われます
 - リアルの絵柄は、光（トーンマッピング・周りの映り込み・細かい影・物の間の暗がり）と、家具・設備の材質（木目・布目・金属の筋・石の粒・陶器や漆のつや など）を本物らしくし、空と地面も描きます
 - 影のON/OFF
 - 5段階の明るさ調整
@@ -137,7 +140,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 ### 複数階
 
 - 「＋」で上の階を、「＋B」で地下の階を、何階でも追加（地下はいちばん下に増え、B1F、B2F…と呼びます）
-- 階はタブで切り替え（増えて入りきらないときは横にスクロール）。階を消すと残りの階の名前を付け直します
+- 階はタブで切り替え（増えて入りきらないときは横にスクロール。`[` `]`キーでも下の階・上の階へ）。階を消すと残りの階の名前を付け直します
+- タブの右の重ねた四角のボタンで、いまの階を複製（すぐ上に同じ階が増え、この階の屋根は上の階へ移ります）
 - ほかの階をゴースト表示（透かす階・色・濃さを選択可）
 - 3Dでは階ごとに表示・非表示を切り替え
 - 階高、床スラブ、最上階の壁上端を考慮して積層。地下の階は地面より下に積み、1Fの床が地下の天井をふさぎます
@@ -155,10 +159,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 2Dの上の「絵柄」から、間取り全体の描き方を選べます。メニューは「線画」と「背景」のタブに分かれていて、線の描き方と地（紙や板）を別々に選んで組み合わせられます（例: 鉛筆の線画を黒板に、ネオンの線画を羊皮紙に）。線画の見本はいまの背景で、背景の見本はいまの線画で描いて並べます。間取りのデータ（形・大きさ・色）と3Dは変わらず、描き方だけが変わります。選んだ線画と背景はブラウザに保存され、画像の書き出しもその絵柄になります。
 
-- 線画は17種類で、線画・手描き・和と古風・マンガとゲーム・夜と雰囲気の5つに分けて並べます（下の一覧）
+- 線画は18種類で、線画・手描き・和と古風・マンガとゲーム・夜と雰囲気の5つに分けて並べます（下の一覧）
 - 背景は14種類: おまかせ（線画に合わせる）・白・和紙・画用紙・水彩紙・羊皮紙・コピー用紙・クリーム・青焼き・黒板・黒・夜・暗がり・ゲームの緑。紙の模様や縁の暗がりも背景といっしょに変わります。筆の仲間の線画では、床の模様に重ねる色も背景の色になります
 
 - 標準: これまでどおりの、くっきりした線画
+- モノクロ: 標準と同じ線画を、色だけ白黒の濃淡にします（紙の模様やむらは付けません）。床の模様も色を抜いて残します
 - ドット: ドット絵のマップのように、間取り全体を四角いドットで描きます。細い線はドットのます目に沿った1ドットの線（曲線は階段状、四角の角はそのまま）、壁などの太い線と塗りはドットごとに1色にまとめます。文字はぼかさずにくっきり描きます。ドットの大きさは細かい（2px）・ふつう（3px）・粗い（5px）から選べ、スクロールしてもドットの形がちらつかないよう、間取りを1ドットずつ動かします
 - レトロゲーム: ドットの絵柄を、昔の携帯ゲーム機のような緑の4色だけで描きます。間の明るさは、決まった並びの点（ディザ）で隣の色と混ぜます。点の並びは間取りに貼り付いているので、スクロールしてもちらつきません。ドットの大きさも選べます
 - 筆・和風: 和紙の地に、墨の筆で描いたように描きます。線は入りで押さえてふくらみ、止めで押さえて終わるか、払いで細く抜け、途中でも筆圧で太さが変わり、手で引いたように揺れて少し反ります。四角は辺ごとに筆を運び、角で少し突き抜けます。壁などの太い線（少し細い線も）は筆の毛ごとに描き、終わりの方でかすれます。1本の中でも、入りの方は墨が濃く、かすれる終わりの方は薄くなり、線のまわりは和紙に少しにじみます。塗りは縁が少し波打って少し濃くたまる淡い色で、むらがあり、白は和紙の色になり、最後に和紙の繊維とむらを重ねます。文字は楷書・教科書体（なければ明朝）で、墨が少しにじんだように描きます。同じ形の線はいつ描いても同じ形なので、動かしたりスクロールしたりしても線がちらつきません
@@ -183,7 +188,9 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 上部の「画像」から、間取りをPNG画像にできます。
 
 - 書き出す階: 表示中の階 / 全部の階を1枚に（階の名前付きで並べる） / 階ごとに1枚ずつ。複数の階は同じ範囲・同じ倍率にそろえるので、重ねて見比べられます
-- 方眼と部屋の名前は入れるかどうかを選べます。寸法は2Dの「寸法」の表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
+- 方眼と部屋の名前は入れるかどうかを選べます。寸法と部屋の広さは2Dの表示に合わせます。選択の枠・屋根・ほかの階の透過・固定の印は入りません
+- 「表示」で方眼の大きさを決めて方眼を入れると、画像の端を方眼の線に合わせ（画像の左上から方眼が並ぶ）、「1マスの大きさ」で方眼1つを50〜140pxにできます。ココフォリアなどのマップのマス目に合わせられます
+- 「背景を透明にする」で、地の色や紙の模様を入れずに書き出せます（ドットの絵柄では背景も入ります）。「画像をコピー」で、画像をクリップボードにコピーできます
 - 2Dの「絵柄」が標準以外なら、画像もその絵柄で描きます（ドットは画面と同じ大きさのドット。筆は和紙、設計図は青い地、黒板は緑の板のように、地の色や紙の模様も入ります）
 - 線の太さや文字の大きさの割合は、2Dで間取り全体を表示したときと同じにします（大きな間取りでも、縮めて見たときに線が細く薄くならないように）。細かさは画面の2倍以上・1cmが1.5ピクセル以上で、大きすぎる間取りはどの端末でも作れる大きさまで下げます
 - 「3Dの画像（いまの見え方）」は、3Dで見ている向きのまま画面の2倍の細かさで書き出します
@@ -452,7 +459,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（間取り・3D）、新規作成 |
 | 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、テンプレート |
-| 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・ドット・筆と和風など17種類）、透過・寸法・屋根の表示切替 |
+| 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・モノクロ・ドット・筆と和風など18種類）、透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
 左上のパネル切替ボタンで、編集パネルを一時的に隠せます。作業内容に応じて、上部の表示切替から2Dまたは3Dを広く表示できます。
@@ -493,6 +500,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 矢印キー / `Shift + 矢印キー` | 選択した物を20cm / 100cm移動 |
 | `Esc` | 操作をキャンセルして選択ツールへ。操作中でなければ選択を解除 |
 | `Ctrl + Y` / `Cmd + Shift + Z` | やり直す |
+| `Ctrl / Cmd + S` | 間取りをファイル（JSON）に書き出す |
+| `[` / `]` | 下の階 / 上の階へ |
+| `G` | 方眼の表示・非表示 |
+| `0` | 全体を表示 |
+| `+` / `-` | 拡大・縮小 |
 
 入力欄や選択欄を編集中は、文字入力を妨げないよう一部のショートカットが無効になります。
 
@@ -656,7 +668,7 @@ madori/
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
-│  ├─ plan-style.ts          # 2Dの絵柄（ドット・筆・鉛筆・水彩・マンガ・設計図・ホラーなど17種類）の描き方
+│  ├─ plan-style.ts          # 2Dの絵柄（モノクロ・ドット・筆・鉛筆・水彩・マンガ・設計図・ホラーなど18種類）の描き方
 │  ├─ templates.ts           # テンプレート（家・病院・洋館など）の分類と間取りのデータ
 │  ├─ changelog.ts           # 更新履歴（アプリとREADMEで共通）
 │  ├─ colors.ts              # カラーコード（透明度付き）の読み取り
@@ -797,6 +809,18 @@ npm.cmd run dev
 ## 更新履歴
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
+
+### 2026年10月21日
+
+- 壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります
+- 2Dの上に「表示」を追加。部屋名の表示・部屋の広さ（帖・㎡）・方眼の表示と大きさ（25cm・50cm・半間・1m・1.5m・1間・2m・3m）を切り替えられます。方眼の大きさを決めると部屋の上にも方眼が重なり、画像の書き出しでは画像の左上からその大きさの方眼が並び、1マスの大きさ（px）も選べます（ココフォリアなどのマップのマス目に合わせられます）
+- 画像の書き出しで、背景を透明にしたり、画像をクリップボードにコピーしたりできるように
+- いまの階を複製できるように（階のタブの右の、重ねた四角のボタン）。すぐ上に同じ階が増え、この階の屋根は上の階へ移ります
+- 絵柄に「モノクロ」を追加（2Dと3D）。色を白黒の濃淡にします
+- 好きな画像を取り込めるように。「画像を取り込む」を押すか、2Dに画像のファイルをドラッグすると置けます。2Dに描き、3Dでは床に貼ります。大きさ・向き・濃さを変えられ、濃さを下げて「配置を固定」すれば下絵にもできます
+- 家具の一覧のボタンに、2Dの記号の小さな絵を付けました
+- テンプレートを名前で探せるように。「家具なし（間取りだけ）で開く」にすると、家具を外して開きます（階段や川・塀などの外まわりは残します）
+- 家具・画像を「最前面へ」「最背面へ」動かせるように。キーの操作を追加: [ ] で階の切り替え、G で方眼の表示、0 で全体を表示、+ と - で拡大・縮小、Ctrl+S でファイルに書き出し
 
 ### 2026年10月19日
 
@@ -1133,9 +1157,12 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
+- The 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖, 1.62 m² each, stairwell holes excluded) or square meters, and turns the grid on or off with a size of auto, 25 cm, 50 cm, 91 cm (half a ken), 1 m, 1.5 m, 182 cm (one ken), 2 m or 3 m. A chosen size is drawn clearly over rooms too; `G` toggles the grid
+- Import any image (PNG, JPEG, WebP or GIF) with 画像を取り込む or by dragging the file onto the 2D plan; it is placed 3 m on its longer side, drawn in 2D and laid on the floor in 3D at the same size and angle. Size (optionally keeping the aspect ratio), rotation, flip and opacity can be changed; a faint, locked image works as a tracing underlay. Images are scaled to at most 1600 px and stored in the plan (autosave and exported files)
+- Bring furniture and images to the front or send them to the back
 - Show other floors as a translucent guide ("透過"). The ▼ next to it picks which floors (the one below, the one above, all others, or one by name), a tint color (a color code, or blank for the original colors) and the strength. Ghost floors are drawn normally first and made see-through once, so wall corners and overlaps stay even
 - Temporarily hide roofs on the 2D plan
-- Switch how the whole 2D plan is drawn with "絵柄" (17 styles: standard, blueprint, CAD, photocopy, pencil, watercolor, crayon, chalkboard, brush on washi, ink wash, old map, manga, pop, dots, retro game, neon, and horror); see "2D styles" below
+- Switch how the whole 2D plan is drawn with "絵柄" (18 styles: standard, monochrome, blueprint, CAD, photocopy, pencil, watercolor, crayon, chalkboard, brush on washi, ink wash, old map, manga, pop, dots, retro game, neon, and horror); see "2D styles" below
 - Search parts by name, including hiragana, katakana, and common aliases
 - Lock selected items to prevent accidental movement or deletion
 - Zoom with the mouse wheel (almost without limit, from 0.0001x to 10,000x; the grid spacing widens automatically when zoomed far out, and when zoomed far in the grid also shows faintly inside rooms so you can see the view moving) and pan with right-drag
@@ -1154,7 +1181,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Place a staircase once on its departure floor. Its arrival is shown automatically as a descending symbol in the next floor's 2D plan and PNG export, even with floor ghosting off. No extra 3D flight is created. The symbol follows edits to the original staircase; edit it on the lower floor
 - For an existing duplicate, select the upper flight and choose "下階の階段表示に切り替え" (use the lower-floor stair display). This removes only that upper flight, supports undo, and is disabled for locked stairs. Keep an upper flight when it intentionally leads to another floor
 - Grass floors grow thin blades of grass in 3D (except under ponds, stepping stones, and rugs)
-- 15 looks for the 3D view: standard, realistic, white model, line art, old photo, pencil, watercolor, ink wash, anime, manga, pixel art, retro game, blueprint, neon and horror. The chosen look is remembered and used for 3D image export
+- 16 looks for the 3D view: standard, realistic, white model, line art, monochrome, old photo, pencil, watercolor, ink wash, anime, manga, pixel art, retro game, blueprint, neon and horror. The chosen look is remembered and used for 3D image export
 - The realistic look adds tone mapping, environment reflections, finer shadows and ambient occlusion, draws a sky and ground, and gives all furniture and equipment realistic materials (wood grain, fabric weave, brushed metal, stone grain, glossy ceramics and lacquer, and more)
 - Optional shadows
 - Five light intensity levels
@@ -1166,8 +1193,8 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 
 ### Multiple floors
 
-- Up to four floors
-- Separate 1F, 2F, 3F, and 4F tabs
+- Add floors above with "＋" and basements with "＋B"; switch floors with the tabs or the `[` and `]` keys
+- The overlapping-squares button next to the tabs duplicates the current floor directly above it (this floor's roofs move up onto the copy)
 - Translucent lower-floor reference in 2D
 - Per-floor visibility in 3D
 - Stacked floor heights, slabs, and top-floor wall caps
@@ -1185,10 +1212,11 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 
 "絵柄" above the 2D plan changes how the whole plan is drawn. The menu has two tabs, line art (線画) and background (背景), so the way lines are drawn and the ground (paper or board) can be combined freely (for example, pencil lines on a chalkboard or neon lines on parchment). Line-art samples are drawn on the current background, and background samples with the current line art. The plan data (shapes, sizes, colors) and the 3D view stay the same; only the drawing changes. Both choices are saved in the browser, and exported images use them too.
 
-- 17 line-art styles, in five groups: line art, hand-drawn, Japanese and old, manga and games, and night and mood (listed below).
+- 18 line-art styles, in five groups: line art, hand-drawn, Japanese and old, manga and games, and night and mood (listed below).
 - 14 backgrounds: auto (follows the line art), white, washi, drawing paper, watercolor paper, parchment, copy paper, cream, blueprint blue, chalkboard, black, night, gloom, and game green. Paper textures and darkened edges change with the background, and brush-family line art blends floor patterns into the background color.
 
 - 標準 (standard): the crisp line drawing as before.
+- モノクロ (monochrome): the standard line drawing with every color turned into shades of gray, without paper texture; floor patterns stay in gray.
 - ドット (dots): the whole plan drawn in square dots like a pixel-art map. Thin lines become one-dot lines on the dot grid (stair-stepped on curves, square at corners); thick lines such as walls and fills take one color per dot. Text stays sharp without blurring. Dots are 2, 3, or 5 px, and the plan moves one dot at a time so the dots do not flicker while scrolling.
 - レトロゲーム (retro game): the dot style in the four greens of an old handheld game console. In-between shades mix the neighboring greens in a fixed dot pattern (dithering) that is attached to the plan, so it does not flicker while scrolling. The dot size can be chosen too.
 - 筆・和風 (brush): drawn with a sumi ink brush on washi paper. Lines are pressed where the brush lands, end with a firm stop or a tapering sweep, change width with the brush pressure along the way, and wobble and bow slightly like hand-drawn lines; rectangles are drawn one side at a time and overshoot a little at the corners. Thick lines such as walls (and slightly thinner ones too) are drawn bristle by bristle and run dry toward their ends. Within a stroke the ink is darker where the brush lands and lighter where it runs dry, and it bleeds slightly into the paper. Fills are pale washes with slightly wavy, slightly darker edges and some mottling, white becomes the paper color, and the paper's fibers and mottling lie over everything. Text uses a brush-style typeface (kaisho or kyokasho, otherwise mincho) with a slight ink bleed. The same line always gets the same brush shape, so nothing flickers while moving or scrolling.
@@ -1213,7 +1241,9 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 "画像" in the top bar saves the plan as PNG images.
 
 - Floors: the current floor, all floors in one image (each with its name), or one image per floor. Several floors share the same area and scale so they line up.
-- Grid and room names can be left out. Dimensions follow the 2D dimension toggle. Selection frames, roofs, ghost floors, and lock icons are never included.
+- Grid and room names can be left out. Dimensions and room areas follow the 2D view. Selection frames, roofs, ghost floors, and lock icons are never included.
+- With a grid size chosen under 表示 and the grid included, the image edges snap to grid lines (the grid starts at the top-left corner) and 1マスの大きさ sets one cell to 50–140 px, to match the grid of online tabletop maps.
+- 背景を透明にする leaves out the background color and paper texture (dot styles keep their background), and 画像をコピー copies the image to the clipboard.
 - When the 2D style is not the standard one, the image is drawn in that style (dots of the same size as on screen; the paper or board, such as washi, blueprint blue, or the green chalkboard, is included).
 - Line widths and text keep the same proportions as the whole plan shown in the 2D view, so large plans do not look faint when the image is scaled down. Resolution is at least twice the screen and 1.5 pixels per centimeter, reduced for very large plans so every device can create the image.
 - "3Dの画像" saves the current 3D view at twice the screen resolution.
@@ -1471,7 +1501,7 @@ Multi-floor templates include upper-floor stairwell openings and show arriving s
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, image export (plan and 3D), and new plan |
 | Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
-| 2D pane | Drawing, selection, movement, resizing, the 2D style (17 styles such as dots and brush), and toggles for ghost floors, dimensions, and roofs |
+| 2D pane | Drawing, selection, movement, resizing, the 2D style (18 styles such as monochrome, dots and brush), and toggles for ghost floors, dimensions, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
 The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let you dedicate more space to the current task.
@@ -1512,6 +1542,11 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | Arrow keys / `Shift + arrow keys` | Move the selection by 20 cm / 100 cm |
 | `Esc` | Cancel the gesture and return to selection; clear selection when idle |
 | `Ctrl + Y` / `Cmd + Shift + Z` | Redo |
+| `Ctrl / Cmd + S` | Save the plan file (JSON) |
+| `[` / `]` | Go down / up a floor |
+| `G` | Show or hide the grid |
+| `0` | Fit the whole plan |
+| `+` / `-` | Zoom in / out |
 
 Some shortcuts are disabled while an input, select box, or editable field has focus.
 
@@ -1804,6 +1839,18 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-10-21
+
+- Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners
+- A new 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖) or square meters, and turns the grid on or off with a size of 25 cm, 50 cm, half a ken, 1 m, 1.5 m, one ken, 2 m or 3 m. A chosen grid size is drawn over rooms too, and image export starts the grid at the top-left corner with a selectable cell size in pixels, ready for online tabletop maps
+- Image export can leave the background transparent and copy the image to the clipboard
+- The current floor can be duplicated (the overlapping-squares button next to the floor tabs): the copy is added directly above, and this floor's roofs move up onto it
+- Added a monochrome look for both the 2D plan and the 3D view, turning colors into shades of gray
+- Any image can be imported: press 画像を取り込む (import image) or drag an image file onto the 2D plan. It appears in 2D and lies on the floor in 3D; its size, rotation and opacity can be changed, and a faint, locked image works as a tracing underlay
+- Furniture buttons in the parts list now show a small picture of their 2D symbol
+- Templates can be searched by name, and 家具なし（間取りだけ）で開く opens one without furniture (stairs and outdoor shapes such as rivers and walls stay)
+- Furniture and images can be brought to the front or sent to the back. New keys: [ and ] switch floors, G toggles the grid, 0 fits the whole plan, + and - zoom, and Ctrl+S saves the plan file
 
 ### 2026-10-19
 

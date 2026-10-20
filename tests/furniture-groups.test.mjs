@@ -7,7 +7,7 @@ const STAIRS = ['stairs', 'stairsU', 'stairsSpiral'];
 const group = id => FURNITURE_GROUPS.find(item => item.id === id);
 
 test('every kind of furniture has exactly one home group, and groups may also show others', () => {
-  const kinds = Object.keys(FURNITURE_DEFS).filter(kind => kind !== 'paint' && !STAIRS.includes(kind));
+  const kinds = Object.keys(FURNITURE_DEFS).filter(kind => kind !== 'paint' && kind !== 'image' && !STAIRS.includes(kind));
   const homes = FURNITURE_GROUPS.flatMap(group => group.kinds);
   assert.deepEqual([...homes].sort(), [...kinds].sort(), 'each kind is in exactly one group');
   assert.equal(new Set(FURNITURE_GROUPS.map(group => group.label)).size, FURNITURE_GROUPS.length);

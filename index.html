@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta name="description" content="2Dで描いた間取りが、その場で3Dになる無料の間取り作成アプリ。漫画・イラストの背景資料、小説やゲームの舞台設定、TRPGのマップづくりなど、創作に使えます。ブラウザだけで動きます。" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta name="application-name" content="間取りクイック3D" />
     <meta name="apple-mobile-web-app-title" content="間取りクイック3D" />
@@ -14,7 +14,7 @@
     <meta property="og:locale" content="ja_JP" />
     <meta property="og:site_name" content="間取りクイック3D" />
     <meta property="og:title" content="間取りクイック3D" />
-    <meta property="og:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta property="og:description" content="2Dで描いた間取りが、その場で3Dになる無料の間取り作成アプリ。漫画・イラストの背景資料、小説やゲームの舞台設定、TRPGのマップづくりなど、創作に使えます。ブラウザだけで動きます。" />
     <meta property="og:url" content="https://madori-5yu.pages.dev/" />
     <meta property="og:image" content="https://madori-5yu.pages.dev/icon-512.png" />
     <meta property="og:image:type" content="image/png" />
@@ -23,7 +23,7 @@
     <meta property="og:image:alt" content="間取りクイック3Dのアプリアイコン" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="間取りクイック3D" />
-    <meta name="twitter:description" content="2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。" />
+    <meta name="twitter:description" content="2Dで描いた間取りが、その場で3Dになる無料の間取り作成アプリ。漫画・イラストの背景資料、小説やゲームの舞台設定、TRPGのマップづくりなど、創作に使えます。ブラウザだけで動きます。" />
     <meta name="twitter:image" content="https://madori-5yu.pages.dev/icon-512.png" />
     <link rel="canonical" href="https://madori-5yu.pages.dev/" />
     <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
@@ -45,8 +45,8 @@
         "@id": "https://madori-5yu.pages.dev/#website",
         "url": "https://madori-5yu.pages.dev/",
         "name": "間取りクイック3D",
-        "alternateName": ["Madori Quick 3D", "間取りクイック", "madori-5yu.pages.dev"],
-        "description": "2Dで描いた間取りをすぐに3Dで確認できる、ブラウザだけで使える無料の間取り作成アプリです。",
+        "alternateName": ["Madori Quick 3D", "間取りクイック"],
+        "description": "2Dで描いた間取りが、その場で3Dになる無料の間取り作成アプリ。漫画・イラストの背景資料、小説やゲームの舞台設定、TRPGのマップづくりなど、創作に使えます。ブラウザだけで動きます。",
         "inLanguage": "ja"
       }
     </script>
@@ -112,8 +112,21 @@
                 </select>
               </label>
               <label class="check"><input id="imageExportGrid" type="checkbox" checked /> 方眼を入れる</label>
+              <label>1マスの大きさ（方眼の大きさを決めたとき）
+                <select id="imageExportCell">
+                  <option value="0">おまかせ</option>
+                  <option value="50">50px</option>
+                  <option value="64">64px</option>
+                  <option value="70">70px</option>
+                  <option value="100">100px</option>
+                  <option value="128">128px</option>
+                  <option value="140">140px</option>
+                </select>
+              </label>
               <label class="check"><input id="imageExportNames" type="checkbox" checked /> 部屋の名前を入れる</label>
+              <label class="check" title="ドットの絵柄では、背景も入ります"><input id="imageExportTransparent" type="checkbox" /> 背景を透明にする</label>
               <button class="text-button primary-export" id="imageExportPlan" type="button" title="2Dの間取りをPNG画像にする">間取りの画像を書き出す</button>
+              <button class="text-button" id="imageExportCopy" type="button" title="2Dの間取りの画像を、クリップボードにコピーする（階ごとのときは表示中の階）">画像をコピー</button>
               <button class="text-button" id="imageExport3d" type="button" title="いまの3Dの見え方をPNG画像にする">3Dの画像（いまの見え方）</button>
               <div class="credit-copy">
                 <span>画像を公開するときは、クレジットの表記をお願いします</span>
@@ -194,6 +207,10 @@
             <button class="tool-button floor-draw-tool" type="button" data-tool="floor" title="点を順に置いて床を描く。始点をクリックかEnterで閉じ、Backspaceで1点戻す" aria-label="線で囲んで床を作成">
               <i data-lucide="pentagon"></i><span>線で囲んで床を作成</span>
             </button>
+            <button class="tool-button floor-draw-tool" type="button" id="imageImportButton" title="好きな画像（PNG・JPEG など）を間取りに置く。2Dに画像のファイルをドラッグしても置けます。3Dでは床に貼ります" aria-label="画像を取り込む">
+              <i data-lucide="image-plus"></i><span>画像を取り込む</span>
+            </button>
+            <input id="imageImportInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
           </section>
 
           <section class="tool-section">
@@ -242,6 +259,12 @@
                 <div class="shortcut-row"><span><kbd>Delete</kbd></span><span>選択中の要素を削除（Backspaceでも可）</span></div>
                 <div class="shortcut-row"><span><kbd>Ctrl</kbd>+<kbd>Z</kbd></span><span>元に戻す</span></div>
                 <div class="shortcut-row"><span><kbd>Ctrl</kbd>+<kbd>Y</kbd></span><span>やり直す（Ctrl+Shift+Zでも可）</span></div>
+                <div class="shortcut-row"><span><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd> / <kbd>D</kbd></span><span>コピー / 貼り付け / 複製（Ctrl+Aでいまの階の物をぜんぶ選ぶ）</span></div>
+                <div class="shortcut-row"><span><kbd>Ctrl</kbd>+<kbd>S</kbd></span><span>間取りをファイルに書き出す</span></div>
+                <div class="shortcut-row"><span><kbd>[</kbd> / <kbd>]</kbd></span><span>下の階 / 上の階へ</span></div>
+                <div class="shortcut-row"><span><kbd>G</kbd></span><span>方眼の表示 / 非表示</span></div>
+                <div class="shortcut-row"><span><kbd>0</kbd></span><span>全体を表示</span></div>
+                <div class="shortcut-row"><span><kbd>+</kbd> / <kbd>-</kbd></span><span>拡大 / 縮小</span></div>
                 <div class="shortcut-row"><span><kbd>Esc</kbd></span><span>3Dでの家具の配置・移動を中止</span></div>
                 <div class="shortcut-row"><span>ホイール</span><span>ズーム</span></div>
                 <div class="shortcut-row"><span>右ドラッグ</span><span>画面の移動</span></div>
@@ -254,7 +277,12 @@
           <section class="tool-section">
             <details class="template-details">
               <summary>テンプレート</summary>
+              <div class="template-tools">
+                <input id="templateSearch" type="search" placeholder="テンプレートを探す（例: 病院、城）" aria-label="テンプレートを探す" autocomplete="off" />
+                <label class="check"><input id="templateStructureOnly" type="checkbox" /> 家具なし（間取りだけ）で開く</label>
+              </div>
               <div class="template-list" id="templateList"></div>
+              <p class="palette-empty" id="templateEmpty" hidden>見つかりませんでした</p>
             </details>
           </section>
 
@@ -369,6 +397,37 @@
                     </span>
                   </label>
                   <label>濃さ <span id="ghostOpacityValue"></span><input id="ghostOpacityInput" type="range" min="3" max="90" step="1" /></label>
+                </div>
+              </div>
+              <div class="ghost-options view-options">
+                <button class="toggle-button" id="viewMenuButton" type="button" title="部屋名・部屋の広さ・方眼の表示を選ぶ" aria-haspopup="true" aria-expanded="false">
+                  <i data-lucide="eye"></i>
+                  <span>表示</span>
+                </button>
+                <div class="ghost-menu view-menu" id="viewMenu" hidden>
+                  <label class="check"><input id="roomNamesInput" type="checkbox" checked /> 部屋名を表示</label>
+                  <label>部屋の広さ
+                    <select id="roomAreaSelect">
+                      <option value="none">表示しない</option>
+                      <option value="jo">帖（畳の数）</option>
+                      <option value="m2">㎡</option>
+                    </select>
+                  </label>
+                  <label class="check"><input id="gridVisibleInput" type="checkbox" checked /> 方眼を表示（G）</label>
+                  <label>方眼の大きさ
+                    <select id="gridSizeSelect">
+                      <option value="0">おまかせ（20cm刻み）</option>
+                      <option value="25">25cm</option>
+                      <option value="50">50cm</option>
+                      <option value="91">91cm（半間）</option>
+                      <option value="100">1m</option>
+                      <option value="150">1.5m</option>
+                      <option value="182">182cm（1間）</option>
+                      <option value="200">2m</option>
+                      <option value="300">3m</option>
+                    </select>
+                  </label>
+                  <p class="style-note">方眼の大きさを決めると、部屋の上にも方眼を重ねます。画像の書き出しでも、画像の左上からこの大きさの方眼が並ぶので、ココフォリアなどのマップのマス目に合わせられます。</p>
                 </div>
               </div>
               <button class="toggle-button is-active" id="roofToggle2d" type="button" title="間取り上の屋根を一時的に隠す" aria-pressed="true" hidden>

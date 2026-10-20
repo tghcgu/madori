@@ -31,7 +31,7 @@ export async function verifyThreeStyles({ open, plan, output }) {
     await page.locator('button[data-view-mode="three"]').first().click();
     await page.waitForTimeout(500);
     const values = await page.locator('#threeStyleSelect option').evaluateAll(options => options.map(option => option.value));
-    assert.deepEqual(values, ['standard', 'real', 'model', 'line', 'sepia', 'pencil', 'watercolor', 'sumie', 'anime', 'manga', 'pixel', 'retro', 'blueprint', 'neon', 'horror']);
+    assert.deepEqual(values, ['standard', 'real', 'model', 'line', 'mono', 'sepia', 'pencil', 'watercolor', 'sumie', 'anime', 'manga', 'pixel', 'retro', 'blueprint', 'neon', 'horror']);
     assert.equal(await page.locator('#threeStyleSelect').inputValue(), 'standard');
     const standard = await look();
     const seen = new Set([standard.hash]);
@@ -44,6 +44,7 @@ export async function verifyThreeStyles({ open, plan, output }) {
       if (style === 'neon' || style === 'horror') assert.ok(result.r + result.g + result.b < 150, `${style} is dark: ${JSON.stringify(result)}`);
       if (style === 'retro') assert.ok(result.g > result.r && result.g > result.b, `retro is green: ${JSON.stringify(result)}`);
       if (style === 'sepia') assert.ok(result.r > result.b + 25, `sepia is brown: ${JSON.stringify(result)}`);
+      if (style === 'mono') assert.ok(Math.abs(result.r - result.g) < 3 && Math.abs(result.g - result.b) < 3, `monochrome is gray: ${JSON.stringify(result)}`);
       if (['line', 'neon', 'manga', 'retro'].includes(style)) await page.screenshot({ path: `${output}/three-style-${style}.png` });
     }
 
@@ -65,7 +66,7 @@ export async function verifyThreeStyles({ open, plan, output }) {
     await page.waitForFunction(() => Boolean(window.__editorTest));
     assert.equal(await page.locator('#threeStyleSelect').inputValue(), 'watercolor');
     await page.locator('#threeStyleSelect').selectOption('standard');
-    console.log('PASS: 3D looks: 15 looks from the list, each drawn differently, realistic materials for furniture, back to standard, and remembered after reload');
+    console.log('PASS: 3D looks: 16 looks from the list, each drawn differently, realistic materials for furniture, back to standard, and remembered after reload');
   } finally {
     await page.context().close();
   }

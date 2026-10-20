@@ -22,6 +22,7 @@ import { verifyLiveThree } from './live-three-editor.mjs';
 import { verifyThreeStyles } from './three-style-editor.mjs';
 import { verifyFreeShapes } from './free-shape-editor.mjs';
 import { verifyWallStyles } from './wall-styles-editor.mjs';
+import { verifyMapTools } from './map-tools-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -38,6 +39,19 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       openingNames(id) { ensureThreeScene(); return planGroup.children.filter(object => object.userData.entityId === id).map(object => object.name); },
       snapshot() { return cloneState(state); },
       templateSnapshot(key) { return makeTemplate(key); },
+      gridStep() { return gridStep(); },
+      display() { return { ...displaySettings }; },
+      planStyle() { return planStyle; },
+      exportImageSize(cell) {
+        const before = { ...imageExportSettings };
+        Object.assign(imageExportSettings, { cell, grid: true, transparent: false });
+        try {
+          const canvas = renderPlanImage([state.activeFloor], exportBounds([state.activeFloor]));
+          return { width: canvas.width, height: canvas.height };
+        } finally {
+          Object.assign(imageExportSettings, before);
+        }
+      },
       textBounds(id) { return measureTextLabel(findEntity(id)); },
       hit(x, y) { return hitTest({ x, y }).entity?.id ?? null; },
       floorAt(id, x, y) {
@@ -226,6 +240,8 @@ try {
   if (!process.argv.includes('--free-shapes-only')) {
   await verifyWallStyles({ open, plan, output });
   if (!process.argv.includes('--wall-styles-only')) {
+  await verifyMapTools({ open, plan, output, readFile });
+  if (!process.argv.includes('--map-tools-only')) {
   await verifyThreeStyles({ open, plan, output });
   if (!process.argv.includes('--three-style-only')) {
   await verifyLiveThree({ open, plan, output });
@@ -1216,11 +1232,11 @@ try {
     return { colors: colors.size, hash };
   }));
   await page.locator('#planStyleButton').click();
-  assert.equal(samples.length, 17);
+  assert.equal(samples.length, 18);
   assert.equal(await page.locator('#planStyleChoices .style-group').count(), 5, 'the styles are shown in five groups');
   // （レトロゲームは4色だけで描く）
   assert.ok(samples.every(sample => sample.colors >= 4), `every sample is drawn: ${samples.map(sample => sample.colors)}`);
-  assert.equal(new Set(samples.map(sample => sample.hash)).size, 17, 'each style has its own sample');
+  assert.equal(new Set(samples.map(sample => sample.hash)).size, 18, 'each style has its own sample');
   // The other styles each have their own paper or board, and the walls stand out from it.
   const lightness = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
   const looks = {
@@ -1237,6 +1253,7 @@ try {
     cad: { label: 'CAD', ground: c => lightness(c) < 40 },
     horror: { label: 'ホラー', ground: c => lightness(c) < 90 },
     copy: { label: 'コピー', ground: c => lightness(c) > 225 && Math.max(...c) - Math.min(...c) < 12 },
+    mono: { label: 'モノクロ', ground: c => lightness(c) > 225 && Math.max(...c) - Math.min(...c) < 4 },
     retro: { label: 'レトロゲーム', ground: c => c[1] > c[0] + 10 && c[1] > c[2] + 60 },
   };
   for (const [style, look] of Object.entries(looks)) {
@@ -1291,7 +1308,7 @@ try {
   assert.equal(await page.locator('#planStyleLabel').textContent(), '絵柄');
   const white = shown(await pixelAt(450, 330));
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
-  console.log('PASS: 2D styles: 17 line styles in five groups and 14 backgrounds with samples, combined freely, exported images, editing, undo and kept after a reload');
+  console.log('PASS: 2D styles: 18 line styles in five groups and 14 backgrounds with samples, combined freely, exported images, editing, undo and kept after a reload');
 
   // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
   const squeezed = () => page.evaluate(() => {
@@ -1509,8 +1526,8 @@ try {
   const symbols = [];
   const variants = await page.evaluate(() => window.__editorTest.variants);
   for (const [kind, defaults] of Object.entries(catalog)) {
-    // Pen strokes are drawn with the pen tool, not chosen as a kind of furniture.
-    if (kind === 'paint') continue;
+    // Pen strokes are drawn with the pen tool and images are imported, not chosen as a kind of furniture.
+    if (kind === 'paint' || kind === 'image') continue;
     await page.locator('#furnitureKindInput').selectOption(kind);
     const designs = variants[kind]?.length ?? 0;
     assert.equal(await page.locator('.symbol-option').count(), designs ? designs + 1 : 0, `${kind}: design picker`);
@@ -1671,6 +1688,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

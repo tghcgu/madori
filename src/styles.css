@@ -721,6 +721,22 @@ select:focus-visible {
   background: #f9fafc;
 }
 
+/* 家具の小さな絵（2Dの記号）を左に付けたボタン */
+.furniture-items button.has-thumb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 4px 6px 4px 4px;
+  text-align: left;
+}
+
+.furniture-thumb {
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+}
+
 /* 壁の種類を絵で選ぶ欄 */
 .wall-style-picker {
   display: grid;
@@ -1144,6 +1160,32 @@ select:focus-visible {
   gap: 5px;
   color: var(--muted);
   font-size: 12px;
+}
+
+/* 表示メニューのチェック（部屋名・方眼）は、チェックと文字を横に並べる */
+.ghost-menu label.check,
+.image-export-menu label.check,
+.template-tools label.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+/* テンプレートを探す欄と、家具なしで開くチェック */
+.template-tools {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.template-tools input[type="search"] {
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 13px;
 }
 
 .ghost-menu select,

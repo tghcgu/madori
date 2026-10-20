@@ -18,9 +18,9 @@ function signedArea(polygon) {
   return area / 2;
 }
 
-test('there are 17 2D styles in five groups, each with a name, a hint and its own background and grid', () => {
+test('there are 18 2D styles in five groups, each with a name, a hint and its own background and grid', () => {
   assert.deepEqual(PLAN_STYLES.map(style => style.value), [
-    'standard', 'blueprint', 'cad', 'copy', 'pencil', 'watercolor', 'crayon', 'chalk', 'brush', 'sumie', 'parchment', 'manga', 'pop', 'pixel', 'retro', 'neon', 'horror',
+    'standard', 'mono', 'blueprint', 'cad', 'copy', 'pencil', 'watercolor', 'crayon', 'chalk', 'brush', 'sumie', 'parchment', 'manga', 'pop', 'pixel', 'retro', 'neon', 'horror',
   ]);
   assert.equal(PLAN_STYLE_GROUPS.length, 5);
   for (const group of PLAN_STYLE_GROUPS) assert.ok(PLAN_STYLES.some(style => style.group === group), `${group} has styles`);
@@ -44,7 +44,7 @@ test('there are 17 2D styles in five groups, each with a name, a hint and its ow
   const [r, , b] = parseCssColor(STYLE_LOOKS.blueprint.background);
   assert.ok(b > r * 2, 'the blueprint is blue');
   assert.ok(lightness('neon') < 40 && lightness('chalk') < 90 && lightness('cad') < 30 && lightness('horror') < 40, 'neon, the chalkboard, CAD and horror are dark');
-  assert.ok(['parchment', 'pencil', 'watercolor', 'sumie', 'crayon', 'pop', 'copy'].every(style => lightness(style) > 180), 'paper styles are light');
+  assert.ok(['parchment', 'pencil', 'watercolor', 'sumie', 'crayon', 'pop', 'copy', 'mono'].every(style => lightness(style) > 180), 'paper styles are light');
   const [gr, gg, gb] = parseCssColor(STYLE_LOOKS.retro.background);
   assert.ok(gg > gr && gg > gb, 'the retro game is green');
 });

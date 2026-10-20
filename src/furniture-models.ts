@@ -2402,6 +2402,19 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       m.reserveFootprint(w, d);
       break;
     }
+    case "image": {
+      // 取り込んだ画像: 床に貼った薄い板。画像は main.ts で貼る（2Dと同じ画像を同じ向き・大きさで）
+      const decal = m.material("image-decal", 0xffffff, 0.9);
+      decal.transparent = true;
+      decal.alphaTest = 0.02;
+      decal.polygonOffset = true;
+      decal.polygonOffsetFactor = -1;
+      const plane = m.mesh(new THREE.PlaneGeometry(w, d), [0, 0.004, 0], decal);
+      plane.rotation.x = -Math.PI / 2;
+      plane.castShadow = false;
+      m.reserveFootprint(w, d);
+      break;
+    }
     case "paint": {
       // ペンで描いた線・塗り: 床に貼った薄い板。形は main.ts で、2Dと同じ描き方の画像を貼る
       const paint = m.material("paint-decal", 0x9b1c17, 0.6, 0, true);

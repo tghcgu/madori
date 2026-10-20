@@ -8,6 +8,37 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-21",
+    items: [{
+      ja: "壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります",
+      en: "Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners",
+    }, {
+      ja: "2Dの上に「表示」を追加。部屋名の表示・部屋の広さ（帖・㎡）・方眼の表示と大きさ（25cm・50cm・半間・1m・1.5m・1間・2m・3m）を切り替えられます。方眼の大きさを決めると部屋の上にも方眼が重なり、画像の書き出しでは画像の左上からその大きさの方眼が並び、1マスの大きさ（px）も選べます（ココフォリアなどのマップのマス目に合わせられます）",
+      en: "A new 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖) or square meters, and turns the grid on or off with a size of 25 cm, 50 cm, half a ken, 1 m, 1.5 m, one ken, 2 m or 3 m. A chosen grid size is drawn over rooms too, and image export starts the grid at the top-left corner with a selectable cell size in pixels, ready for online tabletop maps",
+    }, {
+      ja: "画像の書き出しで、背景を透明にしたり、画像をクリップボードにコピーしたりできるように",
+      en: "Image export can leave the background transparent and copy the image to the clipboard",
+    }, {
+      ja: "いまの階を複製できるように（階のタブの右の、重ねた四角のボタン）。すぐ上に同じ階が増え、この階の屋根は上の階へ移ります",
+      en: "The current floor can be duplicated (the overlapping-squares button next to the floor tabs): the copy is added directly above, and this floor's roofs move up onto it",
+    }, {
+      ja: "絵柄に「モノクロ」を追加（2Dと3D）。色を白黒の濃淡にします",
+      en: "Added a monochrome look for both the 2D plan and the 3D view, turning colors into shades of gray",
+    }, {
+      ja: "好きな画像を取り込めるように。「画像を取り込む」を押すか、2Dに画像のファイルをドラッグすると置けます。2Dに描き、3Dでは床に貼ります。大きさ・向き・濃さを変えられ、濃さを下げて「配置を固定」すれば下絵にもできます",
+      en: "Any image can be imported: press 画像を取り込む (import image) or drag an image file onto the 2D plan. It appears in 2D and lies on the floor in 3D; its size, rotation and opacity can be changed, and a faint, locked image works as a tracing underlay",
+    }, {
+      ja: "家具の一覧のボタンに、2Dの記号の小さな絵を付けました",
+      en: "Furniture buttons in the parts list now show a small picture of their 2D symbol",
+    }, {
+      ja: "テンプレートを名前で探せるように。「家具なし（間取りだけ）で開く」にすると、家具を外して開きます（階段や川・塀などの外まわりは残します）",
+      en: "Templates can be searched by name, and 家具なし（間取りだけ）で開く opens one without furniture (stairs and outdoor shapes such as rivers and walls stay)",
+    }, {
+      ja: "家具・画像を「最前面へ」「最背面へ」動かせるように。キーの操作を追加: [ ] で階の切り替え、G で方眼の表示、0 で全体を表示、+ と - で拡大・縮小、Ctrl+S でファイルに書き出し",
+      en: "Furniture and images can be brought to the front or sent to the back. New keys: [ and ] switch floors, G toggles the grid, 0 fits the whole plan, + and - zoom, and Ctrl+S saves the plan file",
+    }],
+  },
+  {
     date: "2026-10-19",
     items: [{
       ja: "床・地面と、池・花壇・芝生・ラグを、ペンで塗れるように。描き方の「ペンで塗る」を選んで2Dをドラッグすると、塗った所がその形になります。重ねて塗るとつながり、輪のように塗ると真ん中があいた形（ドーナツ）になります。「けずる」にすると、塗った所を消したり穴をあけたりできます。塗る幅も選べます。これまでの、ぐるっとなぞって囲む描き方は「囲んで描く」です。ペンのツールで池などを描くときは、はじめから「ペンで塗る」です",

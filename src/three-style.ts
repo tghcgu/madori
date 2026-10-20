@@ -3,7 +3,7 @@
 // ここは three.js を読み込まない（テストが Node でそのまま読む）。シェーダーの文字列と、材質の分け方だけを持つ
 
 export type ThreeStyle =
-  | "standard" | "real" | "model" | "line" | "sepia"
+  | "standard" | "real" | "model" | "line" | "mono" | "sepia"
   | "pencil" | "watercolor" | "sumie"
   | "anime" | "manga" | "pixel" | "retro"
   | "blueprint" | "neon" | "horror";
@@ -13,6 +13,7 @@ export const THREE_STYLES: { value: ThreeStyle; label: string; hint: string; gro
   { value: "real", label: "リアル", hint: "本物らしい光と材質", group: "写真・模型" },
   { value: "model", label: "白模型", hint: "白い建築模型", group: "写真・模型" },
   { value: "line", label: "線画", hint: "白地に黒い線（下描き・トレース用）", group: "写真・模型" },
+  { value: "mono", label: "モノクロ", hint: "白黒の写真", group: "写真・模型" },
   { value: "sepia", label: "古写真", hint: "セピア色の古い写真", group: "写真・模型" },
   { value: "pencil", label: "鉛筆", hint: "鉛筆の線と斜線の陰", group: "手描き" },
   { value: "watercolor", label: "水彩", hint: "にじむ絵の具と紙", group: "手描き" },
@@ -151,6 +152,10 @@ void main() {
     float shade = 0.9 + 0.1 * smoothstep(0.12, 0.85, luma(c));
     col = isSky(uv) ? vec3(1.0) : vec3(shade);
     col = mix(col, vec3(0.07), edgeAt(uv, lw * 1.2));
+  } else if (styleId == ${id("mono")}) {
+    // モノクロ: 明るさだけを残した白黒（空は白）
+    vec3 c = toSrgb(texture2D(tColor, uv).rgb);
+    col = isSky(uv) ? vec3(0.97) : vec3(luma(c));
   } else if (styleId == ${id("sepia")}) {
     vec3 c = toSrgb(texture2D(tColor, uv).rgb);
     float l = luma(c);
