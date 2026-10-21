@@ -1,4 +1,5 @@
 import type { DoorStyle } from "./opening-shapes.ts";
+import { MORE_DEFS, MORE_PART_KINDS, type MorePartKind } from "./furniture-more.ts";
 
 export type FurnitureKind =
   | "tatami" | "zabuton" | "chabudai" | "byobu" | "shojiScreen" | "andon"
@@ -99,7 +100,9 @@ export type FurnitureKind =
   // 取り込んだ画像（床に貼る。一覧には出さず、「画像を取り込む」から置く）
   | "image"
   // 自由な形（なぞって作る。free-shapes.ts）
-  | "lawn" | "river" | "pathway" | "hedge" | "stoneWall" | "railway";
+  | "lawn" | "river" | "pathway" | "hedge" | "stoneWall" | "railway"
+  // 足した家具・小物（furniture-more.ts）
+  | MorePartKind;
 export interface FurnitureDef {
   label: string;
   w: number;
@@ -108,7 +111,7 @@ export interface FurnitureDef {
   height?: number;
 }
 
-export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
+const BASE_FURNITURE_DEFS: Record<Exclude<FurnitureKind, MorePartKind>, FurnitureDef> = {
   tatami: { label: "畳（一畳）", w: 90, h: 180, height: 6 },
   zabuton: { label: "座布団", w: 55, h: 59, height: 8 },
   chabudai: { label: "ちゃぶ台", w: 90, h: 90, height: 33 },
@@ -283,6 +286,12 @@ export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
   railway: { label: "線路", w: 500, h: 312 },
 };
 
+// 足した家具・小物（furniture-more.ts）も、ほかの家具と同じ一覧にする
+export const FURNITURE_DEFS: Record<FurnitureKind, FurnitureDef> = {
+  ...BASE_FURNITURE_DEFS,
+  ...(Object.fromEntries(MORE_PART_KINDS.map((kind) => [kind, { label: MORE_DEFS[kind].label, w: MORE_DEFS[kind].w, h: MORE_DEFS[kind].h, height: MORE_DEFS[kind].height }])) as Record<MorePartKind, FurnitureDef>),
+};
+
 // 家具ごとの別デザインの名前（1番以降。0番は標準）。2Dの記号と3Dのモデルが、この番号で同じデザインになる
 export const FURNITURE_VARIANTS: Partial<Record<FurnitureKind, string[]>> = {
   chair: ["脚付き", "丸い座面"],
@@ -348,7 +357,7 @@ export interface FurnitureGroup {
   doorStyles?: DoorStyle[];
 }
 
-export const FURNITURE_GROUPS: FurnitureGroup[] = [
+const BASE_GROUPS: FurnitureGroup[] = [
   { id: "seating", label: "椅子・ソファ", keywords: "いす すわる", kinds: ["sofa", "sofa2", "sofaCorner", "armchair", "chair", "officeChair", "zaisu", "stool", "barStool", "bench"], also: ["zabuton", "engawa", "throne", "wheelchair"] },
   { id: "tables", label: "テーブル・机", keywords: "つくえ てーぶる", kinds: ["diningTable", "roundTable", "table", "sideTable", "kotatsu", "longTable", "desk", "deskL"], also: ["chabudai", "counter", "schoolDesk", "lectern"] },
   { id: "beds", label: "ベッド・寝具", keywords: "べっど しんぐ ねる 寝る", kinds: ["bed", "bedSemiDouble", "bedDouble", "bunkBed", "futon", "crib"], also: ["hospitalBed"] },
@@ -382,6 +391,38 @@ export type PaletteSection = "fittings" | "walls" | "stairs" | "trace" | "surfac
 export const PALETTE_ORDER: string[] = [
   "fittings", "walls", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor",
   "stairs", "trace", "surfaces", "outdoor", "roofs",
-  "japanese", "school", "shop", "people", "vehicles", "hospital", "street", "shrine", "play", "fantasy",
+  "japanese", "school", "shop", "people", "creatures", "vehicles", "station", "hospital", "street", "structure", "infra", "industry",
+  "culture", "shrine", "play", "fantasy", "occult", "sf",
   "shapes",
 ];
+
+// 足した家具・小物（furniture-more.ts）の分類。ほかの分類に入る物は、その分類の終わりに並べる
+const MORE_GROUPS: { id: string; label: string; keywords: string }[] = [
+  { id: "structure", label: "建物の部分・工事", keywords: "たてもの 建物 こうぞう 構造 こうじ 工事 はしら 柱 壊れた こわれた" },
+  { id: "infra", label: "設備・インフラ", keywords: "せつび 設備 いんふら インフラ はいかん 配管 でんき 電気 きかい 機械 おくじょう 屋上" },
+  { id: "industry", label: "物流・工場・倉庫", keywords: "ぶつりゅう 物流 こうじょう 工場 そうこ 倉庫 みなと 港" },
+  { id: "culture", label: "博物館・教会・図書館", keywords: "はくぶつかん 博物館 びじゅつかん 美術館 きょうかい 教会 としょかん 図書館 だいがく 大学" },
+  { id: "station", label: "駅・線路", keywords: "えき 駅 せんろ 線路 てつどう 鉄道 でんしゃ 電車" },
+  { id: "creatures", label: "人物・動物・怪物（コマ）", keywords: "じんぶつ 人物 ひと 人 NPC どうぶつ 動物 かいぶつ 怪物 モンスター まもの 魔物 てき 敵 コマ こま" },
+  { id: "occult", label: "ホラー・オカルト", keywords: "ほらー ホラー おかると オカルト かいき 怪奇 のろい 呪い ぎしき 儀式 じゃしん 邪神" },
+  { id: "sf", label: "SF・宇宙船", keywords: "えすえふ SF うちゅう 宇宙 うちゅうせん 宇宙船 みらい 未来" },
+];
+// ほかの分類に足した物のための、探す語
+const MORE_KEYWORDS: Record<string, string> = {
+  hospital: "けんきゅう 研究 じっけん 実験 らぼ ラボ",
+  play: "げきじょう 劇場 じむ ジム ぷーる プール らいぶ ライブ",
+  vehicles: "ふね 船 みなと 港 じゅうき 重機 ひこうき 飛行機",
+  school: "しれいしつ 司令室 かいぎ 会議",
+  people: "てがかり 手がかり しょうこ 証拠 こもの 小物",
+};
+
+// 「種類」の選択欄も、左の一覧と同じ順に並べる
+export const FURNITURE_GROUPS: FurnitureGroup[] = [
+  ...BASE_GROUPS.map((group) => ({
+    ...group,
+    keywords: [group.keywords, MORE_KEYWORDS[group.id]].filter(Boolean).join(" ") || undefined,
+    kinds: [...group.kinds, ...MORE_PART_KINDS.filter((kind) => MORE_DEFS[kind].group === group.id)],
+  })),
+  ...MORE_GROUPS.map((group) => ({ ...group, kinds: MORE_PART_KINDS.filter((kind) => MORE_DEFS[kind].group === group.id) })),
+].sort((a, b) => PALETTE_ORDER.indexOf(a.id) - PALETTE_ORDER.indexOf(b.id));
+

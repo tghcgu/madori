@@ -132,7 +132,8 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `index.html` | 画面の部品（上のバー、左の欄、2Dと3Dの欄、メニュー）。先頭で間取り専用版かどうかを見分ける |
 | `src/main.ts` | アプリ本体（約8500行）。状態、2Dの描画と操作、選択中の欄、3Dの組み立て、保存、書き出し、メニュー |
 | `src/furniture-catalog.ts` | 家具の種類（名前・標準の大きさ。`FURNITURE_DEFS`）と、デザインの名前（`FURNITURE_VARIANTS`。2Dと3Dで共通の番号）、一覧の分類（`FURNITURE_GROUPS`。どの種類も1つの分類の `kinds` に入り、`also` でほかの分類にも重ねて出す。`doorStyles` でその分類にもドアを出す） |
-| `src/furniture-shapes.ts` | 2Dと3Dで共通の形のデータ（岩・池・足跡・血・破片・人の模型の骨組みなど）。部品で組む家具（`PART_KINDS`: 和風の家具・鳥居・学校やお店の設備・遊具など89種類）は `furnitureParts()` が部品（箱・円柱・輪・横倒しの円柱・楕円体・傾けた板）の並びを返し、2D（`drawFurnitureSymbol`）は低い順に真上から描き、3D（`buildFurnitureModel`）は同じ部品を立体にする。材質は `PART_MATERIALS`（色を変えられる部品は `tintable`、ガラスは `opacity`、炎は `glow`）。壁に掛ける物は `MOUNTED_PART_KINDS` |
+| `src/furniture-shapes.ts` | 2Dと3Dで共通の形のデータ（岩・池・足跡・血・破片・人の模型の骨組みなど）。部品で組む家具（`PART_KINDS`: 和風の家具・鳥居・学校やお店の設備・遊具など89種類）は `furnitureParts()` が部品（箱・円柱・輪・横倒しの円柱・楕円体・傾けた板）の並びを返し、2D（`drawFurnitureSymbol`）は低い順に真上から描き、3D（`buildFurnitureModel`）は同じ部品を立体にする。材質は `PART_MATERIALS`（色を変えられる部品は `tintable`、ガラスは `opacity`、炎は `glow`）。壁に掛ける物は `MOUNTED_PART_KINDS`。部品を作る道具は `createPartBuilder()`（`furniture-more.ts` も同じ物を使う） |
+| `src/furniture-more.ts` | 2026-10-21 に足した家具・小物248種類（`MORE_DEFS`: 名前・大きさ・高さ・分類 `group`・壁や天井に付く `mounted`・机にのせる小物 `small`・検索の語）と、その部品（`moreFurnitureParts()`）。`furniture-catalog.ts` が `FURNITURE_DEFS` と分類に、`furniture-shapes.ts` が `PART_KINDS` に自動で入れる。`furniture-shapes.ts` は型だけ読む（読み込みの輪にしない） |
 | `src/furniture-models.ts` | 家具の3Dモデル（`buildFurnitureModel`）。種類ごとの `case` |
 | `src/opening-models.ts` | ドア・引き戸・和風の建具・窓の3Dモデル |
 | `src/opening-shapes.ts` | ドアの種類（`DOOR_STYLES`: ドア・両開きドア・引き戸・障子・襖・格子戸・板戸・門扉）と、2D・3D共通の戸の並び（`slidingPanels`）・組子や格子の位置（`panelBars`）・門扉の板（`gateSlats`） |
@@ -188,11 +189,11 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 ### 家具を1種類増やすとき
 
 1. `furniture-catalog.ts` の `FurnitureKind` と `FURNITURE_DEFS` に足す（名前と標準の大きさ。部品で組む家具は `height` も）。デザインがあれば `FURNITURE_VARIANTS` にも足す。
-2. いちばん簡単なのは、部品で組む家具にすること: `furniture-shapes.ts` の `PART_KINDS` に足し、`furnitureParts()` に `case` を書く（割合で書く `box`/`ellipse`/`ring`/`disc`/`sphere`、cm で書く `cm`、傾けた板の `slab`/`tilted`）。これだけで2Dも3Dもでき、真上から見た形が必ずそろう。いちばん低い部品は床（0）から、いちばん高い部品は高さちょうど（1）までにする（単体テストが確かめる。壁に掛ける物は `MOUNTED_PART_KINDS` に足す）。
+2. いちばん簡単なのは、`furniture-more.ts` の `DEFS` に1行足して `moreFurnitureParts()` に `case` を書くこと（`FurnitureKind`・`FURNITURE_DEFS`・`PART_KINDS`・分類・検索の語に自動で入るので、1. と 4. はいらない）。前からある部品の家具は: `furniture-shapes.ts` の `PART_KINDS` に足し、`furnitureParts()` に `case` を書く（割合で書く `box`/`ellipse`/`ring`/`disc`/`sphere`、cm で書く `cm`、傾けた板の `slab`/`tilted`）。これだけで2Dも3Dもでき、真上から見た形が必ずそろう。いちばん低い部品は床（0）から、いちばん高い部品は高さちょうど（1）までにする（単体テストが確かめる。壁に掛ける物は `MOUNTED_PART_KINDS` に足す）。
 3. 部品で組まない家具は、形のデータを `furniture-shapes.ts` に作り、2Dは `main.ts` の `drawFurnitureSymbol()`（塗りは `furnitureSymbolFill()`、デザインは `SYMBOL_VARIANTS`）、3Dは `furniture-models.ts` の `buildFurnitureModel()` に `case` を足す。
 4. 左の一覧と検索: `FURNITURE_GROUPS`（どれか1つの分類の `kinds` に入れ、ほかの分類にも出すなら `also`）と `main.ts` の `SEARCH_KEYWORDS` に足す。
 5. 確かめる: `npm test`（全種類を自動で調べる）、`npm run test:e2e`（全種類の大きさ・回転・反転・色）、`npm run compare -- 新しい種類`。
-6. 説明を直す: README の家具の表と数（いまは一覧に159種類。ペンの線 `paint` は一覧に出さないので、定義は160）と、更新履歴。
+6. 説明を直す: README の家具の表と数（いまは定義が415種類。ペンの線 `paint` と画像 `image` は一覧に出さない）と、更新履歴。
 
 ### 2Dの絵柄（`src/plan-style.ts`）の仕組み
 
@@ -290,6 +291,8 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - 一覧の家具の絵: `addPaletteThumbs`（欄を開いたときに `drawSymbolPreview` で30pxの絵）。
   - サイト名と説明: `index.html` の JSON-LD の `alternateName` からドメインを外し、説明を創作向け（漫画・イラストの背景資料、小説やゲームの舞台、TRPGのマップ）にした。Google の表示が変わるのは、次に読みに来たとき（Search Console の URL 検査で早められる）。
   - E2E は `tests/map-tools-editor.mjs`（`--map-tools-only`）。
+  - 参考サイトにある家具・小物を、絵は使わずに自分で部品から組んで248種類足した（`src/furniture-more.ts`。分類を8つ足し、ほかの分類の終わりにも足した）。部品の決まり（範囲の中・床から高さちょうど・描く回数24まで）は前からの家具の単体テストが全種類を確かめる。手前（正面）は y が正。ふたや天板で上から何もかもが隠れる物は、天板を奥へ寄せて正面の扉を見せる・天井を枠だけにする・上に機械やファンを載せる、などで上から見て分かるようにした。
+  - 机にのせる小物（`small`: メモ・鍵・携帯電話・ノートPCなど）は、3Dでは下にある家具の上にのせる（`main.ts` の `smallItemLift`・`liftSmallItems`。2Dは変わらない。人・怪物・ラグ・血などは台にしない `NO_SUPPORT_KINDS`）。
 - **2026-10-19（その9）**: 「重い」「ペンで描くなのに範囲になってる」「ドーナツも描けるように」「川の真ん中の線」「すべて見直せ」への対応。
   - 軽くする（`src/main.ts`）: `rebuildThreeScene` は2Dだけを表示中なら作らず（`threeSceneKey = null`、3Dを見るときに `ensureThreeScene`）、間取り・屋根・隠した階・屋根の表示・絵柄の JSON（`threeSceneSignature`）が前と同じなら選択の枠だけ直す（`refreshSelectionBoxes`。枠を付ける物には `userData.selectionTarget`）。家具・ドア・窓は形を決める値の JSON を鍵に作り置きを `clone` して使い（`cachedModel`。形と材質は `cachedResources` に入れ、`disposeGroup`・`removeThreeObjects` では捨てない。3回の作り直しで使われなければ `trimModelCache` で捨てる）、草の置き場所も作り置き（`grassCache`）。捨てる形・材質は次に3Dを描いた後で捨てる（`pendingDisposal` → `flushDisposal`。先に捨てるとシェーダーを組み直して重い）。影は `renderer.shadowMap.autoUpdate = false` で、物や光が変わったときだけ `needsUpdate`。シーンを作り直さずに3Dを変える所（`syncThreeWhileDragging`）では `threeSceneKey = null`。E2E の3Dを調べる関数は先に `ensureThreeScene()` を呼ぶ。測り方は `.codex/perf.mjs`・`.codex/cpu.mjs`（作業用）。
   - ペンで塗る（`src/brush-area.ts`）: 描き方に `brush`（床と、池・花壇・芝生・ラグだけ。`isAreaKey`）。線を幅のある帯（区切りの四角と点の丸）にして `polygon-clipping` で合わせ（`brushStroke`）、重なった同じ物（床は同じ素材で名前のない物、自由な形は同じ種類）と `unionRegions`、けずるときは `subtractRegion`。床は `floorFromRegion`（輪郭128点・穴32まで）、自由な形は `freeFrame(outer, margin, holes)` で `path` と `holes`（割合の輪）にする（`paintFloor`・`paintFreeArea`）。ペンのツールでは閉じる形ははじめから塗る（`drawMethodFor`）。床の「囲んで描く」と「ペンで塗る」は部屋のツール。

@@ -8,6 +8,7 @@ import { CAP_COLOR, WALL_STYLES, WALL_THICKNESS_RANGE, isWallStyle, isWallThickn
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
 import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
+import { MORE_DEFS, MORE_SMALL_KINDS, isMorePartKind } from "./furniture-more";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { CHANGELOG, changelogDate } from "./changelog";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
@@ -1580,7 +1581,7 @@ function createDoorStyleButton(style: DoorStyle): HTMLButtonElement {
 }
 
 function createFurnitureButton(kind: FurnitureKind): HTMLButtonElement {
-  const button = createPaletteButton(FURNITURE_DEFS[kind].label, SEARCH_KEYWORDS[kind] ?? "", () => {
+  const button = createPaletteButton(FURNITURE_DEFS[kind].label, SEARCH_KEYWORDS[kind] ?? (isMorePartKind(kind) ? MORE_DEFS[kind].keywords ?? "" : ""), () => {
     activeFurniture = kind;
     pathRedrawId = null;
     setActiveButton("[data-furniture]", activeFurniture);
@@ -9788,6 +9789,7 @@ function buildThreeObjects(): void {
     addGroundPlaceholder({ x: 0, y: 0 });
   }
 
+  liftSmallItems();
   state.roofs.forEach((roofItem) => addRoof3d(roofItem, center));
   if (threeStyle === "real") addRealGround(bounds, center);
   else addSubtleGrid(bounds, center);
@@ -10157,8 +10159,48 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
 function placeFurniture3d(group: THREE.Object3D, furnitureItem: Furniture, center: Point, yBase: number): void {
   const floorTop = yBase === 0 ? 0.08 : 0;
   const pos = to3d(furnitureItem.x + furnitureItem.w / 2, furnitureItem.y + furnitureItem.h / 2, center);
-  group.position.set(pos.x, yBase + floorTop, pos.z);
+  group.position.set(pos.x, yBase + floorTop + smallItemLift(furnitureItem, yBase + floorTop), pos.z);
   group.rotation.y = (-furnitureItem.rotation * Math.PI) / 180;
+}
+
+// 机やテーブルの上に置く小物（鍵・メモ・ノートPCなど）。3Dでは、2Dで重ねて置いた家具の上にのせる
+const SMALL_ITEM_KINDS = new Set<FurnitureKind>(MORE_SMALL_KINDS);
+// 上にのせない物（人や動物、床に貼る物）
+const NO_SUPPORT_KINDS = new Set<FurnitureKind>(["person", "fallenPerson", "rug", "paint", "image", "bloodPool", "footprints", "brokenGlass", "evidenceMarker"]);
+
+// 小物の真下にある家具の、いちばん上の高さ（床から m）。なければ 0
+function smallItemLift(item: Furniture, floorY: number): number {
+  if (!SMALL_ITEM_KINDS.has(item.kind)) return 0;
+  const floor = state.floors.find((candidate) => candidate.entities.includes(item));
+  if (!floor) return 0;
+  const center = { x: item.x + item.w / 2, y: item.y + item.h / 2 };
+  let top = 0;
+  for (const other of floor.entities) {
+    if (other.type !== "furniture" || other === item || SMALL_ITEM_KINDS.has(other.kind) || NO_SUPPORT_KINDS.has(other.kind)) continue;
+    if (isMorePartKind(other.kind) && MORE_DEFS[other.kind].group === "creatures") continue;
+    const [lx, ly] = worldToFurnitureLocal(other, center);
+    if (Math.abs(lx) > other.w / 2 || Math.abs(ly) > other.h / 2) continue;
+    for (const object of planGroup.children) {
+      if (object.userData.entityId !== other.id || object.userData.ignoreSelection) continue;
+      top = Math.max(top, new THREE.Box3().setFromObject(object).max.y - floorY);
+    }
+  }
+  return top;
+}
+
+// 作り直しの終わりに、小物を下の家具の上へのせ直す（下の家具が小物より後に作られることもあるため）
+function liftSmallItems(): void {
+  for (const object of planGroup.children) {
+    const id = object.userData.entityId;
+    if (typeof id !== "string" || object.userData.ignoreSelection) continue;
+    const item = findEntity(id);
+    if (item?.type !== "furniture" || !SMALL_ITEM_KINDS.has(item.kind)) continue;
+    const floorIndex = state.floors.findIndex((floor) => floor.entities.includes(item));
+    if (floorIndex < 0) continue;
+    const floorY = floorBaseY(floorIndex) + floorTopOffset(floorIndex);
+    object.position.y = floorY + smallItemLift(item, floorY);
+  }
+  planGroup.children.forEach((object) => { if (object instanceof THREE.BoxHelper) object.update(); });
 }
 
 // ---- 2Dでドラッグしている間も、3Dをすぐ合わせる ----

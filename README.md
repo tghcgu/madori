@@ -227,37 +227,45 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、窓、中央区切り付き窓 |
 | 壁 | 壁、コンクリート、レンガ、ブロック塀、板塀、土塀、ガラス、石垣、生け垣、竹垣、フェンス |
 | 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、カウンターチェア、ベンチ（座布団、縁台、玉座、車椅子） |
-| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク（ちゃぶ台、カウンター、学校の机と椅子、教卓） |
-| ベッド・寝具 | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド（病院のベッド） |
-| 収納・棚 | クローゼット、タンス、棚・本棚、食器棚、靴箱、コートハンガー、段ボール箱（階段箪笥、ロッカー、金庫、陳列棚、木箱） |
-| キッチン | キッチン、L型キッチン、アイランドキッチン（冷蔵庫、食器棚、カウンターチェア、かまど） |
+| テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク、机と椅子、丸いダイニング（4人）（ちゃぶ台、カウンター、学校の机と椅子、教卓） |
+| ベッド・寝具 | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド、天蓋付きベッド、ナイトテーブル（病院のベッド） |
+| 収納・棚 | クローゼット、タンス、棚・本棚、食器棚、靴箱、コートハンガー、段ボール箱、ドレッサー（階段箪笥、ロッカー、金庫、陳列棚、木箱） |
+| キッチン | キッチン、L型キッチン、アイランドキッチン、シンク、コンロ（冷蔵庫、食器棚、カウンターチェア、かまど） |
 | 浴室・トイレ・洗面 | 浴槽、ユニットバス、シャワー、トイレ、洗面台（洗濯機、檜風呂、和式トイレ） |
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン、室外機、扇風機、ストーブ（複合機、自動販売機） |
-| 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
+| 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン、グランドピアノ、蓄音機（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
 | 階段 | 直階段、折り返し階段、らせん階段 |
 | なぞって形を決める | ペン、池、花壇、芝生、ラグ、川、小道、生け垣、石垣、フェンス、竹垣、線路、飛び石、足跡、破片（床・地面の素材と部屋も、ぐるっとなぞるとその形） |
 | 床・地面 | 標準、フローリング、ヘリンボーン、ウッドデッキ・板張り、畳、カーペット、タイル、モザイクタイル、市松・チェッカー、大理石、石の床、石畳、レンガ、コンクリート、アスファルト、鉄板（縞鋼板）、草地・芝生、土・土間、砂・砂浜、砂利、雪、水面 |
 | 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、芝生、川、小道、生け垣、石垣、フェンス、竹垣、外灯、石灯籠、墓石、十字架の墓、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ、井戸、噴水、石像、焚き火、テント（門扉、ベンチ、つくばい、縁台、鳥居、室外機、自転車、車） |
 | 屋根 | 切妻、寄棟、陸屋根、円すい、ドーム、正多角形 |
-| 和風（和室・和の設備） | 障子、襖、格子戸（玄関戸）、板戸、門扉、畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい、仏壇、神棚、床の間、かまど、和式トイレ、提灯（座椅子、こたつ、布団、石灯籠、飛び石、池、墓石、竹垣、生け垣、石垣、井戸、鳥居） |
-| 学校・オフィス | 黒板、ホワイトボード、教卓、学校の机と椅子、ロッカー、複合機（コピー機）、パーティション、金庫、消火器（机、L字デスク、オフィスチェア、長テーブル、棚・本棚、跳び箱、ピアノ） |
-| お店・飲食店 | カウンター、ショーケース、陳列棚、自動販売機、立て看板（A型）（カウンターチェア、ダイニングセット、椅子、丸テーブル、キッチン、提灯、ゴミ箱） |
-| 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、破片 |
-| 乗り物 | 車、バイク、自転車、バス |
-| 病院・介護 | 病院のベッド、点滴スタンド、車椅子、診察台（カーテン、パーティション、洗面台） |
-| 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶、線路（小道、川、車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
-| 神社・寺 | 鳥居、狛犬、賽銭箱、手水鉢（門扉、石灯籠、提灯、神棚、仏壇、篝火、竹垣、墓石、つくばい） |
-| 遊具・スポーツ・音楽 | すべり台、ジャングルジム、鉄棒、砂場、跳び箱、卓球台、ビリヤード台、ドラムセット、ステージ（舞台）（ブランコ、ピアノ） |
-| ファンタジー | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）（石像、焚き火、十字架の墓、噴水、テント、川、石垣） |
+| 和風（和室・和の設備） | 障子、襖、格子戸（玄関戸）、板戸、門扉、畳、座布団、ちゃぶ台、屏風、障子の衝立、行灯、階段箪笥、囲炉裏、火鉢、縁台、檜風呂、つくばい、仏壇、神棚、床の間、かまど、和式トイレ、提灯、座卓、縁側（板敷き）、刀掛け、鹿威し、石橋、太鼓橋（木の橋）、松、竹、苔、茶室（建物を外から）（座椅子、こたつ、布団、石灯籠、飛び石、池、墓石、竹垣、生け垣、石垣、井戸、鳥居） |
+| 学校・オフィス | 黒板、ホワイトボード、教卓、学校の机と椅子、ロッカー、複合機（コピー機）、パーティション、金庫、消火器、事務机、受付カウンター、書類棚、会議テーブル（6人）、島型デスク（4席）、モニター壁、作戦卓、通信機、銃架（机、L字デスク、オフィスチェア、長テーブル、棚・本棚、跳び箱、ピアノ） |
+| お店・飲食店 | カウンター、ショーケース、陳列棚、自動販売機、立て看板（A型）、レジカウンター、冷蔵ショーケース、ATM、理容椅子（カウンターチェア、ダイニングセット、椅子、丸テーブル、キッチン、提灯、ゴミ箱） |
+| 人・事件・調査 | 人（手足を動かせる模型）、倒れた人、足跡、番号の印、血だまり、破片、手がかりの印、危険の印、指紋の印、メモ・紙片、日記・手帳、鍵、刃物、写真、携帯電話、薬瓶、懐中電灯、工具箱、鞄、財布、書類の束、ファイル、ノートPC、録音機、カメラ、使用済みの薬莢、弾痕、焼け跡、壊れた家具、立入禁止テープ、拘束された人 |
+| 人物・動物・怪物（コマ） | 男性、女性、子ども、老人、警官、兵士、医師、看護師、研究員、作業員、駅員、船員、警備員、ローブ姿、猫、犬、大型犬、鳥、野生動物（熊）、人型の敵、小型モンスター（スライム）、モンスター、大型モンスター、強大な敵（竜）、超大型の敵 |
+| 乗り物 | 車、バイク、自転車、バス、電車・客車、機関車、バン、トラック、パトカー、救急車、消防車、ショベルカー、ブルドーザー、クレーン車、フォークリフト、戦車、飛行機（小型機）、ヘリコプター、小舟、救命艇、救命いかだ、錨、係船設備（ビット）、操舵輪、レーダー卓、海図卓、船舶エンジン、船舶用ハッチ |
+| 駅・線路 | ポイント（分岐器）、車止め（線路の終端）、ホームの端（点字ブロック）、改札、券売機、駅名標、駅の売店 |
+| 病院・介護 | 病院のベッド、点滴スタンド、車椅子、診察台、手術台、薬品棚、遺体安置庫、実験台、培養槽、サーバーラック、ドラフトチャンバー、顕微鏡、超低温フリーザー、除染シャワー（カーテン、パーティション、洗面台） |
+| 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶、線路、道路（2車線）、横断歩道、駐車区画、路面の矢印、道路標識、信号機、車止め（ポール）、水たまり、崖、土砂、工事柵（仮囲い）（小道、川、車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
+| 建物の部分・工事 | 柱、はしご、エレベーター、床の扉（地下・床下へ）、下り階段（地下へ）、瓦礫、壁のヒビ、崩れた壁、壁の穴、非常階段（屋外の鉄骨）、外階段、仮設階段、手すり、ガードレール、足場、工事用バリケード、換気口、ダクト（天井）、排水溝、グレーチング、土嚢 |
+| 設備・インフラ | ブレーカー、配電盤、制御盤、電気の引込み口、ケーブルラック（天井）、パイプ、太い工業用パイプ、水道管、バルブ、ポンプ、ボイラー、大型タンク、非常用発電機、給水塔（高架水槽）、換気設備、アンテナ、消火栓、防犯カメラ、カードリーダー、警報装置、水門 |
+| 物流・工場・倉庫 | パレット、パレット積み、貨物コンテナ、台車、工具棚、工作機械、発電機（持ち運び）、工業用タンク、ベルトコンベア、作業台、資材の山、建築資材（鉄骨・木材）、大型ラック |
+| 博物館・教会・図書館 | 講義室の机（固定席）、両面書架、額縁の絵、展示台・彫刻、ロープパーティション、恐竜の骨格標本、パイプオルガン、洗礼盤、告解室 |
+| 神社・寺 | 鳥居、狛犬、賽銭箱、手水鉢、手水舎、祠、須弥壇・本尊、梵鐘（鐘楼）（門扉、石灯籠、提灯、神棚、仏壇、篝火、竹垣、墓石、つくばい） |
+| 遊具・スポーツ・音楽 | すべり台、ジャングルジム、鉄棒、砂場、跳び箱、卓球台、ビリヤード台、ドラムセット、ステージ（舞台）、客席（1列）、長椅子（教会）、スピーカー、音響卓（PA）、ボックス席、宴会テーブル（8人）、プール、デッキチェア、ランニングマシン、エアロバイク、ベンチプレス、ダンベルラック（ブランコ、ピアノ） |
+| ファンタジー | 宝箱、樽、木箱、玉座、祭壇、棺、檻、篝火（かがり火）、武器ラック、鎧、大釜、水晶玉、旗・タペストリー、金床、鍛冶炉、依頼掲示板、トゲの罠、壁の松明、干し草（石像、焚き火、十字架の墓、噴水、テント、川、石垣） |
+| ホラー・オカルト | 奇妙な像、地蔵、魔法陣、燭台、骨、培養ポット（人型）、石棺、儀式台、鎖、奇妙な石碑、トーテム、供物、呪物、肉塊・異形、黒い染み、触手の侵食、異常な穴 |
+| SF・宇宙船 | 操作卓・コンソール、操縦席、冷凍睡眠カプセル、動力炉、ホログラム卓、ハッチ |
 | 図形の壁 | 円、楕円、円弧、三角形〜八角形 |
 
 パネル上部の検索欄に入力すると、該当するパーツだけに絞り込めます。
 
 各家具は2D用の平面記号と3Dモデルを持ちます。椅子や枕のように向きがあるものは背もたれ側を塗り分け、壁の高い位置に付くエアコンは破線で描きます。幅・奥行を変更しても、できるだけ形状の特徴を保つように生成されます。
 
-和風の家具・鳥居・学校やお店の設備・遊具など（`src/furniture-shapes.ts` の `PART_KINDS`）は、箱・円柱・輪・横倒しの円柱・楕円体・傾けた板といった部品の組み合わせで作ります。2Dの記号は同じ部品を低い順に真上から描くので、3Dを真上から見た形と同じになります。高さを変えると部品の高さも一緒に変わり、竹垣・檻・ジャングルジム・カーテンは幅に合わせて柱やひだの数が増えます。神棚・提灯・黒板は壁に掛ける物なので、3Dでも床から浮いた高さに付きます。
+和風の家具・鳥居・学校やお店の設備・遊具など（`src/furniture-shapes.ts` の `PART_KINDS`）は、箱・円柱・輪・横倒しの円柱・楕円体・傾けた板といった部品の組み合わせで作ります。2Dの記号は同じ部品を低い順に真上から描くので、3Dを真上から見た形と同じになります。高さを変えると部品の高さも一緒に変わり、竹垣・檻・ジャングルジム・カーテンは幅に合わせて柱やひだの数が増えます。神棚・提灯・黒板・額縁の絵・防犯カメラ・天井のダクトなどは壁に掛けたり天井から吊るしたりする物なので、3Dでも床から浮いた高さに付きます。メモ・鍵・携帯電話・ノートPCなどの小物は、机やテーブルの上に重ねて置くと、3Dではその家具の上にのります。
 
-- 家具・設備165種類に、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
+- 家具・設備・小物の410種類あまりに、クッション、脚、取っ手、棚板、寝具、家電の操作部などを個別に表現しています。
 - 和風の12種類は幅・奥行・高さをそれぞれ調整できます（高さ1cm〜30m）。2D記号と3Dモデルは同じ部品の位置・寸法を使っています。
 - 木・針葉樹・ヤシの木・低木・岩・フェンス・外灯・キャットタワーは「選択中」の「高さ cm」で高さを変えられます（10cm〜30m）。いちばん高い所がその高さになるように3Dを作ります。
 - 2D記号には文字を使いません。形・線・塗り分けだけで見分けられるように描いています（番号の印に書く番号だけは別です）。
@@ -818,6 +826,7 @@ npm.cmd run dev
 - いまの階を複製できるように（階のタブの右の、重ねた四角のボタン）。すぐ上に同じ階が増え、この階の屋根は上の階へ移ります
 - 絵柄に「モノクロ」を追加（2Dと3D）。色を白黒の濃淡にします
 - 好きな画像を取り込めるように。「画像を取り込む」を押すか、2Dに画像のファイルをドラッグすると置けます。2Dに描き、3Dでは床に貼ります。大きさ・向き・濃さを変えられ、濃さを下げて「配置を固定」すれば下絵にもできます
+- 家具・小物を約250種類追加しました。新しい分類は「建物の部分・工事」（柱・はしご・エレベーター・床の扉・瓦礫・壁のヒビや穴・非常階段・足場・土嚢など）、「設備・インフラ」（配電盤・配管・バルブ・ボイラー・タンク・給水塔・防犯カメラ・水門など）、「物流・工場・倉庫」（パレット・コンテナ・台車・工作機械・ベルトコンベアなど）、「博物館・教会・図書館」（恐竜の骨格・パイプオルガン・告解室など）、「駅・線路」（ポイント・車止め・ホームの端・改札・券売機など）、「人物・動物・怪物（コマ）」（いろいろな仕事の人・猫・犬・鳥・大小の怪物）、「ホラー・オカルト」（魔法陣・儀式台・石碑・肉塊・触手・異常な穴など）、「SF・宇宙船」（操作卓・冷凍睡眠カプセル・動力炉・ホログラム卓など）。ほかの分類にも、手術台や研究の機械、劇場の客席・プール・ジムの器具、電車・救急車・消防車・重機・戦車・飛行機・ヘリ・船の物、道路・横断歩道・信号、事務机や司令室の物、天蓋付きベッド・グランドピアノ、和風の庭の物、梵鐘、手がかりの小物（メモ・鍵・携帯電話・写真・刃物など）、ファンタジーの物を足しました。どれも2Dの記号と3Dの形が同じです。机やテーブルに重ねて置いた小物は、3Dではその上にのります
 - 家具の一覧のボタンに、2Dの記号の小さな絵を付けました
 - テンプレートを名前で探せるように。「家具なし（間取りだけ）で開く」にすると、家具を外して開きます（階段や川・塀などの外まわりは残します）
 - 家具・画像を「最前面へ」「最背面へ」動かせるように。キーの操作を追加: [ ] で階の切り替え、G で方眼の表示、0 で全体を表示、+ と - で拡大・縮小、Ctrl+S でファイルに書き出し
@@ -1279,35 +1288,43 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, window, divided window |
 | Walls | Plain wall, concrete, brick, block wall, board fence, earthen wall, glass, stone wall, hedge, bamboo fence, fence |
 | Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bar stool, bench (zabuton, veranda bench, throne, wheelchair) |
-| Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk (chabudai, counter, school desk and chair, lectern) |
-| Beds and bedding | Single bed, semi-double bed, double bed, bunk bed, futon, crib (hospital bed) |
-| Storage | Closet, wardrobe, shelf, cupboard, shoe cabinet, coat stand, cardboard box (stepped chest, locker, safe, store shelves, crate) |
-| Kitchen | Kitchen unit, L-shaped kitchen, island kitchen (refrigerator, cupboard, bar stool, kamado stove) |
+| Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk, desk and chair set, round dining set (4 seats) (chabudai, counter, school desk and chair, lectern) |
+| Beds and bedding | Single bed, semi-double bed, double bed, bunk bed, futon, crib, canopy bed, nightstand (hospital bed) |
+| Storage | Closet, wardrobe, shelf, cupboard, shoe cabinet, coat stand, cardboard box, dresser (stepped chest, locker, safe, store shelves, crate) |
+| Kitchen | Kitchen unit, L-shaped kitchen, island kitchen, sink, cooktop (refrigerator, cupboard, bar stool, kamado stove) |
 | Bath, toilet and washroom | Bathtub, unit bath, shower, toilet, washbasin (washing machine, hinoki bathtub, squat toilet) |
 | Appliances | Refrigerator, washing machine, TV stand, air conditioner, outdoor AC unit, fan, heater (copier, vending machine) |
-| Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower, curtain (andon lantern, folding screen, shoji partition, irori hearth, hibachi, paper lantern, partition) |
+| Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower, curtain, grand piano, gramophone (andon lantern, folding screen, shoji partition, irori hearth, hibachi, paper lantern, partition) |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
 | Trace a shape | Pen, pond, flower bed, lawn, rug, river, path, hedge, stone wall, fence, bamboo fence, railway, stepping stones, footprints, shards (floor and ground materials and rooms also take the shape you trace) |
 | Floors and ground | Plain, wood planks, herringbone, wooden deck, tatami, carpet, tile, mosaic tiles, checkerboard, marble, stone paving, cobblestones, brick, concrete, asphalt, checker plate, grass, soil, sand, gravel, snow, water |
 | Outdoor & garden | Tree, conifer, palm tree, shrub, rock, stepping stones, flower bed, pond, lawn, river, path, hedge, stone wall, fence, bamboo fence, garden light, stone lantern, grave, cross grave, mailbox, shed, dog house, parasol, clothes drying stand, swing, well, fountain, statue, campfire, tent (gate, bench, tsukubai basin, veranda bench, torii, outdoor AC unit, bicycle, car) |
 | Roofs | Gable, hip, flat, cone, dome, regular polygon |
-| Japanese | Shoji, fusuma, lattice entrance door, plank door, gate, tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin, Buddhist altar, household shrine, tokonoma alcove, kamado stove, squat toilet, paper lantern (floor chair, kotatsu, futon, stone lantern, stepping stones, pond, grave, bamboo fence, hedge, stone wall, well, torii) |
-| School and office | Blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe, fire extinguisher (desk, L-shaped desk, office chair, long table, shelf, vaulting box, upright piano) |
-| Shops and restaurants | Counter, showcase, store shelves, vending machine, A-frame sign (bar stool, dining set, chair, round table, kitchen unit, paper lantern, trash can) |
-| People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, shards |
-| Vehicles | Car, motorcycle, bicycle, bus |
-| Hospital and care | Hospital bed, IV stand, wheelchair, examination couch (curtain, partition, washbasin) |
-| Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum, railway (path, river, car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
-| Shrines and temples | Torii gate, guardian lion-dog, offering box, purification basin (gate, stone lantern, paper lantern, household shrine, Buddhist altar, brazier, bamboo fence, grave, tsukubai basin) |
-| Playground, sports and music | Slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit, stage (swing, upright piano) |
-| Fantasy | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier (statue, campfire, cross grave, fountain, tent, river, stone wall) |
+| Japanese | Shoji, fusuma, lattice entrance door, plank door, gate, tatami, zabuton, chabudai, folding screen, shoji partition, andon lantern, stepped chest, irori hearth, hibachi, veranda bench, hinoki bathtub, tsukubai basin, Buddhist altar, household shrine, tokonoma alcove, kamado stove, squat toilet, paper lantern, low table (zataku), engawa deck, sword rack, shishi-odoshi, stone bridge, wooden drum bridge, pine, bamboo, moss, tea house (exterior) (floor chair, kotatsu, futon, stone lantern, stepping stones, pond, grave, bamboo fence, hedge, stone wall, well, torii) |
+| School and office | Blackboard, whiteboard, lectern, school desk and chair, locker, copier, partition, safe, fire extinguisher, office desk, reception counter, file cabinet, meeting table (6 seats), island desks (4 seats), monitor wall, operations table, radio set, gun rack (desk, L-shaped desk, office chair, long table, shelf, vaulting box, upright piano) |
+| Shops and restaurants | Counter, showcase, store shelves, vending machine, A-frame sign, register counter, refrigerated showcase, ATM, barber chair (bar stool, dining set, chair, round table, kitchen unit, paper lantern, trash can) |
+| People and investigation | Person (posable mannequin), fallen person, footprints, numbered evidence marker, blood, shards, clue marker, danger mark, fingerprint marker, memo, diary, key, knife, photo, smartphone, pill bottle, flashlight, toolbox, bag, wallet, papers, file folder, laptop, voice recorder, camera, bullet casings, bullet holes, burn mark, broken furniture, keep-out tape, bound person |
+| People, animals and monsters (tokens) | Man, woman, child, elderly person, police officer, soldier, doctor, nurse, scientist, worker, station staff, sailor, security guard, robed figure, cat, dog, large dog, bird, wild animal (bear), humanoid enemy, small monster (slime), monster, large monster, mighty foe (dragon), giant foe |
+| Vehicles | Car, motorcycle, bicycle, bus, train car, locomotive, van, truck, police car, ambulance, fire truck, excavator, bulldozer, crane truck, forklift, tank, light airplane, helicopter, rowboat, lifeboat, life raft, anchor, mooring bitt, ship's wheel, radar console, chart table, ship engine, ship hatch |
+| Stations and railways | Railway switch, buffer stop, platform edge (tactile paving), ticket gates, ticket machine, station sign, station kiosk |
+| Hospital and care | Hospital bed, IV stand, wheelchair, examination couch, operating table, medicine cabinet, morgue refrigerator, lab bench, culture tank, server rack, fume hood, microscope, ultra-low freezer, decontamination shower (curtain, partition, washbasin) |
+| Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum, railway, two-lane road, crosswalk, parking space, road arrow, road sign, traffic light, bollard, puddle, cliff, landslide, site hoarding (path, river, car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
+| Building parts and construction | Pillar, ladder, elevator, trapdoor, stairs down to a basement, debris, wall crack, collapsed wall, wall hole, steel fire escape, outdoor stairs, temporary stairs, handrail, guardrail, scaffolding, construction barricade, vent, ceiling duct, gutter, grating, sandbags |
+| Utilities and infrastructure | Breaker box, distribution board, control panel, service entrance, ceiling cable rack, pipe, large industrial pipe, water pipe, valve, pump, boiler, large tank, emergency generator, water tower, ventilation unit, antenna, fire hydrant cabinet, security camera, card reader, alarm, sluice gate |
+| Logistics, factories and warehouses | Pallet, pallet stack, shipping container, hand cart, tool shelf, machine tool, portable generator, industrial tank, conveyor belt, workbench, material pile, building materials (steel and lumber), pallet rack |
+| Museums, churches and libraries | Lecture hall desks (fixed seats), double-sided bookshelf, framed painting, display pedestal with sculpture, rope barrier, dinosaur skeleton, pipe organ, baptismal font, confessional |
+| Shrines and temples | Torii gate, guardian lion-dog, offering box, purification basin, purification pavilion (temizuya), small shrine (hokora), Buddhist dais with main image, temple bell in a belfry (gate, stone lantern, paper lantern, household shrine, Buddhist altar, brazier, bamboo fence, grave, tsukubai basin) |
+| Playground, sports and music | Slide, jungle gym, horizontal bar, sandbox, vaulting box, table tennis table, pool table, drum kit, stage, theater seats (one row), church pew, speaker, mixing desk, booth seat, banquet table (8 seats), swimming pool, deck chair, treadmill, exercise bike, weight bench, dumbbell rack (swing, upright piano) |
+| Fantasy | Treasure chest, barrel, crate, throne, altar, coffin, cage, brazier, weapon rack, armor stand, cauldron, crystal ball, banner, anvil, forge, quest board, spike trap, wall torch, hay (statue, campfire, cross grave, fountain, tent, river, stone wall) |
+| Horror and occult | Strange idol, jizo statue, magic circle, candelabra, bones, human pod, sarcophagus, ritual table, chains, strange stele, totem, offering, cursed item, flesh mass, black stain, tendrils, abyss |
+| Sci-fi and spaceships | Console, pilot seat, cryo pod, reactor, hologram table, hatch |
 | Shape walls | Circle, ellipse, arc, triangle to octagon |
 
 Type in the search box at the top of the palette to show only matching parts.
 
 Each item has a dedicated 2D plan symbol and a generated 3D representation. Items with a facing direction shade their back side, and the wall-mounted air conditioner is drawn with a dashed outline. The geometry adapts to user-defined width and depth where practical.
 
-Japanese furnishings, the torii, school and shop equipment, playground equipment and similar items (`PART_KINDS` in `src/furniture-shapes.ts`) are built from simple parts: boxes, cylinders, rings, horizontal cylinders, ellipsoids and tilted boards. The 2D symbol draws the same parts from above, lowest first, so it matches the 3D model seen from above. Changing the height scales the parts, and bamboo fences, cages, jungle gyms and curtains add posts or folds as they get wider. The household shrine, paper lantern and blackboard hang on the wall, so they stay above the floor in 3D as well.
+Japanese furnishings, the torii, school and shop equipment, playground equipment and similar items (`PART_KINDS` in `src/furniture-shapes.ts`) are built from simple parts: boxes, cylinders, rings, horizontal cylinders, ellipsoids and tilted boards. The 2D symbol draws the same parts from above, lowest first, so it matches the 3D model seen from above. Changing the height scales the parts, and bamboo fences, cages, jungle gyms and curtains add posts or folds as they get wider. The household shrine, paper lantern, blackboard, framed painting, security camera, ceiling duct and similar items hang on a wall or from the ceiling, so they stay above the floor in 3D as well. Small items such as memos, keys, smartphones and laptops rest on top of a desk or table placed under them in 3D.
 
 - Trees, conifers, palm trees, shrubs, rocks, fences, garden lights, and cat towers have a height setting (10 cm to 30 m) under Selection. The top of the 3D model matches that height.
 - 2D symbols never use text. They are drawn with shapes, lines, and shading only (except the number on a numbered marker).
@@ -1316,7 +1333,7 @@ Japanese furnishings, the torii, school and shop equipment, playground equipment
 - Choose 足跡 (footprints) and drag on the 2D plan to lay footprints along the drawn path, alternating left and right with the toes facing the walking direction (a click places a straight trail). The stride can be changed, and the path can be redrawn or straightened from Selection.
 - The investigation marks are meant for exploration and crime-scene maps. Each new numbered marker takes the next number across all floors, and the number (up to four characters) can be edited under Selection; the 3D marker shows it on its top face. Footprints (shoes or bare feet), the fallen person (face down, spread out, or a chalk outline), blood (pool, splatter, or drag trail) and shards look the same in 2D and in 3D from above. For footprints and blood, the 2D color colors the mark.
 - "破片" (shards, such as broken glass): choose it and drag on the 2D plan to scatter shards along the path (a click places the original cluster). Under Selection, change the spread and the amount (few, normal, many), redraw the path, or gather the shards into the cluster again. Without a color they are see-through glass; with a 2D/3D color they become solid shards of that color (pottery, wood and so on).
-- All 165 furniture and equipment types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
+- All 410-plus furniture, equipment and small item types include individual details such as cushions, legs, handles, shelves, bedding, and appliance controls.
 - The 12 Japanese furnishings have independent width, depth and height settings (height: 1 cm to 30 m). Their 2D symbols and 3D models use the same part dimensions and positions.
 - Plants have stems and leaves; aquariums have transparent panes, fish, and aquatic plants; clocks have ticks and hands. TV screens retain a 16:9 aspect ratio when their width changes.
 - Custom colors affect primary upholstery or body materials while preserving glass, hardware, clock faces, and foliage.
@@ -1848,6 +1865,7 @@ The same history as "更新履歴" in the app, newest first.
 - The current floor can be duplicated (the overlapping-squares button next to the floor tabs): the copy is added directly above, and this floor's roofs move up onto it
 - Added a monochrome look for both the 2D plan and the 3D view, turning colors into shades of gray
 - Any image can be imported: press 画像を取り込む (import image) or drag an image file onto the 2D plan. It appears in 2D and lies on the floor in 3D; its size, rotation and opacity can be changed, and a faint, locked image works as a tracing underlay
+- Added about 250 furniture pieces and small items. New groups: building parts and construction (pillars, ladders, elevators, trapdoors, debris, wall cracks and holes, fire escapes, scaffolding, sandbags and more), utilities and infrastructure (switchboards, pipes, valves, boilers, tanks, water towers, security cameras, sluice gates and more), logistics, factories and warehouses (pallets, containers, hand carts, machine tools, conveyors and more), museums, churches and libraries (a dinosaur skeleton, a pipe organ, a confessional and more), stations and railways (switches, buffer stops, platform edges, ticket gates, ticket machines and more), people, animals and monsters as tokens (people in many jobs, cats, dogs, birds and monsters of every size), horror and occult (magic circles, ritual tables, steles, flesh masses, tentacles, an abyss and more), and sci-fi and spaceships (consoles, cryo pods, a reactor, a hologram table and more). Other groups gained operating tables and lab equipment, theater seats, a pool and gym equipment, trains, an ambulance, a fire truck, construction machines, a tank, an airplane, a helicopter and ship fittings, roads, crosswalks and traffic lights, office desks and command-room gear, a canopy bed and a grand piano, Japanese garden pieces, a temple bell, clue items (memos, keys, smartphones, photos, knives and more) and fantasy pieces. Every 2D symbol matches its 3D model, and small items placed on a desk or table rest on top of it in 3D
 - Furniture buttons in the parts list now show a small picture of their 2D symbol
 - Templates can be searched by name, and 家具なし（間取りだけ）で開く opens one without furniture (stairs and outdoor shapes such as rivers and walls stay)
 - Furniture and images can be brought to the front or sent to the back. New keys: [ and ] switch floors, G toggles the grid, 0 fits the whole plan, + and - zoom, and Ctrl+S saves the plan file

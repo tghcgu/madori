@@ -22,7 +22,7 @@ import { verifyLiveThree } from './live-three-editor.mjs';
 import { verifyThreeStyles } from './three-style-editor.mjs';
 import { verifyFreeShapes } from './free-shape-editor.mjs';
 import { verifyWallStyles } from './wall-styles-editor.mjs';
-import { verifyMapTools } from './map-tools-editor.mjs';
+import { verifyMapTools, verifyMoreFurniture } from './map-tools-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -241,6 +241,7 @@ try {
   await verifyWallStyles({ open, plan, output });
   if (!process.argv.includes('--wall-styles-only')) {
   await verifyMapTools({ open, plan, output, readFile });
+  await verifyMoreFurniture({ open, plan });
   if (!process.argv.includes('--map-tools-only')) {
   await verifyThreeStyles({ open, plan, output });
   if (!process.argv.includes('--three-style-only')) {

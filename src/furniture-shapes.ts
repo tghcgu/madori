@@ -4,6 +4,8 @@
 
 export type Point2 = [number, number];
 
+import { MORE_MOUNTED_KINDS, MORE_PART_KINDS, isMorePartKind, moreFurnitureParts } from "./furniture-more.ts";
+
 // ---- 部品で組む家具・設備（和風の家具・鳥居・学校やお店の設備・遊具など） ----
 // 部品（箱・円柱・輪・横倒しの円柱・楕円体・傾けた板）の上から見た形と高さを共有する。
 // 2Dは低い部品から順に描くので、3Dを真上から見たときと同じく、高い部品が上に重なる。
@@ -21,11 +23,13 @@ export const PART_KINDS = [
   "trafficCone", "utilityPole", "busStop", "phoneBooth", "manhole", "drum", "bus",
   "cardboard", "acOutdoor", "fan", "stove", "curtain",
   "treasureChest", "barrel", "crate", "throne", "altar", "coffin", "cage", "brazier",
+  // 足した家具・小物（furniture-more.ts）
+  ...MORE_PART_KINDS,
 ] as const;
 export type JapaneseKind = typeof JAPANESE_KINDS[number];
 export type PartKind = typeof PART_KINDS[number];
 // 壁に掛ける・天井から吊るす物。3Dでも床まで下ろさず、部品の高さのまま置く
-export const MOUNTED_PART_KINDS: readonly PartKind[] = ["kamidana", "chochin", "blackboard"];
+export const MOUNTED_PART_KINDS: readonly PartKind[] = ["kamidana", "chochin", "blackboard", ...MORE_MOUNTED_KINDS];
 
 export interface PartMaterial {
   color: string;
@@ -107,6 +111,56 @@ const MATERIALS = {
   phoneRoof: { color: "#6d9a62", tintable: true },
   phone: { color: "#7aa36f", tintable: false },
   waterJet: { color: "#d6eef8", tintable: false, opacity: 0.7 },
+  // 足した家具・小物の材質
+  brick: { color: "#a5523a", tintable: true, roughness: 0.9 },
+  woodDark: { color: "#5a3d28", tintable: true },
+  stoneDark: { color: "#6b6f6c", tintable: true, roughness: 0.95 },
+  steel: { color: "#8a959b", tintable: true, roughness: 0.4, metalness: 0.45 },
+  rust: { color: "#8c5233", tintable: true, roughness: 0.85, metalness: 0.2 },
+  pipeBlue: { color: "#3f6f9f", tintable: true, roughness: 0.45, metalness: 0.2 },
+  vehicle: { color: "#d8dce0", tintable: true, roughness: 0.35, metalness: 0.15 },
+  military: { color: "#56623b", tintable: true, roughness: 0.8 },
+  asphalt: { color: "#4b4f53", tintable: true, roughness: 1 },
+  roadLine: { color: "#f3f3ee", tintable: false, roughness: 0.8 },
+  tactile: { color: "#e9c440", tintable: false, roughness: 0.7 },
+  poolTile: { color: "#d7eef2", tintable: false, roughness: 0.4 },
+  dirt: { color: "#8b6a46", tintable: true, roughness: 1 },
+  hay: { color: "#d8bf62", tintable: true, roughness: 1 },
+  moss: { color: "#6a8f3c", tintable: true, roughness: 1 },
+  pine: { color: "#345c32", tintable: true, roughness: 0.9 },
+  bambooGreen: { color: "#6f9a3a", tintable: true, roughness: 0.6 },
+  paperWhite: { color: "#fbfbf6", tintable: true, roughness: 0.9 },
+  photo: { color: "#5f7286", tintable: false, roughness: 0.4 },
+  ice: { color: "#cfe9f4", tintable: false, opacity: 0.55 },
+  skin: { color: "#e8c4a4", tintable: false, roughness: 0.8 },
+  hair: { color: "#3a2a20", tintable: false, roughness: 0.9 },
+  suitDark: { color: "#323a46", tintable: true, roughness: 0.8 },
+  police: { color: "#24365e", tintable: true, roughness: 0.8 },
+  navy: { color: "#283b5d", tintable: true, roughness: 0.8 },
+  pink: { color: "#e9a9bc", tintable: true, roughness: 0.8 },
+  robe: { color: "#4a2f5c", tintable: true, roughness: 0.95 },
+  fur: { color: "#8a6a4a", tintable: true, roughness: 1 },
+  furDark: { color: "#4a3a2c", tintable: true, roughness: 1 },
+  feather: { color: "#5d6670", tintable: true, roughness: 0.9 },
+  monster: { color: "#4f6339", tintable: true, roughness: 0.8 },
+  monsterDark: { color: "#2b2430", tintable: true, roughness: 0.8 },
+  horn: { color: "#d8cfb8", tintable: false, roughness: 0.6 },
+  bone: { color: "#e9e2cc", tintable: false, roughness: 0.7 },
+  flesh: { color: "#a8484c", tintable: true, roughness: 0.5 },
+  blood: { color: "#6e0f12", tintable: true, roughness: 0.3 },
+  soot: { color: "#2e2824", tintable: false, roughness: 1 },
+  slime: { color: "#6fbf4a", tintable: true, roughness: 0.2, opacity: 0.82 },
+  eye: { color: "#ff3b2f", tintable: false, glow: true },
+  magic: { color: "#9b5cff", tintable: true, glow: true },
+  crystal: { color: "#a6e3ff", tintable: true, glow: true, opacity: 0.7 },
+  hologram: { color: "#5fd3ff", tintable: true, glow: true, opacity: 0.55 },
+  screenGlow: { color: "#59c3f0", tintable: false, glow: true },
+  led: { color: "#4cff7a", tintable: false, glow: true },
+  redLamp: { color: "#ff3030", tintable: false, glow: true },
+  amberLamp: { color: "#ffb020", tintable: false, glow: true },
+  greenLamp: { color: "#3dff7a", tintable: false, glow: true },
+  blueLamp: { color: "#3a7bff", tintable: false, glow: true },
+  light: { color: "#fff2b0", tintable: false, glow: true },
 };
 export type PartMaterialName = keyof typeof MATERIALS;
 export const PART_MATERIALS: Record<PartMaterialName, PartMaterial> = MATERIALS;
@@ -151,7 +205,8 @@ export function furniturePartTop(part: FurniturePart): number {
   return part.bottom + partRise(part);
 }
 
-export function furnitureParts(kind: PartKind, w: number, d: number, height: number): FurniturePart[] {
+// 部品を並べる道具。割合（幅・奥行・高さに対する）で書く at・box・ellipse など、cm で書く cm・tilted・slab
+export function createPartBuilder(w: number, d: number, height: number) {
   const parts: FurniturePart[] = [];
   // 幅・奥行・高さに対する割合で書く部品
   const at = (shape: PartShape, x: number, y: number, pw: number, pd: number, bottom: number, ph: number, material: PartMaterialName, extra: PartExtra = {}) => {
@@ -188,7 +243,18 @@ export function furnitureParts(kind: PartKind, w: number, d: number, height: num
   const legs = (bottom: number, top: number, x = 0.39, y = 0.36) => {
     for (const sx of [-1, 1]) for (const sy of [-1, 1]) box(sx * x, sy * y, 0.08, 0.12, bottom, top - bottom, "wood");
   };
+  return { parts, w, d, height, at, cm, box, ellipse, ring, disc, sphere, tilted, slab, legs };
+}
+export type PartBuilder = ReturnType<typeof createPartBuilder>;
+
+export function furnitureParts(kind: PartKind, w: number, d: number, height: number): FurniturePart[] {
+  const builder = createPartBuilder(w, d, height);
+  const { parts, cm, box, ellipse, ring, disc, sphere, tilted, slab, legs } = builder;
   const goods = ["goodsA", "goodsB", "goodsC", "goodsD"] as const;
+  if (isMorePartKind(kind)) {
+    moreFurnitureParts(kind, builder);
+    return parts.sort((a, b) => furniturePartTop(a) - furniturePartTop(b));
+  }
   switch (kind) {
     case "tatami":
       box(0, 0, 1, 1, 0, 0.96, "straw");

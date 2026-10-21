@@ -121,3 +121,29 @@ export async function verifyMapTools({ open, plan, output, readFile }) {
     await page.context().close();
   }
 }
+
+// 足した家具・小物: 新しい分類が一覧にあって検索で見つかり、机に重ねた小物は3Dで机の上、床に置いた小物は床の上
+export async function verifyMoreFurniture({ open, plan }) {
+  const room = { id: 'office', type: 'room', name: '', x: 0, y: 0, w: 600, h: 405, color: '#ffffff', surface: 'wood' };
+  const desk = { id: 'desk', type: 'furniture', kind: 'desk', x: 100, y: 100, w: 120, h: 60, rotation: 0 };
+  const memo = { id: 'memo', type: 'furniture', kind: 'memo', x: 140, y: 120, w: 15, h: 10, rotation: 0 };
+  const phone = { id: 'phone', type: 'furniture', kind: 'smartphone', x: 400, y: 300, w: 8, h: 15, rotation: 0 };
+  const page = await open(JSON.stringify(plan([room, desk, memo, phone])));
+  try {
+    await page.locator('button[data-view-mode="split"]').first().click();
+    const bounds = id => page.evaluate(id => window.__editorTest.bounds(id), id);
+    const deskBox = await bounds('desk'), memoBox = await bounds('memo'), phoneBox = await bounds('phone');
+    assert.ok(Math.abs(memoBox.min[1] - deskBox.max[1]) < 0.02, `the memo rests on the desk: ${memoBox.min[1]} / ${deskBox.max[1]}`);
+    assert.ok(Math.abs(phoneBox.min[1] - 0.08) < 0.01, `a phone on the floor stays on the floor: ${phoneBox.min[1]}`);
+
+    const group = page.locator('details.palette-group', { has: page.locator('summary', { hasText: /^建物の部分・工事$/ }) });
+    assert.equal(await group.count(), 1, 'the new group is in the palette');
+    assert.equal(await group.locator('button[data-furniture]').count(), 21);
+    await page.locator('#paletteSearch').fill('スライム');
+    assert.equal(await page.locator('button[data-furniture="smallMonster"]').first().isVisible(), true, 'search finds the slime');
+    await page.locator('#paletteSearch').fill('');
+    console.log('PASS: added furniture: new palette groups and search, and small items rest on the desk under them in 3D');
+  } finally {
+    await page.context().close();
+  }
+}
