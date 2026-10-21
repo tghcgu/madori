@@ -166,6 +166,8 @@ export const UI: Record<string, Translations> = {
   "地下の階を追加（いちばん下に増えます）": ["Add a basement floor (added at the bottom)", "지하층 추가 (맨 아래에 추가됩니다)", "新增地下樓層（加在最下方）"],
   "上の階を追加": ["Add a floor above", "위층 추가", "新增上方樓層"],
   "{0}を編集": ["Edit {0}", "{0} 편집", "編輯 {0}"],
+  "{0}を編集（ダブルクリックで名前を変える）": ["Edit {0} (double-click to rename)", "{0} 편집 (더블클릭으로 이름 변경)", "編輯 {0}（雙擊可重新命名）"],
+  "階の名前（空にすると、いつもの名前に戻ります）": ["Floor name (leave empty for the usual name)", "층 이름 (비우면 원래 이름으로 돌아갑니다)", "樓層名稱（留空則恢復原本名稱）"],
   "{0}を複製（すぐ上に同じ階を足す）": ["Duplicate {0} (adds the same floor right above)", "{0} 복제 (바로 위에 같은 층을 추가)", "複製 {0}（在正上方加入相同樓層）"],
   "この階を複製": ["Duplicate this floor", "이 층 복제", "複製此樓層"],
   "表示中の階を削除": ["Delete the current floor", "표시 중인 층 삭제", "刪除目前樓層"],

@@ -206,7 +206,10 @@ type Entity = Room | LinearElement | Furniture | Shape | Roof | TextLabel;
 
 interface Floor {
   id: string;
+  // いつもの名前（1F・B1F など。階の並びから決まる）
   name: string;
+  // 利用者が付けた名前（階のタブをダブルクリック）。あればタブや書き出しにこちらを出す
+  label?: string;
   entities: Entity[];
 }
 
@@ -910,6 +913,7 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
       .map((floor, index) => ({
         id: typeof floor.id === "string" ? floor.id : newId("floor"),
         name: `${index + 1}F`,
+        ...floorLabelOf(floor.label),
         entities: normalizeEntities(floor.entities),
       }));
     if (floors.length === 0) return null;
@@ -943,6 +947,31 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
     };
   }
   return null;
+}
+
+// 階に付けた名前（20文字まで）。空なら持たない
+const MAX_FLOOR_LABEL = 20;
+function floorLabelOf(value: unknown): { label?: string } {
+  const label = typeof value === "string" ? value.trim().slice(0, MAX_FLOOR_LABEL) : "";
+  return label ? { label } : {};
+}
+
+// 画面と書き出しに出す階の名前（付けた名前があればそれ）
+function floorTitle(floor: Floor): string {
+  return floor.label ?? floor.name;
+}
+
+// 階の名前を変える（空にすると、いつもの名前 1F・B1F などに戻る）
+function renameFloor(index: number): void {
+  const floor = state.floors[index];
+  if (!floor) return;
+  const answer = window.prompt("階の名前（空にすると、いつもの名前に戻ります）", floorTitle(floor));
+  if (answer === null) return;
+  const { label } = floorLabelOf(answer);
+  if (!label || label === floor.name) delete floor.label;
+  else floor.label = label;
+  commitState();
+  redrawAll();
 }
 
 // 間取りの名前（60文字まで）。空なら持たない
@@ -1682,7 +1711,7 @@ function applyPaletteSearch(): void {
 let floorTabsKey = "";
 
 function renderFloorTabs(): void {
-  const key = JSON.stringify([state.floors.map((floor) => floor.name), state.activeFloor, planStats.textContent]);
+  const key = JSON.stringify([state.floors.map((floor) => floorTitle(floor)), state.activeFloor, planStats.textContent]);
   if (key === floorTabsKey && floorTabs.childElementCount) return;
   floorTabsKey = key;
   floorTabs.innerHTML = "";
@@ -1700,9 +1729,10 @@ function renderFloorTabs(): void {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `floor-tab${index === state.activeFloor ? " is-active" : ""}`;
-    button.textContent = floor.name;
-    button.title = `${floor.name}を編集`;
+    button.textContent = floorTitle(floor);
+    button.title = `${floorTitle(floor)}を編集（ダブルクリックで名前を変える）`;
     button.addEventListener("click", () => setActiveFloorIndex(index));
+    button.addEventListener("dblclick", () => renameFloor(index));
     list.appendChild(button);
   });
   // 縦のホイールでも横にスクロールできるようにする
@@ -1723,8 +1753,8 @@ function renderFloorTabs(): void {
   const duplicate = document.createElement("button");
   duplicate.type = "button";
   duplicate.className = "floor-tab floor-tab-ghost floor-tab-duplicate";
-  duplicate.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="5.5" width="9" height="9" rx="1.5" fill="#fff" stroke="currentColor" stroke-width="1.4"/></svg>`;
-  duplicate.title = `${activeFloor().name}を複製（すぐ上に同じ階を足す）`;
+  duplicate.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="5.5" width="9" height="9" rx="1.5" style="fill: var(--panel)" stroke="currentColor" stroke-width="1.4"/></svg>`;
+  duplicate.title = `${floorTitle(activeFloor())}を複製（すぐ上に同じ階を足す）`;
   duplicate.setAttribute("aria-label", "この階を複製");
   duplicate.addEventListener("click", duplicateActiveFloor);
   floorTabs.appendChild(duplicate);
@@ -1765,8 +1795,8 @@ function renderFloorVisibility(): void {
       button.type = "button";
       const visible = !hiddenFloorIds.has(floor.id);
       button.className = `mini-toggle${visible ? " is-active" : ""}`;
-      button.textContent = floor.name;
-      button.title = visible ? `${floor.name}を3Dから一時的に隠す` : `${floor.name}を3Dに表示`;
+      button.textContent = floorTitle(floor);
+      button.title = visible ? `${floorTitle(floor)}を3Dから一時的に隠す` : `${floorTitle(floor)}を3Dに表示`;
       button.setAttribute("aria-pressed", String(visible));
       button.addEventListener("click", () => {
         if (hiddenFloorIds.has(floor.id)) {
@@ -1983,7 +2013,7 @@ function removeActiveFloor(): void {
   if (state.floors.length <= 1) return;
   const floor = activeFloor();
   const attachedRoofs = state.roofs.filter((item) => item.floorId === floor.id);
-  if (!window.confirm(`${floor.name}（${floor.entities.length}個の要素・屋根${attachedRoofs.length}枚）を削除します。実行しますか？`)) {
+  if (!window.confirm(`${floorTitle(floor)}（${floor.entities.length}個の要素・屋根${attachedRoofs.length}枚）を削除します。実行しますか？`)) {
     return;
   }
   hiddenFloorIds.delete(floor.id);
@@ -2201,7 +2231,7 @@ function renderGhostFloorOptions(): void {
     ["below", "すぐ下の階"],
     ["above", "すぐ上の階"],
     ["all", "ほかの階すべて"],
-    ...state.floors.map((floor) => [floor.id, floor.name]),
+    ...state.floors.map((floor) => [floor.id, floorTitle(floor)]),
   ];
   // 選んでいた階が消えたときは、すぐ下の階に戻す
   if (!options.some(([value]) => value === ghostSettings.target)) ghostSettings.target = "below";
@@ -3687,8 +3717,13 @@ function beginThreeMove(event: PointerEvent, entity: Entity): void {
   if (!threeCanvas.hasPointerCapture(event.pointerId)) threeCanvas.setPointerCapture(event.pointerId);
   state.activeFloor = floorIndex;
   const members = selectedEntities();
-  const origins = members.length > 1 && members.some((item) => item.id === entity.id) ? members.map(cloneEntity) : undefined;
+  let origins = members.length > 1 && members.some((item) => item.id === entity.id) ? members.map(cloneEntity) : undefined;
   if (!origins) selectOnly(entity.id);
+  // 部屋は、2Dと同じく中身も一緒に動かす（Alt を押していれば部屋だけ）
+  if (!origins && entity.type === "room" && !event.altKey) {
+    const contents = roomContentIds(entity).map((id) => findEntity(id)).filter((item): item is Entity => item !== undefined);
+    if (contents.length) origins = [entity, ...contents].map(cloneEntity);
+  }
   threeDrag = { pointerId: event.pointerId, startScreen: { x: event.clientX, y: event.clientY }, startWorld: point, origin: cloneEntity(entity), origins, planeY, created: false, moved: false };
   threeCanvas.style.cursor = "grabbing";
   redrawAll();
@@ -11065,7 +11100,7 @@ function updatePropertiesPanel(): void {
       <div class="property-grid">
         ${lockRow}
         <p class="empty-state">屋根 ${roofIndex + 1}</p>
-        <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${floor.name}</option>`).join("")}</select></label>
+        <label>設置階<select id="roofFloorInput" ${placementDisabled}>${state.floors.map((floor) => `<option value="${escapeHtml(floor.id)}" ${floor.id === (selected.floorId ?? state.floors[state.floors.length - 1].id) ? "selected" : ""}>${escapeHtml(floorTitle(floor))}</option>`).join("")}</select></label>
         <label>上げ下げ cm<input id="roofElevationInput" type="number" min="${-ROOF_ELEVATION_LIMIT}" max="${ROOF_ELEVATION_LIMIT}" step="10" value="${roofElevation(selected.elevation)}" title="設置階の壁の上から、屋根を置く高さをずらす（下げるとマイナス）" ${placementDisabled} /></label>
         <label>種類
           <select id="roofKindInput" ${placementDisabled}>
@@ -12157,7 +12192,7 @@ function renderPlanImage(floorIndexes: number[], original: Bounds): HTMLCanvasEl
   floorIndexes.forEach((floorIndex, i) => {
     const left = (i % columns) * cellW;
     const top = Math.floor(i / columns) * cellH;
-    if (labelled) drawExportHeading(target, state.floors[floorIndex].name, left + 16, top + heading / 2, ratio, cellW * columns, cellH * rows);
+    if (labelled) drawExportHeading(target, floorTitle(state.floors[floorIndex]), left + 16, top + heading / 2, ratio, cellW * columns, cellH * rows);
     drawFloorForExport(target, floorIndex, bounds, left, top + heading, ratio, zoom);
   });
   // 紙の模様などの仕上げは、画像全体にまとめて重ねる
@@ -12202,7 +12237,7 @@ function exportPlanImages(): void {
   if (choice === "each") {
     // 階ごとの画像も、同じ範囲・同じ倍率にそろえる（重ねて見比べやすいように）
     floorIndexes.forEach((floorIndex, i) => {
-      window.setTimeout(() => downloadCanvas(renderPlanImage([floorIndex], bounds), `${fileBaseName()}-${stamp}-${state.floors[floorIndex].name}.png`), i * 350);
+      window.setTimeout(() => downloadCanvas(renderPlanImage([floorIndex], bounds), `${fileBaseName()}-${stamp}-${fileSafe(floorTitle(state.floors[floorIndex]))}.png`), i * 350);
     });
     return;
   }
@@ -12243,10 +12278,14 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
   }, "image/png");
 }
 
-// 書き出すファイルの名前の頭: 間取りの名前（ファイルの名前に使えない文字は除く）。なければ madori
+// ファイルの名前に使えない文字を除く
+function fileSafe(text: string): string {
+  return text.replace(/[\\/:*?"<>|]/g, "").replace(/[\u0000-\u001f]/g, "").trim();
+}
+
+// 書き出すファイルの名前の頭: 間取りの名前。なければ madori
 function fileBaseName(): string {
-  const name = (state.name ?? "").replace(/[\\/:*?"<>|]/g, "").replace(/[\u0000-\u001f]/g, "").trim();
-  return name || "madori";
+  return fileSafe(state.name ?? "") || "madori";
 }
 
 function exportPlan(): void {

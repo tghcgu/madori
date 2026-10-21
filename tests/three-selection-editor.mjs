@@ -88,9 +88,18 @@ export async function verifyThreeSelection({ page, importPlan, project, planPoin
   await page.locator('#threeMoveToggle').click();
   assert.equal(await page.locator('#threeMoveToggle').getAttribute('aria-pressed'), 'true', 'one press turns the move mode on');
   const entity = async id => (await snapshot()).floors[0].entities.find(item => item.id === id);
+  // 床を動かすと、上の家具も一緒に動く（2Dと同じ）。元に戻す
   await move(await project(600, 100, 0.03), 50, 25);
+  assert.notEqual((await entity('table')).x, table.x, 'furniture on the floor moves with it in 3D');
+  await page.locator('#undoButton').click();
+  assert.equal((await entity('table')).x, table.x);
+  // Alt を押しながらなら、床だけ
+  await page.keyboard.down('Alt');
+  await move(await project(600, 100, 0.03), 50, 25);
+  await page.keyboard.up('Alt');
   const movedFloor = await entity('floor');
   assert.ok(movedFloor.x !== 0 || movedFloor.y !== 0, `the floor moves in 3D: ${movedFloor.x}, ${movedFloor.y}`);
+  assert.equal((await entity('table')).x, table.x, 'with Alt only the floor moves');
   assert.deepEqual(await ids(), ['floor'], 'the moved floor is selected');
   await move(await project(400, 600, 1.2), 0, 40);
   const movedWall = await entity('wall');

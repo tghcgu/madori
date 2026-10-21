@@ -287,8 +287,10 @@ export async function setLanguage(next: Language, remember = true): Promise<void
 export async function initI18n(): Promise<void> {
   const nativeConfirm = window.confirm.bind(window);
   const nativeAlert = window.alert.bind(window);
+  const nativePrompt = window.prompt.bind(window);
   window.confirm = (message?: string) => nativeConfirm(message === undefined ? message : t(String(message)));
   window.alert = (message?: unknown) => nativeAlert(message === undefined ? message : t(String(message)));
+  window.prompt = (message?: string, value?: string) => nativePrompt(message === undefined ? message : t(String(message)), value);
   const start = startingLanguage();
   if (start !== "ja") {
     try {

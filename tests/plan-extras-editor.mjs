@@ -20,6 +20,19 @@ export async function verifyPlanExtras({ open, plan }) {
     assert.equal((await snapshot()).name, undefined, 'naming can be undone');
     await page.keyboard.press('Escape');
 
+    // 階の名前: タブをダブルクリックして付ける。空にすると、いつもの名前に戻る
+    const tab = page.locator('#floorTabs .floor-tab-list button').first();
+    page.once('dialog', (dialog) => dialog.accept('地下牢'));
+    await tab.dblclick();
+    await page.waitForTimeout(100);
+    assert.equal((await snapshot()).floors[0].label, '地下牢', 'the floor keeps its name');
+    assert.equal((await tab.textContent()).trim(), '地下牢', 'the tab shows the name');
+    page.once('dialog', (dialog) => dialog.accept(''));
+    await page.locator('#floorTabs .floor-tab-list button').first().dblclick();
+    await page.waitForTimeout(100);
+    assert.equal((await snapshot()).floors[0].label, undefined, 'an empty name goes back to the usual one');
+    assert.equal((await page.locator('#floorTabs .floor-tab-list button').first().textContent()).trim(), '1F');
+
     // 文字の太字
     const at = await page.evaluate(() => window.__editorTest.planPoint(300, 200));
     await page.mouse.click(at.x, at.y);
@@ -51,7 +64,7 @@ export async function verifyPlanExtras({ open, plan }) {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'night mode is remembered');
     await page.locator('#themeToggle').click();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), undefined, 'and can be turned off');
-    console.log('PASS: plan extras: a plan name for exported files with undo, bold text, and night mode for the panels and the 3D background that is remembered');
+    console.log('PASS: plan extras: a plan name for exported files with undo, floor names, bold text, and night mode for the panels and the 3D background that is remembered');
   } finally {
     await page.context().close();
   }
