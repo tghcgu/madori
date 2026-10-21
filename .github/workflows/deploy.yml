@@ -23,10 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Cloudflare Pages と同じ、脆弱性を直した版（.node-version）でビルドする
+      # 22系のいちばん新しい版（脆弱性の修正が出たら、それを使う）でビルドする
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
+          node-version: 22
+          check-latest: true
           cache: npm
 
       - run: npm ci

@@ -600,7 +600,7 @@ JSONファイルを「読み込み」した場合も、処理はブラウザ内�
 
 - Git
 - Node.js 22以上（脆弱性を直した最新の版を使ってください。Node.js 20は保守が終わっています）
-- 公開のビルド（Cloudflare Pages・GitHub Actions）は、`.node-version` に書いた版（22.23.4）を使います
+- GitHub Actions のビルドは、22系のいちばん新しい版を使います
 - WebGL対応のPC向けブラウザ
 
 ### セットアップ
@@ -781,11 +781,11 @@ madori/
 | Build output directory | `dist` |
 | Root directory | 空欄 |
 
-`main`へのpushで本番が更新され、`develop`へのpushでプレビューが生成されます。ビルドに使うNode.jsの版は、リポジトリの`.node-version`で決めています（Cloudflare Pagesのいつもの版は古いため）。
+`main`へのpushで本番が更新され、`develop`へのpushでプレビューが生成されます。Cloudflare PagesのビルドのNode.jsは、Cloudflareのいつもの版です。
 
 ### GitHub Pages
 
-`.github/workflows/deploy.yml`が`main`へのpushを検知し、`.node-version`の版のNode.jsで`npm ci`と`npm run build`を実行して`dist/`を公開します。
+`.github/workflows/deploy.yml`が`main`へのpushを検知し、Node.js 22系の最新版で`npm ci`と`npm run build`を実行して`dist/`を公開します。
 
 GitHub Pagesでは`/madori/`配下、Cloudflare Pagesとローカルでは`/`配下になるため、`vite.config.ts`が`DEPLOY_TARGET=github`を見て`base`を切り替えます。
 
@@ -1666,7 +1666,7 @@ Imported JSON files are processed entirely in the browser.
 
 - Git
 - Node.js 22 or newer (use the latest patched release; Node.js 20 is no longer maintained)
-- Production builds (Cloudflare Pages and GitHub Actions) use the version in `.node-version` (22.23.4)
+- GitHub Actions builds with the latest Node.js 22 release
 - A desktop browser with WebGL support
 
 ### Setup
@@ -1851,7 +1851,7 @@ Pushing to `main` updates production. Pushing to `develop` creates or updates th
 
 ### GitHub Pages
 
-`.github/workflows/deploy.yml` runs on every push to `main`, installs dependencies with the Node.js version in `.node-version`, builds the app, and publishes `dist/`. Cloudflare Pages reads the same file, because its default Node.js version is older.
+`.github/workflows/deploy.yml` runs on every push to `main`, installs dependencies with the latest Node.js 22 release, builds the app, and publishes `dist/`.
 
 GitHub Pages serves the app under `/madori/`, while Cloudflare Pages and local development use `/`. `vite.config.ts` switches the Vite `base` when `DEPLOY_TARGET=github` is present.
 

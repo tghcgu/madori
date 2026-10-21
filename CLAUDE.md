@@ -32,7 +32,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 
 | コマンド | 内容 |
 | --- | --- |
-| `npm ci` | 初回の準備（Node.js 22以上。手元は 24。公開のビルドは `.node-version` の版で、Node.js の脆弱性の修正が出たら上げる） |
+| `npm ci` | 初回の準備（Node.js 22以上。手元は 24。Node.js の脆弱性の修正が出たら、手元も新しい版にする） |
 | `npx playwright install chromium` | E2E・見比べ用のブラウザ。Windows は入っている Edge を使うので不要（ほかのOSだけ。`E2E_BROWSER_CHANNEL` で変えられる） |
 | `npm run dev` | 開発用サーバー（http://127.0.0.1:5173/） |
 | `npm test` | 単体テスト（Node の `--experimental-strip-types` で `src/*.ts` をそのまま読む） |
