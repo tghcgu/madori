@@ -1256,6 +1256,7 @@ function setupUi(): void {
   setupChangelog();
   setupLanguageSelect();
   setupThemeToggle();
+  setupSpacePan();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -2694,10 +2695,38 @@ function cancelPlanDrag(): void {
   redrawAll();
 }
 
+// Space を押しながらの左ドラッグと、中ボタンのドラッグでも、右ドラッグと同じく2Dの画面を動かす。
+// Space は、マウスが2Dの上にあるときだけ（ほかでは、ボタンを押すなどのいつもの動き）
+let spacePan = false;
+let pointerOverPlan = false;
+
+function setupSpacePan(): void {
+  planCanvas.addEventListener("pointerenter", () => { pointerOverPlan = true; });
+  planCanvas.addEventListener("pointerleave", () => { pointerOverPlan = false; });
+  const typing = (target: EventTarget | null) => {
+    const element = target as HTMLElement | null;
+    return element?.tagName === "INPUT" || element?.tagName === "SELECT" || element?.tagName === "TEXTAREA" || Boolean(element?.isContentEditable);
+  };
+  window.addEventListener("keydown", (event) => {
+    if (event.code !== "Space" || !pointerOverPlan || typing(event.target)) return;
+    event.preventDefault();
+    if (spacePan) return;
+    spacePan = true;
+    if (drag.pointerId === null) planCanvas.style.cursor = "grab";
+  });
+  window.addEventListener("keyup", (event) => {
+    if (event.code !== "Space" || !spacePan) return;
+    event.preventDefault();
+    spacePan = false;
+    if (drag.pointerId === null) syncPlanCursor();
+  });
+  window.addEventListener("blur", () => { spacePan = false; });
+}
+
 function handlePointerDown(event: PointerEvent): void {
-  if (drag.pointerId !== null || (event.button !== 0 && event.button !== 2)) return;
+  if (drag.pointerId !== null || (event.button !== 0 && event.button !== 1 && event.button !== 2)) return;
   cancelLongPress();
-  if (event.button === 2) {
+  if (event.button === 2 || event.button === 1 || (event.button === 0 && spacePan)) {
     event.preventDefault();
     planCanvas.setPointerCapture(event.pointerId);
     drag = {

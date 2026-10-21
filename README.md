@@ -528,6 +528,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | `Esc` | 操作をキャンセルして選択ツールへ。操作中でなければ選択を解除 |
 | `Ctrl + Y` / `Cmd + Shift + Z` | やり直す |
 | `Ctrl / Cmd + S` | 間取りをファイル（JSON）に書き出す |
+| `Space` + ドラッグ / 中ボタンのドラッグ | 2Dの画面を動かす（右ドラッグと同じ） |
 | `[` / `]` | 下の階 / 上の階へ |
 | `G` | 方眼の表示・非表示 |
 | `0` | 全体を表示 |
@@ -845,7 +846,7 @@ npm.cmd run dev
 
 - 壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます
 - 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）。ドア・窓は、壁をクリックするだけで、いつもの幅で壁の上に置けます（開き戸は押した側に開きます）。選んだ開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
-- ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。階のタブをダブルクリックすると、階に名前を付けられます（空にすると 1F・B1F などに戻ります）。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
+- ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。階のタブをダブルクリックすると、階に名前を付けられます（空にすると 1F・B1F などに戻ります）。Space を押しながらのドラッグと、中ボタンのドラッグでも2Dの画面を動かせます。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
 - 対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです
 - 壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります
 - 2Dの上に「表示」を追加。部屋名の表示・部屋の広さ（帖・㎡）・方眼の表示と大きさ（25cm・50cm・半間・1m・1.5m・1間・2m・3m）を切り替えられます。方眼の大きさを決めると部屋の上にも方眼が重なり、画像の書き出しでは画像の左上からその大きさの方眼が並び、1マスの大きさ（px）も選べます（ココフォリアなどのマップのマス目に合わせられます）
@@ -1606,6 +1607,7 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | `Esc` | Cancel the gesture and return to selection; clear selection when idle |
 | `Ctrl + Y` / `Cmd + Shift + Z` | Redo |
 | `Ctrl / Cmd + S` | Save the plan file (JSON) |
+| `Space` + drag / middle-button drag | Pan the 2D plan (same as a right-drag) |
 | `[` / `]` | Go down / up a floor |
 | `G` | Show or hide the grid |
 | `0` | Fit the whole plan |
@@ -1911,7 +1913,7 @@ The same history as "更新履歴" in the app, newest first.
 
 - Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too
 - Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types. Doors and windows can be placed by just clicking a wall: they get the usual width and a swing door opens toward the side you clicked. A selected swing door can move its hinge to the other end
-- Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Double-click a floor tab to name the floor (leave it empty for 1F, B1F and so on). Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide
+- Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Double-click a floor tab to name the floor (leave it empty for 1F, B1F and so on). Space + drag and middle-button drag also pan the 2D plan. Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide
 - Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are
 - Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners
 - A new 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖) or square meters, and turns the grid on or off with a size of 25 cm, 50 cm, half a ken, 1 m, 1.5 m, one ken, 2 m or 3 m. A chosen grid size is drawn over rooms too, and image export starts the grid at the top-left corner with a selectable cell size in pixels, ready for online tabletop maps

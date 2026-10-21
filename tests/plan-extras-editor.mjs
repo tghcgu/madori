@@ -20,6 +20,29 @@ export async function verifyPlanExtras({ open, plan }) {
     assert.equal((await snapshot()).name, undefined, 'naming can be undone');
     await page.keyboard.press('Escape');
 
+    // Space を押しながらの左ドラッグ・中ボタンのドラッグで、2Dの画面が動く（物は動かない）
+    const origin = () => page.evaluate(() => window.__editorTest.planPoint(0, 0));
+    const plans = JSON.stringify((await snapshot()).floors);
+    let from = await page.evaluate(() => window.__editorTest.planPoint(100, 300));
+    await page.mouse.move(from.x, from.y);
+    let start = await origin();
+    await page.keyboard.down('Space');
+    await page.mouse.down();
+    await page.mouse.move(from.x + 60, from.y + 30, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up('Space');
+    let moved = await origin();
+    assert.ok(Math.abs(moved.x - start.x - 60) < 2 && Math.abs(moved.y - start.y - 30) < 2, `Space + drag pans: ${JSON.stringify([start, moved])}`);
+    from = await page.evaluate(() => window.__editorTest.planPoint(100, 300));
+    await page.mouse.move(from.x, from.y);
+    start = await origin();
+    await page.mouse.down({ button: 'middle' });
+    await page.mouse.move(from.x - 40, from.y, { steps: 6 });
+    await page.mouse.up({ button: 'middle' });
+    moved = await origin();
+    assert.ok(Math.abs(moved.x - start.x + 40) < 2, 'a middle-button drag pans');
+    assert.equal(JSON.stringify((await snapshot()).floors), plans, 'panning moves nothing in the plan');
+
     // 階の名前: タブをダブルクリックして付ける。空にすると、いつもの名前に戻る
     const tab = page.locator('#floorTabs .floor-tab-list button').first();
     page.once('dialog', (dialog) => dialog.accept('地下牢'));
@@ -64,7 +87,7 @@ export async function verifyPlanExtras({ open, plan }) {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark', 'night mode is remembered');
     await page.locator('#themeToggle').click();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), undefined, 'and can be turned off');
-    console.log('PASS: plan extras: a plan name for exported files with undo, floor names, bold text, and night mode for the panels and the 3D background that is remembered');
+    console.log('PASS: plan extras: a plan name for exported files with undo, panning with Space or the middle button, floor names, bold text, and night mode for the panels and the 3D background that is remembered');
   } finally {
     await page.context().close();
   }

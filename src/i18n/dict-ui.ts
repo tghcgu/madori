@@ -540,6 +540,8 @@ export const UI: Record<string, Translations> = {
   "ズーム": ["Zoom", "줌", "縮放"],
   "右ドラッグ": ["Right-drag", "오른쪽 드래그", "右鍵拖曳"],
   "画面の移動": ["Pan the view", "화면 이동", "移動畫面"],
+  "＋ドラッグ・中ボタンのドラッグ": [" + drag, or middle-button drag", " + 드래그·가운데 버튼 드래그", "＋拖曳・滑鼠中鍵拖曳"],
+  "画面の移動（2D）": ["Pan the view (2D)", "화면 이동 (2D)", "移動畫面（2D）"],
   "ダブルクリック": ["Double-click", "더블클릭", "雙擊"],
   "要素を選択": ["Select an item", "요소 선택", "選取物件"],
   "ハンドル操作": ["Handles", "핸들 조작", "控制點操作"],
