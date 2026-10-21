@@ -13,7 +13,7 @@ import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { CHANGELOG } from "./changelog";
 import { formatDate, getLanguage, initI18n, isLanguage, onLanguageChange, setLanguage, t } from "./i18n";
 import { roomContents } from "./room-contents";
-import { snapToWall } from "./wall-snap";
+import { openingOnWall, snapToWall } from "./wall-snap";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
 import { makeTranslucent } from "./translucency";
 import {
@@ -2935,6 +2935,48 @@ function roomContentIds(room: Room): string[] {
   return ids;
 }
 
+// ---- ドア・窓をクリックで壁に置く ----
+type OpeningTool = "door" | "slidingDoor" | "window" | "window2";
+function isOpeningTool(tool: Tool): tool is OpeningTool {
+  return tool === "door" || tool === "slidingDoor" || tool === "window" || tool === "window2";
+}
+
+// クリックで置くときの幅（cm）
+const DOOR_WIDTHS: Record<DoorStyle, number> = { swing: 80, double: 160, sliding: 160, shoji: 180, fusuma: 180, koshi: 180, itado: 160, gate: 200, opening: 90 };
+const WINDOW_WIDTH = 120, DIVIDED_WINDOW_WIDTH = 160;
+// 壁の中心線からこれ以内をクリックしたら、その壁に置く（cm）
+const OPENING_REACH = 40;
+
+function placeOpeningOnWall(point: Point): LinearElement | null {
+  const tool = activeTool;
+  if (!isOpeningTool(tool)) return null;
+  const style: DoorStyle = tool === "slidingDoor" ? "sliding" : activeDoorStyle;
+  const length = tool === "window" ? WINDOW_WIDTH : tool === "window2" ? DIVIDED_WINDOW_WIDTH : DOOR_WIDTHS[style];
+  const walls = activeEntities().filter((entity): entity is LinearElement => entity.type === "wall")
+    .map((wall) => ({ x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, thickness: wallInfoOf(wall).thickness }));
+  const reach = Math.max(OPENING_REACH, 12 / view.zoom);
+  const line = openingOnWall(point, walls, length, reach);
+  if (!line) return null;
+  const type = tool === "window" || tool === "window2" ? "window" : "door";
+  const item: LinearElement = { id: newId(type), type, x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2 };
+  if (tool === "window2") item.mullion = true;
+  if (type === "door" && style !== "swing") item.doorStyle = style;
+  // 開き戸は押した側に開く（開く向きの印は、線の向きに対して flip で決まる）
+  if (type === "door" && line.side > 0) item.flip = true;
+  activeEntities().push(item);
+  selectOnly(item.id);
+  redrawAll();
+  return item;
+}
+
+// 開き戸の吊元（ちょうつがい）を反対の端にする。開く側はそのまま
+function flipDoorHinge(door: LinearElement): void {
+  [door.x1, door.x2] = [door.x2, door.x1];
+  [door.y1, door.y2] = [door.y2, door.y1];
+  if (door.flip) delete door.flip;
+  else door.flip = true;
+}
+
 // 消しゴムのドラッグで続けて消す物（家具・文字・ドア・窓。部屋・壁・図形の壁は、通っただけでは消さない）
 function isDragErasable(entity: Entity): boolean {
   return entity.type === "furniture" || entity.type === "text" || entity.type === "door" || entity.type === "window";
@@ -3104,7 +3146,7 @@ function toolAction(): [string, string] | null {
     case "slidingDoor":
     case "window":
     case "window2":
-      return ["壁に沿ってドラッグで置く", click];
+      return ["壁をクリックで置く・壁に沿ってドラッグで長さを決める", click];
     case "circle":
     case "ellipse":
     case "arc":
@@ -3310,6 +3352,17 @@ function handlePointerUp(event: PointerEvent): void {
     if (entity && handle) resizeEntity(entity, drag.originEntity, drag.resizeCorner, handle);
   }
 
+  // ドア・窓のツールでクリックしたら、いちばん近い壁の上に、いつもの幅で置く（開き戸は押した側に開く）。
+  // ドア・窓の上をクリックしたときは、その物を選ぶ（下の、ほかのツールと同じ）
+  const pressedOpening = drag.pressedId ? findEntity(drag.pressedId) : undefined;
+  if (drag.dragMode === "draw" && clicked && isOpeningTool(activeTool) && pressedOpening?.type !== "door" && pressedOpening?.type !== "window") {
+    const placed = placeOpeningOnWall(start);
+    if (placed) {
+      drag.createdId = placed.id;
+      drag.dragMode = "none";
+    }
+  }
+
   // 描くツールで物をクリックしたら、その物を選んで選択ツールに切り替える
   if (drag.dragMode === "draw" && clicked && drag.pressedId) {
     selectFromOtherTool(drag.pressedId, false);
@@ -3367,7 +3420,7 @@ function handlePointerUp(event: PointerEvent): void {
   }
   // クリックで置いた・消した物を覚えておく（続けてもう1回押したら、取り消してそこにある物を選ぶ）
   const placedId = drag.createdId ?? pathCreatedId;
-  if (clicked && (tool === "furniture" || tool === "text") && placedId && findEntity(placedId)) {
+  if (clicked && (tool === "furniture" || tool === "text" || isOpeningTool(tool)) && placedId && findEntity(placedId)) {
     lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: pressedId ?? placedId, revert: Boolean(pressedId) };
   } else if (clicked && erasedId) {
     lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: erasedId, revert: true };
@@ -11234,6 +11287,7 @@ function updatePropertiesPanel(): void {
     const doorFlipRow =
       selected.type === "door"
         ? `<label class="check"><input id="doorFlipInput" type="checkbox" ${selected.flip ? "checked" : ""} ${placementDisabled} /> ${slidingDoor ? "重なり" : "開き"}を反転（Fキー）</label>`
+          + (doorInfo.value === "swing" ? `<button type="button" class="prop-button" id="doorHingeButton" ${placementDisabled}>吊元（ちょうつがい）を反対側に</button>` : "")
         : "";
     const mullionRow =
       selected.type === "window"
@@ -11270,6 +11324,7 @@ function updatePropertiesPanel(): void {
     });
     bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
     bindButton("#lineRotateButton", () => rotateEntity(selected, 90));
+    bindButton("#doorHingeButton", () => flipDoorHinge(selected));
     bindSelect("#doorStyleInput", (value) => {
       if (!isDoorStyle(value) || value === "swing") delete selected.doorStyle;
       else selected.doorStyle = value;

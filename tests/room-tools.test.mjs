@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { roomContents, polygonArea } from '../src/room-contents.ts';
-import { snapToWall } from '../src/wall-snap.ts';
+import { openingOnWall, snapToWall } from '../src/wall-snap.ts';
 
 const rect = (id, x, y, w, h) => ({ id, polygon: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h]]] });
 const wall = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, reach: 7 });
@@ -45,4 +45,17 @@ test('furniture near a wall turns its back to the wall and touches it', () => {
   // 斜めの壁
   const diagonal = snapToWall({ x: 140, y: 140, w: 40, h: 40, rotation: 0 }, [{ x1: 0, y1: 300, x2: 300, y2: 0, thickness: 10 }]);
   assert.equal(diagonal.rotation, 315);
+});
+
+test('a click near a wall places a door of the usual width on it, opening toward the click', () => {
+  const walls = [{ x1: 0, y1: 0, x2: 400, y2: 0, thickness: 10 }];
+  // 壁の向き（右）に対して右側（y が正）を押した: side 1
+  assert.deepEqual(openingOnWall({ x: 203, y: 20 }, walls, 80, 40), { x1: 160, y1: 0, x2: 240, y2: 0, side: 1 });
+  // 壁の端の近くでは、はみ出さない
+  assert.deepEqual(openingOnWall({ x: 10, y: -15 }, walls, 80, 40), { x1: 0, y1: 0, x2: 80, y2: 0, side: -1 });
+  // 遠い所・壁の先では置かない
+  assert.equal(openingOnWall({ x: 200, y: 60 }, walls, 80, 40), null);
+  assert.equal(openingOnWall({ x: 500, y: 0 }, walls, 80, 40), null);
+  // 短い壁には壁いっぱい
+  assert.deepEqual(openingOnWall({ x: 30, y: 5 }, [{ x1: 0, y1: 0, x2: 60, y2: 0, thickness: 10 }], 80, 40), { x1: 0, y1: 0, x2: 60, y2: 0, side: 1 });
 });

@@ -270,6 +270,8 @@ export const UI: Record<string, Translations> = {
   "ドラッグで四角、ぐるっとなぞるとその形の床": ["Drag for a rectangle, or trace around for a floor of that shape", "드래그하면 사각형, 빙 둘러 그리면 그 모양의 바닥", "拖曳為矩形，繞一圈描繪即為該形狀的地板"],
   "ドラッグで壁を描く": ["Drag to draw a wall", "드래그로 벽 그리기", "拖曳繪製牆壁"],
   "壁に沿ってドラッグで置く": ["Drag along a wall to place", "벽을 따라 드래그해서 배치", "沿著牆壁拖曳放置"],
+  "壁をクリックで置く・壁に沿ってドラッグで長さを決める": ["Click a wall to place, or drag along it to set the length", "벽을 클릭해 배치·벽을 따라 드래그해 길이 정하기", "點選牆壁放置，或沿著牆壁拖曳決定長度"],
+  "吊元（ちょうつがい）を反対側に": ["Move the hinge to the other side", "경첩을 반대쪽으로", "鉸鏈換到另一側"],
   "ドラッグで図形の壁を描く": ["Drag to draw a shape wall", "드래그로 도형 벽 그리기", "拖曳繪製圖形牆"],
   "ドラッグした所の{0}をけずる": ["Cut away the {0} where you drag", "드래그한 곳의 {0} 깎기", "削去拖曳處的{0}"],
   "ドラッグで塗った所が{0}になる": ["Where you drag becomes {0}", "드래그로 칠한 곳이 {0}이(가) 됩니다", "拖曳塗抹處會變成{0}"],

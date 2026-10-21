@@ -63,5 +63,18 @@ export async function verifyDoors({ page, importPlan, choose, planPoint, move, s
   assert.deepEqual(await selection(), [placed[1].id], 'inside the swing of a gate selects it');
   await clickAt(160, 300);
   assert.deepEqual(await selection(), ['hall'], 'the other side of the door is the floor');
-  console.log('PASS: door styles: double, sliding, shoji, fusuma, lattice entrance, plank and gate doors from the palette, style changes in 2D and 3D, Japanese doors in the Japanese group, and selecting doors inside their swing');
+  // 壁をクリックすると、いつもの幅（ドアは80cm）で壁の上に置く。開き戸は押した側に開く。吊元は反対側にもできる
+  await choose('[data-door-style="swing"]');
+  await clickAt(330, 215);
+  const clicked = (await doors()).at(-1);
+  assert.deepEqual([clicked.x1, clicked.y1, clicked.x2, clicked.y2, clicked.flip], [290, 200, 370, 200, true], 'a click on the wall places a door that opens toward the click');
+  await page.locator('#doorHingeButton').click();
+  const hinged = (await doors()).at(-1);
+  assert.deepEqual([hinged.x1, hinged.x2, hinged.flip], [370, 290, undefined], 'the hinge moves to the other end and the door still opens the same way');
+  // ドアの上を押すと、そのドアを選ぶ（新しく置かない）
+  const count = (await doors()).length;
+  await page.locator('[data-door-style="swing"]').first().click();
+  await clickAt(180, 200);
+  assert.equal((await doors()).length, count, 'clicking a door does not place another one');
+  console.log('PASS: door styles: double, sliding, shoji, fusuma, lattice entrance, plank and gate doors from the palette, style changes in 2D and 3D, Japanese doors in the Japanese group, selecting doors inside their swing, clicking a wall to place a door that opens toward the click, and moving the hinge');
 }

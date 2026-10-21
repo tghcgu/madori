@@ -86,7 +86,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です。厚みは、選んだ壁の欄の「厚み」で変えられます（フェンス・竹垣を除く。厚くした壁も角がすき間なくつながります）
-- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です
+- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です。壁をクリックするだけでも、いつもの幅（ドア80cm・両開き160cm・窓120cmなど）で壁の上に置けます（開き戸は押した側に開きます。ドア・窓の上を押すと、そのドア・窓を選びます）。開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転。壁の近くに置くと、背を壁に向けて壁に付きます（`Alt`を押しながら置くと付けません。人・小物・床に描く物などは付けません）
 - 部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。`Alt`を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます（「キャンセル」で部屋だけ）
@@ -844,7 +844,7 @@ npm.cmd run dev
 ### 2026年10月21日
 
 - 壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます
-- 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）
+- 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）。ドア・窓は、壁をクリックするだけで、いつもの幅で壁の上に置けます（開き戸は押した側に開きます）。選んだ開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
 - ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。階のタブをダブルクリックすると、階に名前を付けられます（空にすると 1F・B1F などに戻ります）。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
 - 対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです
 - 壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります
@@ -1176,7 +1176,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls. Choose a wall type: plain, concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence or fence (pick one in the Walls group and drag on the 2D plan, or change a selected wall's type from pictures in the selection panel). Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above; stone walls, hedges, bamboo fences and fences look the same as the free shapes
-- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D
+- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D. A click on a wall also places one with the usual width (80 cm for a door, 160 cm for a double door, 120 cm for a window and so on); a swing door opens toward the side you clicked, and clicking an existing door or window selects it. A swing door's hinge can be moved to the other end under Selection
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture. Furniture placed near a wall turns its back to the wall and touches it (hold `Alt` to skip; people, small items and floor marks never snap)
 - Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it as well (walls shared with the next room stay; hold `Alt` to move only the room). Deleting a room with things inside asks whether to delete them too (Cancel deletes only the room)
@@ -1910,7 +1910,7 @@ The same history as "更新履歴" in the app, newest first.
 ### 2026-10-21
 
 - Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too
-- Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types
+- Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types. Doors and windows can be placed by just clicking a wall: they get the usual width and a swing door opens toward the side you clicked. A selected swing door can move its hinge to the other end
 - Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Double-click a floor tab to name the floor (leave it empty for 1F, B1F and so on). Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide
 - Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are
 - Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners

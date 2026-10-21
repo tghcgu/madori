@@ -37,3 +37,36 @@ export function snapToWall<T extends SnapItem>(item: T, walls: readonly SnapWall
   const centerX = best.px + best.nx * offset, centerY = best.py + best.ny * offset;
   return { ...item, x: Math.round((centerX - item.w / 2) * 100) / 100, y: Math.round((centerY - item.h / 2) * 100) / 100, rotation };
 }
+
+// ---- ドア・窓をクリックで壁の上に置く ----
+
+export interface OpeningLine { x1: number; y1: number; x2: number; y2: number }
+
+// point からいちばん近い壁（壁の中心線から reach 以内）の上に、長さ length の開口を置く線。
+// 開口は壁の向きにそろえ、壁の端からはみ出さない（壁が短ければ壁いっぱい）。中心は 10cm 刻み。
+// side は押した側（壁の向きに対して右なら 1、左なら -1）。開き戸はこの側に開く
+export function openingOnWall(point: { x: number; y: number }, walls: readonly SnapWall[], length: number, reach: number): (OpeningLine & { side: 1 | -1 }) | null {
+  let best: { wall: SnapWall; along: number; length: number; ux: number; uy: number; distance: number; side: 1 | -1 } | null = null;
+  for (const wall of walls) {
+    const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+    const wallLength = Math.hypot(dx, dy);
+    if (wallLength < 1) continue;
+    const ux = dx / wallLength, uy = dy / wallLength;
+    const along = (point.x - wall.x1) * ux + (point.y - wall.y1) * uy;
+    if (along < 0 || along > wallLength) continue;
+    const cross = ux * (point.y - wall.y1) - uy * (point.x - wall.x1);
+    const distance = Math.abs(cross);
+    if (distance > reach) continue;
+    if (!best || distance < best.distance) best = { wall, along, length: wallLength, ux, uy, distance, side: cross > 0 ? 1 : -1 };
+  }
+  if (!best) return null;
+  const size = Math.min(length, best.length);
+  const center = Math.max(size / 2, Math.min(best.length - size / 2, Math.round(best.along / 10) * 10));
+  const round = (value: number) => Math.round(value * 100) / 100;
+  const { wall, ux, uy } = best;
+  return {
+    x1: round(wall.x1 + ux * (center - size / 2)), y1: round(wall.y1 + uy * (center - size / 2)),
+    x2: round(wall.x1 + ux * (center + size / 2)), y2: round(wall.y1 + uy * (center + size / 2)),
+    side: best.side,
+  };
+}
