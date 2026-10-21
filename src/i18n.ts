@@ -35,7 +35,7 @@ const PUNCTUATION: Record<Exclude<Language, "ja">, [RegExp, string][]> = {
 let language: Language = "ja";
 let dictionary: Record<string, Translations> | null = null;
 let table: Map<string, string> | null = null;
-let patterns: { regex: RegExp; translation: string; weight: number; strict: boolean }[] = [];
+let patterns: { regex: RegExp; translation: string; weight: number }[] = [];
 const cache = new Map<string, string>();
 const missing = new Set<string>();
 const listeners = new Set<(language: Language) => void>();
@@ -57,6 +57,7 @@ export function useDictionary(source: Record<string, Translations>, next: Langua
   dictionary = source;
   language = next;
   cache.clear();
+  valueCache.clear();
   missing.clear();
   if (next === "ja") {
     table = null;
@@ -71,10 +72,10 @@ export function useDictionary(source: Record<string, Translations>, next: Langua
     if (!value) continue;
     table.set(key, value);
     if (!/\{\d+\}/.test(key)) continue;
-    // 型: 決まった文字の多い物から試す。決まった文字が少ない型（「{0}を{1}」など）は、中の値がどれも訳せたときだけ使う
+    // 型: 決まった文字の多い物から試す（型の中の値がどれも訳せたときだけ使う）
     const weight = key.replace(HOLE, "").replace(/[\s・、。（）()「」：:／/，,！？!?]/g, "").length;
     const regex = new RegExp(`^${key.replace(/[.*+?^$|[\]\\()]/g, "\\$&").replace(HOLE, "(.+?)")}$`);
-    patterns.push({ regex, translation: value, weight, strict: weight < 2 });
+    patterns.push({ regex, translation: value, weight });
   }
   patterns.sort((a, b) => b.weight - a.weight);
 }
@@ -89,7 +90,7 @@ export function t(text: string): string {
 function translateCore(core: string): string {
   const cached = cache.get(core);
   if (cached !== undefined) return cached;
-  const result = exact(core) ?? numbered(core) ?? patterned(core) ?? segmented(core);
+  const result = exact(core) ?? numbered(core) ?? patterned(core) ?? segmented(core, false);
   if (result === null) missing.add(core);
   const value = result ?? core;
   cache.set(core, value);
@@ -109,31 +110,44 @@ function numbered(core: string): string | null {
   return value === undefined ? null : value.replace(HOLE, (whole, index: string) => numbers[Number(index)] ?? whole);
 }
 
-// 型に当てはめる（「1Fを編集」→「{0}を編集」）。型の中の値も訳す
+// 型に当てはめる（「1Fを編集」→「{0}を編集」）。型の中の値も訳し、訳せない値があればその型は使わない
+// （「部屋{0}」が「部屋の中に…」のような別の文に当たらないように）
 function patterned(core: string): string | null {
   for (const pattern of patterns) {
     const match = pattern.regex.exec(core);
     if (!match) continue;
-    const values = match.slice(1).map((value) => (JA.test(value) ? translateCore(value) : value));
-    if (pattern.strict && values.some((value) => JA.test(value))) continue;
+    const values = match.slice(1).map(translateValue);
+    if (values.some((value) => value === null)) continue;
     return pattern.translation.replace(HOLE, (whole, index: string) => values[Number(index)] ?? whole);
   }
   return null;
 }
 
-// 区切った所ごとに訳す（「椅子（丸い座面）」→「Chair (round seat)」）。どこも訳せなければ null
-function segmented(core: string): string | null {
+// 型の中の値: 日本語がなければそのまま。あれば、そのまま・数字・型・区切り（どの区切りも訳せたとき）で訳す。訳せなければ null
+const valueCache = new Map<string, string | null>();
+function translateValue(value: string): string | null {
+  if (!JA.test(value)) return value;
+  if (!valueCache.has(value)) valueCache.set(value, exact(value) ?? numbered(value) ?? patterned(value) ?? segmented(value, true));
+  return valueCache.get(value) ?? null;
+}
+
+// 区切った所ごとに訳す（「椅子（丸い座面）」→「Chair (round seat)」）。どこも訳せなければ null。
+// strict なら、日本語のある所がどれも訳せたときだけ
+function segmented(core: string, strict: boolean): string | null {
   const parts = core.split(SEPARATORS);
   if (parts.length < 3) return null;
-  let changed = false;
+  let changed = false, failed = false;
   const out = parts.map((part, index) => {
     if (index % 2 === 1 || !JA.test(part)) return part;
     const value = exact(part) ?? numbered(part) ?? patterned(part);
-    if (value === null) return part;
+    if (value === null) {
+      failed = true;
+      return part;
+    }
     changed = true;
     return value;
   });
-  if (!changed) return null;
+  if (!changed || (strict && failed)) return null;
   let joined = out.join("");
   if (language !== "ja") for (const [from, to] of PUNCTUATION[language]) joined = joined.replace(from, to);
   return joined.replace(/ {2,}/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").replace(/ ([,.:!?])/g, "$1").trim();

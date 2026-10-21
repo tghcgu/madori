@@ -19,6 +19,8 @@ export const UI: Record<string, Translations> = {
   "3Dのみ表示": ["Show 3D only", "3D만 표시", "僅顯示 3D"],
   "同時": ["Both", "동시", "同時"],
   "元に戻す": ["Undo", "실행 취소", "復原"],
+  "ナイトモード（画面を暗くする）": ["Night mode (darken the screen)", "나이트 모드 (화면을 어둡게)", "夜間模式（讓畫面變暗）"],
+  "ライトモード（画面を明るくする）": ["Light mode (brighten the screen)", "라이트 모드 (화면을 밝게)", "淺色模式（讓畫面變亮）"],
   "やり直す": ["Redo", "다시 실행", "重做"],
   "3Dも使える版で、同じ間取りを開く": ["Open the same plan in the edition with 3D", "3D도 쓸 수 있는 판에서 같은 평면도 열기", "以含 3D 的版本開啟相同平面圖"],
   "3Dでも見る": ["View in 3D", "3D로도 보기", "也用 3D 查看"],
@@ -85,6 +87,7 @@ export const UI: Record<string, Translations> = {
   "保存データに読み込めない項目がありました。元データを退避し、読み込める内容を復旧しました。": ["Some saved items could not be loaded. The original data was set aside and everything readable was restored.", "저장된 데이터에 불러올 수 없는 항목이 있었습니다. 원본 데이터를 따로 보관하고 불러올 수 있는 내용을 복구했습니다.", "已儲存的資料中有無法讀取的項目。已另存原始資料，並復原可讀取的內容。"],
   "保存データが壊れていたため読み込めませんでした。元データは退避してあり、「元データを書き出し」から取り出せます。": ["The saved data was damaged and could not be loaded. The original data was set aside; use \"Export original data\" to get it.", "저장된 데이터가 손상되어 불러올 수 없었습니다. 원본 데이터는 따로 보관했으며 '원본 데이터 내보내기'로 꺼낼 수 있습니다.", "已儲存的資料損毀，無法讀取。原始資料已另存，可從「匯出原始資料」取出。"],
   "現在の間取りをテンプレートで置き換えます。実行しますか？": ["Replace the current plan with this template?", "현재 평면도를 템플릿으로 바꿉니다. 계속할까요?", "要用範本取代目前的平面圖嗎？"],
+  "部屋の中に{0}個の物があります。一緒に削除しますか？（「キャンセル」で部屋だけ削除します）": ["There are {0} items in this room. Delete them too? (Cancel deletes only the room)", "방 안에 물건이 {0}개 있습니다. 함께 삭제할까요? ('취소'를 누르면 방만 삭제합니다)", "房間內有 {0} 個物件。要一起刪除嗎？（按「取消」只刪除房間）"],
   "現在の間取りを消去して新規作成します。実行しますか？": ["Clear the current plan and start a new one?", "현재 평면도를 지우고 새로 만듭니다. 계속할까요?", "要清除目前的平面圖並新增嗎？"],
 
   // ---- ツール ----
@@ -199,6 +202,8 @@ export const UI: Record<string, Translations> = {
   "部屋名・部屋の広さ・方眼の表示を選ぶ": ["Choose whether to show room names, room areas and the grid", "방 이름·방 넓이·모눈 표시 고르기", "選擇是否顯示房間名稱、房間面積與方格"],
   "表示": ["View", "보기", "顯示"],
   "部屋名を表示": ["Show room names", "방 이름 표시", "顯示房間名稱"],
+  "間取りの名前（書き出すファイルの名前になります）": ["Plan name (used for exported file names)", "평면도 이름 (내보낼 파일 이름이 됩니다)", "平面圖名稱（作為匯出的檔案名稱）"],
+  "例: 古い洋館": ["e.g. Old mansion", "예: 오래된 저택", "例：古老的洋館"],
   "部屋の広さ": ["Room area", "방 넓이", "房間面積"],
   "表示しない": ["Hide", "표시 안 함", "不顯示"],
   "帖（畳の数）": ["Tatami mats (jo)", "첩 (다다미 수)", "帖（榻榻米數）"],
@@ -335,6 +340,7 @@ export const UI: Record<string, Translations> = {
   "文字サイズ cm": ["Text size cm", "글자 크기 cm", "文字大小 cm"],
   "文字の方向": ["Text direction", "글자 방향", "文字方向"],
   "縦書き": ["Vertical", "세로쓰기", "直書"],
+  "太字": ["Bold", "굵게", "粗體"],
   "横書き": ["Horizontal", "가로쓰기", "橫書"],
   "文字（改行もできます）": ["Text (line breaks allowed)", "문자 (줄바꿈 가능)", "文字（可換行）"],
   "90°回転（Rキー）": ["Rotate 90° (R key)", "90° 회전 (R 키)", "旋轉 90°（R 鍵）"],

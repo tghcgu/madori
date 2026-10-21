@@ -12,6 +12,8 @@ import { MORE_DEFS, MORE_SMALL_KINDS, isMorePartKind } from "./furniture-more";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
 import { CHANGELOG } from "./changelog";
 import { formatDate, getLanguage, initI18n, isLanguage, onLanguageChange, setLanguage, t } from "./i18n";
+import { roomContents } from "./room-contents";
+import { snapToWall } from "./wall-snap";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
 import { makeTranslucent } from "./translucency";
 import {
@@ -65,7 +67,7 @@ type EntityType = "room" | "wall" | "door" | "window" | "furniture" | "shape" | 
 type ShapeKind = "circle" | "ellipse" | "arc" | "polygon";
 type LegacyRoofKind = RoofKind | "none";
 type LightDirection = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw" | "top";
-type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "marquee" | "none";
+type DragMode = "draw" | "move" | "resize" | "label" | "pan" | "path" | "pose" | "marquee" | "erase" | "none";
 type ViewMode = "split" | "plan" | "three";
 
 interface Point {
@@ -196,6 +198,7 @@ interface TextLabel {
   rotation: number;
   writingMode?: WritingMode;
   color?: string;
+  bold?: boolean;
   locked?: boolean;
 }
 
@@ -214,6 +217,8 @@ interface PlanState {
   selectedId: string | null;
   roofs: Roof[];
   basements?: number;
+  // 間取りの名前（「表示」で付ける。書き出すファイルの名前に使う）
+  name?: string;
 }
 
 interface PointerState {
@@ -233,6 +238,8 @@ interface PointerState {
   pressedId?: string;
   // 置くツールで、押した所に物があったとき: 置く・消すのは、指を離すか動かすまで待つ（長押しで選べるように）
   pending?: "furniture" | "text" | "erase";
+  // 消しゴムのドラッグで消した物
+  erased?: string[];
   origins?: Entity[];
   createdId?: string;
 }
@@ -924,6 +931,7 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
       selectedId: data.selectedId ?? null,
       roofs,
       ...(basements ? { basements } : {}),
+      ...planName(data.name),
     };
   }
   if (data && Array.isArray(data.entities)) {
@@ -935,6 +943,13 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
     };
   }
   return null;
+}
+
+// 間取りの名前（60文字まで）。空なら持たない
+const MAX_PLAN_NAME = 60;
+function planName(value: unknown): { name?: string } {
+  const name = typeof value === "string" ? value.trim().slice(0, MAX_PLAN_NAME) : "";
+  return name ? { name } : {};
 }
 
 function normalizeEntity(value: unknown): Entity {
@@ -1033,6 +1048,7 @@ function normalizeEntity(value: unknown): Entity {
       writingMode: entity.writingMode === "vertical" ? "vertical" : undefined,
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       color: color(entity.color),
+      bold: entity.bold === true ? true : undefined,
     };
   }
   throw new Error("Unknown plan entity");
@@ -1210,6 +1226,7 @@ function setupUi(): void {
   setupCreditCopy();
   setupChangelog();
   setupLanguageSelect();
+  setupThemeToggle();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -2039,9 +2056,22 @@ function setupViewMenu(): void {
   const grid = document.querySelector<HTMLInputElement>("#gridVisibleInput");
   const size = document.querySelector<HTMLSelectElement>("#gridSizeSelect");
   if (!button || !menu || !names || !area || !grid || !size) return;
+  const planNameInput = document.querySelector<HTMLInputElement>("#planNameInput");
   button.addEventListener("click", () => {
     menu.hidden = !menu.hidden;
     button.setAttribute("aria-expanded", String(!menu.hidden));
+    if (planNameInput) planNameInput.value = state.name ?? "";
+  });
+  // 間取りの名前は、入力を終えたとき（欄から出る・Enter）に「元に戻す」の履歴に入れる
+  planNameInput?.addEventListener("change", () => {
+    const { name } = planName(planNameInput.value);
+    if ((state.name ?? "") === (name ?? "")) return;
+    if (name) state.name = name;
+    else delete state.name;
+    commitState();
+  });
+  planNameInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") planNameInput.blur();
   });
   document.addEventListener("pointerdown", (event) => {
     if (menu.hidden || menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
@@ -2622,6 +2652,8 @@ function cancelPlanDrag(): void {
   cancelLongPress();
   const pointerId = drag.pointerId;
   if (pointerId === null) return;
+  // 消しゴムのドラッグで消した物は、消したままにする（やめても「元に戻す」で戻せる）
+  if (drag.dragMode === "erase" && drag.erased?.length) commitState(false);
   if (drag.createdId) removeEntityById(drag.createdId);
   else restoreOrigins(drag.origins ?? (drag.originEntity ? [drag.originEntity] : []));
   drag = { ...drag, pointerId: null, dragMode: "none", pending: undefined, path: undefined, origins: undefined, originEntity: null, createdId: undefined };
@@ -2704,9 +2736,10 @@ function handlePointerDown(event: PointerEvent): void {
   if (drag.pressedId) startLongPress(event, drag.pressedId);
 
   if (activeTool === "erase") {
-    // 消すのは指を離したとき（押し続けると、消さずに選ぶ）
-    drag.dragMode = "none";
+    // 消すのは指を離したとき（押し続けると、消さずに選ぶ）。ドラッグすると、通った所の家具・文字・ドア・窓を続けて消す
+    drag.dragMode = "erase";
     drag.pending = hit.entity ? "erase" : undefined;
+    drag.erased = [];
     return;
   }
 
@@ -2738,6 +2771,11 @@ function handlePointerDown(event: PointerEvent): void {
       drag.dragMode = "none";
     } else if (hit.entity) {
       drag.dragMode = "move";
+      // 部屋を動かすと、中の家具・その部屋の壁やドア・載っている屋根も一緒に動く（Alt を押していれば部屋だけ）
+      if (hit.entity.type === "room" && !event.altKey) {
+        const contents = roomContentIds(hit.entity).map((id) => findEntity(id)).filter((item): item is Entity => item !== undefined);
+        if (contents.length) drag.origins = [hit.entity, ...contents].map(cloneEntity);
+      }
     } else {
       drag.dragMode = "none";
     }
@@ -2786,15 +2824,16 @@ function handlePointerDown(event: PointerEvent): void {
       render2d();
       return;
     }
-    placeFurnitureAt(point);
+    placeFurnitureAt(point, !event.altKey);
     return;
   }
 
   render2d();
 }
 
-// 家具の一覧で選んでいる家具を、point を中心に置いて、そのままドラッグで動かせるようにする
-function placeFurnitureAt(point: Point): void {
+// 家具の一覧で選んでいる家具を、point を中心に置いて、そのままドラッグで動かせるようにする。
+// 壁の近くでは、背を壁に向けて壁に付ける（snapWall が false なら付けない。Alt を押しながら置いたとき）
+function placeFurnitureAt(point: Point, snapWall = true): void {
   const base = FURNITURE_DEFS[activeFurniture];
   const entity: Furniture = {
     id: newId("furniture"),
@@ -2809,11 +2848,80 @@ function placeFurnitureAt(point: Point): void {
   };
   activeEntities().push(entity);
   selectOnly(entity.id);
+  // 動かし始めの形は、壁に付ける前（ドラッグ中も、近い壁があれば付け直す）
   drag.originEntity = cloneEntity(entity);
+  if (snapWall) snapFurnitureToWall(entity);
   drag.dragMode = "move";
   drag.pending = undefined;
   drag.createdId = entity.id;
   redrawAll();
+}
+
+// 壁ぎわで背を壁に向けない物: 床に描く物・壁に重ねる物・平らな物（高さ20cm未満）・人やコマ・机にのせる小物・階段・自由な形
+const NO_WALL_SNAP_KINDS = new Set<FurnitureKind>([
+  "rug", "paint", "image", "person", "fallenPerson", "footprints", "bloodPool", "brokenGlass", "evidenceMarker", "manhole",
+  "wallCrack", "collapsedWall", "wallHole", "bulletHoles", "tendrils",
+]);
+function snapsToWall(kind: FurnitureKind): boolean {
+  if (NO_WALL_SNAP_KINDS.has(kind) || isFreeShapeKind(kind) || (STAIR_KINDS as readonly FurnitureKind[]).includes(kind) || SMALL_ITEM_KINDS.has(kind)) return false;
+  if (isMorePartKind(kind) && (MORE_DEFS[kind].group === "creatures" || MORE_DEFS[kind].height < 20)) return false;
+  return true;
+}
+
+// いまの階の壁で、いちばん近い壁に背を向けて付ける。付けたら true
+function snapFurnitureToWall(item: Furniture): boolean {
+  if (!snapsToWall(item.kind)) return false;
+  const walls = activeEntities().filter((entity): entity is LinearElement => entity.type === "wall")
+    .map((wall) => ({ x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, thickness: wallInfoOf(wall).thickness }));
+  const snapped = snapToWall(item, walls);
+  if (!snapped) return false;
+  item.x = snapped.x;
+  item.y = snapped.y;
+  item.rotation = snapped.rotation;
+  return true;
+}
+
+// ---- 部屋の中身 ----
+// 部屋を動かす・消すときに一緒に扱う物（src/room-contents.ts）。いまの階の家具・文字・図形と、その部屋の壁・ドア・窓、
+// その部屋に載る屋根（この階に付いていて、部屋の外枠を少し広げた中に収まる物）
+function roomContentIds(room: Room): string[] {
+  const entities = activeEntities();
+  const rooms = entities.filter(isRoom).map((item) => ({ id: item.id, polygon: floorPolygon(item) }));
+  const target = rooms.find((item) => item.id === room.id);
+  if (!target) return [];
+  const points = entities.flatMap((item) => item.type === "furniture" ? [{ id: item.id, x: item.x + item.w / 2, y: item.y + item.h / 2 }]
+    : item.type === "text" || item.type === "shape" ? [{ id: item.id, x: item.x, y: item.y }] : []);
+  const segments = entities.filter(isLinear).map((item) => ({ id: item.id, x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2, reach: (item.type === "wall" ? wallInfoOf(item).thickness : 12) / 2 + 2 }));
+  const ids = [...roomContents(target, rooms, points, segments)];
+  const floorId = state.floors[state.activeFloor]?.id;
+  const [ring] = target.polygon;
+  const xs = ring.map(([x]) => x), ys = ring.map(([, y]) => y);
+  const eaves = 120;
+  for (const roof of state.roofs) {
+    if (roof.floorId !== floorId) continue;
+    if (roof.x >= Math.min(...xs) - eaves && roof.y >= Math.min(...ys) - eaves && roof.x + roof.w <= Math.max(...xs) + eaves && roof.y + roof.h <= Math.max(...ys) + eaves
+      && pointInPolygon(roof.x + roof.w / 2, roof.y + roof.h / 2, target.polygon)) ids.push(roof.id);
+  }
+  return ids;
+}
+
+// 消しゴムのドラッグで続けて消す物（家具・文字・ドア・窓。部屋・壁・図形の壁は、通っただけでは消さない）
+function isDragErasable(entity: Entity): boolean {
+  return entity.type === "furniture" || entity.type === "text" || entity.type === "door" || entity.type === "window";
+}
+
+// 部屋を消す。中に物があれば、一緒に消すかを聞く（「キャンセル」なら部屋だけ）。部屋でなければそのまま消す
+function removeWithContents(entity: Entity): void {
+  if (entity.type === "room") {
+    const contents = roomContentIds(entity).filter((id) => {
+      const item = findEntity(id);
+      return item !== undefined && !isLocked(item);
+    });
+    if (contents.length && window.confirm(`部屋の中に${contents.length}個の物があります。一緒に削除しますか？（「キャンセル」で部屋だけ削除します）`)) {
+      contents.forEach((id) => removeEntityById(id));
+    }
+  }
+  removeEntityById(entity.id);
 }
 
 // 文字を置く（target があればその文字を選ぶ）。すぐ入力できるよう選択ツールへ戻す
@@ -3022,7 +3130,7 @@ function handlePointerMove(event: PointerEvent): void {
     if (longPressTimer) longPressPoint = point;
     if (moved > CLICK_SLOP) {
       cancelLongPress();
-      if (drag.pending === "furniture") placeFurnitureAt(drag.startWorld);
+      if (drag.pending === "furniture") placeFurnitureAt(drag.startWorld, !event.altKey);
     }
   }
 
@@ -3040,6 +3148,19 @@ function handlePointerMove(event: PointerEvent): void {
 
   if (drag.dragMode === "marquee") {
     render2d();
+    return;
+  }
+
+  if (drag.dragMode === "erase") {
+    if (Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= CLICK_SLOP) return;
+    // ドラッグになったら、押した物を離したときに消すのはやめ、通った所の物を消していく
+    drag.pending = undefined;
+    const target = hitTest(point).entity;
+    if (target && isDragErasable(target) && !isLocked(target)) {
+      removeEntityById(target.id);
+      drag.erased?.push(target.id);
+      redrawAll(false);
+    }
     return;
   }
 
@@ -3087,6 +3208,10 @@ function handlePointerMove(event: PointerEvent): void {
     const entity = findEntity(drag.originEntity.id);
     if (!entity) return;
     moveEntity(entity, drag.originEntity, point.x - drag.startWorld.x, point.y - drag.startWorld.y);
+    if (entity.type === "furniture" && drag.originEntity.type === "furniture") {
+      entity.rotation = drag.originEntity.rotation;
+      if (!event.altKey) snapFurnitureToWall(entity);
+    }
     redrawAll(false);
     // 置いたばかりの家具は、まだ3Dにないので作る
     syncThreeWhileDragging([entity], !planGroup.children.some((object) => object.userData.entityId === entity.id));
@@ -3131,12 +3256,12 @@ function handlePointerUp(event: PointerEvent): void {
   }
 
   // 置くツールで物の上を押していたとき: 長押しにならずに離したら、置く・消す
-  if (drag.pending === "furniture") placeFurnitureAt(start);
+  if (drag.pending === "furniture") placeFurnitureAt(start, !event.altKey);
   else if (drag.pending === "text") placeTextAt(start, null);
   else if (drag.pending === "erase" && drag.pressedId) {
     const target = findEntity(drag.pressedId);
     if (target && !isLocked(target)) {
-      removeEntityById(target.id);
+      removeWithContents(target);
       if (state.selectedId === target.id) state.selectedId = null;
       commitState();
       erasedId = target.id;
@@ -3146,6 +3271,8 @@ function handlePointerUp(event: PointerEvent): void {
     }
   }
   drag.pending = undefined;
+  // ドラッグで続けて消した物は、まとめて1回の「元に戻す」にする
+  if (drag.dragMode === "erase" && drag.erased?.length) commitState();
 
   if (clicked && drag.dragMode === "resize" && drag.originEntity?.type === "room" && drag.resizeCorner?.startsWith("edge:")) {
     const entity = findEntity(drag.originEntity.id);
@@ -3310,7 +3437,7 @@ function handleThreePointerDown(event: PointerEvent): void {
     event.stopImmediatePropagation();
     threePointerDown = null;
     if (selected && !isLocked(selected)) {
-      removeEntityById(selected.id);
+      removeWithContents(selected);
       commitState();
       lastThreeClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: selected.id, revert: true };
       redrawAll();
@@ -3876,7 +4003,7 @@ function handleKeyDown(event: KeyboardEvent): void {
   if (!isEditing && (event.key === "Delete" || event.key === "Backspace") && state.selectedId) {
     const selected = findEntity(state.selectedId);
     if (!selected || isLocked(selected)) return;
-    removeEntityById(state.selectedId);
+    removeWithContents(selected);
     state.selectedId = null;
     commitState();
     redrawAll();
@@ -5716,6 +5843,18 @@ function drawWindow2d(windowEl: LinearElement): void {
 }
 
 function drawDoor2d(door: LinearElement): void {
+  // 戸のない開口: 壁の切れ目だけ（3Dも戸を置かない）。選んでいるときだけ、開口の所に点線を引く
+  if (door.doorStyle === "opening") {
+    if (state.selectedId === door.id) {
+      ctx.save();
+      ctx.strokeStyle = "#2775d1";
+      ctx.lineWidth = 2 / view.zoom;
+      ctx.setLineDash([6 / view.zoom, 4 / view.zoom]);
+      strokeLine(door.x1, door.y1, door.x2, door.y2);
+      ctx.restore();
+    }
+    return;
+  }
   if (door.doorStyle === "sliding") {
     drawSlidingDoor2d(door);
     return;
@@ -9602,7 +9741,7 @@ function drawTextLabel(label: TextLabel): void {
   ctx.save();
   ctx.translate(label.x, label.y);
   ctx.rotate(degreesToRadians(label.rotation));
-  ctx.font = `${label.size}px ${TEXT_FONT}`;
+  ctx.font = `${label.bold ? "700 " : ""}${label.size}px ${TEXT_FONT}`;
   ctx.fillStyle = solidColor(label.color) ?? INK;
   paintLabel(layout, -layout.w / 2, -layout.h / 2);
   ctx.restore();
@@ -9694,7 +9833,7 @@ let threeSceneKey: string | null = null;
 let buildSelection: Set<string> | null = null;
 
 function threeSceneSignature(): string {
-  return JSON.stringify([state.floors, state.roofs, [...hiddenFloorIds], roofVisible3d, threeStyle]);
+  return JSON.stringify([state.floors, state.roofs, [...hiddenFloorIds], roofVisible3d, threeStyle, isDarkTheme()]);
 }
 
 function rebuildThreeScene(): void {
@@ -10397,7 +10536,8 @@ function addGroundPlaceholder(center: Point): void {
 
 function addSubtleGrid(bounds: Bounds | null, center: Point): void {
   const size = bounds ? Math.max(bounds.w, bounds.h) * SCALE_3D + 4 : 10;
-  const grid = new THREE.GridHelper(size, Math.max(8, Math.round(size)), 0xb9c2cd, 0xdde3eb);
+  const [major, minor] = isDarkTheme() ? [0x48505d, 0x2f353f] : [0xb9c2cd, 0xdde3eb];
+  const grid = new THREE.GridHelper(size, Math.max(8, Math.round(size)), major, minor);
   grid.position.y = 0.012;
   grid.position.x = to3d(center.x, center.y, center).x;
   grid.position.z = to3d(center.x, center.y, center).z;
@@ -10463,6 +10603,8 @@ let threePost: ThreePost | null = null;
 let realEnvironment: THREE.Texture | null = null;
 let realSky: THREE.Texture | null = null;
 const STANDARD_BACKGROUND = new THREE.Color(0xe9edf3);
+// ナイトモードの3Dの背景
+const DARK_BACKGROUND = new THREE.Color(0x1b1f26);
 // リアルの空の地平線の色（遠くのかすみも同じ色）
 const REAL_HORIZON = 0xe2e9ee;
 
@@ -10680,7 +10822,7 @@ function applyThreeStyle(rebuild = true): void {
   }
   scene.environment = real ? realEnvironment : null;
   scene.environmentIntensity = 0.06;
-  scene.background = real ? realSkyTexture() : STANDARD_BACKGROUND;
+  scene.background = real ? realSkyTexture() : isDarkTheme() ? DARK_BACKGROUND : STANDARD_BACKGROUND;
   scene.fog = real ? new THREE.Fog(REAL_HORIZON, 30, 200) : null;
   const shadowSize = real ? 4096 : 2048;
   if (sunLight.shadow.mapSize.x !== shadowSize) {
@@ -11132,6 +11274,7 @@ function updatePropertiesPanel(): void {
         ${lockRow}
         <label>文字（改行もできます）<textarea id="textContentInput" rows="3" maxlength="${MAX_TEXT_LENGTH}" ${placementDisabled}>${escapeHtml(label.text)}</textarea></label>
         ${writingModeControl(label.writingMode, placementDisabled)}
+        <label class="check"><input id="textBoldInput" type="checkbox" ${label.bold ? "checked" : ""} ${placementDisabled} /> 太字</label>
         <div class="two-col">
           <label>大きさ cm<input id="textSizeInput" type="number" min="5" max="500" step="2" value="${label.size}" ${placementDisabled} /></label>
           <label>回転 °<input id="textRotationInput" type="number" step="5" value="${label.rotation}" ${placementDisabled} /></label>
@@ -11160,6 +11303,12 @@ function updatePropertiesPanel(): void {
     bindNumber("#textSizeInput", (value) => (label.size = clamp(Number.isFinite(value) ? value : DEFAULT_TEXT_SIZE, 5, 500)));
     bindNumber("#textRotationInput", (value) => (label.rotation = Number.isFinite(value) ? value % 360 : 0));
     bindColor("#textColorInput", (value) => (label.color = value));
+    propertiesPanel.querySelector<HTMLInputElement>("#textBoldInput")?.addEventListener("change", (event) => {
+      if ((event.target as HTMLInputElement).checked) label.bold = true;
+      else delete label.bold;
+      commitState();
+      redrawAll();
+    });
     return;
   }
 
@@ -11528,7 +11677,9 @@ function fitPlanToCanvas(): void {
 function deleteSelection(): void {
   const members = selectedEntities().filter((item) => !isLocked(item));
   if (!members.length) return;
-  members.forEach((item) => removeEntityById(item.id));
+  // 1つだけ消すとき、部屋なら中身も消すかを聞く
+  if (members.length === 1) removeWithContents(members[0]);
+  else members.forEach((item) => removeEntityById(item.id));
   selectOnly(null);
   commitState();
   redrawAll();
@@ -11627,6 +11778,40 @@ function setupChangelog(): void {
       <ul>${entry.items.map((item) => `<li>${escapeHtml(english ? item.en : item.ja)}</li>`).join("")}</ul>
     </section>`).join("");
   if (latest && CHANGELOG[0]) latest.textContent = `最新 ${formatDate(CHANGELOG[0].date, false)}`;
+}
+
+// ---- ナイトモード ----
+// 上のバーの月のボタンで、画面のまわりと3Dの背景を暗くする。選んだ明るさはブラウザに覚える（index.html の先頭で、描く前に付ける）
+const THEME_KEY = "madori-quick-3d-theme";
+
+function isDarkTheme(): boolean {
+  return document.documentElement.dataset.theme === "dark";
+}
+
+function setupThemeToggle(): void {
+  const button = document.querySelector<HTMLButtonElement>("#themeToggle");
+  if (!button) return;
+  const sync = () => {
+    const dark = isDarkTheme();
+    const label = dark ? "ライトモード（画面を明るくする）" : "ナイトモード（画面を暗くする）";
+    button.setAttribute("aria-pressed", String(dark));
+    button.title = label;
+    button.setAttribute("aria-label", label);
+  };
+  sync();
+  button.addEventListener("click", () => {
+    const dark = !isDarkTheme();
+    if (dark) document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    try {
+      localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    } catch {
+      // 覚えられなくても、いまの画面は変える
+    }
+    sync();
+    // 3Dの背景と方眼の色を変える
+    if (!PLAN_EDITION) applyThreeStyle();
+  });
 }
 
 // ---- 言語 ----
@@ -12017,12 +12202,12 @@ function exportPlanImages(): void {
   if (choice === "each") {
     // 階ごとの画像も、同じ範囲・同じ倍率にそろえる（重ねて見比べやすいように）
     floorIndexes.forEach((floorIndex, i) => {
-      window.setTimeout(() => downloadCanvas(renderPlanImage([floorIndex], bounds), `madori-${stamp}-${state.floors[floorIndex].name}.png`), i * 350);
+      window.setTimeout(() => downloadCanvas(renderPlanImage([floorIndex], bounds), `${fileBaseName()}-${stamp}-${state.floors[floorIndex].name}.png`), i * 350);
     });
     return;
   }
   const name = choice === "current" ? state.floors[state.activeFloor].name : "all";
-  downloadCanvas(renderPlanImage(floorIndexes, bounds), `madori-${stamp}-${name}.png`);
+  downloadCanvas(renderPlanImage(floorIndexes, bounds), `${fileBaseName()}-${stamp}-${name}.png`);
 }
 
 // いまの3Dの見え方を、画面の2倍の細かさで画像にする
@@ -12040,7 +12225,7 @@ function exportThreeImage(): void {
   renderer.setSize(size.x, size.y, false);
   renderThreeView();
   const stamp = localDateStamp();
-  downloadCanvas(renderer.domElement, `madori-${stamp}-3d.png`);
+  downloadCanvas(renderer.domElement, `${fileBaseName()}-${stamp}-3d.png`);
   renderer.setPixelRatio(pixelRatio);
   renderer.setSize(size.x, size.y, false);
   render3dOnce();
@@ -12058,8 +12243,14 @@ function downloadCanvas(canvas: HTMLCanvasElement, filename: string): void {
   }, "image/png");
 }
 
+// 書き出すファイルの名前の頭: 間取りの名前（ファイルの名前に使えない文字は除く）。なければ madori
+function fileBaseName(): string {
+  const name = (state.name ?? "").replace(/[\\/:*?"<>|]/g, "").replace(/[\u0000-\u001f]/g, "").trim();
+  return name || "madori";
+}
+
 function exportPlan(): void {
-  downloadJson(JSON.stringify(state, null, 2), `madori-${localDateStamp()}.json`);
+  downloadJson(JSON.stringify(state, null, 2), `${fileBaseName()}-${localDateStamp()}.json`);
 }
 
 // toISOString() はUTCのため、日本時間の0〜9時に前日の日付になる。利用者の現地日付を使う

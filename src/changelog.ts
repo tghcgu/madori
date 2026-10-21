@@ -10,6 +10,15 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
     items: [{
+      ja: "壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます",
+      en: "Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too",
+    }, {
+      ja: "「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）",
+      en: "Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types",
+    }, {
+      ja: "ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します",
+      en: "Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide",
+    }, {
       ja: "対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです",
       en: "Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are",
     }, {

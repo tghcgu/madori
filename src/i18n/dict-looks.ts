@@ -119,6 +119,7 @@ export const LOOKS: Record<string, Translations> = {
   "格子戸（玄関戸）": ["Lattice door (entrance)", "격자문 (현관문)", "格子門（玄關門）"],
   "板戸": ["Plank door", "판자문", "木板門"],
   "門扉（門戸）": ["Gate", "대문", "大門"],
+  "開口（壁の切れ目）": ["Opening (gap in the wall)", "개구부 (벽의 틈)", "開口（牆壁缺口）"],
   // 屋根
   "切妻": ["Gable", "맞배지붕", "人字形屋頂"],
   "寄棟": ["Hip", "모임지붕", "四坡屋頂"],

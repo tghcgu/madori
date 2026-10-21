@@ -2,7 +2,7 @@
 // 長さはすべて cm。位置は開口の中心から、開口の長さに対する割合（-0.5 が始点の側）。
 // テストが Node でそのまま読むので、three.js や DOM は使わない
 
-export type DoorStyle = "swing" | "double" | "sliding" | "shoji" | "fusuma" | "koshi" | "itado" | "gate";
+export type DoorStyle = "swing" | "double" | "sliding" | "shoji" | "fusuma" | "koshi" | "itado" | "gate" | "opening";
 
 export interface DoorStyleInfo {
   value: DoorStyle;
@@ -25,12 +25,14 @@ export const DOOR_STYLES: DoorStyleInfo[] = [
   { value: "koshi", label: "格子戸（玄関戸）", keywords: "こうしど 格子 こうし 玄関 げんかん 玄関戸 和風 引き戸", sliding: true, japanese: true },
   { value: "itado", label: "板戸", keywords: "いたど 木戸 きど 蔵 くら 納屋 和風 引き戸", sliding: true, japanese: true },
   { value: "gate", label: "門扉（門戸）", keywords: "もんぴ もんこ 門 もん 門戸 両開き 外構 庭 にわ 木戸", sliding: false, japanese: true },
+  // 戸のない開口: 壁を切るだけ（2Dは壁の切れ目、3Dは戸のない出入口）
+  { value: "opening", label: "開口（壁の切れ目）", keywords: "かいこう 開口 出入口 でいりぐち 入口 いりぐち 通路 つうろ 壁の穴 あな 切れ目 きれめ 戸なし", sliding: false, japanese: false },
 ];
 
 // 戸の板の色（色を決めていないとき）。2Dの選択中の欄の「色 3D」の初めの値にも使う
 export const DOOR_COLORS: Record<DoorStyle, string> = {
   swing: "#ac8664", double: "#ac8664", sliding: "#ac8664",
-  shoji: "#d8bd90", fusuma: "#e5d6b4", koshi: "#75502f", itado: "#8f6b47", gate: "#7c5a3a",
+  shoji: "#d8bd90", fusuma: "#e5d6b4", koshi: "#75502f", itado: "#8f6b47", gate: "#7c5a3a", opening: "#ac8664",
 };
 
 export function isDoorStyle(value: unknown): value is DoorStyle {

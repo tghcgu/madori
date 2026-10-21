@@ -15,6 +15,12 @@
   --coral: #d45d4c;
   --amber: #c68413;
   --shadow: 0 14px 36px rgba(35, 44, 64, 0.12);
+  /* ナイトモードで変える色（下の :root[data-theme="dark"]） */
+  --panel-soft: #f9fafc;
+  --accent-text: #145da8;
+  --accent-soft: #e8f1fb;
+  --topbar-bg: rgba(255, 255, 255, 0.92);
+  --glass: rgba(255, 255, 255, 0.86);
 }
 
 * {
@@ -64,7 +70,7 @@ select:focus-visible {
   gap: 16px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--topbar-bg);
   backdrop-filter: blur(12px);
 }
 
@@ -97,7 +103,7 @@ select:focus-visible {
   padding: 1px 7px;
   border-radius: 999px;
   background: rgba(39, 117, 209, 0.12);
-  color: #145da8;
+  color: var(--accent-text);
   font-size: 10px;
   font-weight: 700;
   vertical-align: 2px;
@@ -129,7 +135,7 @@ select:focus-visible {
 .template-list button {
   min-height: 36px;
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   transition:
     background 140ms ease,
@@ -145,7 +151,7 @@ select:focus-visible {
 .segmented button:hover,
 .template-list button:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .icon-button:active,
@@ -204,7 +210,7 @@ select:focus-visible {
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
-  background: #fff;
+  background: var(--panel);
 }
 
 .view-switch button {
@@ -225,7 +231,7 @@ select:focus-visible {
 
 .view-switch button.is-active {
   background: rgba(39, 117, 209, 0.1);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -280,7 +286,7 @@ select:focus-visible {
   padding: 1px 7px;
   border-radius: 999px;
   background: rgba(39, 117, 209, 0.12);
-  color: #145da8;
+  color: var(--accent-text);
   font-size: 10px;
   font-weight: 700;
   vertical-align: 2px;
@@ -313,7 +319,7 @@ select:focus-visible {
 
 .edition-note a {
   margin-left: 4px;
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -336,8 +342,8 @@ select:focus-visible {
 }
 
 /* 上のバーに文が2行で入りきらない幅では、文を出さない（ボタンを押しつぶさないように。.top-note の指定より後に置く）。
-   ボタンの幅は約730px、ロゴと名前は約260pxで、文には300pxほど要る */
-@media (max-width: 1339px) {
+   ボタンの幅は約850px（ナイトモードと言語の選択を含む）、ロゴと名前は約260pxで、文には300pxほど要る */
+@media (max-width: 1599px) {
   .brand .top-note {
     display: none;
   }
@@ -502,7 +508,7 @@ select:focus-visible {
 .segmented button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -520,7 +526,7 @@ select:focus-visible {
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   cursor: text;
 }
 
@@ -577,7 +583,7 @@ select:focus-visible {
   padding: 8px 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
 }
@@ -586,7 +592,7 @@ select:focus-visible {
 
 .roof-picker button:hover {
   border-color: var(--line-strong);
-  background: #f7f9fc;
+  background: var(--panel-soft);
 }
 
 .roof-list {
@@ -605,7 +611,7 @@ select:focus-visible {
   border: 1px solid var(--line);
   border-radius: 6px;
   overflow: hidden;
-  background: #fff;
+  background: var(--panel);
 }
 
 .roof-list-row.is-active {
@@ -649,7 +655,7 @@ select:focus-visible {
 .furniture-category {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcfe;
+  background: var(--panel-soft);
 }
 
 .furniture-category summary {
@@ -713,7 +719,7 @@ select:focus-visible {
   padding: 5px 6px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
   white-space: nowrap;
@@ -723,7 +729,7 @@ select:focus-visible {
 
 .furniture-items button:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 /* 家具の小さな絵（2Dの記号）を左に付けたボタン */
@@ -758,7 +764,7 @@ select:focus-visible {
   padding: 3px 6px 3px 3px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   font-size: 12px;
   text-align: left;
 }
@@ -843,7 +849,7 @@ select:focus-visible {
 .furniture-items button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -907,7 +913,7 @@ select:focus-visible {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
 }
 
@@ -935,7 +941,7 @@ select:focus-visible {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 13px;
 }
@@ -956,7 +962,7 @@ select:focus-visible {
 .image-export-menu .primary-export {
   border-color: rgba(39, 117, 209, 0.52);
   background: rgba(39, 117, 209, 0.1);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -981,7 +987,7 @@ select:focus-visible {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
 }
 
@@ -996,7 +1002,7 @@ select:focus-visible {
   gap: 4px;
   padding: 3px;
   border-radius: 8px;
-  background: #eef2f6;
+  background: var(--panel-strong);
 }
 
 .style-tabs button {
@@ -1012,7 +1018,7 @@ select:focus-visible {
 }
 
 .style-tabs button.is-active {
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   box-shadow: 0 1px 3px rgba(20, 30, 45, 0.14);
 }
@@ -1058,7 +1064,7 @@ select:focus-visible {
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   text-align: left;
   cursor: pointer;
@@ -1080,7 +1086,7 @@ select:focus-visible {
   margin-bottom: 2px;
   border: 1px solid var(--line);
   border-radius: 5px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .style-choice strong,
@@ -1114,7 +1120,7 @@ select:focus-visible {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 13px;
 }
@@ -1152,7 +1158,7 @@ select:focus-visible {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
 }
 
@@ -1199,7 +1205,7 @@ select:focus-visible {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 13px;
 }
@@ -1216,7 +1222,7 @@ select:focus-visible {
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: #fff;
+  background: var(--panel);
 }
 
 /* ペン: よく使う色・太さ・描き方 */
@@ -1304,7 +1310,7 @@ select:focus-visible {
 .draw-method button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -1451,7 +1457,7 @@ select:focus-visible {
 
 .color-code-row input.is-invalid {
   border-color: #d45d4c;
-  background: #fff6f4;
+  background: rgba(212, 93, 76, 0.12);
 }
 
 .floor-tab {
@@ -1460,7 +1466,7 @@ select:focus-visible {
   padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
   font-weight: 700;
@@ -1468,13 +1474,13 @@ select:focus-visible {
 
 .floor-tab:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .floor-tab.is-active {
   background: rgba(39, 117, 209, 0.12);
   border-color: rgba(39, 117, 209, 0.55);
-  color: #145da8;
+  color: var(--accent-text);
 }
 
 .floor-tab.floor-tab-ghost {
@@ -1516,7 +1522,7 @@ select:focus-visible {
 .template-details {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcfe;
+  background: var(--panel-soft);
 }
 
 .template-details summary {
@@ -1577,7 +1583,7 @@ select:focus-visible {
   padding: 4px 12px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
@@ -1628,7 +1634,7 @@ select:focus-visible {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .credit-text {
@@ -1670,12 +1676,12 @@ select:focus-visible {
 .feedback-link.feedback-primary {
   border-color: rgba(39, 117, 209, 0.52);
   background: rgba(39, 117, 209, 0.1);
-  color: #145da8;
+  color: var(--accent-text);
 }
 
 .feedback-link:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .shortcut-list {
@@ -1705,7 +1711,7 @@ select:focus-visible {
   border: 1px solid var(--line-strong);
   border-bottom-width: 2px;
   border-radius: 4px;
-  background: #fff;
+  background: var(--panel);
   font-family: inherit;
   font-size: 11px;
   text-align: center;
@@ -1721,7 +1727,7 @@ select:focus-visible {
 .properties-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fbfcfe;
+  background: var(--panel-soft);
   min-height: 104px;
   padding: 12px;
 }
@@ -1750,7 +1756,7 @@ select:focus-visible {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   min-height: 34px;
   padding: 7px 9px;
@@ -1759,7 +1765,7 @@ select:focus-visible {
 .property-grid input:disabled,
 .property-grid select:disabled,
 .property-grid .prop-button:disabled {
-  background: #eef1f4;
+  background: var(--panel-strong);
   color: #8a919b;
   cursor: not-allowed;
   opacity: 1;
@@ -1794,8 +1800,8 @@ select:focus-visible {
 
 .floor-draw-tool { width: 100%; min-height: 38px; margin-top: 8px; }
 .floor-shapes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-.floor-shapes button { height: 48px; padding: 4px; background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
-.floor-shapes button[aria-pressed="true"] { border-color: var(--accent); background: #e8f1fb; }
+.floor-shapes button { height: 48px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.floor-shapes button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .floor-shapes button:disabled { opacity: .45; cursor: not-allowed; }
 .floor-shapes canvas { display: block; width: 100%; height: 36px; object-fit: contain; }
 .vertex-heading { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
@@ -1804,11 +1810,11 @@ select:focus-visible {
 .diameter-control { display: grid; gap: 6px; }
 .diameter-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 6px; }
 .diameter-row input { text-align: center; font-variant-numeric: tabular-nums; }
-.diameter-row button, .floor-toolbar button { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: var(--ink); cursor: pointer; }
-.diameter-row button:hover, .floor-toolbar button:hover { background: #e8f1fb; border-color: var(--accent); }
+.diameter-row button, .floor-toolbar button { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.diameter-row button:hover, .floor-toolbar button:hover { background: var(--accent-soft); border-color: var(--accent); }
 .diameter-row svg, .floor-toolbar svg { width: 17px; height: 17px; }
 .property-grid .diameter-control input[type="range"] { min-height: 26px; margin: 0; padding: 0; border: 0; accent-color: var(--accent); }
-.floor-toolbar { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); z-index: 5; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; box-shadow: 0 2px 8px #17293b15; }
+.floor-toolbar { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); z-index: 5; padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); box-shadow: 0 2px 8px #17293b15; }
 .floor-toolbar[hidden] { display: none; }
 .floor-toolbar-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .floor-toolbar strong { font-size: 12px; padding: 0 4px; }
@@ -1831,7 +1837,7 @@ select:focus-visible {
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   cursor: pointer;
 }
 
@@ -1854,14 +1860,14 @@ select:focus-visible {
   min-height: 32px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
 }
 
 .property-grid .prop-button:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .property-grid .prop-button:has(svg) {
@@ -1900,7 +1906,7 @@ select:focus-visible {
   min-width: 0;
   min-height: 0;
   position: relative;
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .plan-pane {
@@ -1967,7 +1973,7 @@ select:focus-visible {
   gap: 12px;
   padding: 6px 10px 6px 14px;
   border-bottom: 1px solid var(--line);
-  background: #fff;
+  background: var(--panel);
 }
 
 .pane-actions {
@@ -1997,7 +2003,7 @@ select:focus-visible {
 .toggle-button.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -2022,7 +2028,8 @@ select:focus-visible {
 
 #planCanvas {
   cursor: crosshair;
-  background: #ffffff;
+  /* 2Dの間取りの紙は、ナイトモードでも白のまま（書き出す画像と同じ見え方） */
+  background: #fff;
   /* 長押しで選ぶとき、スマホで文字の選択や長押しのメニューが出ないように */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
@@ -2099,7 +2106,7 @@ select:focus-visible {
   padding: 5px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--glass);
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
@@ -2140,7 +2147,7 @@ select:focus-visible {
 
 .three-pane {
   overflow: hidden;
-  background: #e9edf3;
+  background: var(--panel-strong);
   container: three-pane / inline-size;
 }
 
@@ -2238,7 +2245,7 @@ body[data-resizing="down"] {
   padding: 9px 12px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.68);
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--glass);
   box-shadow: var(--shadow);
   backdrop-filter: blur(14px);
 }
@@ -2260,7 +2267,7 @@ body[data-resizing="down"] {
   padding: 3px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--muted);
   font-size: 12px;
 }
@@ -2273,13 +2280,13 @@ body[data-resizing="down"] {
 
 .mini-toggle:hover {
   border-color: var(--line-strong);
-  background: #f9fafc;
+  background: var(--panel-soft);
 }
 
 .mini-toggle.is-active {
   background: rgba(39, 117, 209, 0.1);
   border-color: rgba(39, 117, 209, 0.52);
-  color: #145da8;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -2325,7 +2332,7 @@ body[data-resizing="down"] {
   padding: 3px 6px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--panel);
   color: var(--ink);
   font-size: 12px;
 }
@@ -2439,7 +2446,7 @@ body[data-resizing="down"] {
   padding: 0 2px 0 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
   color: var(--muted);
   cursor: pointer;
 }
@@ -2484,4 +2491,52 @@ html[data-i18n-pending] body {
    間取り専用版へはテンプレートの欄の下から、注意書きは「このアプリについて」から読める） */
 :root:not(:lang(ja)) .brand .top-note {
   display: none;
+}
+
+/* ナイトモード（上のバーの月のボタン）。画面のまわりを暗くする。2Dの間取りの紙はそのまま（絵柄で変えられる） */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15181d;
+  --panel: #1e2229;
+  --panel-strong: #2a3039;
+  --panel-soft: #242931;
+  --ink: #e4e8ef;
+  --muted: #9aa3b2;
+  --line: #363d48;
+  --line-strong: #4c5563;
+  --accent: #4a90e2;
+  --accent-text: #8cb9f2;
+  --accent-soft: #1f3552;
+  --topbar-bg: rgba(30, 34, 41, 0.94);
+  --glass: rgba(30, 34, 41, 0.88);
+  --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+}
+
+/* 月と太陽の絵は、いまの明るさで出し分ける */
+.theme-toggle .theme-sun,
+:root[data-theme="dark"] .theme-toggle .theme-moon {
+  display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .theme-sun {
+  display: block;
+}
+
+/* ナイトモードで暗い背景に合う文字の色 */
+:root[data-theme="dark"] .text-button.danger {
+  color: #ef8f82;
+}
+
+:root[data-theme="dark"] .edition-note,
+:root[data-theme="dark"] .edition-note a {
+  color: var(--accent-text);
+}
+
+:root[data-theme="dark"] .property-grid label.placement-lock {
+  color: #e2b36c;
+}
+
+:root[data-theme="dark"] .property-grid .prop-button.danger-button,
+:root[data-theme="dark"] .floor-error {
+  color: #ef8f82;
 }

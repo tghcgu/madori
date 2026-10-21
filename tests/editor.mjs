@@ -24,6 +24,8 @@ import { verifyFreeShapes } from './free-shape-editor.mjs';
 import { verifyWallStyles } from './wall-styles-editor.mjs';
 import { verifyMapTools, verifyMoreFurniture } from './map-tools-editor.mjs';
 import { verifyLanguages } from './i18n-editor.mjs';
+import { verifyRoomTools } from './room-tools-editor.mjs';
+import { verifyPlanExtras } from './plan-extras-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -38,6 +40,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       variants: FURNITURE_VARIANTS,
       selection() { return selectedEntities().map(item => item.id); },
       openingNames(id) { ensureThreeScene(); return planGroup.children.filter(object => object.userData.entityId === id).map(object => object.name); },
+      meshCount(id) { ensureThreeScene(); let count = 0; planGroup.children.filter(object => object.userData.entityId === id).forEach(object => object.traverse(part => { if (part.isMesh) count += 1; })); return count; },
       snapshot() { return cloneState(state); },
       templateSnapshot(key) { return makeTemplate(key); },
       gridStep() { return gridStep(); },
@@ -237,6 +240,10 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyRoomTools({ open, plan });
+  if (!process.argv.includes('--room-tools-only')) {
+  await verifyPlanExtras({ open, plan });
+  if (!process.argv.includes('--extras-only')) {
   await verifyLanguages({ open, plan });
   if (!process.argv.includes('--languages-only')) {
   await verifyFreeShapes({ open, plan, output });
@@ -1328,18 +1335,19 @@ try {
     if (document.documentElement.scrollWidth > window.innerWidth + 1) problems.push(`page ${document.documentElement.scrollWidth} > ${window.innerWidth}`);
     return problems;
   });
-  for (const width of [1360, 1280, 1100, 1024, 900, 820, 390]) {
+  for (const width of [1680, 1360, 1280, 1100, 1024, 900, 820, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.waitForTimeout(150);
     assert.deepEqual(await squeezed(), [], `the top bar fits at ${width} px`);
-    assert.equal(await page.locator('#topNote').isVisible(), width >= 1340, `the notice shows only where it fits (${width} px)`);
+    assert.equal(await page.locator('#topNote').isVisible(), width >= 1600, `the notice shows only where it fits (${width} px)`);
   }
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  console.log('PASS: top bar: buttons never squeezed from 390 to 1360 px, the notice hides where it does not fit');
+  console.log('PASS: top bar: buttons never squeezed from 390 to 1680 px, the notice hides where it does not fit');
 
   // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
+  await page.setViewportSize({ width: 1680, height: 1000 });
   assert.equal(await page.locator('#editionNote').isVisible(), true, 'the full app announces the plan-only edition in the top bar');
   assert.equal(await page.locator('#alphaNote').isVisible(), false, 'in place of the alpha note');
+  await page.setViewportSize({ width: 1440, height: 1000 });
   assert.match(await page.locator('#editionNote a').getAttribute('href'), /\/plan\/$/);
   const fullModeBefore = await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode);
   const planBefore = await saved();
@@ -1389,6 +1397,8 @@ try {
   assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode), fullModeBefore, 'the plan-only edition keeps the view mode of the full app');
   // The notice does not take any height: the 2D pane starts right below the top bar.
   assert.ok(Math.abs((await page.locator('.workspace').boundingBox()).y - (await page.locator('.topbar').boundingBox()).height) < 2);
+  // 文は広い画面でだけ出る
+  await page.setViewportSize({ width: 1680, height: 1000 });
   await page.locator('#topNoteClose').click();
   assert.equal(await page.locator('#editionNote').isVisible(), false);
   assert.equal(await page.locator('#alphaNote').isVisible(), true, 'the alpha note comes back after the notice is closed');
@@ -1400,6 +1410,7 @@ try {
   await page.reload();
   await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal(await page.locator('#topNote').isVisible(), false, 'closed texts stay closed');
+  await page.setViewportSize({ width: 1440, height: 1000 });
   console.log('PASS: plan-only edition: no 3D pane or 3D settings, same plan both ways, keeps the full view mode, and the notice with its link');
 
   const surfaces = plan([{ ...room('grass', 0, 0, 600, 400, 'grass'), color: '#83ab57' }, { ...room('stone', 100, 100, 400, 200, 'stone'), color: '#aeb3b1' }]);
@@ -1692,6 +1703,8 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
+  }
   }
   }
   }

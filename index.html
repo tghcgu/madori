@@ -37,6 +37,12 @@
     <script>
       // 間取り専用版（/plan/）は、画面を描く前に3Dの欄や3Dだけのボタンを隠す
       if (/\/plan\/?(index\.html)?$/.test(location.pathname)) document.documentElement.dataset.edition = "plan";
+      // ナイトモードを選んでいたら、描く前に暗くする（src/main.ts の setupThemeToggle）
+      try {
+        if (localStorage.getItem("madori-quick-3d-theme") === "dark") document.documentElement.dataset.theme = "dark";
+      } catch (error) {
+        // 読めなければ明るいまま
+      }
       // 日本語以外の言語を選んでいるときは、訳し終えるまで画面を隠す（日本語が一瞬見えないように。src/i18n.ts が外す）
       try {
         var language = new URLSearchParams(location.search).get("lang") || localStorage.getItem("madori-quick-3d-language");
@@ -169,6 +175,10 @@
           <button class="text-button danger" id="resetButton" type="button" title="新しい間取りを始める（いまの間取りは確認してから消します）">
             <i data-lucide="rotate-ccw"></i>
             <span>新規</span>
+          </button>
+          <button class="icon-button theme-toggle" id="themeToggle" type="button" title="ナイトモード（画面を暗くする）" aria-label="ナイトモード（画面を暗くする）" aria-pressed="false">
+            <i data-lucide="moon" class="theme-moon"></i>
+            <i data-lucide="sun" class="theme-sun"></i>
           </button>
           <label class="language-select" title="言語 / Language" data-i18n-skip>
             <i data-lucide="languages"></i>
@@ -425,6 +435,9 @@
                   <span>表示</span>
                 </button>
                 <div class="ghost-menu view-menu" id="viewMenu" hidden>
+                  <label>間取りの名前（書き出すファイルの名前になります）
+                    <input id="planNameInput" type="text" maxlength="60" placeholder="例: 古い洋館" autocomplete="off" spellcheck="false" />
+                  </label>
                   <label class="check"><input id="roomNamesInput" type="checkbox" checked /> 部屋名を表示</label>
                   <label>部屋の広さ
                     <select id="roomAreaSelect">

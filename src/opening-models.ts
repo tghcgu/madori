@@ -20,7 +20,7 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
   if (!Number.isFinite(item.length) || item.length <= 0) throw new Error("Invalid opening length");
   const group = new THREE.Group();
   const style: DoorStyle = isDoorStyle(item.doorStyle) ? item.doorStyle : "swing";
-  group.name = item.type === "window" ? "window" : style === "sliding" ? "sliding-door" : style === "swing" ? "closed-door" : `${style}-door`;
+  group.name = item.type === "window" ? "window" : style === "sliding" ? "sliding-door" : style === "swing" ? "closed-door" : style === "opening" ? "opening" : `${style}-door`;
   const w = item.length;
   // カラーコードの末尾に透明度があれば、ドア・窓をまるごと半透明にする
   const parsed = parseColorCode(item.color3d ?? item.color);
@@ -67,6 +67,8 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
       part("handle-base", Math.min(w * 0.03, 0.018), 0.1, 0.014, handleX, y - 0.12, z + 0.038, metal);
       part("handle", Math.min(w * 0.025, 0.015), 0.075, 0.014, handleX, y - 0.1, z + 0.052, metal);
     }
+  } else if (style === "opening") {
+    // 戸のない開口: 何も置かない（壁はドアと同じ高さまで切ってある）
   } else if (style !== "swing" && style !== "sliding") {
     buildStyledDoor(style);
   } else {

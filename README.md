@@ -86,19 +86,21 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です。厚みは、選んだ壁の欄の「厚み」で変えられます（フェンス・竹垣を除く。厚くした壁も角がすき間なくつながります）
-- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます
+- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です
 - 円、円弧、多角形を壁として3D化
-- 家具・設備を配置し、移動、サイズ変更、回転、左右反転
+- 家具・設備を配置し、移動、サイズ変更、回転、左右反転。壁の近くに置くと、背を壁に向けて壁に付きます（`Alt`を押しながら置くと付けません。人・小物・床に描く物などは付けません）
+- 部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。`Alt`を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます（「キャンセル」で部屋だけ）
+- 「削除」ツールは、クリックした物を消すほか、ドラッグすると通った所の家具・文字・ドア・窓を続けて消せます（部屋・壁は消しません。「元に戻す」1回で全部戻ります）
 - 家具のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・洗濯機・トイレ・植物・ラグ・岩・外灯・花壇・フェンス・スツール・番号の印・足跡・倒れた人・血など43種類。観葉植物の「らせんの葉」は、ひとつ前の標準の3Dの形を残したもの）。2Dの記号と3Dの形が同じデザインに変わります（例: 丸い座面の椅子は3Dでも丸い座面と曲げ木の背もたれ、布団を折り返したベッドは3Dでも掛け布団の角が折れ、ガラス天板のテーブルは3Dでもガラス越しに下の棚が見える）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。「2Dの記号のみ」と書かれたデザイン（クローゼットの斜線など）は、3Dは標準の形のままです
 - 3Dを真上から見た形は、2Dの記号と同じになるように作っています。岩の輪郭と稜線、池の輪郭と石の位置、飛び石・花壇の花の並び、木目、ラグの柄、植物の葉の向きなどは、2Dと3Dが同じデータから作られます（冷蔵庫の雪の結晶や靴箱の靴のように、見分けるための図柄は2Dだけに描きます）
 - 部屋名を本文とは別にドラッグして自由配置
 - 部屋名の「文字サイズ cm」を変更できます（空欄で自動）。部屋名と自由テキストは「横書き」「縦書き」を切り替えられ、縦書きの改行は右から左へ列を増やします。保存・Undo/Redo・PNGにも反映されます
 - 「ペン」ツールで、好きな色で床に描けます（血だまりや汚れ、印などに）。2Dの上をドラッグすると線、クリックで点、「囲んで塗る」にすると囲んだ所を塗りつぶします。よく使う色（血の色・赤・黒・白など）から選ぶか、カラーコード（透明度も可）で決め、太さは1〜300cm。描いた線は3Dでも床に同じ形で描かれ、選ぶと色・太さ・描き方をあとから変えられます（線の上をクリックすると選べます）。描く前から、マウスの所にペン先の大きさの丸が出るので、太さが分かります（太さを変えている間は、2Dの真ん中に同じ丸が出ます）。ペンの欄の「描く物」で、川・小道・生け垣・石垣・フェンス・竹垣・線路・飛び石・池・花壇・芝生・ラグも選べます。川・小道などの線の形はなぞった道すじで描け（川・小道・生け垣・石垣は幅も決められます）、池・花壇・芝生・ラグは、はじめから「ペンで塗る」で、塗った所がその形になります（下の「自由な形」）。「描き方」で「直線で描く」「曲線で描く」にすると、なぞる代わりにクリックで点を打って描けます（直線は点と点をまっすぐ、曲線は点を通るなめらかな線でつなぎます。閉じる形は最初の点を押すと、線は Enter かダブルクリックで描き終えます。直線は、点を打つ前にドラッグすると1本の直線になります）。ペンの色や太さ、描く物、描き方はブラウザに記憶されます
-- 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
+- 「テキスト」ツールで間取りの好きな場所に文字を配置。内容（改行可）・大きさ・回転・色・太字を編集でき、ドラッグ移動・固定・Undo / Redo・保存に対応。空にすると削除。2Dだけに表示され、3Dには出ません
 - 幅・奥行・長さ・角度・座標を数値で編集
 - 2D色と3D色を個別指定。見本から選ぶほか、カラーコード（`#RRGGBB`）を直接入力できます。末尾に2桁足した`#RRGGBBAA`では透明度も決められ（`00`で透明〜`ff`で不透明。例: `#2775d180`で半分透ける）、2Dでは同じ色の要素をまとめて1回で透かすので重なった所や壁の角も同じ濃さ、3Dでは床・壁・建具・家具がまるごと透けます（透けている物は影を落としません）。見本では透明度が市松模様で分かり、見本で色を選び直しても透明度はそのまま。カラーコードを空にすると標準の色に戻ります
 - 寸法ラベル（部屋・屋根の幅×奥行）の表示・非表示。初期状態は非表示
-- 2Dの上の「表示」で、部屋名の表示・部屋の広さ（帖・㎡。1帖は1.62㎡、階段の穴は引きます）・方眼の表示と大きさ（おまかせ・25cm・50cm・91cm（半間）・1m・1.5m・182cm（1間）・2m・3m）を切り替え。方眼の大きさを決めると、部屋の上にも方眼をはっきり重ねます。`G`キーで方眼の表示を切り替えられます
+- 2Dの上の「表示」で、間取りの名前（書き出すファイルの名前になります）・部屋名の表示・部屋の広さ（帖・㎡。1帖は1.62㎡、階段の穴は引きます）・方眼の表示と大きさ（おまかせ・25cm・50cm・91cm（半間）・1m・1.5m・182cm（1間）・2m・3m）を切り替え。方眼の大きさを決めると、部屋の上にも方眼をはっきり重ねます。`G`キーで方眼の表示を切り替えられます
 - 好きな画像（PNG・JPEG・WebP・GIF）を取り込めます。「画像を取り込む」を押すか、2Dに画像のファイルをドラッグすると、長い辺3mで置きます。2Dに描き、3Dでは床に貼ります（2Dと同じ向き・大きさ）。大きさ（縦横の比を保てる）・回転・反転・濃さを変えられ、濃さを下げて「配置を固定」すれば下絵にもできます。画像は長い辺1600pxまでに縮めて、間取りのデータ（自動保存・書き出しのファイル）に入ります
 - 家具・画像を「最前面へ」「最背面へ」動かして、重なりの順を変えられます
 - ほかの階を半透明で重ねる「透過」表示。横の▼から、透かす階（すぐ下・すぐ上・ほかの階すべて・階を名前で指定）、透かす色（カラーコード。空欄なら元の色）、濃さを選べます。透かした階は一度ふつうに描いてから1回だけ半透明で重ねるので、壁の角や重なった所も同じ濃さです
@@ -146,6 +148,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 3Dでは階ごとに表示・非表示を切り替え
 - 階高、床スラブ、最上階の壁上端を考慮して積層。地下の階は地面より下に積み、1Fの床が地下の天井をふさぎます
 
+### ナイトモード
+
+上のバーの月のボタンで、画面のまわり（ボタン・欄・メニュー）と3Dの背景を暗くできます。もう一度押すと元に戻り、選んだ明るさはブラウザが覚えます。2Dの間取りの紙は白のままです（書き出す画像と同じ見え方。暗い紙にしたいときは2Dの「絵柄」の背景で選べます）。
+
 ### 言語（日本語・英語・韓国語・繁体字中国語）
 
 上のバーの「言語」（JP・EN・KR・繁中）で、画面の言語を切り替えられます。
@@ -164,7 +170,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 2Dの画面だけで、3Dの欄・表示の切り替え・3Dの色・高さ・屋根・3Dの画像の書き出しは出しません
 - 間取りのデータは本体と共通です。間取り専用版で描いた間取りを、上部の「3Dでも見る」から本体で開いて3Dで確かめられます（同じブラウザのとき）
 - 本体の表示の切り替えや3Dで見ていた向きは、間取り専用版を開いても変わりません
-- 本体の上のバーの文字の所に、間取り専用版のお知らせを出しています。×で消せて、消すと開発中の注意書きに戻ります（注意書きも×で消せます。消した文は次からも出ません）。画面の高さは使いません
+- 本体の上のバーの文字の所に、間取り専用版のお知らせを出しています（横幅1600px以上の画面のとき）。×で消せて、消すと開発中の注意書きに戻ります（注意書きも×で消せます。消した文は次からも出ません）。画面の高さは使いません
 
 ### 2Dの絵柄
 
@@ -509,7 +515,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | `F` | 家具の左右反転、ドアの開き・引き戸の重なりを反転 |
 | `V` / `Shift + V` | 家具のデザイン（2Dの記号と3Dの形）を切り替え（逆順） |
 | `L` | 選択中の要素を固定・固定解除 |
-| `Delete` / `Backspace` | 選択中の要素を削除 |
+| `Delete` / `Backspace` | 選択中の要素を削除（中に物がある部屋は、一緒に消すかを聞きます） |
+| `Alt`（家具を置く・部屋を動かすとき） | 家具を壁に付けない・部屋だけを動かす |
 | `Ctrl + Z` / `Cmd + Z` | 元に戻す |
 | `Ctrl + クリック` / `Cmd + クリック` | 複数選択に追加・選択から解除 |
 | `Ctrl + ドラッグ` / `Cmd + ドラッグ` | 四角で囲んだ物を選択に追加 |
@@ -835,6 +842,9 @@ npm.cmd run dev
 
 ### 2026年10月21日
 
+- 壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます
+- 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）
+- ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
 - 対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです
 - 壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります
 - 2Dの上に「表示」を追加。部屋名の表示・部屋の広さ（帖・㎡）・方眼の表示と大きさ（25cm・50cm・半間・1m・1.5m・1間・2m・3m）を切り替えられます。方眼の大きさを決めると部屋の上にも方眼が重なり、画像の書き出しでは画像の左上からその大きさの方眼が並び、1マスの大きさ（px）も選べます（ココフォリアなどのマップのマス目に合わせられます）
@@ -1165,14 +1175,16 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls. Choose a wall type: plain, concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence or fence (pick one in the Walls group and drag on the 2D plan, or change a selected wall's type from pictures in the selection panel). Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above; stone walls, hedges, bamboo fences and fences look the same as the free shapes
-- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, windows, and divided windows. The door type can be changed later under Selection
+- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D
 - Turn circles, arcs, and polygons into wall geometry
-- Place, move, resize, rotate, and flip furniture
+- Place, move, resize, rotate, and flip furniture. Furniture placed near a wall turns its back to the wall and touches it (hold `Alt` to skip; people, small items and floor marks never snap)
+- Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it as well (walls shared with the next room stay; hold `Alt` to move only the room). Deleting a room with things inside asks whether to delete them too (Cancel deletes only the room)
+- The Delete tool removes what you click, and dragging it removes every piece of furniture, text, door or window it crosses (rooms and walls stay; one Undo brings them all back)
 - Drag room labels independently from room geometry
 - Choose a different design for furniture from the thumbnails under Selection (43 types, including chairs, sofas, beds, tables, fridges, washers, toilets, plants, rugs, rocks, garden lights, flower beds, fences, stools, numbered markers, footprints, the fallen person, and blood; the plant's "spiral leaves" design keeps the previous standard 3D shape). The 2D symbol and the 3D model change together (for example, the round-seat chair also has a round seat and a bentwood back in 3D, the bed with a folded-back duvet shows the folded corner in 3D, and the glass-top table shows its lower shelf through the glass). Press `V` to cycle through them. New items of the same type use the last design you picked. Designs marked "2D symbol only" (such as the hatched closet) keep the standard 3D model
 - Seen from directly above, each 3D model matches its 2D symbol. Rock outlines and ridges, pond outlines and rim stones, stepping stone and flower layouts, wood grain, rug patterns, and plant leaf directions are generated from the same data for 2D and 3D (identifying marks such as the fridge snowflake or the shoes on the shoe cabinet appear only in 2D)
 - Draw on the floor in any color with the Pen tool (for blood, stains or marks): drag for a line, click for a dot, or choose "囲んで塗る" to fill the area drawn around. Pick a common color (blood red, red, black, white, ...) or a color code (with transparency), and a width from 1 to 300 cm. Strokes appear with the same shape on the 3D floor; select one by clicking on its line to change its color, width or fill later. A circle the size of the pen tip follows the mouse before you draw, so you can see the width (while you change the width, the same circle appears in the middle of the plan). Under 描く物 (what to draw) in the pen settings you can also choose a river, path, hedge, stone wall, fence, bamboo fence, railway, stepping stones, pond, flower bed, lawn or rug. Line shapes such as rivers and paths follow the traced path (rivers, paths, hedges and stone walls have a width setting), while ponds, flower beds, lawns and rugs start with ペンで塗る (paint): the painted area takes that shape (see Free shapes below). Choose 直線で描く (straight lines) or 曲線で描く (curves) under 描き方 (drawing method) to click points instead of tracing: straight lines join the points directly, curves pass smoothly through them, closed shapes finish when you click the first point, and lines finish with Enter or a double-click. With straight lines, a drag before placing any point draws one straight line. The pen color, width, what it draws and the drawing method are remembered in the browser.
-- Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, and color; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
+- Place free text anywhere on the plan with the Text tool. Edit content (multi-line), size, rotation, color, and bold; move, lock, undo/redo, and save it like other items. Clearing the text deletes it. Text appears only in 2D, not in 3D
 - Room labels also have a font size field (blank restores automatic sizing). Both room labels and free text support horizontal and vertical writing, with new vertical columns flowing right to left. Selection bounds, dragging, undo, saved files and PNG use the same layout
 - Choose "線で囲んで床を作成" to draw a floor by clicking or tapping successive corners. Close it by clicking the first point, pressing Enter or the check button. Shift constrains the next segment horizontally/vertically; Backspace or the undo button removes the last draft point, redo restores it, and Escape or the cancel button discards the draft. Crossed outlines are rejected with feedback. This creates a floor, not walls
 - Existing floors have rectangle, circle, ellipse, regular polygon and L-shaped previews. Normal selection resizes the whole floor; "なぞり直す" (retrace) lets you trace around an area in 2D for a new shape (or drag diagonally for a rectangle), keeping its material, name and colors; "輪郭を編集" enables direct vertex editing. Click or drag an edge midpoint to insert a point, adjust the selected point through coordinates or arrow keys (1 cm, or 20 cm with Shift), and press Delete to remove it. The active point stays highlighted across edits. Finish or press Escape to return to normal selection. Changes that would invalidate stairwell holes are blocked without deleting the holes
@@ -1182,7 +1194,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Edit dimensions, line length, angle, coordinates, and colors numerically
 - Set separate 2D and 3D colors. Pick a swatch or type a color code (`#RRGGBB`); two more digits (`#RRGGBBAA`) set transparency (`00` clear to `ff` solid, e.g. `#2775d180` is half see-through). In 2D, items of the same color are made see-through together so overlaps and wall corners stay even; in 3D, floors, walls, openings and furniture become see-through as a whole (and cast no shadows). Clearing the code goes back to the default color
 - Toggle dimension labels for rooms and roofs (off by default)
-- The 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖, 1.62 m² each, stairwell holes excluded) or square meters, and turns the grid on or off with a size of auto, 25 cm, 50 cm, 91 cm (half a ken), 1 m, 1.5 m, 182 cm (one ken), 2 m or 3 m. A chosen size is drawn clearly over rooms too; `G` toggles the grid
+- The 表示 (view) menu above the 2D plan names the plan (the name is used for exported files), toggles room names, shows room areas in tatami mats (帖, 1.62 m² each, stairwell holes excluded) or square meters, and turns the grid on or off with a size of auto, 25 cm, 50 cm, 91 cm (half a ken), 1 m, 1.5 m, 182 cm (one ken), 2 m or 3 m. A chosen size is drawn clearly over rooms too; `G` toggles the grid
 - Import any image (PNG, JPEG, WebP or GIF) with 画像を取り込む or by dragging the file onto the 2D plan; it is placed 3 m on its longer side, drawn in 2D and laid on the floor in 3D at the same size and angle. Size (optionally keeping the aspect ratio), rotation, flip and opacity can be changed; a faint, locked image works as a tracing underlay. Images are scaled to at most 1600 px and stored in the plan (autosave and exported files)
 - Bring furniture and images to the front or send them to the back
 - Show other floors as a translucent guide ("透過"). The ▼ next to it picks which floors (the one below, the one above, all others, or one by name), a tint color (a color code, or blank for the original colors) and the strength. Ghost floors are drawn normally first and made see-through once, so wall corners and overlaps stay even
@@ -1224,6 +1236,10 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Per-floor visibility in 3D
 - Stacked floor heights, slabs, and top-floor wall caps
 
+### Night mode
+
+The moon button in the top bar darkens the frame of the screen (buttons, panels and menus) and the 3D background. Press it again to go back; the browser remembers the choice. The 2D paper stays white, the same as exported images (choose a dark paper under the 2D style's background if you like).
+
 ### Languages (Japanese, English, Korean, Traditional Chinese)
 
 The language menu in the top bar (JP / EN / KR / 繁中) switches the language of the screen.
@@ -1242,7 +1258,7 @@ For editing just the 2D floor plan, open the plan-only edition at https://madori
 - It shows only the 2D editor: no 3D pane, view switch, 3D colors, heights, roofs, or 3D image export.
 - It shares the saved plan with the full app, so "3Dでも見る" opens the same plan in 3D (in the same browser).
 - It leaves the full app's view mode and 3D camera untouched.
-- The full app shows a notice about the plan-only edition in the text area of the top bar, where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
+- The full app shows a notice about the plan-only edition in the text area of the top bar (on screens at least 1600 px wide), where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
 
 ### 2D styles
 
@@ -1576,7 +1592,8 @@ The left editor panel can be collapsed. Split, 2D-only, and 3D-only modes let yo
 | `F` | Flip furniture or reverse a door/sliding-door side |
 | `V` / `Shift + V` | Cycle the design (2D symbol and 3D model) of the selected furniture (forward / backward) |
 | `L` | Lock or unlock the selected item |
-| `Delete` / `Backspace` | Delete the selected item |
+| `Delete` / `Backspace` | Delete the selected item (a room with things inside asks whether to delete them too) |
+| `Alt` (while placing furniture or moving a room) | Do not snap to a wall / move only the room |
 | `Ctrl + Z` / `Cmd + Z` | Undo |
 | `Ctrl + click` / `Cmd + click` | Add to or remove from a multi-selection |
 | `Ctrl + drag` / `Cmd + drag` | Add items fully inside a selection rectangle |
@@ -1890,6 +1907,9 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-21
 
+- Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too
+- Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types
+- Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide
 - Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are
 - Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners
 - A new 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖) or square meters, and turns the grid on or off with a size of 25 cm, 50 cm, half a ken, 1 m, 1.5 m, one ken, 2 m or 3 m. A chosen grid size is drawn over rooms too, and image export starts the grid at the top-left corner with a selectable cell size in pixels, ready for online tabletop maps

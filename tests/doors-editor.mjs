@@ -9,7 +9,7 @@ export async function verifyDoors({ page, importPlan, choose, planPoint, move, s
   await page.locator('button[data-view-mode="split"]').click();
   const group = label => page.locator('.palette-group').filter({ has: page.locator('summary', { hasText: label }) });
   const styles = locator => locator.locator('[data-door-style]').evaluateAll(buttons => buttons.map(button => button.dataset.doorStyle));
-  assert.deepEqual(await styles(group(/^建具/)), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate'], 'every door style is in the fittings group');
+  assert.deepEqual(await styles(group(/^建具/)), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening'], 'every door style is in the fittings group');
   assert.deepEqual(await styles(group(/^和風/)), ['shoji', 'fusuma', 'koshi', 'itado', 'gate'], 'Japanese doors are also in the Japanese group');
   assert.equal(await group(/^和風/).locator('[data-furniture="zaisu"]').count(), 1, 'the Japanese group also shows the floor chair from the chairs group');
   assert.equal(await group(/^椅子/).locator('[data-furniture="zaisu"]').count(), 1);
@@ -33,6 +33,12 @@ export async function verifyDoors({ page, importPlan, choose, planPoint, move, s
   placed = await doors();
   assert.equal(placed[0].doorStyle, 'fusuma');
   assert.deepEqual(await names(placed[0].id), ['fusuma-door'], '3D follows the new style');
+  // 戸のない開口: 3Dに戸を置かない
+  await page.locator('#doorStyleInput').selectOption('opening');
+  placed = await doors();
+  assert.equal(placed[0].doorStyle, 'opening');
+  assert.deepEqual(await names(placed[0].id), ['opening']);
+  assert.equal(await page.evaluate(id => window.__editorTest.meshCount(id), placed[0].id), 0, 'an opening has no door in 3D');
   await page.locator('#doorStyleInput').selectOption('swing');
   placed = await doors();
   assert.equal(placed[0].doorStyle, undefined, 'a plain door keeps no style');

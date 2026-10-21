@@ -148,7 +148,7 @@ test('sliding panels cover the whole opening and overlap a little; bars stay ins
 });
 
 test('door style names: every style has a label and keywords, and unknown styles are plain doors', () => {
-  assert.deepEqual(DOOR_STYLES.map(style => style.value), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate']);
+  assert.deepEqual(DOOR_STYLES.map(style => style.value), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening']);
   for (const style of DOOR_STYLES) assert.ok(style.label && style.keywords, style.value);
   assert.equal(isDoorStyle('shoji'), true);
   assert.equal(isDoorStyle('hidden'), false);
