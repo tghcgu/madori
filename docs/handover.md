@@ -27,7 +27,7 @@
 
 1. **入れる物**
    - Git
-   - Node.js 22 以上（手元では 24 を使っていた。GitHub Actions は 22）
+   - Node.js 22 以上（手元では 24 を使っていた）。公開のビルド（Cloudflare Pages・GitHub Actions）は `.node-version` の版（2026-10-22 に、10月21日の Node.js の脆弱性の修正版 22.23.4 にした。Cloudflare Pages のいつもの版 22.16.0 は古い）
    - VS Code と Claude Code（いままでと同じ進め方をするなら）
 2. **取ってくる**
    ```
