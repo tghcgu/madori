@@ -9,6 +9,8 @@ export interface WallOpening {
   from: number;
   to: number;
   kind: "door" | "window";
+  // 切り抜く高さ（m）。ないときはドア・窓のいつもの高さ（壊れた壁は、穴の高さを決めて切る）
+  range?: [number, number];
 }
 
 export interface Rectangle {
@@ -18,7 +20,7 @@ export interface Rectangle {
   h: number;
 }
 
-export function openingIntervals(wall: Segment, openings: (Segment & { type: "door" | "window" })[], thickness: number): WallOpening[] {
+export function openingIntervals(wall: Segment, openings: (Segment & { type: "door" | "window"; range?: [number, number] })[], thickness: number): WallOpening[] {
   const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
   if (length < 0.001) return [];
   const ux = (wall.x2 - wall.x1) / length;
@@ -35,7 +37,7 @@ export function openingIntervals(wall: Segment, openings: (Segment & { type: "do
     const end = project(opening.x2, opening.y2);
     const from = Math.max(0, Math.min(start, end) - thickness / 2);
     const to = Math.min(length, Math.max(start, end) + thickness / 2);
-    return to > from ? [{ from, to, kind: opening.type }] : [];
+    return to > from ? [{ from, to, kind: opening.type, ...(opening.range ? { range: opening.range } : {}) }] : [];
   });
 }
 
@@ -56,7 +58,7 @@ export function solidWallSections(length: number, openings: WallOpening[], heigh
     if (to - from < 0.001) continue;
     const middle = (from + to) / 2;
     const holes = openings.filter((opening) => opening.from < middle && opening.to > middle)
-      .map((opening) => opening.kind === "door" ? [0, doorHead] : [windowSill, windowHead])
+      .map((opening) => opening.range ?? (opening.kind === "door" ? [0, doorHead] : [windowSill, windowHead]))
       .sort((a, b) => a[0] - b[0]);
     let bottom = 0;
     for (const [low, high] of [...holes, [height, height]]) {

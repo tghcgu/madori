@@ -162,6 +162,18 @@ test('custom colors preserve glass, clock faces, metal, leaves and screen materi
   }
 });
 
+test('every piece of furniture takes a custom color somewhere', () => {
+  for (const kind of Object.keys(FURNITURE_DEFS)) {
+    // 画像は色を持たない。川は水の色に混ぜる
+    if (kind === 'image' || kind === 'river') continue;
+    const group = buildFurnitureModel({ kind, ...FURNITURE_DEFS[kind], color3d: '#cc4455' }, false);
+    let tinted = false;
+    group.traverse(object => { if (object.material?.color?.getHexString() === 'cc4455') tinted = true; });
+    assert.ok(tinted, `${kind} shows the chosen color`);
+    dispose(group);
+  }
+});
+
 test('TV screens keep a 16:9 ratio as width changes', () => {
   for (const w of [40, 120, 300, 500]) {
     const group = buildFurnitureModel({ kind: 'tv', w, h: 40 });

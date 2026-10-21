@@ -596,4 +596,15 @@ export const UI: Record<string, Translations> = {
   "書斎": ["Study", "서재", "書房"],
   "ホール": ["Hall", "홀", "大廳"],
   "収納": ["Storage", "수납", "收納"],
+  // 2026-10-21: 3Dのダブルクリックの案内、ドア・窓を置く幅、2Dの上に出す「選択中」の欄
+  "ダブルクリックで選択": ["Double-click to select", "더블클릭으로 선택", "雙擊即可選取"],
+  "{0}: 2Dの壁をクリックすると、この幅で置きます。壁に沿ってドラッグすると、好きな幅で置けます。": ["{0}: click a wall on the 2D plan to place it at this width, or drag along a wall to choose any width.", "{0}: 2D의 벽을 클릭하면 이 폭으로 놓습니다. 벽을 따라 드래그하면 원하는 폭으로 놓을 수 있습니다.", "{0}：點選 2D 的牆壁即以此寬度放置；沿著牆壁拖曳可放置任意寬度。"],
+  "置く幅 cm": ["Width to place cm", "놓을 폭 cm", "放置寬度 cm"],
+  "長さ": ["Length", "길이", "長度"],
+  "ドラッグで動かせます": ["Drag to move", "드래그하여 이동할 수 있습니다", "可拖曳移動"],
+  "たたむ・ひらく": ["Collapse / expand", "접기·펼치기", "收合・展開"],
+  "左の欄に戻す": ["Back to the left panel", "왼쪽 패널로 되돌리기", "放回左側欄位"],
+  "選んだ物の欄は、2Dの上に出ています。": ["The selected item's settings are shown over the 2D plan.", "선택한 항목의 설정은 2D 위에 표시되어 있습니다.", "所選物件的欄位顯示在 2D 上方。"],
+  "ここに戻す": ["Show here", "여기로 되돌리기", "放回這裡"],
+  "選択中の欄を2Dの上にも出す": ["Also show the selection panel over the 2D plan", "선택 패널을 2D 위에도 표시", "也在 2D 上方顯示選取欄位"],
 };

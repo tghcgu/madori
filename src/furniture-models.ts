@@ -12,7 +12,7 @@ import {
   SPIRAL_POT_SCALE, spiralLeaves,
   CHALK_WIDTH, bloodShape, evidenceMarkerShape, footprintPieces, markerTextureSpan, personDesign, personLayout, personOutline, shardPieces,
   type PersonPart, type PersonPose, type StoneSlab,
-  PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise,
+  PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise, tintedPartMaterials,
 } from "./furniture-shapes.ts";
 import {
   RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeHoleOutlines, freeHolePoints, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
@@ -67,13 +67,15 @@ class Model {
       material = new THREE.MeshStandardMaterial({ color: tintable && this.tint ? this.tint : color, roughness, metalness });
       material.name = name;
       material.userData.tintable = tintable;
+      // 利用者の色を付けた材質（リアルでは、金属でも塗った物として色を見せる）
+      material.userData.tinted = tintable && Boolean(this.tint);
       this.materials.set(name, material);
     }
     return material;
   }
 
-  glass(name: string, color = 0xc0dde4, opacity = 0.2): Material {
-    const material = this.material(name, color, 0.12, 0.05);
+  glass(name: string, color = 0xc0dde4, opacity = 0.2, tintable = false): Material {
+    const material = this.material(name, color, 0.12, 0.05, tintable);
     material.transparent = true;
     material.opacity = opacity;
     material.depthWrite = false;
@@ -129,13 +131,14 @@ class Model {
 
   // 形の外側に余白があっても、上から見た大きさを設置範囲（w×d）ちょうどに保つための見えない板。
   // これがないと、余白のぶん形が引き伸ばされ、2Dの記号と大きさがずれる
-  reserveFootprint(w: number, d: number): void {
+  // y は板を置く高さ（壁や天井に付く物は、物の下の端）
+  reserveFootprint(w: number, d: number, y = 0): void {
     const material = this.material("footprint", 0xffffff);
     material.transparent = true;
     material.opacity = 0;
     material.visible = false;
     material.depthWrite = false;
-    const mesh = this.mesh(new THREE.BoxGeometry(w, 0.001, d), [0, 0.0005, 0], material);
+    const mesh = this.mesh(new THREE.BoxGeometry(w, 0.001, d), [0, y + 0.0005, 0], material);
     mesh.castShadow = false;
     mesh.receiveShadow = false;
   }
@@ -484,7 +487,8 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
     case "railway": {
       // 砂利の道床、枕木、2本のレール（1067mm）
       strokeSolid(m, line, 300, 0, RAILWAY.ballastHeight / 100, m.material("ballast-stone", 0x8e8a84, 1));
-      const sleeper = m.material("sleeper-wood", 0x6e5641, 0.9);
+      // 色を決めたら枕木の色にする（2Dの枕木と同じ）
+      const sleeper = m.material("sleeper-wood", 0x6e5641, 0.9, 0, true);
       const bottom = RAILWAY.ballastHeight / 100, top = bottom + RAILWAY.sleeperHeight / 100;
       for (const sample of freePosts(line, RAILWAY.sleeperSpacing)) {
         const mesh = m.box(RAILWAY.sleeperWidth / 100, RAILWAY.sleeperHeight / 100, RAILWAY.sleeperLength / 100, sample.x / 100, (bottom + top) / 2, sample.y / 100, sleeper, 0);
@@ -600,10 +604,14 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
   // 部品で組む家具（和風の家具・鳥居・遊具など）。2Dの記号と同じ部品の並びから作る
   if (isPartKind(item.kind)) {
     const height = clamp(item.height ?? FURNITURE_DEFS[item.kind].height!, 1, 3000);
-    for (const part of furnitureParts(item.kind, item.w, item.h, height)) {
+    const parts = furnitureParts(item.kind, item.w, item.h, height);
+    const tinted = tintedPartMaterials(parts);
+    for (const part of parts) {
       const spec = PART_MATERIALS[part.material];
       const name = `part-${part.material}`, color = Number.parseInt(spec.color.slice(1), 16);
-      const material = spec.opacity !== undefined ? m.glass(name, color, spec.opacity) : m.material(name, color, spec.roughness ?? 0.72, spec.metalness ?? 0, spec.tintable);
+      const material = spec.opacity !== undefined
+        ? m.glass(name, color, spec.opacity, tinted.has(part.material))
+        : m.material(name, color, spec.roughness ?? 0.72, spec.metalness ?? 0, tinted.has(part.material));
       // 炎や明かりは、自分の色で光らせる（色を変えたら、その色で光る）
       if (spec.glow) { material.emissive.copy(material.color); material.emissiveIntensity = 0.8; }
       const x = part.x / 100, z = part.y / 100, y = (part.bottom + partRise(part) / 2) / 100;
@@ -631,9 +639,11 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       mesh.rotation.x = part.tilt ?? 0;
       mesh.rotation.y = -(part.angle ?? 0);
     }
-    m.reserveFootprint(w, d);
+    // 壁や天井に付く物は、見えない板も物の下の端に置く（床に置くと、3Dで真下の床を押したときにこの物が選ばれる）
+    const mounted = isMountedPartKind(item.kind);
+    m.reserveFootprint(w, d, mounted ? Math.min(...parts.map((part) => part.bottom)) / 100 : 0);
     m.group.name = item.kind;
-    return m.finish(w, d, isMountedPartKind(item.kind), optimize);
+    return m.finish(w, d, mounted, optimize);
   }
   // 別デザインの番号。0は標準。範囲外の番号は標準として作る
   const variantCount = FURNITURE_VARIANTS[item.kind]?.length ?? 0;

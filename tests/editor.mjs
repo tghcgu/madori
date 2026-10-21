@@ -26,6 +26,7 @@ import { verifyMapTools, verifyMoreFurniture } from './map-tools-editor.mjs';
 import { verifyLanguages } from './i18n-editor.mjs';
 import { verifyRoomTools } from './room-tools-editor.mjs';
 import { verifyPlanExtras } from './plan-extras-editor.mjs';
+import { verifyUiExtras } from './ui-extras-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -58,6 +59,7 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
       },
       textBounds(id) { return measureTextLabel(findEntity(id)); },
       hit(x, y) { return hitTest({ x, y }).entity?.id ?? null; },
+      pick3d(x, y) { ensureThreeScene(); return pickThreeEntity({ clientX: x, clientY: y }); },
       floorAt(id, x, y) {
         ensureThreeScene();
         const ray = new THREE.Raycaster(new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D, 100, (y-threeSceneCenter.y)*SCALE_3D), new THREE.Vector3(0,-1,0));
@@ -202,6 +204,8 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
   await target.addInitScript(({ key, raw }) => {
     if (sessionStorage.getItem('seeded')) return;
     localStorage.setItem(key, raw);
+    // 「選択中」の欄を2Dの上に出さずに始める（地図の上の欄が、2Dをクリックするテストの邪魔をしないように。出すのは ui-extras で確かめる）
+    localStorage.setItem('madori-quick-3d-selection-on-plan', 'off');
     sessionStorage.setItem('seeded', 'yes');
   }, { key, raw });
   // 再読み込みは、画面のコードが動き出したら（DOMContentLoaded）進む。まれに読み込みが終わらないまま止まる
@@ -240,6 +244,8 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyUiExtras({ open, plan, output });
+  if (!process.argv.includes('--ui-extras-only')) {
   await verifyRoomTools({ open, plan });
   if (!process.argv.includes('--room-tools-only')) {
   await verifyPlanExtras({ open, plan });
@@ -1703,6 +1709,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

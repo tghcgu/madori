@@ -295,7 +295,13 @@ const REAL_MATERIAL_RULES: [RealMaterialKind, RegExp][] = [
   ["plastic", /plastic|bin|marker|gasket|status|vent|led|screen|keyboard|monitor|tire|rubber|mannequin|toy/],
 ];
 
-export function realMaterialKind(name: string, color: number, roughness: number, metalness: number, transparent: boolean): RealMaterialKind {
+// painted: 利用者が色を決めた材質。金属なら塗った金属（つやのある塗装）にする。金属の映り込みだけだと、選んだ色がほとんど見えない
+export function realMaterialKind(name: string, color: number, roughness: number, metalness: number, transparent: boolean, painted = false): RealMaterialKind {
+  const kind = materialKindByName(name, color, roughness, metalness, transparent);
+  return painted && kind === "metal" ? "lacquer" : kind;
+}
+
+function materialKindByName(name: string, color: number, roughness: number, metalness: number, transparent: boolean): RealMaterialKind {
   const key = name.toLowerCase();
   if (transparent && /glass|window|water|surface/.test(key)) return /water|surface/.test(key) ? "water" : "glass";
   for (const [kind, pattern] of REAL_MATERIAL_RULES) if (pattern.test(key)) return kind;

@@ -205,6 +205,24 @@ export function furniturePartTop(part: FurniturePart): number {
   return part.bottom + partRise(part);
 }
 
+// 利用者の色（色 2D・色 3D）を付ける材質。色を付けられる材質がない家具は、いちばん大きく見える材質に付ける
+// （ガラス・光る物・画面は除く）。2Dと3Dの両方がここで決めるので、同じ部品に色が付く
+export function tintedPartMaterials(parts: readonly FurniturePart[]): Set<PartMaterialName> {
+  const tintable = new Set(parts.filter((part) => PART_MATERIALS[part.material].tintable).map((part) => part.material));
+  if (tintable.size) return tintable;
+  const sizes = new Map<PartMaterialName, number>();
+  for (const part of parts) {
+    const spec = PART_MATERIALS[part.material];
+    if (spec.glow || spec.opacity !== undefined || part.material === "screen") continue;
+    // 上の面と横の面のおおよその広さ
+    const span = partSpan(part), rise = partRise(part);
+    sizes.set(part.material, (sizes.get(part.material) ?? 0) + part.w * span + (part.w + span) * rise);
+  }
+  let largest: PartMaterialName | undefined;
+  for (const [material, size] of sizes) if (!largest || size > sizes.get(largest)!) largest = material;
+  return new Set(largest ? [largest] : []);
+}
+
 // 部品を並べる道具。割合（幅・奥行・高さに対する）で書く at・box・ellipse など、cm で書く cm・tilted・slab
 export function createPartBuilder(w: number, d: number, height: number) {
   const parts: FurniturePart[] = [];

@@ -771,8 +771,7 @@ select:focus-visible {
 
 .wall-style-picker img {
   width: 44px;
-  height: 18px;
-  object-fit: cover;
+  height: 20px;
   border-radius: 3px;
 }
 
@@ -2124,9 +2123,131 @@ select:focus-visible {
   left: 12px;
 }
 
+/* 3Dで家具・ドア・窓にマウスを乗せたときの、マウスのそばの案内（ダブルクリックで選べる） */
+.three-hover-tip {
+  position: absolute;
+  z-index: 6;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(23, 32, 45, 0.86);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(14px, 18px);
+}
+
+.three-hover-tip.is-left {
+  transform: translate(calc(-100% - 10px), 18px);
+}
+
+.three-hover-tip.is-up {
+  transform: translate(14px, calc(-100% - 10px));
+}
+
+.three-hover-tip.is-left.is-up {
+  transform: translate(calc(-100% - 10px), calc(-100% - 10px));
+}
+
+/* 1回だけクリックしたときは、青く目立たせる */
+.three-hover-tip.is-nudge {
+  background: #2775d1;
+  animation: tip-nudge 0.4s ease-out;
+}
+
+@keyframes tip-nudge {
+  0% { scale: 1.25; }
+  100% { scale: 1; }
+}
+
+.three-hover-tip[hidden] {
+  display: none;
+}
+
 .tool-hint strong {
   color: var(--ink);
   font-weight: 700;
+}
+
+/* 2Dの上に浮かべた「選択中」の欄（右上。つまみをドラッグで動かせる） */
+.plan-selection {
+  position: absolute;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  width: min(270px, calc(100% - 16px));
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.plan-selection[hidden] {
+  display: none;
+}
+
+.plan-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-soft);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.plan-selection-bar:active {
+  cursor: grabbing;
+}
+
+.plan-selection-bar > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+.plan-selection-bar strong {
+  flex: 1;
+  font-size: 13px;
+}
+
+.plan-selection-bar .icon-button {
+  width: 28px;
+  height: 28px;
+}
+
+.plan-selection-bar .icon-button svg {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.15s;
+}
+
+.plan-selection.is-collapsed #planSelectionCollapse svg {
+  transform: rotate(180deg);
+}
+
+.plan-selection-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.plan-selection.is-collapsed .plan-selection-body {
+  display: none;
+}
+
+.plan-selection .properties-panel {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.properties-away .text-button {
+  margin-left: 4px;
 }
 
 /* まとめて選んでいるときの数 */
@@ -2530,6 +2651,14 @@ html[data-i18n-pending] body {
 :root[data-theme="dark"] .edition-note,
 :root[data-theme="dark"] .edition-note a {
   color: var(--accent-text);
+}
+
+/* ナイトモードでも、一覧の小さな絵は2Dの紙と同じ白地に描く（黒い線が見えるように） */
+:root[data-theme="dark"] .furniture-thumb,
+:root[data-theme="dark"] .wall-style-picker img,
+:root[data-theme="dark"] .symbol-option canvas {
+  border-radius: 4px;
+  background: #ffffff;
 }
 
 :root[data-theme="dark"] .property-grid label.placement-lock {

@@ -10,6 +10,18 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
     items: [{
+      ja: "3Dで家具・ドア・窓にマウスを乗せると、薄い枠と「ダブルクリックで選択」の案内が出るように（1回だけクリックしたときは、案内を青く目立たせます）。物を選んでいる間は「選択中」の欄を2Dの上にも出します（選んだ物と反対の側に出し、つまみのドラッグで動かす・たたむ・左の欄に戻すができます。「表示」で切り替え）",
+      en: "In 3D, hovering over furniture, a door or a window shows a light outline and a “Double-click to select” tip next to the pointer (a single click makes the tip stand out in blue). While something is selected, the selection panel also floats over the 2D plan on the side away from the selection: drag its handle to move it, collapse it, or send it back to the left panel (toggle in the 表示 (view) menu)",
+    }, {
+      ja: "天井に付ける物を13種類追加（シャンデリア・ペンダントライト・シーリングライト・シーリングファン・ダウンライト・スポットライト・裸電球・ミラーボール・吊り鉢・プロジェクター・天井埋め込みエアコン・火災報知器・スプリンクラー）。一覧の「天井（照明など）」にあり、3Dでは天井の高さに付きます。扉の種類に「壁の大穴」と「崩れ落ちた壁」を追加（壁をぎざぎざに切り抜き、足もとにかけらが散らばります。向こうが見え、大穴は通り抜けられます。一覧の「建物の部分・工事」にもあります）",
+      en: "Added 13 ceiling fixtures (chandelier, pendant light, ceiling light, ceiling fan, downlight, track spotlights, bare bulb, mirror ball, hanging plant, projector, ceiling cassette air conditioner, smoke detector and sprinkler) in the new “Ceiling (lights, etc.)” group; in 3D they hang from the ceiling. Two new door types break walls open: a large hole you can walk through and a collapsed wall, both cut with jagged edges and with rubble scattered on the floor (also listed under building parts)",
+    }, {
+      ja: "家具の幅・奥行を1cm単位で決められるように（20cm刻みに丸めず、小物も小さいままにできます。角のハンドルでも、小さな家具は細かく変わります）。選んだドア・窓の欄は「長さ」を「幅」と表示し、ドア・窓のツールでは置く幅を決められます（選んだドア・窓の幅を変えると、次からその幅で置きます）。一覧の壁・ドア・窓のボタンに2Dの記号の絵を付け、壁の見本を大きくしました",
+      en: "Furniture width and depth can be set to the centimeter (no more rounding to 20 cm, so small items keep their size, and corner handles resize small pieces in finer steps). Selected doors and windows show a Width field, and the door and window tools let you choose the width to place (changing a selected door or window also sets the width for the next ones). Wall, door and window buttons in the palette now show their 2D symbols, with larger wall samples",
+    }, {
+      ja: "どの家具・設備も「色 3D」で色を変えられるように（色を変えられる部品がなかった物は、いちばん大きい部品の色が変わります）。「リアル」の絵柄で、色を変えた金属の部品が暗く沈んで色が分からなかったのを直しました（塗った金属として、選んだ色で見せます）",
+      en: "Every piece of furniture and equipment now takes the 3D color (items without a colorable part change their largest part), and in the realistic look, recolored metal parts no longer sink into dark reflections: they show the chosen color as painted metal",
+    }, {
       ja: "壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます",
       en: "Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too",
     }, {

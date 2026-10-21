@@ -244,9 +244,10 @@
           </section>
 
           <section class="tool-section">
-            <details class="template-details" open>
+            <details class="template-details" id="propertiesHome" open>
               <summary>選択中</summary>
               <div id="propertiesPanel" class="properties-panel"></div>
+              <p class="empty-state properties-away" id="propertiesAway" hidden>選んだ物の欄は、2Dの上に出ています。<button type="button" class="text-button" id="propertiesBackButton">ここに戻す</button></p>
             </details>
           </section>
 
@@ -439,6 +440,7 @@
                   <label>間取りの名前（書き出すファイルの名前になります）
                     <input id="planNameInput" type="text" maxlength="60" placeholder="例: 古い洋館" autocomplete="off" spellcheck="false" />
                   </label>
+                  <label class="check"><input id="selectionOnPlanInput" type="checkbox" checked /> 選択中の欄を2Dの上にも出す</label>
                   <label class="check"><input id="roomNamesInput" type="checkbox" checked /> 部屋名を表示</label>
                   <label>部屋の広さ
                     <select id="roomAreaSelect">
@@ -478,6 +480,15 @@
             </div>
           </div>
           <canvas id="planCanvas" aria-label="2D間取り編集キャンバス"></canvas>
+          <div class="plan-selection" id="planSelection" hidden>
+            <div class="plan-selection-bar" id="planSelectionBar" title="ドラッグで動かせます">
+              <i data-lucide="grip-horizontal"></i>
+              <strong>選択中</strong>
+              <button type="button" class="icon-button" id="planSelectionCollapse" title="たたむ・ひらく" aria-label="たたむ・ひらく" aria-expanded="true"><i data-lucide="chevron-up"></i></button>
+              <button type="button" class="icon-button" id="planSelectionDock" title="左の欄に戻す" aria-label="左の欄に戻す"><i data-lucide="panel-left"></i></button>
+            </div>
+            <div class="plan-selection-body" id="planSelectionBody"></div>
+          </div>
         </section>
 
         <section class="three-pane">

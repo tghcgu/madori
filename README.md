@@ -86,9 +86,10 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 部屋をドラッグして作成。作った部屋・床には最初は名前を付けず、2Dに文字を出しません（必要なときだけ「選択中」で名前を付けられます）
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です。厚みは、選んだ壁の欄の「厚み」で変えられます（フェンス・竹垣を除く。厚くした壁も角がすき間なくつながります）
-- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です。壁をクリックするだけでも、いつもの幅（ドア80cm・両開き160cm・窓120cmなど）で壁の上に置けます（開き戸は押した側に開きます。ドア・窓の上を押すと、そのドア・窓を選びます）。開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
+- ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です。壁をクリックするだけでも、いつもの幅（ドア80cm・両開き160cm・窓120cmなど）で壁の上に置けます（開き戸は押した側に開きます。ドア・窓の上を押すと、そのドア・窓を選びます）。開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます。ドア・窓のツールでは、選択中の欄で置く幅を決められます（選んだドア・窓の「幅」を変えると、次からその幅で置きます）
+- 扉の種類の「壁の大穴」（床から通り抜けられる穴）と「崩れ落ちた壁」（上が崩れて低くなった壁）は、壁をぎざぎざに切り抜き、足もとにかけらを散らします。3Dでは向こうが見え、2Dでは残った壁・崩れたふちと、3Dと同じ所のかけらを描きます（一覧の「建物の部分・工事」にもあります）
 - 円、円弧、多角形を壁として3D化
-- 家具・設備を配置し、移動、サイズ変更、回転、左右反転。壁の近くに置くと、背を壁に向けて壁に付きます（`Alt`を押しながら置くと付けません。人・小物・床に描く物などは付けません）
+- 家具・設備を配置し、移動、サイズ変更、回転、左右反転。幅・奥行は1cm単位で決められます（小物も小さいまま。角のハンドルでも、小さな家具は細かく変わります）。壁の近くに置くと、背を壁に向けて壁に付きます（`Alt`を押しながら置くと付けません。人・小物・床に描く物などは付けません）
 - 部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。`Alt`を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます（「キャンセル」で部屋だけ）
 - 「削除」ツールは、クリックした物を消すほか、ドラッグすると通った所の家具・文字・ドア・窓を続けて消せます（部屋・壁は消しません。「元に戻す」1回で全部戻ります）
 - 家具のデザインを「選択中」の見本から選択（椅子・ソファ・ベッド・テーブル・冷蔵庫・洗濯機・トイレ・植物・ラグ・岩・外灯・花壇・フェンス・スツール・番号の印・足跡・倒れた人・血など43種類。観葉植物の「らせんの葉」は、ひとつ前の標準の3Dの形を残したもの）。2Dの記号と3Dの形が同じデザインに変わります（例: 丸い座面の椅子は3Dでも丸い座面と曲げ木の背もたれ、布団を折り返したベッドは3Dでも掛け布団の角が折れ、ガラス天板のテーブルは3Dでもガラス越しに下の棚が見える）。`V`キーで順に切り替え、同じ種類を続けて置くと最後に選んだデザインを使います。「2Dの記号のみ」と書かれたデザイン（クローゼットの斜線など）は、3Dは標準の形のままです
@@ -134,7 +135,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 8方位と真上から選べる光の向き
 - 階ごとの表示・非表示
 - 屋根全体の一時表示・非表示（屋根ごとに色も変えられ、透かせば中が見えます）
-- 3D上の家具・ドア・窓はダブルクリックで選択（スマホ・タブレットは長押し）。1回クリックでは選択を変えず、選び方を案内します。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。床・壁・屋根などは1回クリックで選択します
+- 3D上の家具・ドア・窓はダブルクリックで選択（スマホ・タブレットは長押し）。マウスを乗せると薄い枠と「ダブルクリックで選択」の案内が出ます。1回クリックでは選択を変えず、選び方を案内します。固定した家具も選択でき、Ctrl／Cmd＋クリックでの複数選択はそのまま使えます。床・壁・屋根などは1回クリックで選択します
 - 家具を選んで3D画面をクリックすると、編集中の階へ連続配置
 - 「選択」ツールで家具をダブルクリックすると、その家具や複数選択した家具をドラッグで移動できます。3D欄の移動ボタン（十字の矢印）を押すと移動モードになり、何も選んでいなくても、押した物（床・壁・ドア・窓・屋根・家具など）をそのままドラッグで動かせます。移動モードは、もう一度押すか Esc で終わります。移動中のEscは元の位置に戻します。通常の左ドラッグは家具の上でも視点回転です
 - 右ドラッグ／Shift＋左ドラッグは、画面に沿った上下左右の平行移動です。上下ドラッグで高さも変わり、2階・3階の室内まで視点を持ち上げられます
@@ -242,7 +243,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 
 | 分類 | 収録要素 |
 | --- | --- |
-| 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、窓、中央区切り付き窓 |
+| 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、開口（壁の切れ目）、壁の大穴、崩れ落ちた壁、窓、中央区切り付き窓 |
 | 壁 | 壁、コンクリート、レンガ、ブロック塀、板塀、土塀、ガラス、石垣、生け垣、竹垣、フェンス |
 | 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、カウンターチェア、ベンチ（座布団、縁台、玉座、車椅子） |
 | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク、机と椅子、丸いダイニング（4人）（ちゃぶ台、カウンター、学校の机と椅子、教卓） |
@@ -252,6 +253,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 浴室・トイレ・洗面 | 浴槽、ユニットバス、シャワー、トイレ、洗面台（洗濯機、檜風呂、和式トイレ） |
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン、室外機、扇風機、ストーブ（複合機、自動販売機） |
 | 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン、グランドピアノ、蓄音機（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
+| 天井（照明など） | シャンデリア、ペンダントライト、シーリングライト、シーリングファン、ダウンライト、スポットライト（レール）、裸電球、ミラーボール、吊り鉢（ハンギングプラント）、プロジェクター（天井）、天井埋め込みエアコン、火災報知器（煙感知器）、スプリンクラー（3Dでは天井の高さに付きます） |
 | 階段 | 直階段、折り返し階段、らせん階段 |
 | なぞって形を決める | ペン、池、花壇、芝生、ラグ、川、小道、生け垣、石垣、フェンス、竹垣、線路、飛び石、足跡、破片（床・地面の素材と部屋も、ぐるっとなぞるとその形） |
 | 床・地面 | 標準、フローリング、ヘリンボーン、ウッドデッキ・板張り、畳、カーペット、タイル、モザイクタイル、市松・チェッカー、大理石、石の床、石畳、レンガ、コンクリート、アスファルト、鉄板（縞鋼板）、草地・芝生、土・土間、砂・砂浜、砂利、雪、水面 |
@@ -266,7 +268,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 駅・線路 | ポイント（分岐器）、車止め（線路の終端）、ホームの端（点字ブロック）、改札、券売機、駅名標、駅の売店 |
 | 病院・介護 | 病院のベッド、点滴スタンド、車椅子、診察台、手術台、薬品棚、遺体安置庫、実験台、培養槽、サーバーラック、ドラフトチャンバー、顕微鏡、超低温フリーザー、除染シャワー（カーテン、パーティション、洗面台） |
 | 街・道路 | カラーコーン、電柱、バス停、電話ボックス、マンホール、ドラム缶、線路、道路（2車線）、横断歩道、駐車区画、路面の矢印、道路標識、信号機、車止め（ポール）、水たまり、崖、土砂、工事柵（仮囲い）（小道、川、車、バス、自転車、自動販売機、室外機、郵便ポスト、外灯、フェンス、ベンチ、木、ゴミ箱、立て看板、消火器） |
-| 建物の部分・工事 | 柱、はしご、エレベーター、床の扉（地下・床下へ）、下り階段（地下へ）、瓦礫、壁のヒビ、崩れた壁、壁の穴、非常階段（屋外の鉄骨）、外階段、仮設階段、手すり、ガードレール、足場、工事用バリケード、換気口、ダクト（天井）、排水溝、グレーチング、土嚢 |
+| 建物の部分・工事 | 柱、はしご、エレベーター、床の扉（地下・床下へ）、下り階段（地下へ）、瓦礫、壁のヒビ、崩れた壁、壁の穴、非常階段（屋外の鉄骨）、外階段、仮設階段、手すり、ガードレール、足場、工事用バリケード、換気口、ダクト（天井）、排水溝、グレーチング、土嚢（壁の大穴、崩れ落ちた壁） |
 | 設備・インフラ | ブレーカー、配電盤、制御盤、電気の引込み口、ケーブルラック（天井）、パイプ、太い工業用パイプ、水道管、バルブ、ポンプ、ボイラー、大型タンク、非常用発電機、給水塔（高架水槽）、換気設備、アンテナ、消火栓、防犯カメラ、カードリーダー、警報装置、水門 |
 | 物流・工場・倉庫 | パレット、パレット積み、貨物コンテナ、台車、工具棚、工作機械、発電機（持ち運び）、工業用タンク、ベルトコンベア、作業台、資材の山、建築資材（鉄骨・木材）、大型ラック |
 | 博物館・教会・図書館 | 講義室の机（固定席）、両面書架、額縁の絵、展示台・彫刻、ロープパーティション、恐竜の骨格標本、パイプオルガン、洗礼盤、告解室 |
@@ -484,7 +486,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | エリア | 役割 |
 | --- | --- |
 | 上部バー | 表示切替、Undo / Redo、JSON書き出し・読み込み、画像の書き出し（間取り・3D）、新規作成 |
-| 左パネル | 作図ツール、選択中のプロパティ、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、テンプレート |
+| 左パネル | 作図ツール、選択中のプロパティ（物を選んでいる間は2Dの上にも出します。つまみのドラッグで動かす・たたむ・左に戻すができ、「表示」で切り替え）、パーツ検索、家具・設備（建具・家具・床材・階段・図形の壁・屋根）、テンプレート |
 | 2Dペイン | 間取りの作成、選択、移動、リサイズ、絵柄（標準・モノクロ・ドット・筆と和風など18種類）、透過・寸法・屋根の表示切替 |
 | 3Dペイン | 自動生成モデルの確認、視点操作、光・影・階表示の調整 |
 
@@ -844,6 +846,10 @@ npm.cmd run dev
 
 ### 2026年10月21日
 
+- 3Dで家具・ドア・窓にマウスを乗せると、薄い枠と「ダブルクリックで選択」の案内が出るように（1回だけクリックしたときは、案内を青く目立たせます）。物を選んでいる間は「選択中」の欄を2Dの上にも出します（選んだ物と反対の側に出し、つまみのドラッグで動かす・たたむ・左の欄に戻すができます。「表示」で切り替え）
+- 天井に付ける物を13種類追加（シャンデリア・ペンダントライト・シーリングライト・シーリングファン・ダウンライト・スポットライト・裸電球・ミラーボール・吊り鉢・プロジェクター・天井埋め込みエアコン・火災報知器・スプリンクラー）。一覧の「天井（照明など）」にあり、3Dでは天井の高さに付きます。扉の種類に「壁の大穴」と「崩れ落ちた壁」を追加（壁をぎざぎざに切り抜き、足もとにかけらが散らばります。向こうが見え、大穴は通り抜けられます。一覧の「建物の部分・工事」にもあります）
+- 家具の幅・奥行を1cm単位で決められるように（20cm刻みに丸めず、小物も小さいままにできます。角のハンドルでも、小さな家具は細かく変わります）。選んだドア・窓の欄は「長さ」を「幅」と表示し、ドア・窓のツールでは置く幅を決められます（選んだドア・窓の幅を変えると、次からその幅で置きます）。一覧の壁・ドア・窓のボタンに2Dの記号の絵を付け、壁の見本を大きくしました
+- どの家具・設備も「色 3D」で色を変えられるように（色を変えられる部品がなかった物は、いちばん大きい部品の色が変わります）。「リアル」の絵柄で、色を変えた金属の部品が暗く沈んで色が分からなかったのを直しました（塗った金属として、選んだ色で見せます）
 - 壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます
 - 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）。ドア・窓は、壁をクリックするだけで、いつもの幅で壁の上に置けます（開き戸は押した側に開きます）。選んだ開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
 - ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。階のタブをダブルクリックすると、階に名前を付けられます（空にすると 1F・B1F などに戻ります）。Space を押しながらのドラッグと、中ボタンのドラッグでも2Dの画面を動かせます。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
@@ -1177,9 +1183,10 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls. Choose a wall type: plain, concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence or fence (pick one in the Walls group and drag on the 2D plan, or change a selected wall's type from pictures in the selection panel). Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above; stone walls, hedges, bamboo fences and fences look the same as the free shapes
-- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D. A click on a wall also places one with the usual width (80 cm for a door, 160 cm for a double door, 120 cm for a window and so on); a swing door opens toward the side you clicked, and clicking an existing door or window selects it. A swing door's hinge can be moved to the other end under Selection
+- Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D. A click on a wall also places one with the usual width (80 cm for a door, 160 cm for a double door, 120 cm for a window and so on); a swing door opens toward the side you clicked, and clicking an existing door or window selects it. A swing door's hinge can be moved to the other end under Selection. With a door or window tool active, the Selection panel sets the width to place (changing the width of a selected door or window also sets it for the next ones)
+- The door types "large hole in the wall" (a hole you can walk through) and "collapsed wall" (a wall whose top has fallen in) cut the wall with jagged edges and scatter rubble on the floor. 3D shows the view through the gap; 2D draws what is left of the wall, the broken edge and the rubble in the same places as in 3D (also listed under building parts)
 - Turn circles, arcs, and polygons into wall geometry
-- Place, move, resize, rotate, and flip furniture. Furniture placed near a wall turns its back to the wall and touches it (hold `Alt` to skip; people, small items and floor marks never snap)
+- Place, move, resize, rotate, and flip furniture. Width and depth can be set to the centimeter (small items keep their size, and corner handles resize small pieces in finer steps). Furniture placed near a wall turns its back to the wall and touches it (hold `Alt` to skip; people, small items and floor marks never snap)
 - Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it as well (walls shared with the next room stay; hold `Alt` to move only the room). Deleting a room with things inside asks whether to delete them too (Cancel deletes only the room)
 - The Delete tool removes what you click, and dragging it removes every piece of furniture, text, door or window it crosses (rooms and walls stay; one Undo brings them all back)
 - Drag room labels independently from room geometry
@@ -1227,7 +1234,7 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Eight compass directions plus overhead lighting
 - Per-floor visibility controls
 - Temporary roof visibility toggle
-- Double-click furniture, doors and windows in 3D to select and edit them (long press on phones and tablets); a single click does not change the selection and explains how to select instead. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Floors, walls, roofs and other objects use a single click
+- Double-click furniture, doors and windows in 3D to select and edit them (long press on phones and tablets); hovering shows a light outline and a "Double-click to select" tip, and a single click does not change the selection and explains how to select instead. Locked furniture can still be selected, and Ctrl/Cmd-click still adds or removes items from a group. Floors, walls, roofs and other objects use a single click
 - In Select mode, double-click furniture, then drag it (or its selected group). The move button (cross arrows) in the 3D bar turns on the move mode: even with nothing selected, drag whatever you press, including floors, walls, doors, windows, roofs and furniture. Press it again or Escape to finish; Escape during a drag restores the starting position. Normal left-drag rotates the view, including over furniture. Right-drag or Shift-left-drag moves in the screen plane, including up/down elevation for exploring upper floors
 
 ### Multiple floors
@@ -1331,7 +1338,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 
 | Category | Objects |
 | --- | --- |
-| Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, window, divided window |
+| Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, plain opening, large hole in the wall, collapsed wall, window, divided window |
 | Walls | Plain wall, concrete, brick, block wall, board fence, earthen wall, glass, stone wall, hedge, bamboo fence, fence |
 | Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bar stool, bench (zabuton, veranda bench, throne, wheelchair) |
 | Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk, desk and chair set, round dining set (4 seats) (chabudai, counter, school desk and chair, lectern) |
@@ -1341,6 +1348,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Bath, toilet and washroom | Bathtub, unit bath, shower, toilet, washbasin (washing machine, hinoki bathtub, squat toilet) |
 | Appliances | Refrigerator, washing machine, TV stand, air conditioner, outdoor AC unit, fan, heater (copier, vending machine) |
 | Lighting and decor | Plant, large plant, rug, floor lamp, fireplace, wall clock, grandfather clock, aquarium, upright piano, trash can, cat tower, curtain, grand piano, gramophone (andon lantern, folding screen, shoji partition, irori hearth, hibachi, paper lantern, partition) |
+| Ceiling (lights, etc.) | Chandelier, pendant light, ceiling light, ceiling fan, downlight, track spotlights, bare bulb, mirror ball, hanging plant, ceiling projector, ceiling cassette air conditioner, smoke detector, sprinkler (they hang from the ceiling in 3D) |
 | Stairs | Straight stairs, U-shaped stairs, spiral stairs |
 | Trace a shape | Pen, pond, flower bed, lawn, rug, river, path, hedge, stone wall, fence, bamboo fence, railway, stepping stones, footprints, shards (floor and ground materials and rooms also take the shape you trace) |
 | Floors and ground | Plain, wood planks, herringbone, wooden deck, tatami, carpet, tile, mosaic tiles, checkerboard, marble, stone paving, cobblestones, brick, concrete, asphalt, checker plate, grass, soil, sand, gravel, snow, water |
@@ -1355,7 +1363,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Stations and railways | Railway switch, buffer stop, platform edge (tactile paving), ticket gates, ticket machine, station sign, station kiosk |
 | Hospital and care | Hospital bed, IV stand, wheelchair, examination couch, operating table, medicine cabinet, morgue refrigerator, lab bench, culture tank, server rack, fume hood, microscope, ultra-low freezer, decontamination shower (curtain, partition, washbasin) |
 | Streets | Traffic cone, utility pole, bus stop, phone booth, manhole, oil drum, railway, two-lane road, crosswalk, parking space, road arrow, road sign, traffic light, bollard, puddle, cliff, landslide, site hoarding (path, river, car, bus, bicycle, vending machine, outdoor AC unit, mailbox, garden light, fence, bench, tree, trash can, A-frame sign, fire extinguisher) |
-| Building parts and construction | Pillar, ladder, elevator, trapdoor, stairs down to a basement, debris, wall crack, collapsed wall, wall hole, steel fire escape, outdoor stairs, temporary stairs, handrail, guardrail, scaffolding, construction barricade, vent, ceiling duct, gutter, grating, sandbags |
+| Building parts and construction | Pillar, ladder, elevator, trapdoor, stairs down to a basement, debris, wall crack, collapsed wall, wall hole, steel fire escape, outdoor stairs, temporary stairs, handrail, guardrail, scaffolding, construction barricade, vent, ceiling duct, gutter, grating, sandbags (large hole in the wall, collapsed wall) |
 | Utilities and infrastructure | Breaker box, distribution board, control panel, service entrance, ceiling cable rack, pipe, large industrial pipe, water pipe, valve, pump, boiler, large tank, emergency generator, water tower, ventilation unit, antenna, fire hydrant cabinet, security camera, card reader, alarm, sluice gate |
 | Logistics, factories and warehouses | Pallet, pallet stack, shipping container, hand cart, tool shelf, machine tool, portable generator, industrial tank, conveyor belt, workbench, material pile, building materials (steel and lumber), pallet rack |
 | Museums, churches and libraries | Lecture hall desks (fixed seats), double-sided bookshelf, framed painting, display pedestal with sculpture, rope barrier, dinosaur skeleton, pipe organ, baptismal font, confessional |
@@ -1563,7 +1571,7 @@ Multi-floor templates include upper-floor stairwell openings and show arriving s
 | Area | Purpose |
 | --- | --- |
 | Top bar | View mode, undo/redo, JSON export/import, image export (plan and 3D), and new plan |
-| Left panel | Drawing tools, selected-item properties, part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
+| Left panel | Drawing tools, selected-item properties (while something is selected they also float over the 2D plan; drag the handle to move them, collapse them or send them back, and toggle this in the view menu), part search, furniture and equipment (openings, furniture, floors, stairs, shape walls, roofs), and templates |
 | 2D pane | Drawing, selection, movement, resizing, the 2D style (18 styles such as monochrome, dots and brush), and toggles for ghost floors, dimensions, and roofs |
 | 3D pane | Generated model, camera controls, lighting, shadows, and floor visibility |
 
@@ -1911,6 +1919,10 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-21
 
+- In 3D, hovering over furniture, a door or a window shows a light outline and a “Double-click to select” tip next to the pointer (a single click makes the tip stand out in blue). While something is selected, the selection panel also floats over the 2D plan on the side away from the selection: drag its handle to move it, collapse it, or send it back to the left panel (toggle in the 表示 (view) menu)
+- Added 13 ceiling fixtures (chandelier, pendant light, ceiling light, ceiling fan, downlight, track spotlights, bare bulb, mirror ball, hanging plant, projector, ceiling cassette air conditioner, smoke detector and sprinkler) in the new “Ceiling (lights, etc.)” group; in 3D they hang from the ceiling. Two new door types break walls open: a large hole you can walk through and a collapsed wall, both cut with jagged edges and with rubble scattered on the floor (also listed under building parts)
+- Furniture width and depth can be set to the centimeter (no more rounding to 20 cm, so small items keep their size, and corner handles resize small pieces in finer steps). Selected doors and windows show a Width field, and the door and window tools let you choose the width to place (changing a selected door or window also sets the width for the next ones). Wall, door and window buttons in the palette now show their 2D symbols, with larger wall samples
+- Every piece of furniture and equipment now takes the 3D color (items without a colorable part change their largest part), and in the realistic look, recolored metal parts no longer sink into dark reflections: they show the chosen color as painted metal
 - Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too
 - Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types. Doors and windows can be placed by just clicking a wall: they get the usual width and a swing door opens toward the side you clicked. A selected swing door can move its hinge to the other end
 - Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Double-click a floor tab to name the floor (leave it empty for 1F, B1F and so on). Space + drag and middle-button drag also pan the 2D plan. Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide

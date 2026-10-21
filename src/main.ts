@@ -38,12 +38,13 @@ import {
   FOOTPRINT_STRIDE, footprintPathTrail, footprintPieces,
   PERSON_HEIGHT, PERSON_PRESETS, POSTURES, editablePersonPose, normalizePersonPose, personDesign, personLayout, personOutline, personRefSize, presetPose, reachHandle,
   type LimbAngles, type PersonLayout, type PersonPose, type Point2, type Posture, type StoneSlab, type TrunkAngles,
-  PART_MATERIALS, furnitureParts, isPartKind, partSpan,
+  PART_MATERIALS, furnitureParts, isPartKind, partSpan, tintedPartMaterials,
 } from "./furniture-shapes";
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 import {
-  DOOR_COLORS, DOOR_STYLES, doorStyleInfo, doubleLeaves, gateSlats, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset, type DoorStyle,
+  BROKEN_CUTS, DOOR_COLORS, DOOR_STYLES, brokenHoleEdges, brokenRubble, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
+  type BrokenStyle, type DoorStyle,
 } from "./opening-shapes";
 import { translateSelection } from "./selection";
 import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
@@ -361,6 +362,8 @@ const MAX_TEXT_LENGTH = 500;
 const SYMBOL_SHADE = "#dde4e2";
 const SYMBOL_PREVIEW_SIZE = 48;
 const MIN_FURNITURE_HEIGHT = 10;
+// 家具の幅・奥行のいちばん小さい値（cm）。スマホ・メモなどの小物もそのままの大きさにできる
+const MIN_FURNITURE_SIZE = 1;
 const MAX_FURNITURE_HEIGHT = 3000;
 // 草地の3Dに生やす草の束の密度と、1つの床あたりの上限（重くしすぎない）
 const GRASS_TUFTS_PER_M2 = 70;
@@ -1257,6 +1260,7 @@ function setupUi(): void {
   setupLanguageSelect();
   setupThemeToggle();
   setupSpacePan();
+  setupSelectionPanel();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -1392,6 +1396,10 @@ function setupUi(): void {
   threeCanvas.addEventListener("pointerup", handleThreePointerUp);
   for (const type of ["pointermove", "pointerup", "pointercancel"] as const) threeCanvas.addEventListener(type, trackThreeLongPress);
   threeCanvas.addEventListener("dblclick", handleThreeDoubleClick);
+  threeCanvas.addEventListener("pointermove", queueThreeHover);
+  threeCanvas.addEventListener("pointerleave", clearThreeHover);
+  threeCanvas.addEventListener("pointerdown", hideThreeHoverTip);
+  threeCanvas.addEventListener("wheel", hideThreeHoverTip, { passive: true });
   threeCanvas.addEventListener("pointercancel", cancelThreeDrag);
   threeCanvas.addEventListener("lostpointercapture", cancelThreeDrag);
   window.addEventListener("blur", () => { cancelThreeDrag(); threeMoveId = null; syncThreeMoveMode(); });
@@ -1441,6 +1449,7 @@ function buildFurniturePicker(): void {
       activeTool = tool;
       setActiveButton("[data-tool]", activeTool);
       syncPlanCursor();
+      updatePropertiesPanel();
     });
     button.dataset.tool = tool;
     fittings.items.appendChild(button);
@@ -1459,10 +1468,6 @@ function buildFurniturePicker(): void {
       updatePropertiesPanel();
     });
     button.dataset.wallStyle = style.value;
-    const swatch = document.createElement("span");
-    swatch.className = "surface-swatch wall-swatch";
-    whenOpened(walls.details, () => { swatch.style.backgroundImage = `url(${wallStyleSwatchUrl(style.value)})`; });
-    button.prepend(swatch);
     walls.items.appendChild(button);
   });
   sections.set("walls", walls.details);
@@ -1559,20 +1564,26 @@ function buildFurniturePicker(): void {
   applyPaletteSearch();
 }
 
-// 一覧の家具のボタンに、2Dの記号の小さな絵を付ける（その欄を開いたときに描く）
+// 一覧の家具・ドア・窓・壁のボタンに、2Dの記号の小さな絵を付ける（その欄を開いたときに描く）
 const PALETTE_THUMB_SIZE = 30;
 function addPaletteThumbs(details: HTMLDetailsElement): void {
   whenOpened(details, () => {
-    details.querySelectorAll<HTMLButtonElement>("button[data-furniture]").forEach((button) => {
+    details.querySelectorAll<HTMLButtonElement>("button[data-furniture], button[data-door-style], button[data-wall-style], button[data-tool]").forEach((button) => {
       if (button.querySelector(".furniture-thumb")) return;
-      const kind = button.dataset.furniture as FurnitureKind;
-      const def = FURNITURE_DEFS[kind];
-      if (!def) return;
+      const { furniture, doorStyle, wallStyle, tool } = button.dataset;
       const canvas = document.createElement("canvas");
       canvas.className = "furniture-thumb";
       canvas.setAttribute("aria-hidden", "true");
-      const symbol = validSymbol(kind, lastSymbolByKind[kind]) || 0;
-      drawSymbolPreview(canvas, { id: "thumb", type: "furniture", kind, x: 0, y: 0, w: def.w, h: def.h, rotation: 0, ...(symbol ? { symbol } : {}) }, symbol, PALETTE_THUMB_SIZE);
+      if (furniture) {
+        const kind = furniture as FurnitureKind;
+        const def = FURNITURE_DEFS[kind];
+        if (!def) return;
+        const symbol = validSymbol(kind, lastSymbolByKind[kind]) || 0;
+        drawSymbolPreview(canvas, { id: "thumb", type: "furniture", kind, x: 0, y: 0, w: def.w, h: def.h, rotation: 0, ...(symbol ? { symbol } : {}) }, symbol, PALETTE_THUMB_SIZE);
+      } else if (isDoorStyle(doorStyle)) drawOpeningThumb(canvas, doorStyle);
+      else if (isWallStyle(wallStyle)) drawWallStyleThumb(canvas, wallStyle);
+      else if (tool === "window" || tool === "window2") drawOpeningThumb(canvas, tool);
+      else return;
       button.prepend(canvas);
       button.classList.add("has-thumb");
     });
@@ -1624,6 +1635,7 @@ function createDoorStyleButton(style: DoorStyle): HTMLButtonElement {
     pathRedrawId = null;
     setActiveButton("[data-tool]", activeTool);
     syncPlanCursor();
+    updatePropertiesPanel();
   });
   button.dataset.doorStyle = style;
   return button;
@@ -2344,6 +2356,7 @@ function bindSplitDivider(): void {
 function applyViewMode(nextMode: ViewMode, persist = true, restore = false): void {
   viewMode = nextMode;
   workspace.dataset.viewMode = viewMode;
+  placePropertiesPanel();
   workspace.classList.remove("is-active");
   setActiveButton("button[data-view-mode]", viewMode);
   if (persist && !PLAN_EDITION) {
@@ -2700,6 +2713,135 @@ function cancelPlanDrag(): void {
 let spacePan = false;
 let pointerOverPlan = false;
 
+// ---- 「選択中」の欄を2Dの上にも出す ----
+// 物を選んでいる間は、選択中の欄を2Dの右上に浮かべる（地図から目を離さずに直せる）。左の欄には「2Dの上に出ています」と出す。
+// 浮かべた欄は、つまみ（上の帯）をドラッグで動かし、たためる。表示のメニューか欄のボタンで、左の欄だけに戻せる（ブラウザに覚える）
+const SELECTION_ON_PLAN_KEY = "madori-quick-3d-selection-on-plan";
+const SELECTION_PANEL_KEY = "madori-quick-3d-selection-panel";
+// 2Dの欄の右上からのずれ（px）、たたんでいるか、動かしたか（動かしていなければ、選んだ物と反対の側に寄せる）
+let selectionPanelPlace: { right: number; top: number; collapsed: boolean; manual: boolean } = { right: 12, top: 10, collapsed: false, manual: false };
+let selectionOnPlan = true;
+// 寄せる側を決めたときの選択（選び直したときだけ決め直す。動かしている間に左右へ飛ばないように）
+let selectionPanelFor = "";
+
+function setupSelectionPanel(): void {
+  try {
+    selectionOnPlan = localStorage.getItem(SELECTION_ON_PLAN_KEY) !== "off";
+    const saved = JSON.parse(localStorage.getItem(SELECTION_PANEL_KEY) ?? "null") as Partial<typeof selectionPanelPlace> | null;
+    if (saved && Number.isFinite(saved.right) && Number.isFinite(saved.top)) selectionPanelPlace = { right: saved.right!, top: saved.top!, collapsed: saved.collapsed === true, manual: saved.manual === true };
+  } catch {
+    // 保存できない環境では、いつもの場所に出す
+  }
+  const toggle = document.querySelector<HTMLInputElement>("#selectionOnPlanInput");
+  if (toggle) {
+    toggle.checked = selectionOnPlan;
+    toggle.addEventListener("change", () => setSelectionOnPlan(toggle.checked));
+  }
+  document.querySelector("#planSelectionDock")?.addEventListener("click", () => setSelectionOnPlan(false));
+  document.querySelector("#propertiesBackButton")?.addEventListener("click", () => setSelectionOnPlan(false));
+  document.querySelector("#planSelectionCollapse")?.addEventListener("click", () => {
+    selectionPanelPlace.collapsed = !selectionPanelPlace.collapsed;
+    saveSelectionPanelPlace();
+    placePropertiesPanel();
+  });
+  // つまみをドラッグして動かす
+  const panel = document.querySelector<HTMLElement>("#planSelection");
+  const bar = document.querySelector<HTMLElement>("#planSelectionBar");
+  let grab: { pointerId: number; x: number; y: number; right: number; top: number } | null = null;
+  bar?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    grab = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, right: selectionPanelPlace.right, top: selectionPanelPlace.top };
+    bar.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  bar?.addEventListener("pointermove", (event) => {
+    if (!grab || event.pointerId !== grab.pointerId) return;
+    selectionPanelPlace.right = grab.right - (event.clientX - grab.x);
+    selectionPanelPlace.top = grab.top + (event.clientY - grab.y);
+    selectionPanelPlace.manual = true;
+    positionSelectionPanel();
+  });
+  const release = (event: PointerEvent) => {
+    if (!grab || event.pointerId !== grab.pointerId) return;
+    grab = null;
+    saveSelectionPanelPlace();
+  };
+  bar?.addEventListener("pointerup", release);
+  bar?.addEventListener("pointercancel", release);
+  // 2Dの欄の大きさが変わったら、はみ出さないように置き直す
+  if (panel) new ResizeObserver(() => positionSelectionPanel()).observe(panel.parentElement ?? panel);
+  window.matchMedia(WIDE_LAYOUT_QUERY).addEventListener("change", placePropertiesPanel);
+}
+
+// スマホの幅（2Dの欄がせまい）では、左の欄（引き出し）だけに出す
+const WIDE_LAYOUT_QUERY = "(min-width: 761px)";
+
+function setSelectionOnPlan(on: boolean): void {
+  selectionOnPlan = on;
+  // 出し直したときは、また選んだ物と反対の側に寄せる
+  if (on) {
+    selectionPanelPlace.manual = false;
+    selectionPanelFor = "";
+    saveSelectionPanelPlace();
+  }
+  try {
+    localStorage.setItem(SELECTION_ON_PLAN_KEY, on ? "on" : "off");
+  } catch {
+    // 覚えられなくても、いまの画面では切り替える
+  }
+  const toggle = document.querySelector<HTMLInputElement>("#selectionOnPlanInput");
+  if (toggle) toggle.checked = on;
+  placePropertiesPanel();
+}
+
+function saveSelectionPanelPlace(): void {
+  try {
+    localStorage.setItem(SELECTION_PANEL_KEY, JSON.stringify(selectionPanelPlace));
+  } catch {
+    // 覚えられなくても、いまの画面では動かせる
+  }
+}
+
+// 選んだ物があって、2Dが見えているときは、選択中の欄を2Dの上へ。ほかのときは左の欄へ戻す
+function placePropertiesPanel(): void {
+  const floating = document.querySelector<HTMLElement>("#planSelection");
+  const body = document.querySelector<HTMLElement>("#planSelectionBody");
+  const home = document.querySelector<HTMLElement>("#propertiesHome");
+  const away = document.querySelector<HTMLElement>("#propertiesAway");
+  if (!floating || !body || !home || !away) return;
+  const onPlan = selectionOnPlan && viewMode !== "three" && selectedEntities().length > 0 && window.matchMedia(WIDE_LAYOUT_QUERY).matches;
+  if (onPlan && propertiesPanel.parentElement !== body) body.appendChild(propertiesPanel);
+  if (!onPlan && propertiesPanel.parentElement !== home) home.insertBefore(propertiesPanel, away);
+  floating.hidden = !onPlan;
+  away.hidden = !onPlan;
+  floating.classList.toggle("is-collapsed", selectionPanelPlace.collapsed);
+  document.querySelector("#planSelectionCollapse")?.setAttribute("aria-expanded", String(!selectionPanelPlace.collapsed));
+  if (onPlan) positionSelectionPanel();
+}
+
+// 2Dの欄（上のボタンの列の下）からはみ出さないように置く
+function positionSelectionPanel(): void {
+  const floating = document.querySelector<HTMLElement>("#planSelection");
+  const pane = floating?.parentElement;
+  if (!floating || !pane || floating.hidden) return;
+  const bar = pane.querySelector<HTMLElement>(".pane-bar");
+  const barHeight = bar?.offsetHeight ?? 0;
+  const width = floating.offsetWidth, height = floating.offsetHeight;
+  // 動かしていなければ、選んだ物が2Dの右半分にあるときは左、左半分にあるときは右に寄せる
+  const key = selectedEntities().map((item) => item.id).join(",");
+  if (!selectionPanelPlace.manual && key !== selectionPanelFor) {
+    selectionPanelFor = key;
+    const bounds = getEntitiesBounds(selectedEntities());
+    const centerX = bounds ? (bounds.x + bounds.w / 2) * view.zoom + view.x : 0;
+    selectionPanelPlace.right = centerX > pane.clientWidth / 2 ? pane.clientWidth - width - 12 : 12;
+  }
+  const right = clamp(selectionPanelPlace.right, 4, Math.max(4, pane.clientWidth - width - 4));
+  const top = clamp(selectionPanelPlace.top, 4, Math.max(4, pane.clientHeight - barHeight - Math.min(height, 120) - 4));
+  floating.style.right = `${right}px`;
+  floating.style.top = `${barHeight + top}px`;
+  floating.style.maxHeight = `${Math.max(120, pane.clientHeight - barHeight - top - 8)}px`;
+}
+
 function setupSpacePan(): void {
   planCanvas.addEventListener("pointerenter", () => { pointerOverPlan = true; });
   planCanvas.addEventListener("pointerleave", () => { pointerOverPlan = false; });
@@ -2971,16 +3113,33 @@ function isOpeningTool(tool: Tool): tool is OpeningTool {
 }
 
 // クリックで置くときの幅（cm）
-const DOOR_WIDTHS: Record<DoorStyle, number> = { swing: 80, double: 160, sliding: 160, shoji: 180, fusuma: 180, koshi: 180, itado: 160, gate: 200, opening: 90 };
+const DOOR_WIDTHS: Record<DoorStyle, number> = { swing: 80, double: 160, sliding: 160, shoji: 180, fusuma: 180, koshi: 180, itado: 160, gate: 200, opening: 90, hole: 110, broken: 200 };
 const WINDOW_WIDTH = 120, DIVIDED_WINDOW_WIDTH = 160;
 // 壁の中心線からこれ以内をクリックしたら、その壁に置く（cm）
 const OPENING_REACH = 40;
+
+// 次にクリックで置くドア・窓の幅（cm）。種類ごとに、最後に決めた幅を覚える（ツールの欄か、選んだドア・窓の「幅」で決める）
+type OpeningKind = DoorStyle | "window" | "window2";
+const OPENING_WIDTH_RANGE = { min: GRID, max: 1000 };
+const openingWidths: Partial<Record<OpeningKind, number>> = {};
+function openingKindOfTool(tool: OpeningTool): OpeningKind {
+  return tool === "window" || tool === "window2" ? tool : tool === "slidingDoor" ? "sliding" : activeDoorStyle;
+}
+function openingKindOf(item: LinearElement): OpeningKind {
+  return item.type === "window" ? (item.mullion ? "window2" : "window") : item.doorStyle ?? "swing";
+}
+function openingWidth(kind: OpeningKind): number {
+  return openingWidths[kind] ?? (kind === "window" ? WINDOW_WIDTH : kind === "window2" ? DIVIDED_WINDOW_WIDTH : DOOR_WIDTHS[kind]);
+}
+function openingLabel(kind: OpeningKind): string {
+  return kind === "window" ? "窓" : kind === "window2" ? "窓（区切付き）" : doorStyleInfo(kind).label;
+}
 
 function placeOpeningOnWall(point: Point): LinearElement | null {
   const tool = activeTool;
   if (!isOpeningTool(tool)) return null;
   const style: DoorStyle = tool === "slidingDoor" ? "sliding" : activeDoorStyle;
-  const length = tool === "window" ? WINDOW_WIDTH : tool === "window2" ? DIVIDED_WINDOW_WIDTH : DOOR_WIDTHS[style];
+  const length = openingWidth(openingKindOfTool(tool));
   const walls = activeEntities().filter((entity): entity is LinearElement => entity.type === "wall")
     .map((wall) => ({ x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, thickness: wallInfoOf(wall).thickness }));
   const reach = Math.max(OPENING_REACH, 12 / view.zoom);
@@ -3833,6 +3992,88 @@ function showThreeHint(text: string): void {
   }, 3200);
 }
 
+// 3Dでマウスを乗せた家具・ドア・窓。ダブルクリックで選べることを、薄い枠とマウスのそばの案内で知らせる
+let threeHover: { id: string; helper: THREE.BoxHelper } | null = null;
+let threeHoverEvent: PointerEvent | null = null;
+let threeHoverFrame = 0;
+let threeHoverTip: HTMLDivElement | null = null;
+// 1回クリックで目立たせた案内を、この時刻まで目立たせたままにする（すぐ後のマウスの動きで消さない）
+let threeHoverNudgeUntil = 0;
+
+function queueThreeHover(event: PointerEvent): void {
+  if (event.pointerType !== "mouse") return;
+  threeHoverEvent = event;
+  if (threeHoverFrame) return;
+  threeHoverFrame = requestAnimationFrame(() => {
+    threeHoverFrame = 0;
+    const last = threeHoverEvent;
+    threeHoverEvent = null;
+    if (last) updateThreeHover(last);
+  });
+}
+
+function updateThreeHover(event: PointerEvent): void {
+  // ボタンを押している間（視点を回す・物を動かす）や、置く・消すツールと移動モードでは出さない
+  const busy = event.buttons !== 0 || threeDrag !== null || activeTool === "furniture" || activeTool === "erase" || threeMoveMode;
+  const id = busy ? null : pickThreeEntity(event);
+  const entity = id ? findEntity(id) : undefined;
+  if (!entity || !isThreeDoubleSelect(entity) || selectedEntities().some((item) => item.id === entity.id)) {
+    clearThreeHover();
+    return;
+  }
+  if (threeHover?.id !== entity.id) {
+    clearThreeHover();
+    const object = planGroup.children.find((child) => child.userData.entityId === entity.id && !(child instanceof THREE.BoxHelper));
+    if (!object) return;
+    const helper = new THREE.BoxHelper(object, 0x7fb0ea);
+    helper.userData.ignoreSelection = true;
+    scene.add(helper);
+    threeHover = { id: entity.id, helper };
+    threeNeedsRender = true;
+  }
+  threeCanvas.style.cursor = "pointer";
+  showThreeHoverTip(event, "ダブルクリックで選択");
+}
+
+// マウスのそばの案内（nudge: 1回だけクリックしたとき、目立たせる）
+function showThreeHoverTip(event: MouseEvent, text: string, nudge = false): void {
+  const pane = threeCanvas.parentElement;
+  if (!pane) return;
+  if (!threeHoverTip) {
+    threeHoverTip = document.createElement("div");
+    threeHoverTip.className = "three-hover-tip";
+    threeHoverTip.id = "threeHoverTip";
+    threeHoverTip.setAttribute("aria-hidden", "true");
+    pane.appendChild(threeHoverTip);
+  }
+  const rect = pane.getBoundingClientRect();
+  const x = event.clientX - rect.left, y = event.clientY - rect.top;
+  threeHoverTip.textContent = text;
+  threeHoverTip.style.left = `${x}px`;
+  threeHoverTip.style.top = `${y}px`;
+  // 右の端や下の端では、マウスの左・上に出す
+  threeHoverTip.classList.toggle("is-left", x > rect.width - 180);
+  threeHoverTip.classList.toggle("is-up", y > rect.height - 50);
+  if (nudge) threeHoverNudgeUntil = performance.now() + 1500;
+  threeHoverTip.classList.toggle("is-nudge", performance.now() < threeHoverNudgeUntil);
+  threeHoverTip.hidden = false;
+}
+
+function hideThreeHoverTip(): void {
+  if (threeHoverTip) threeHoverTip.hidden = true;
+}
+
+function clearThreeHover(): void {
+  hideThreeHoverTip();
+  if (!threeHover) return;
+  scene.remove(threeHover.helper);
+  threeHover.helper.geometry.dispose();
+  (threeHover.helper.material as THREE.Material).dispose();
+  threeHover = null;
+  threeNeedsRender = true;
+  if (!threeDrag) threeCanvas.style.cursor = threeMoveMode || threeMoveId ? "move" : "grab";
+}
+
 function handleThreePointerUp(event: PointerEvent): void {
   if (threeDrag) {
     if (event.pointerId === threeDrag.pointerId) finishThreeDrag();
@@ -3848,6 +4089,7 @@ function handleThreePointerUp(event: PointerEvent): void {
   if (entity && isThreeDoubleSelect(entity)) {
     if (!selectedEntities().some((item) => item.id === entity.id) && activeTool === "select" && event.pointerType === "mouse") {
       showThreeHint(entity.type === "furniture" ? "家具はダブルクリックで選べます。選んだ家具は、そのままドラッグで動かせます" : "ドア・窓はダブルクリックで選べます");
+      showThreeHoverTip(event, "ダブルクリックで選択", true);
     }
     return;
   }
@@ -4919,14 +5161,15 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
     let y1 = origin.y;
     let x2 = origin.x + origin.w;
     let y2 = origin.y + origin.h;
-    if (corner.includes("w")) x1 = snap(point.x);
-    if (corner.includes("e")) x2 = snap(point.x);
-    if (corner.includes("n")) y1 = snap(point.y);
-    if (corner.includes("s")) y2 = snap(point.y);
+    const stepX = furnitureResizeStep(origin.w), stepY = furnitureResizeStep(origin.h);
+    if (corner.includes("w")) x1 = Math.round(point.x / stepX) * stepX;
+    if (corner.includes("e")) x2 = Math.round(point.x / stepX) * stepX;
+    if (corner.includes("n")) y1 = Math.round(point.y / stepY) * stepY;
+    if (corner.includes("s")) y2 = Math.round(point.y / stepY) * stepY;
     entity.x = Math.min(x1, x2);
     entity.y = Math.min(y1, y2);
-    entity.w = Math.max(GRID, Math.abs(x2 - x1));
-    entity.h = Math.max(GRID, Math.abs(y2 - y1));
+    entity.w = Math.max(MIN_FURNITURE_SIZE, Math.abs(x2 - x1));
+    entity.h = Math.max(MIN_FURNITURE_SIZE, Math.abs(y2 - y1));
   }
 
   if (origin.type === "roof" && entity.type === "roof") {
@@ -5822,32 +6065,68 @@ function freeWallItem(wallItem: LinearElement, info: WallStyleInfo, from: number
   };
 }
 
-// 壁の種類の見本の絵（一覧と選択中の欄）。2Dの壁と同じ描き方で、短い壁を描く
+// 壁の種類の見本の絵（選択中の欄）。2Dの壁と同じ描き方で、短い壁を描く
+const WALL_SWATCH_SIZE = { w: 44, h: 20 };
 const wallSwatchUrls = new Map<WallStyle, string>();
 function wallStyleSwatchUrl(style: WallStyle): string {
   const cached = wallSwatchUrls.get(style);
   if (cached) return cached;
   const canvas = document.createElement("canvas");
-  canvas.width = 120;
-  canvas.height = 48;
-  const target = canvas.getContext("2d")!;
-  target.fillStyle = "#ffffff";
-  target.fillRect(0, 0, canvas.width, canvas.height);
-  const saved = ctx, zoom = view.zoom, selected = state.selectedId;
-  try {
-    ctx = target;
-    view.zoom = 0.4;
-    state.selectedId = null;
-    target.setTransform(0.4, 0, 0, 0.4, 0, 0);
-    drawWallBody2d({ id: "swatch", type: "wall", x1: 50, y1: 60, x2: 250, y2: 60, ...(style !== "plain" ? { wallStyle: style } : {}) });
-  } finally {
-    ctx = saved;
-    view.zoom = zoom;
-    state.selectedId = selected;
-  }
+  drawWallStyleThumb(canvas, style, WALL_SWATCH_SIZE.w, WALL_SWATCH_SIZE.h);
   const url = canvas.toDataURL();
   wallSwatchUrls.set(style, url);
   return url;
+}
+
+// 一覧のボタンの小さな絵を、2Dと同じ描き方で描く。大きさ zoom（1cmあたりの画素）、絵の真ん中が (0, cy) cm
+function drawPlanThumb(canvas: HTMLCanvasElement, width: number, height: number, zoom: number, cy: number, draw: () => void): void {
+  const target = canvas.getContext("2d");
+  if (!target) return;
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+  const saved = ctx, savedZoom = view.zoom, selected = state.selectedId;
+  try {
+    ctx = target;
+    view.zoom = zoom;
+    state.selectedId = null;
+    target.setTransform(ratio * zoom, 0, 0, ratio * zoom, (width / 2) * ratio, (height / 2 - cy * zoom) * ratio);
+    draw();
+  } finally {
+    ctx = saved;
+    view.zoom = savedZoom;
+    state.selectedId = selected;
+  }
+}
+
+// 壁の種類の小さな絵。薄い壁も模様が見えるよう、厚みが絵の高さの半分ほどになる大きさで、真ん中に描く
+function drawWallStyleThumb(canvas: HTMLCanvasElement, style: WallStyle, width = PALETTE_THUMB_SIZE, height = PALETTE_THUMB_SIZE): void {
+  const thickness = wallStyleInfo(style).thickness;
+  const zoom = clamp((height * 0.5) / thickness, 0.15, 1.6), reach = width / zoom;
+  drawPlanThumb(canvas, width, height, zoom, 0, () => drawWallBody2d({ id: "thumb", type: "wall", x1: -reach, y1: 0, x2: reach, y2: 0, ...(style !== "plain" ? { wallStyle: style } : {}) }));
+}
+
+// ドア・窓の小さな絵: 両わきの短い壁と、2Dと同じ記号のドア・窓（開き戸は、開く円弧が入る大きさで）
+type OpeningThumbKind = DoorStyle | "window" | "window2";
+function drawOpeningThumb(canvas: HTMLCanvasElement, kind: OpeningThumbKind, size = PALETTE_THUMB_SIZE): void {
+  const windowKind = kind === "window" || kind === "window2";
+  const length = kind === "window" ? WINDOW_WIDTH : kind === "window2" ? DIVIDED_WINDOW_WIDTH : DOOR_WIDTHS[kind];
+  // 開く扉の出っ張り（開き戸は戸の幅、両開き・門扉は半分）
+  const swing = kind === "swing" ? length : kind === "double" || kind === "gate" ? length / 2 : 0;
+  const stub = length * 0.18, span = length + stub * 2;
+  // 開く扉のない物（引き戸・障子・窓など）は細い線になるので、真ん中を大きく写す（開口は、両わきの壁が入る大きさ。壊れた壁は、かけらも入る大きさ）
+  const broken = kind === "hole" || kind === "broken";
+  const zoom = broken ? Math.min((size - 3) / span, (size - 3) / (WALL_THICKNESS_2D + 80))
+    : swing || kind === "opening" ? Math.min((size - 3) / span, (size - 3) / (swing + WALL_THICKNESS_2D)) : (size - 2) / Math.min(span, 70);
+  const half = length / 2, cy = -swing / 2;
+  drawPlanThumb(canvas, size, size, zoom, cy, () => {
+    for (const side of [-1, 1]) drawWallBody2d({ id: "thumb-wall", type: "wall", x1: side * half, y1: 0, x2: side * (half + stub + 4), y2: 0 });
+    const item: LinearElement = { id: "thumb", type: windowKind ? "window" : "door", x1: -half, y1: 0, x2: half, y2: 0 };
+    if (kind === "window2") item.mullion = true;
+    if (!windowKind && kind !== "swing") item.doorStyle = kind;
+    if (windowKind) drawWindow2d(item);
+    else drawDoor2d(item);
+  });
 }
 
 // 壁の厚み（cm）。変えられない種類（フェンス・竹垣）は出さない
@@ -5960,6 +6239,10 @@ function drawWindow2d(windowEl: LinearElement): void {
 }
 
 function drawDoor2d(door: LinearElement): void {
+  if (isBrokenStyle(door.doorStyle)) {
+    drawBrokenWall2d(door, door.doorStyle);
+    return;
+  }
   // 戸のない開口: 壁の切れ目だけ（3Dも戸を置かない）。選んでいるときだけ、開口の所に点線を引く
   if (door.doorStyle === "opening") {
     if (state.selectedId === door.id) {
@@ -6011,6 +6294,68 @@ function drawDoor2d(door: LinearElement): void {
     ctx.arc(door.x1, door.y1, length, leafAngle, angle, false);
   }
   ctx.stroke();
+  ctx.restore();
+  if (selected && !isLocked(door)) drawLineHandles(door);
+}
+
+// 壊れた壁: 大穴は、床から1mの高さで切った形（穴のふちまで残った壁と、ぎざぎざの端）。崩れ落ちた壁は、低く残った壁の帯と、
+// 崩れたふちのぎざぎざの線。どちらも足もとのかけらを、3Dと同じ並びで描く
+function drawBrokenWall2d(door: LinearElement, style: BrokenStyle): void {
+  const host = hostWallOf(door);
+  const info = wallInfoOf(host ?? { ...door, type: "wall" });
+  const thickness = host ? info.thickness : WALL_THICKNESS_2D;
+  const length = Math.max(distance(door), 1);
+  const mid = midpoint(door);
+  const selected = state.selectedId === door.id;
+  const ink = selected ? "#2775d1" : solidColor(door.color) ?? INK;
+  const wallFill = solidColor(host?.color) ?? (info.value === "plain" ? INK : info.color);
+  const half = length / 2 + thickness / 2, t = thickness / 2;
+  ctx.save();
+  ctx.translate(mid.x, mid.y);
+  ctx.rotate(lineAngle(door));
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = (selected ? 2 : 1.2) / view.zoom;
+  if (style === "hole") {
+    // 残った壁の帯（外の端から穴のふちまで）。穴の側の端はぎざぎざ
+    brokenHoleEdges(length, thickness, WALL_HEIGHT * 100).forEach((edge, index) => {
+      const side = index ? 1 : -1, jag = side * Math.min(thickness * 0.6, 6);
+      ctx.beginPath();
+      ctx.moveTo(side * half, -t);
+      ctx.lineTo(edge, -t);
+      ctx.lineTo(edge - jag, -t / 3);
+      ctx.lineTo(edge + jag * 0.4, t / 4);
+      ctx.lineTo(edge - jag * 0.5, t);
+      ctx.lineTo(side * half, t);
+      ctx.closePath();
+      ctx.fillStyle = wallFill;
+      ctx.fill();
+      ctx.stroke();
+    });
+  } else {
+    // 低く残った壁: 細い線の帯（中は白）と、崩れたふちのぎざぎざの線
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-half, -t, half * 2, t * 2);
+    ctx.strokeRect(-half, -t, half * 2, t * 2);
+    const steps = Math.max(4, Math.round(length / 12));
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i += 1) {
+      const x = -half + (2 * half * i) / steps, y = (i % 2 ? 1 : -1) * t * 0.5;
+      if (i) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+  // 足もとのかけら（3Dの箱と同じ位置・大きさ・向き）
+  ctx.fillStyle = "#c9c3b8";
+  for (const piece of brokenRubble(style, length, thickness)) {
+    ctx.save();
+    ctx.translate(piece.x, piece.y);
+    ctx.rotate(piece.angle);
+    ctx.fillRect(-piece.w / 2, -piece.d / 2, piece.w, piece.d);
+    ctx.strokeRect(-piece.w / 2, -piece.d / 2, piece.w, piece.d);
+    ctx.restore();
+  }
   ctx.restore();
   if (selected && !isLocked(door)) drawLineHandles(door);
 }
@@ -6509,12 +6854,14 @@ function drawFurnitureSymbol(kind: FurnitureKind, w: number, h: number, symbol =
   }
   // 部品で組む家具は、3Dと同じ部品を低い順に真上から描く（横倒しの円柱と傾けた板は、上から見た長方形）
   if (isPartKind(kind)) {
-    for (const part of furnitureParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!)) {
+    const parts = furnitureParts(kind, w, h, item?.height ?? FURNITURE_DEFS[kind].height!);
+    const tinted = tintedPartMaterials(parts);
+    for (const part of parts) {
       ctx.save();
       ctx.translate(part.x, part.y);
       ctx.rotate(part.angle ?? 0);
       const material = PART_MATERIALS[part.material];
-      ctx.fillStyle = material.tintable && item?.color ? solidColor(item.color) : material.color;
+      ctx.fillStyle = tinted.has(part.material) && item?.color ? solidColor(item.color) : material.color;
       if (material.opacity !== undefined) ctx.globalAlpha *= Math.max(0.3, material.opacity);
       const depth = partSpan(part);
       if (part.shape === "box" || part.shape === "disc") strokeRoundedRect(-part.w / 2, -depth / 2, part.w, depth, part.radius, true);
@@ -8356,7 +8703,7 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
     }
     case "railway": {
       strokeFreeBand(line, 300, "#ebe8e2");
-      ctx.fillStyle = OUTDOOR_TRUNK;
+      ctx.fillStyle = tint ?? OUTDOOR_TRUNK;
       for (const sleeper of freePosts(line, RAILWAY.sleeperSpacing)) {
         ctx.save();
         ctx.translate(sleeper.x, sleeper.y);
@@ -9977,6 +10324,7 @@ function ensureThreeScene(): void {
 
 // 選択の枠だけを付け直す
 function refreshSelectionBoxes(): void {
+  clearThreeHover();
   for (const helper of planGroup.children.filter((object) => object instanceof THREE.BoxHelper)) {
     planGroup.remove(helper);
     collectDisposables(helper, pendingDisposal);
@@ -9994,6 +10342,7 @@ function refreshSelectionBoxes(): void {
 }
 
 function buildThreeScene(): void {
+  clearThreeHover();
   threeNeedsRender = true;
   renderer.shadowMap.needsUpdate = true;
   disposeGroup(planGroup);
@@ -10377,9 +10726,9 @@ function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): voi
 
 function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   if (item.type === "wall") return;
-  const options = { ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0 };
-  const { type, doorStyle, color, color3d, flip, floorTop, length, mullion } = options;
-  const key = JSON.stringify([threeStyle === "real", type, doorStyle, color, color3d, flip, floorTop, length, mullion]);
+  const options = { ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0, ...brokenWallOptions(item) };
+  const { type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName } = options;
+  const key = JSON.stringify([threeStyle === "real", type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName]);
   const group = cachedModel(`opening:${key}`, () => buildOpeningModel(options));
   const mid = midpoint(item);
   const position = to3d(mid.x, mid.y, center);
@@ -10388,6 +10737,27 @@ function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   markSelectable(group, item.id);
   planGroup.add(group);
   addSelectionBox(group, item.id);
+}
+
+// ドア・窓が付いている壁（壊れた壁の色・厚み・高さに使う）
+function hostWallOf(item: LinearElement): LinearElement | undefined {
+  const floor = state.floors.find((candidate) => candidate.entities.some((entity) => entity.id === item.id));
+  return floor?.entities.find((entity): entity is LinearElement => entity.type === "wall"
+    && openingIntervals(entity, [{ x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2, type: "door" }], wallInfoOf(entity).thickness).length > 0);
+}
+
+// 壊れた壁の3Dに渡す、付いている壁の色・厚み（cm）・高さ（m）・材質の名前（リアルの模様に使う）
+function brokenWallOptions(item: LinearElement): { wallColor?: string; wallThickness?: number; wallTop?: number; wallMaterialName?: string } {
+  if (!isBrokenStyle(item.doorStyle)) return {};
+  const host = hostWallOf(item);
+  const info = wallInfoOf(host ?? { ...item, type: "wall" });
+  const plain = !host || info.value === "plain";
+  return {
+    wallColor: solidColor(host?.color3d ?? host?.color) ?? (plain ? "#f4f1ec" : info.color),
+    wallThickness: host ? info.thickness : WALL_THICKNESS_2D,
+    wallTop: info.height !== undefined ? Math.min(WALL_HEIGHT, info.height * SCALE_3D) : WALL_HEIGHT,
+    wallMaterialName: plain ? "plaster-wall" : info.value === "wood" ? "wall-wood-plank" : info.value === "earthen" ? "plaster-earthen" : `wall-${info.value}`,
+  };
 }
 
 // ---- 3D furniture ----
@@ -10974,7 +11344,7 @@ function realizeMaterials(root: THREE.Object3D, on: boolean): void {
 
 function makeMaterialReal(material: THREE.MeshStandardMaterial): void {
   if (material.userData.realKind) return;
-  const kind = realMaterialKind(material.name, material.color.getHex(), material.roughness, material.metalness, material.transparent);
+  const kind = realMaterialKind(material.name, material.color.getHex(), material.roughness, material.metalness, material.transparent, material.userData.tinted === true);
   material.userData.realKind = kind;
   // 床など、すでに模様（画像）を持つ物は、光り方だけ変える
   const colorCode = material.map ? "" : realColorCode(kind);
@@ -11072,6 +11442,11 @@ function drawPointsHint(label: string, closed: boolean): string {
 }
 
 function updatePropertiesPanel(): void {
+  renderPropertiesPanel();
+  placePropertiesPanel();
+}
+
+function renderPropertiesPanel(): void {
   if (activeTool === "floor") {
     propertiesPanel.innerHTML = `<div class="property-grid"><p class="empty-state">${drawPointsHint("床", true)}</p>${drawMethodHtml()}${surfacePickerHtml("draftSurfacePicker", activeRoomSurface)}</div>`;
     bindDrawMethod();
@@ -11131,6 +11506,21 @@ function updatePropertiesPanel(): void {
       </div>`;
     bindPenControls();
     bindDrawMethod();
+    return;
+  }
+  // ドア・窓のツール: 壁をクリックして置くときの幅を決める
+  if (!selected && isOpeningTool(activeTool)) {
+    const kind = openingKindOfTool(activeTool);
+    propertiesPanel.innerHTML = `<div class="property-grid">
+        <p class="empty-state">${escapeHtml(openingLabel(kind))}: 2Dの壁をクリックすると、この幅で置きます。壁に沿ってドラッグすると、好きな幅で置けます。</p>
+        <label>置く幅 cm<input id="openingWidthInput" type="number" min="${OPENING_WIDTH_RANGE.min}" max="${OPENING_WIDTH_RANGE.max}" step="5" value="${openingWidth(kind)}" /></label>
+      </div>`;
+    const input = propertiesPanel.querySelector<HTMLInputElement>("#openingWidthInput");
+    input?.addEventListener("change", () => {
+      const value = Number(input.value);
+      if (input.value.trim() !== "" && Number.isFinite(value)) openingWidths[kind] = clamp(Math.round(value), OPENING_WIDTH_RANGE.min, OPENING_WIDTH_RANGE.max);
+      input.value = String(openingWidth(kind));
+    });
     return;
   }
   // 壁のツール: 次に描く壁の種類を絵で選ぶ
@@ -11314,7 +11704,7 @@ function updatePropertiesPanel(): void {
           </label>`
         : "";
     const doorFlipRow =
-      selected.type === "door"
+      selected.type === "door" && doorInfo.value !== "opening" && !isBrokenStyle(doorInfo.value)
         ? `<label class="check"><input id="doorFlipInput" type="checkbox" ${selected.flip ? "checked" : ""} ${placementDisabled} /> ${slidingDoor ? "重なり" : "開き"}を反転（Fキー）</label>`
           + (doorInfo.value === "swing" ? `<button type="button" class="prop-button" id="doorHingeButton" ${placementDisabled}>吊元（ちょうつがい）を反対側に</button>` : "")
         : "";
@@ -11330,7 +11720,7 @@ function updatePropertiesPanel(): void {
         ${selected.type === "wall" ? wallThicknessHtml(selected, placementDisabled) : ""}
         ${doorStyleRow}
         <div class="two-col">
-          <label>長さ cm<input id="lineLengthInput" type="number" min="20" step="20" value="${Math.round(distance(selected))}" ${placementDisabled} /></label>
+          <label>${selected.type === "wall" ? "長さ" : "幅"} cm<input id="lineLengthInput" type="number" min="20" step="${selected.type === "wall" ? 20 : 5}" value="${Math.round(distance(selected))}" ${placementDisabled} /></label>
           <label>角度 °<input id="lineAngleInput" type="number" step="5" value="${Math.round(radiansToDegrees(lineAngle(selected)))}" ${placementDisabled} /></label>
         </div>
         <div class="two-col">
@@ -11350,6 +11740,7 @@ function updatePropertiesPanel(): void {
       const angle = lineAngle(selected);
       selected.x2 = Math.round(selected.x1 + Math.cos(angle) * newLength);
       selected.y2 = Math.round(selected.y1 + Math.sin(angle) * newLength);
+      if (selected.type !== "wall") openingWidths[openingKindOf(selected)] = clamp(newLength, OPENING_WIDTH_RANGE.min, OPENING_WIDTH_RANGE.max);
     });
     bindNumber("#lineAngleInput", (value) => rotateLineTo(selected, value));
     bindButton("#lineRotateButton", () => rotateEntity(selected, 90));
@@ -11568,8 +11959,8 @@ function updatePropertiesPanel(): void {
       ${duplicateStair ? `<button type="button" class="prop-button" id="useLowerStairButton" title="この階の重複した階段を削除し、下階の階段を2Dに表示します。取り消し可能です" ${placementDisabled}><i data-lucide="arrow-down-to-line"></i>下階の階段表示に切り替え</button>` : ""}
       ${symbolPicker}
       <div class="two-col">
-        <label>幅 cm<input id="furnitureWInput" type="number" min="20" step="20" value="${selectedFurniture.w}" ${placementDisabled} /></label>
-        <label>奥行 cm<input id="furnitureHInput" type="number" min="20" step="20" value="${selectedFurniture.h}" ${placementDisabled} /></label>
+        <label>幅 cm<input id="furnitureWInput" type="number" min="${MIN_FURNITURE_SIZE}" step="1" value="${selectedFurniture.w}" ${placementDisabled} /></label>
+        <label>奥行 cm<input id="furnitureHInput" type="number" min="${MIN_FURNITURE_SIZE}" step="1" value="${selectedFurniture.h}" ${placementDisabled} /></label>
       </div>
       ${heightRow}
       ${markerRow}
@@ -11629,8 +12020,8 @@ function updatePropertiesPanel(): void {
       redrawAll();
     });
   });
-  bindNumber("#furnitureWInput", (value) => (selectedFurniture.w = Math.max(GRID, snap(value))));
-  bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(GRID, snap(value))));
+  bindNumber("#furnitureWInput", (value) => (selectedFurniture.w = Math.max(MIN_FURNITURE_SIZE, roundTenth(value))));
+  bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(MIN_FURNITURE_SIZE, roundTenth(value))));
   bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
   bindCheckbox("#furnitureFlipInput", (checked) => (selectedFurniture.flip = checked));
   bindColor("#furnitureColorInput", (value) => (selectedFurniture.color = value));
@@ -13528,6 +13919,11 @@ function isLinear(entity: Entity): entity is LinearElement {
   return entity.type === "wall" || entity.type === "door" || entity.type === "window";
 }
 
+// 家具の大きさを角のハンドルで変えるときの刻み（cm）。小さな物は細かく（1mより小さい向きは5cm、20cmより小さい向きは1cm）
+function furnitureResizeStep(size: number): number {
+  return size < GRID ? 1 : size < 100 ? 5 : GRID;
+}
+
 function isResizable(entity: Entity): entity is Room | Furniture | Roof {
   return entity.type === "room" || entity.type === "furniture" || entity.type === "roof";
 }
@@ -13558,7 +13954,9 @@ function getVisibleWallSegments(wallItem: LinearElement, entities: Entity[]): Li
 }
 
 function wallSections(wallItem: LinearElement, entities: Entity[]) {
-  const openings = entities.filter((entity): entity is LinearElement & { type: "door" | "window" } => entity.type === "door" || entity.type === "window");
+  // 壊れた壁（大穴・崩れ落ちた壁）は、決まった高さで切り抜く
+  const openings = entities.filter((entity): entity is LinearElement & { type: "door" | "window" } => entity.type === "door" || entity.type === "window")
+    .map((opening) => isBrokenStyle(opening.doorStyle) ? { ...opening, range: [BROKEN_CUTS[opening.doorStyle].bottom, BROKEN_CUTS[opening.doorStyle].top] as [number, number] } : opening);
   return solidWallSections(distance(wallItem), openingIntervals(wallItem, openings, WALL_THICKNESS_2D), WALL_HEIGHT, DOOR_HEAD_Y, WINDOW_SILL_Y, WINDOW_HEAD_Y);
 }
 

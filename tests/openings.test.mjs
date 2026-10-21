@@ -87,10 +87,13 @@ test('doors and windows with a color code alpha become translucent, opaque codes
 });
 
 // ---- 両開きドア・門扉と、和風の引き戸（障子・襖・格子戸・板戸） ----
-import { DOOR_STYLES, doorStyleInfo, isDoorStyle, panelBars, slidingPanels } from '../src/opening-shapes.ts';
+import { BROKEN_CUTS, DOOR_STYLES, brokenHoleEdges, brokenRubble, brokenWallOutline, doorStyleInfo, isBrokenStyle, isDoorStyle, panelBars, slidingPanels } from '../src/opening-shapes.ts';
+import { solidWallSections } from '../src/geometry.ts';
 
 test('every door style builds a closed door that stays inside the opening, at small and large widths', () => {
   for (const { value } of DOOR_STYLES) {
+    // 壊れた壁は、下の別のテスト
+    if (isBrokenStyle(value)) continue;
     for (const length of [0.3, 0.9, 1.8, 3.6]) {
       for (const flip of [false, true]) {
         const group = buildOpeningModel({ type: 'door', doorStyle: value, length, flip });
@@ -148,10 +151,53 @@ test('sliding panels cover the whole opening and overlap a little; bars stay ins
 });
 
 test('door style names: every style has a label and keywords, and unknown styles are plain doors', () => {
-  assert.deepEqual(DOOR_STYLES.map(style => style.value), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening']);
+  assert.deepEqual(DOOR_STYLES.map(style => style.value), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening', 'hole', 'broken']);
   for (const style of DOOR_STYLES) assert.ok(style.label && style.keywords, style.value);
   assert.equal(isDoorStyle('shoji'), true);
   assert.equal(isDoorStyle('hidden'), false);
   assert.equal(doorStyleInfo(undefined).value, 'swing');
   assert.deepEqual(DOOR_STYLES.filter(style => style.japanese).map(style => style.value), ['shoji', 'fusuma', 'koshi', 'itado', 'gate']);
+});
+
+// ---- 壊れた壁（壁の大穴・崩れ落ちた壁） ----
+test('broken walls fill the cut with a jagged rim, and drop rubble at the same places as the 2D symbol', () => {
+  for (const style of ['hole', 'broken']) {
+    for (const length of [0.6, 1.1, 2, 4]) {
+      for (const [thickness, wallTop] of [[10, 2.6], [30, 2]]) {
+        const group = buildOpeningModel({ type: 'door', doorStyle: style, length, wallThickness: thickness, wallTop, wallColor: '#a5523a', floorTop: 0.08 });
+        try {
+          const half = length / 2 + thickness / 200;
+          const remain = group.children.find(part => part.name === 'broken-wall');
+          const box = bounds(remain);
+          assert.ok(box.min.x >= -half - 1e-6 && box.max.x <= half + 1e-6, `${style} ${length}: the rim stays in the cut`);
+          assert.ok(box.min.y >= -1e-6 && box.max.y <= Math.min(wallTop, BROKEN_CUTS[style].top) + 1e-6, `${style} ${length}: height ${box.max.y}`);
+          assert.ok(Math.abs(box.max.z - box.min.z - thickness / 100) < 1e-6, `${style}: as thick as the wall`);
+          if (style === 'broken') assert.ok(box.min.y >= BROKEN_CUTS.broken.bottom - 1e-6, 'the low wall below stays as the wall');
+          assert.equal(remain.material.color.getHexString(), 'a5523a', 'the rim has the color of its wall');
+          assert.ok(remain.geometry.getAttribute('position').array.every(Number.isFinite));
+          // かけら: 床の上にあり、2Dの並びと同じ所
+          const rubble = group.children.filter(part => part.name === 'rubble');
+          const pieces = brokenRubble(style, length * 100, thickness);
+          assert.equal(rubble.length, pieces.length);
+          rubble.forEach((mesh, index) => {
+            assert.ok(Math.abs(mesh.position.x - pieces[index].x / 100) < 1e-9 && Math.abs(mesh.position.z - pieces[index].y / 100) < 1e-9, 'rubble matches 2D');
+            assert.ok(Math.abs(bounds(mesh).min.y - 0.08) < 0.03, 'rubble lies on the floor');
+            assert.ok(Math.abs(pieces[index].y) >= thickness / 2, 'rubble is beside the wall');
+          });
+        } finally { dispose(group); }
+      }
+    }
+  }
+  // 大穴は床から切り、上に壁が残る。崩れ落ちた壁は下に低い壁が残る
+  const hole = solidWallSections(300, [{ from: 100, to: 210, kind: 'door', range: [BROKEN_CUTS.hole.bottom, BROKEN_CUTS.hole.top] }], 2.6, 2.1, 0.84, 1.96);
+  assert.deepEqual(hole.filter(section => section.from === 100).map(section => [section.bottom, section.top]), [[2, 2.6]]);
+  const broken = solidWallSections(300, [{ from: 100, to: 210, kind: 'door', range: [BROKEN_CUTS.broken.bottom, BROKEN_CUTS.broken.top] }], 2.6, 2.1, 0.84, 1.96);
+  assert.deepEqual(broken.filter(section => section.from === 100).map(section => [section.bottom, section.top]), [[0, 0.6]]);
+  // 2Dで描く穴のふち（1mの高さ）は、開口の中にあり、左が負・右が正
+  for (const length of [60, 110, 300]) {
+    const [left, right] = brokenHoleEdges(length, 10, 260);
+    assert.ok(left < 0 && right > 0 && -left < length / 2 + 5 && right < length / 2 + 5, `${length}: ${left}, ${right}`);
+    const outline = brokenWallOutline('hole', length, 10, 260);
+    assert.ok(outline.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)));
+  }
 });

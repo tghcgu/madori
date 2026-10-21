@@ -3,7 +3,10 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 // テストでは Node がそのまま読むため、値を読み込むときは拡張子まで書く
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
-import { DOOR_COLORS, doorStyleInfo, doubleLeaves, gateSlats, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset, type DoorStyle } from "./opening-shapes.ts";
+import {
+  DOOR_COLORS, brokenRubble, brokenWallOutline, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
+  type BrokenStyle, type DoorStyle,
+} from "./opening-shapes.ts";
 
 export interface OpeningModelOptions {
   type: "door" | "window";
@@ -14,13 +17,19 @@ export interface OpeningModelOptions {
   flip?: boolean;
   color?: string;
   color3d?: string;
+  // 壊れた壁: 付いている壁の色・厚み（cm）・高さ（m）・材質の名前
+  wallColor?: string;
+  wallThickness?: number;
+  wallTop?: number;
+  wallMaterialName?: string;
 }
 
 export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
   if (!Number.isFinite(item.length) || item.length <= 0) throw new Error("Invalid opening length");
   const group = new THREE.Group();
   const style: DoorStyle = isDoorStyle(item.doorStyle) ? item.doorStyle : "swing";
-  group.name = item.type === "window" ? "window" : style === "sliding" ? "sliding-door" : style === "swing" ? "closed-door" : style === "opening" ? "opening" : `${style}-door`;
+  group.name = item.type === "window" ? "window" : style === "sliding" ? "sliding-door" : style === "swing" ? "closed-door" : style === "opening" ? "opening"
+    : isBrokenStyle(style) ? `${style}-wall` : `${style}-door`;
   const w = item.length;
   // カラーコードの末尾に透明度があれば、ドア・窓をまるごと半透明にする
   const parsed = parseColorCode(item.color3d ?? item.color);
@@ -69,6 +78,8 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
     }
   } else if (style === "opening") {
     // 戸のない開口: 何も置かない（壁はドアと同じ高さまで切ってある）
+  } else if (isBrokenStyle(style)) {
+    buildBrokenWall(style);
   } else if (style !== "swing" && style !== "sliding") {
     buildStyledDoor(style);
   } else {
@@ -106,6 +117,27 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
   }
   applyOpacity(group, parsed?.alpha ?? 1);
   return group;
+
+  // 壊れた壁: 切り抜いた所を、ぎざぎざの穴（崩れたふち）を残して壁で埋め、足もとにかけらを置く（かけらの並びは2Dと同じ）
+  function buildBrokenWall(kind: BrokenStyle): void {
+    const thickness = (item.wallThickness ?? 10) / 100, wallTop = item.wallTop ?? 2.6;
+    const color = custom ?? item.wallColor ?? DOOR_COLORS[kind];
+    const wall = material(item.wallMaterialName ?? "plaster-wall", color, 0.85);
+    const outline = brokenWallOutline(kind, w * 100, thickness * 100, wallTop * 100);
+    const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), { depth: thickness, bevelEnabled: false });
+    geometry.translate(0, 0, -thickness / 2);
+    const remain = new THREE.Mesh(geometry, wall);
+    remain.name = "broken-wall";
+    remain.castShadow = !wall.transparent;
+    remain.receiveShadow = true;
+    group.add(remain);
+    const rubble = material("rubble-stone", new THREE.Color(color).multiplyScalar(0.82), 0.95);
+    const floor = item.floorTop ?? 0.08;
+    for (const piece of brokenRubble(kind, w * 100, thickness * 100)) {
+      const mesh = part("rubble", piece.w / 100, piece.h / 100, piece.d / 100, piece.x / 100, floor + piece.h / 200, piece.y / 100, rubble, 0.012);
+      mesh.rotation.y = -piece.angle;
+    }
+  }
 
   // 両開きドア・門扉と、和風の引き戸（障子・襖・格子戸・板戸）。板の並びと桟の位置は opening-shapes.ts と同じ（2Dの記号と同じ）
   function buildStyledDoor(kind: Exclude<DoorStyle, "swing" | "sliding">): void {

@@ -9,7 +9,7 @@ export async function verifyDoors({ page, importPlan, choose, planPoint, move, s
   await page.locator('button[data-view-mode="split"]').click();
   const group = label => page.locator('.palette-group').filter({ has: page.locator('summary', { hasText: label }) });
   const styles = locator => locator.locator('[data-door-style]').evaluateAll(buttons => buttons.map(button => button.dataset.doorStyle));
-  assert.deepEqual(await styles(group(/^建具/)), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening'], 'every door style is in the fittings group');
+  assert.deepEqual(await styles(group(/^建具/)), ['swing', 'double', 'sliding', 'shoji', 'fusuma', 'koshi', 'itado', 'gate', 'opening', 'hole', 'broken'], 'every door style is in the fittings group');
   assert.deepEqual(await styles(group(/^和風/)), ['shoji', 'fusuma', 'koshi', 'itado', 'gate'], 'Japanese doors are also in the Japanese group');
   assert.equal(await group(/^和風/).locator('[data-furniture="zaisu"]').count(), 1, 'the Japanese group also shows the floor chair from the chairs group');
   assert.equal(await group(/^椅子/).locator('[data-furniture="zaisu"]').count(), 1);

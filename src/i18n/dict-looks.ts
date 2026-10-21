@@ -133,4 +133,7 @@ export const LOOKS: Record<string, Translations> = {
   "座る": ["Sitting", "앉기", "坐下"],
   "ひざをつく": ["Kneeling", "무릎 꿇기", "跪下"],
   "しゃがむ": ["Crouching", "웅크리기", "蹲下"],
+  // 2026-10-21: 壊れた壁
+  "壁の大穴": ["Large hole in the wall", "벽의 큰 구멍", "牆上的大洞"],
+  "崩れ落ちた壁": ["Collapsed wall", "무너진 벽", "崩塌的牆"],
 };

@@ -56,6 +56,10 @@ test('realistic materials are sorted by name into wood, fabric, metal and so on'
   assert.equal(kind('mystery', { roughness: 0.2 }), 'ceramic');
   assert.equal(kind('mystery', { color: 0x8a5a33 }), 'wood');
   assert.equal(kind('mystery', { color: 0x4477aa }), 'plastic');
+  // 利用者が色を決めた金属は、塗った金属（色が見えるように）
+  assert.equal(realMaterialKind('part-steel', 0xcc4455, 0.4, 0.45, false, true), 'lacquer');
+  assert.equal(realMaterialKind('mystery', 0xcc4455, 0.4, 0.8, false, true), 'lacquer');
+  assert.equal(realMaterialKind('part-wood', 0xcc4455, 0.7, 0, false, true), 'wood', 'painting keeps other materials');
 });
 
 test('every realistic material kind has balanced shader code', () => {

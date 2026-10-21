@@ -300,6 +300,21 @@ const DEFS = {
   spikeTrap: { label: "トゲの罠", w: 100, h: 100, height: 30, group: "fantasy", keywords: "とげ 罠 わな" },
   wallTorch: { label: "壁の松明", w: 25, h: 20, height: 220, group: "fantasy", mounted: true, keywords: "たいまつ 松明 明かり" },
   hay: { label: "干し草", w: 100, h: 70, height: 80, group: "fantasy", keywords: "ほしくさ 藁 牧場" },
+
+  // ---- 天井に付ける物（照明など）。どれも天井（床から260cm）に付く ----
+  chandelier: { label: "シャンデリア", w: 90, h: 90, height: 260, group: "ceiling", mounted: true, keywords: "しゃんでりあ 洋館 豪華 照明" },
+  pendantLight: { label: "ペンダントライト", w: 40, h: 40, height: 260, group: "ceiling", mounted: true, keywords: "ぺんだんとらいと 吊り下げ 照明 ダイニング" },
+  ceilingLight: { label: "シーリングライト", w: 50, h: 50, height: 260, group: "ceiling", mounted: true, keywords: "しーりんぐらいと 照明 天井灯" },
+  ceilingFan: { label: "シーリングファン", w: 120, h: 120, height: 260, group: "ceiling", mounted: true, keywords: "しーりんぐふぁん 扇風機 ファン プロペラ" },
+  downlight: { label: "ダウンライト", w: 12, h: 12, height: 260, group: "ceiling", mounted: true, keywords: "だうんらいと 照明 埋め込み" },
+  spotlightRail: { label: "スポットライト（レール）", w: 150, h: 15, height: 260, group: "ceiling", mounted: true, keywords: "すぽっとらいと ライティングレール 照明 ギャラリー" },
+  bareBulb: { label: "裸電球", w: 10, h: 10, height: 260, group: "ceiling", mounted: true, keywords: "はだかでんきゅう 電球 吊り下げ 照明 ホラー" },
+  mirrorBall: { label: "ミラーボール", w: 40, h: 40, height: 260, group: "ceiling", mounted: true, keywords: "みらーぼーる ディスコ クラブ ダンス" },
+  hangingPlant: { label: "吊り鉢（ハンギングプラント）", w: 50, h: 50, height: 260, group: "ceiling", mounted: true, keywords: "つりばち ハンギング 観葉植物 植物 鉢" },
+  ceilingProjector: { label: "プロジェクター（天井）", w: 35, h: 30, height: 260, group: "ceiling", mounted: true, keywords: "ぷろじぇくたー 投影 映写 会議 ホームシアター" },
+  ceilingAc: { label: "天井埋め込みエアコン", w: 84, h: 84, height: 260, group: "ceiling", mounted: true, keywords: "てんじょうえあこん 空調 エアコン カセット オフィス" },
+  smokeDetector: { label: "火災報知器（煙感知器）", w: 12, h: 12, height: 260, group: "ceiling", mounted: true, keywords: "かさいほうちき 火災 煙 感知器 報知器 消防" },
+  sprinkler: { label: "スプリンクラー", w: 8, h: 8, height: 260, group: "ceiling", mounted: true, keywords: "すぷりんくらー 消火 消防 散水" },
 } as const;
 
 export type MorePartKind = keyof typeof DEFS;
@@ -2026,6 +2041,120 @@ export function moreFurnitureParts(kind: MorePartKind, b: PartBuilder): void {
       box(0, 0, 1, 1, 0, 0.75, "hay", 0.1);
       for (const x of [-0.3, 0.3]) box(x, 0, 0.04, 1.0, 0, 0.76, "rope");
       ellipse(0.1, 0.1, 0.5, 0.5, 0.75, 0.25, "hay", 0.4);
+      break;
+
+    // ---- 天井に付ける物。高さ（260cm）がちょうど天井で、上の端が天井に付く ----
+    case "chandelier": {
+      // シャンデリア: 天井の台座から竿を下ろし、金の胴から6本の腕。腕の先に受け皿・ろうそく・明かり、腕の間にガラスの飾り
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 + Math.PI / 6;
+        sphere(Math.cos(a) * 0.27, Math.sin(a) * 0.27, 0.06, 0.06, 0.64, 0.07, "glass");
+      }
+      sphere(0, 0, 0.09, 0.09, 0.6, 0.08, "gold");
+      sphere(0, 0, 0.22, 0.22, 0.66, 0.12, "gold");
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        cm("box", Math.cos(a) * w * 0.21, Math.sin(a) * d * 0.21, w * 0.34, 4, height * 0.72, height * 0.025, "gold", { angle: a });
+        ellipse(Math.cos(a) * 0.4, Math.sin(a) * 0.4, 0.1, 0.1, 0.735, 0.02, "gold");
+        ellipse(Math.cos(a) * 0.4, Math.sin(a) * 0.4, 0.04, 0.04, 0.755, 0.05, "paperWhite");
+        sphere(Math.cos(a) * 0.4, Math.sin(a) * 0.4, 0.05, 0.05, 0.805, 0.03, "light");
+      }
+      ellipse(0, 0, 0.035, 0.035, 0.78, 0.2, "gold");
+      ellipse(0, 0, 0.16, 0.16, 0.975, 0.025, "gold");
+      break;
+    }
+    case "pendantLight":
+      // ペンダントライト: 電球、上がすぼまった笠、コード、天井の台
+      sphere(0, 0, 0.3, 0.3, 0.64, 0.045, "light");
+      ellipse(0, 0, 1, 1, 0.66, 0.1, "dark", 0.3);
+      ellipse(0, 0, 0.04, 0.04, 0.76, 0.22, "black");
+      ellipse(0, 0, 0.25, 0.25, 0.98, 0.02, "dark");
+      break;
+    case "ceilingLight":
+      // シーリングライト: 光る丸いカバーと、白い本体
+      ellipse(0, 0, 0.9, 0.9, 0.955, 0.012, "light");
+      ellipse(0, 0, 1, 1, 0.965, 0.035, "enamel");
+      break;
+    case "ceilingFan": {
+      // シーリングファン: 4枚の羽根、モーター、下の明かり、竿と天井の台
+      sphere(0, 0, 0.12, 0.12, 0.775, 0.045, "light");
+      ellipse(0, 0, 0.16, 0.16, 0.81, 0.05, "dark");
+      for (let i = 0; i < 4; i++) {
+        const a = (i * Math.PI) / 2 + Math.PI / 4;
+        cm("box", Math.cos(a) * w * 0.28, Math.sin(a) * d * 0.28, w * 0.42, d * 0.11, height * 0.83, height * 0.008, "wood", { angle: a });
+      }
+      ellipse(0, 0, 0.025, 0.025, 0.86, 0.11, "dark");
+      ellipse(0, 0, 0.08, 0.08, 0.97, 0.03, "dark");
+      break;
+    }
+    case "downlight":
+      // ダウンライト: 天井に埋めた、光る丸と白い縁
+      ellipse(0, 0, 0.7, 0.7, 0.98, 0.012, "light");
+      ring(0, 0, 1, 1, 0.985, 0.015, "enamel", 0.7);
+      break;
+    case "spotlightRail":
+      // スポットライト: 天井のレールに、下を照らす3つの灯具
+      for (const x of [-0.33, 0, 0.33]) {
+        ellipse(x, 0, 0.06, 0.6, 0.855, 0.012, "light");
+        ellipse(x, 0, 0.08, 0.8, 0.86, 0.065, "dark");
+        box(x, 0, 0.025, 0.3, 0.925, 0.05, "dark");
+      }
+      box(0, 0, 1, 0.35, 0.975, 0.025, "dark");
+      break;
+    case "bareBulb":
+      // 裸電球: コードの先に、ソケットと光る電球
+      sphere(0, 0, 0.75, 0.75, 0.705, 0.045, "light");
+      ellipse(0, 0, 0.45, 0.45, 0.745, 0.055, "black");
+      ellipse(0, 0, 0.12, 0.12, 0.8, 0.2, "black");
+      break;
+    case "mirrorBall":
+      // ミラーボール: 鏡を貼った玉と、竿・天井の台
+      sphere(0, 0, 1, 1, 0.7, 0.15, "metal");
+      ellipse(0, 0, 0.04, 0.04, 0.85, 0.13, "metal");
+      ellipse(0, 0, 0.2, 0.2, 0.98, 0.02, "metal");
+      break;
+    case "hangingPlant":
+      // 吊り鉢: 鉢のふちから垂れ下がるつる、ふちを囲む葉、上が広い鉢、吊りひもと天井のフック
+      for (let i = 0; i < 5; i++) {
+        const a = (i * Math.PI * 2) / 5 + 0.3;
+        ellipse(Math.cos(a) * 0.36, Math.sin(a) * 0.36, 0.07, 0.07, 0.46 + (i % 2) * 0.06, 0.26 - (i % 2) * 0.06, "leaf");
+      }
+      for (let i = 0; i < 7; i++) {
+        const a = (i * Math.PI * 2) / 7;
+        sphere(Math.cos(a) * 0.33, Math.sin(a) * 0.33, 0.3, 0.3, 0.7, 0.09, "leaf");
+      }
+      ellipse(0, 0, 0.5, 0.5, 0.68, 0.12, "ceramic", 1.3);
+      ellipse(0, 0, 0.42, 0.42, 0.8, 0.012, "leaf");
+      ellipse(0, 0, 0.03, 0.03, 0.81, 0.175, "rope");
+      ellipse(0, 0, 0.1, 0.1, 0.985, 0.015, "metal");
+      break;
+    case "ceilingProjector":
+      // 天井のプロジェクター: 吊り金具の下に本体、前（手前）にレンズ
+      box(0, 0, 1, 0.85, 0.82, 0.08, "enamel", 0.2);
+      cm("disc", 0, d * 0.42, 3, w * 0.3, height * 0.835, height * 0.05, "black", { angle: Math.PI / 2 });
+      ellipse(0, 0, 0.08, 0.09, 0.9, 0.085, "dark");
+      box(0, 0, 0.4, 0.4, 0.985, 0.015, "dark");
+      break;
+    case "ceilingAc":
+      // 天井埋め込みエアコン: 四角い化粧板、真ん中の吸い込み口、四方の吹き出し口
+      for (const s of [-1, 1]) {
+        box(0, s * 0.38, 0.6, 0.06, 0.962, 0.006, "dark");
+        box(s * 0.38, 0, 0.06, 0.6, 0.962, 0.006, "dark");
+      }
+      box(0, 0, 0.45, 0.45, 0.964, 0.008, "grille");
+      box(0, 0, 1, 1, 0.97, 0.03, "enamel", 0.05);
+      break;
+    case "smokeDetector":
+      // 火災報知器: 丸い本体と、赤い表示灯
+      ellipse(0.25, 0, 0.08, 0.08, 0.966, 0.006, "redLamp");
+      ellipse(0, 0, 0.45, 0.45, 0.965, 0.012, "enamel");
+      ellipse(0, 0, 1, 1, 0.975, 0.025, "enamel");
+      break;
+    case "sprinkler":
+      // スプリンクラー: 天井の座金と、下向きの頭と散水板
+      ellipse(0, 0, 0.8, 0.8, 0.963, 0.006, "metal");
+      ellipse(0, 0, 0.35, 0.35, 0.968, 0.025, "metal");
+      ellipse(0, 0, 1, 1, 0.993, 0.007, "metal");
       break;
   }
 }

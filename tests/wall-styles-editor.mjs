@@ -15,7 +15,8 @@ export async function verifyWallStyles({ open, plan, output }) {
     const group = page.locator('details.palette-group', { has: page.locator('summary', { hasText: /^壁$/ }) });
     if (await group.getAttribute('open') === null) await group.locator('summary').click();
     assert.ok(await group.locator('[data-wall-style]').count() >= 10, 'the wall group lists the wall types');
-    assert.equal(await group.locator('[data-wall-style] .wall-swatch').count(), await group.locator('[data-wall-style]').count(), 'each wall type has a picture');
+    await page.waitForTimeout(100);
+    assert.equal(await group.locator('[data-wall-style] canvas.furniture-thumb').count(), await group.locator('[data-wall-style]').count(), 'each wall type has a picture');
     await group.locator('[data-wall-style="stoneWall"]').click();
     assert.equal(await page.locator('.tool-button[data-tool="wall"]').getAttribute('aria-pressed'), 'true', 'choosing a wall type starts the wall tool');
     assert.equal(await page.locator('#wallToolStylePicker [data-wall-style-choice="stoneWall"]').getAttribute('aria-checked'), 'true');

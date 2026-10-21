@@ -389,7 +389,7 @@ const BASE_GROUPS: FurnitureGroup[] = [
 // 左の一覧の並び（よく使う順）。家具の分類は FURNITURE_GROUPS の id、ほかは建具・階段・なぞって形を決める物・床材・屋根・図形の壁の欄
 export type PaletteSection = "fittings" | "walls" | "stairs" | "trace" | "surfaces" | "roofs" | "shapes";
 export const PALETTE_ORDER: string[] = [
-  "fittings", "walls", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor",
+  "fittings", "walls", "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor", "ceiling",
   "stairs", "trace", "surfaces", "outdoor", "roofs",
   "japanese", "school", "shop", "people", "creatures", "vehicles", "station", "hospital", "street", "structure", "infra", "industry",
   "culture", "shrine", "play", "fantasy", "occult", "sf",
@@ -397,8 +397,10 @@ export const PALETTE_ORDER: string[] = [
 ];
 
 // 足した家具・小物（furniture-more.ts）の分類。ほかの分類に入る物は、その分類の終わりに並べる
-const MORE_GROUPS: { id: string; label: string; keywords: string }[] = [
-  { id: "structure", label: "建物の部分・工事", keywords: "たてもの 建物 こうぞう 構造 こうじ 工事 はしら 柱 壊れた こわれた" },
+const MORE_GROUPS: { id: string; label: string; keywords: string; doorStyles?: DoorStyle[] }[] = [
+  // 壁の大穴・崩れ落ちた壁（ドアと同じく壁に置く）も、この欄に出す
+  { id: "structure", label: "建物の部分・工事", keywords: "たてもの 建物 こうぞう 構造 こうじ 工事 はしら 柱 壊れた こわれた", doorStyles: ["hole", "broken"] },
+  { id: "ceiling", label: "天井（照明など）", keywords: "てんじょう 天井 しょうめい 照明 あかり 明かり らいと ライト つるす 吊るす つりさげ 吊り下げ" },
   { id: "infra", label: "設備・インフラ", keywords: "せつび 設備 いんふら インフラ はいかん 配管 でんき 電気 きかい 機械 おくじょう 屋上" },
   { id: "industry", label: "物流・工場・倉庫", keywords: "ぶつりゅう 物流 こうじょう 工場 そうこ 倉庫 みなと 港" },
   { id: "culture", label: "博物館・教会・図書館", keywords: "はくぶつかん 博物館 びじゅつかん 美術館 きょうかい 教会 としょかん 図書館 だいがく 大学" },
