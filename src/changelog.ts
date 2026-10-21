@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-21",
     items: [{
+      ja: "対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです",
+      en: "Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are",
+    }, {
       ja: "壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります",
       en: "Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners",
     }, {

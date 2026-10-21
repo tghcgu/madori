@@ -300,6 +300,11 @@ select:focus-visible {
 
 .top-note-text {
   min-width: 0;
+  /* 2行に収める（言語によって文が長くなっても、上のバーからはみ出さない） */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .edition-note {
@@ -2423,4 +2428,60 @@ body[data-resizing="down"] {
     grid-template-columns: 1fr;
     grid-template-rows: auto calc(var(--plan-share) * 120vh) calc((1 - var(--plan-share)) * 120vh);
   }
+}
+
+/* 言語の選択（JP・EN・KR・繁中）。絵と短い名前だけの小さな欄 */
+.language-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.language-select:hover {
+  border-color: var(--line-strong);
+}
+
+.language-select svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.language-select select {
+  height: 34px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* 日本語以外の言語を読み込んでいる間は隠す（index.html の先頭で付け、src/i18n.ts が外す） */
+html[data-i18n-pending] body {
+  visibility: hidden;
+}
+
+/* 韓国語・繁体字は、その言語の字体を先に使う */
+:root:lang(ko) {
+  font-family: Inter, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+:root:lang(zh-Hant) {
+  font-family: Inter, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+}
+
+/* 日本語以外では、上のバーの文（お知らせ・注意書き）を出さない（ボタンの文字が長くなり、文の入る幅がなくなるため。
+   間取り専用版へはテンプレートの欄の下から、注意書きは「このアプリについて」から読める） */
+:root:not(:lang(ja)) .brand .top-note {
+  display: none;
 }

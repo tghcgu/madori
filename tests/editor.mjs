@@ -23,6 +23,7 @@ import { verifyThreeStyles } from './three-style-editor.mjs';
 import { verifyFreeShapes } from './free-shape-editor.mjs';
 import { verifyWallStyles } from './wall-styles-editor.mjs';
 import { verifyMapTools, verifyMoreFurniture } from './map-tools-editor.mjs';
+import { verifyLanguages } from './i18n-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 const output = '.codex/regression';
@@ -236,6 +237,8 @@ try {
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
+  await verifyLanguages({ open, plan });
+  if (!process.argv.includes('--languages-only')) {
   await verifyFreeShapes({ open, plan, output });
   if (!process.argv.includes('--free-shapes-only')) {
   await verifyWallStyles({ open, plan, output });
@@ -1689,6 +1692,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

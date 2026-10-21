@@ -10,7 +10,8 @@ import { readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
 import { MORE_DEFS, MORE_SMALL_KINDS, isMorePartKind } from "./furniture-more";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
-import { CHANGELOG, changelogDate } from "./changelog";
+import { CHANGELOG } from "./changelog";
+import { formatDate, getLanguage, initI18n, isLanguage, onLanguageChange, setLanguage, t } from "./i18n";
 import { TEMPLATE_GROUPS, hasTemplatePlan, templatePlan } from "./templates";
 import { makeTranslucent } from "./translucency";
 import {
@@ -1208,6 +1209,7 @@ function setupUi(): void {
   setupFeedbackForm();
   setupCreditCopy();
   setupChangelog();
+  setupLanguageSelect();
   const ghostToggle = document.querySelector<HTMLButtonElement>("#ghostToggle");
   ghostToggle?.addEventListener("click", () => {
     showGhostFloor = !showGhostFloor;
@@ -1629,10 +1631,10 @@ function applyPaletteSearch(): void {
   document.querySelectorAll<HTMLElement>(".palette-section").forEach((section) => {
     let sectionMatch = false;
     section.querySelectorAll<HTMLDetailsElement>(".palette-group").forEach((group) => {
-      const groupText = group.dataset.search ?? "";
+      const groupText = `${group.dataset.search ?? ""} ${normalizeSearchText(group.querySelector("summary")?.textContent ?? "")}`;
       let groupMatch = false;
       group.querySelectorAll<HTMLButtonElement>("button[data-search]").forEach((button) => {
-        const text = `${button.dataset.search} ${groupText}`;
+        const text = `${button.dataset.search} ${normalizeSearchText(button.textContent ?? "")} ${groupText}`;
         let match = !searching || terms.every((term) => text.includes(term));
         const key = searching && match ? paletteItemKey(button) : null;
         if (key) {
@@ -9416,7 +9418,8 @@ function drawShapeHandle(shape: Shape): void {
   ctx.restore();
 }
 
-function drawSizeBadge(x: number, y: number, text: string): void {
+function drawSizeBadge(x: number, y: number, label: string): void {
+  const text = t(label);
   ctx.save();
   ctx.font = `12px ${TEXT_FONT}`;
   ctx.translate(x, y); ctx.scale(1 / view.zoom, 1 / view.zoom);
@@ -11616,12 +11619,32 @@ function setupChangelog(): void {
   const list = document.querySelector<HTMLDivElement>("#changelogList");
   const latest = document.querySelector<HTMLSpanElement>("#changelogLatest");
   if (!list) return;
+  // 日本語以外では、英語の文を出す
+  const english = getLanguage() !== "ja";
   list.innerHTML = CHANGELOG.map((entry) => `
     <section class="changelog-day">
-      <h3><time datetime="${entry.date}">${changelogDate(entry.date)}</time></h3>
-      <ul>${entry.items.map((item) => `<li>${escapeHtml(item.ja)}</li>`).join("")}</ul>
+      <h3><time datetime="${entry.date}">${formatDate(entry.date)}</time></h3>
+      <ul>${entry.items.map((item) => `<li>${escapeHtml(english ? item.en : item.ja)}</li>`).join("")}</ul>
     </section>`).join("");
-  if (latest && CHANGELOG[0]) latest.textContent = `最新 ${changelogDate(CHANGELOG[0].date).replace(/^\d+年/, "")}`;
+  if (latest && CHANGELOG[0]) latest.textContent = `最新 ${formatDate(CHANGELOG[0].date, false)}`;
+}
+
+// ---- 言語 ----
+// 上のバーの「言語」。選ぶと画面の文字をその言語にし、ブラウザに覚える（src/i18n.ts）
+function setupLanguageSelect(): void {
+  const select = document.querySelector<HTMLSelectElement>("#languageSelect");
+  if (!select) return;
+  select.value = getLanguage();
+  select.addEventListener("change", () => {
+    if (isLanguage(select.value)) void setLanguage(select.value);
+  });
+  onLanguageChange((language) => {
+    select.value = language;
+    // 更新履歴は言語ごとの文を持つので作り直す。2Dに描く文字（部屋の広さなど）も描き直す
+    setupChangelog();
+    applyPaletteSearch();
+    render2d();
+  });
 }
 
 // ---- クレジット表記のコピー ----
@@ -12612,7 +12635,7 @@ function roomAreaText(room: Room): string | null {
     return sum + x * ny - nx * y;
   }, 0)) / 2;
   const m2 = Math.max(0, ring(outer) - holes.reduce((sum, hole) => sum + ring(hole), 0)) / 10000;
-  return displaySettings.area === "jo" ? `${(m2 / 1.62).toFixed(1)}帖` : `${m2.toFixed(1)}㎡`;
+  return displaySettings.area === "jo" ? t(`${(m2 / 1.62).toFixed(1)}帖`) : `${m2.toFixed(1)}㎡`;
 }
 
 function isPointInRoomLabel(point: Point, room: Room): boolean {
@@ -12822,6 +12845,16 @@ function makeTemplate(key: string): PlanState {
   const plan = buildTemplate(key);
   if (!hasTemplatePlan(key)) openTemplateStairwells(plan.floors, () => newId("room"));
   plan.roofs.forEach((item) => { item.floorId ??= plan.floors[plan.floors.length - 1].id; });
+  return localizePlanNames(plan);
+}
+
+// テンプレートの部屋の名前と文字は、選んでいる言語で作る（作った後は利用者の書いた名前と同じに扱い、言語を変えても変えない）
+function localizePlanNames(plan: PlanState): PlanState {
+  if (getLanguage() === "ja") return plan;
+  plan.floors.forEach((floor) => floor.entities.forEach((entity) => {
+    if (entity.type === "room" && entity.name) entity.name = t(entity.name);
+    if (entity.type === "text" && entity.text) entity.text = t(entity.text);
+  }));
   return plan;
 }
 
@@ -13458,6 +13491,7 @@ applySavedDisplaySettings();
 
 createIcons({ icons });
 setupUi();
+void initI18n();
 fitPlanToCanvas();
 render2d();
 rebuildThree();

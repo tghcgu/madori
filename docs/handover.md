@@ -148,8 +148,10 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `src/translucency.ts` | 透明度のある色の3Dの材質 |
 | `src/persistence.ts` | ブラウザに保存した間取りの読み込みと、壊れていたときの復旧・原本の退避 |
 | `src/changelog.ts` | 更新履歴のデータ（アプリの「更新履歴」と README の元） |
+| `src/i18n.ts` | 画面の言語（日本語・英語・韓国語・繁体字中国語）。画面の文字は日本語のまま書き、日本語以外では、画面に出た文字と人に見える属性（title・aria-label・placeholder・alt・label）を MutationObserver で辞書の訳に置き換える。`{0}` の型（「{0}個を選択中」など）は数字や中の値ごと訳し、型にもない文は「・」「（）」などで区切って訳す。確かめの窓（confirm・alert）も訳す。キャンバスに描く文字（部屋の広さの帖など）は描く所で `t()` を通す。置き換えない所は `data-i18n-skip`（言語の選択・更新履歴）。言語は `localStorage` の `madori-quick-3d-language` と URL の `?lang=`。ブラウザの言語からは決めない（検索エンジンが日本語のまま読むように） |
+| `src/i18n/` | 辞書（日本語 → [英語, 韓国語, 繁体字]）。`dict-ui.ts`（画面）・`dict-looks.ts`（絵柄・床材など）・`dict-furniture.ts`（家具）・`dict-templates.ts`（テンプレートと部屋の名前）を `dictionary.ts` がまとめる。日本語以外を選んだときだけ読み込む（ビルドでは別のファイル） |
 | `src/styles.css` | 見た目。狭い画面の切り替え（1339px以下でお知らせを隠す、1039px以下で上のボタンを絵だけ、760px以下でスマホの縦並び） |
-| `scripts/` | `plan-edition.mjs`（/plan/ を作る）、`compare-2d-3d.mjs`、`changelog-readme.mjs`、`check-deploy.mjs` |
+| `scripts/` | `plan-edition.mjs`（/plan/ を作る）、`compare-2d-3d.mjs`、`changelog-readme.mjs`、`check-deploy.mjs`、`i18n-strings.mjs`（コードと index.html から画面の日本語を集め、訳がない物を出す。検索の語・字体・シェーダーは集めない） |
 | `tests/` | `*.test.mjs` は単体テスト、`editor.mjs` は画面のテスト（E2E）、`furniture-visual.mjs` は3Dの一覧画像 |
 
 ### `src/main.ts` の中（`// ---- 見出し ----` で区切ってある。行番号は変わるので、関数名で探す）
@@ -194,6 +196,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 4. 左の一覧と検索: `FURNITURE_GROUPS`（どれか1つの分類の `kinds` に入れ、ほかの分類にも出すなら `also`）と `main.ts` の `SEARCH_KEYWORDS` に足す。
 5. 確かめる: `npm test`（全種類を自動で調べる）、`npm run test:e2e`（全種類の大きさ・回転・反転・色）、`npm run compare -- 新しい種類`。
 6. 説明を直す: README の家具の表と数（いまは定義が415種類。ペンの線 `paint` と画像 `image` は一覧に出さない）と、更新履歴。
+7. 名前の訳: `src/i18n/dict-furniture.ts` に英語・韓国語・繁体字の名前を足す（`npm test` の `tests/i18n.test.mjs` が抜けを見つける）。
 
 ### 2Dの絵柄（`src/plan-style.ts`）の仕組み
 
@@ -292,6 +295,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - サイト名と説明: `index.html` の JSON-LD の `alternateName` からドメインを外し、説明を創作向け（漫画・イラストの背景資料、小説やゲームの舞台、TRPGのマップ）にした。Google の表示が変わるのは、次に読みに来たとき（Search Console の URL 検査で早められる）。
   - E2E は `tests/map-tools-editor.mjs`（`--map-tools-only`）。
   - 参考サイトにある家具・小物を、絵は使わずに自分で部品から組んで248種類足した（`src/furniture-more.ts`。分類を8つ足し、ほかの分類の終わりにも足した）。部品の決まり（範囲の中・床から高さちょうど・描く回数24まで）は前からの家具の単体テストが全種類を確かめる。手前（正面）は y が正。ふたや天板で上から何もかもが隠れる物は、天板を奥へ寄せて正面の扉を見せる・天井を枠だけにする・上に機械やファンを載せる、などで上から見て分かるようにした。
+  - 対応言語 JP・EN・KR・繁中（「対応言語もJP | EN | KR | 繁中」）: `src/i18n.ts` と `src/i18n/`（コードの地図を見る）。上のバーの `#languageSelect`。テンプレートの部屋の名前は `makeTemplate` の `localizePlanNames` でその言語にする（作った後は利用者の名前として扱う）。更新履歴は日本語以外では `en` の文。日本語以外では上のバーのお知らせを出さない（ボタンの文字が長く、入らないため）。E2E は `tests/i18n-editor.mjs`（`--languages-only`）。訳は Claude が書いた（機械翻訳サービスは使っていない）。
   - 机にのせる小物（`small`: メモ・鍵・携帯電話・ノートPCなど）は、3Dでは下にある家具の上にのせる（`main.ts` の `smallItemLift`・`liftSmallItems`。2Dは変わらない。人・怪物・ラグ・血などは台にしない `NO_SUPPORT_KINDS`）。
 - **2026-10-19（その9）**: 「重い」「ペンで描くなのに範囲になってる」「ドーナツも描けるように」「川の真ん中の線」「すべて見直せ」への対応。
   - 軽くする（`src/main.ts`）: `rebuildThreeScene` は2Dだけを表示中なら作らず（`threeSceneKey = null`、3Dを見るときに `ensureThreeScene`）、間取り・屋根・隠した階・屋根の表示・絵柄の JSON（`threeSceneSignature`）が前と同じなら選択の枠だけ直す（`refreshSelectionBoxes`。枠を付ける物には `userData.selectionTarget`）。家具・ドア・窓は形を決める値の JSON を鍵に作り置きを `clone` して使い（`cachedModel`。形と材質は `cachedResources` に入れ、`disposeGroup`・`removeThreeObjects` では捨てない。3回の作り直しで使われなければ `trimModelCache` で捨てる）、草の置き場所も作り置き（`grassCache`）。捨てる形・材質は次に3Dを描いた後で捨てる（`pendingDisposal` → `flushDisposal`。先に捨てるとシェーダーを組み直して重い）。影は `renderer.shadowMap.autoUpdate = false` で、物や光が変わったときだけ `needsUpdate`。シーンを作り直さずに3Dを変える所（`syncThreeWhileDragging`）では `threeSceneKey = null`。E2E の3Dを調べる関数は先に `ensureThreeScene()` を呼ぶ。測り方は `.codex/perf.mjs`・`.codex/cpu.mjs`（作業用）。

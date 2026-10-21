@@ -37,6 +37,17 @@
     <script>
       // 間取り専用版（/plan/）は、画面を描く前に3Dの欄や3Dだけのボタンを隠す
       if (/\/plan\/?(index\.html)?$/.test(location.pathname)) document.documentElement.dataset.edition = "plan";
+      // 日本語以外の言語を選んでいるときは、訳し終えるまで画面を隠す（日本語が一瞬見えないように。src/i18n.ts が外す）
+      try {
+        var language = new URLSearchParams(location.search).get("lang") || localStorage.getItem("madori-quick-3d-language");
+        if (["en", "ko", "zh-Hant"].indexOf(language) >= 0) {
+          document.documentElement.lang = language;
+          document.documentElement.dataset.i18nPending = "";
+          setTimeout(function () { delete document.documentElement.dataset.i18nPending; }, 4000);
+        }
+      } catch (error) {
+        // 読めなければ日本語のまま
+      }
     </script>
     <script type="application/ld+json">
       {
@@ -159,6 +170,15 @@
             <i data-lucide="rotate-ccw"></i>
             <span>新規</span>
           </button>
+          <label class="language-select" title="言語 / Language" data-i18n-skip>
+            <i data-lucide="languages"></i>
+            <select id="languageSelect" aria-label="言語 / Language">
+              <option value="ja" lang="ja">JP</option>
+              <option value="en" lang="en">EN</option>
+              <option value="ko" lang="ko">KR</option>
+              <option value="zh-Hant" lang="zh-Hant">繁中</option>
+            </select>
+          </label>
           <input id="importInput" type="file" accept="application/json" hidden />
           <input id="combineInput" type="file" accept="application/json" multiple hidden />
         </div>
@@ -294,7 +314,7 @@
           <section class="tool-section">
             <details class="template-details">
               <summary>更新履歴<span class="changelog-latest" id="changelogLatest"></span></summary>
-              <div class="about-text changelog" id="changelogList"></div>
+              <div class="about-text changelog" id="changelogList" data-i18n-skip></div>
             </details>
           </section>
 

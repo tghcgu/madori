@@ -146,6 +146,17 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 3Dでは階ごとに表示・非表示を切り替え
 - 階高、床スラブ、最上階の壁上端を考慮して積層。地下の階は地面より下に積み、1Fの床が地下の天井をふさぎます
 
+### 言語（日本語・英語・韓国語・繁体字中国語）
+
+上のバーの「言語」（JP・EN・KR・繁中）で、画面の言語を切り替えられます。
+
+- ボタン・メニュー・選択中の欄・お知らせ・確かめの窓・家具やテンプレートの名前と説明など、画面の文字がその言語になります。選んだ言語はブラウザが覚えます
+- URL に `?lang=en`・`?lang=ko`・`?lang=zh-Hant` を付けても、その言語で開けます（覚えている言語より優先。覚えはしません）
+- テンプレートの部屋の名前は、選んでいる言語で作ります。自分で書いた部屋の名前・文字は、言語を変えてもそのままです（間取りのデータは変わりません）
+- 家具やテンプレートは、その言語の名前でも検索できます
+- 何も選んでいなければ日本語です（ブラウザの言語からは決めません）。日本語以外では、上のバーのお知らせ・注意書きは出しません（注意書きは「このアプリについて」で読めます）
+- 更新履歴は、日本語以外では英語の文を出します
+
 ### 間取り専用版（3Dなし）
 
 3Dを使わずに2Dの間取りだけを編集したいときは、間取り専用版（https://madori-5yu.pages.dev/plan/ ）を使えます。
@@ -672,9 +683,13 @@ madori/
 │  ├─ plan-edition.mjs       # ビルド後に間取り専用版（/plan/）を置く
 │  ├─ compare-2d-3d.mjs      # 2Dの記号と3Dの真上図の見比べ画像
 │  ├─ changelog-readme.mjs   # READMEの更新履歴を src/changelog.ts から書き直す
-│  └─ check-deploy.mjs       # 公開先がいまのコミットになったかを確かめる
+│  ├─ check-deploy.mjs       # 公開先がいまのコミットになったかを確かめる
+│  └─ i18n-strings.mjs       # 画面の日本語を集め、辞書に訳がない物を出す
 ├─ src/
 │  ├─ main.ts                # 2D編集、状態、3D生成、保存処理、間取り専用版の切り替え
+│  ├─ i18n.ts                # 画面の言語（日本語の文を辞書で英語・韓国語・繁体字に置き換える）
+│  ├─ i18n/                  # 辞書（日本語 → [英語, 韓国語, 繁体字]。日本語以外を選んだときだけ読み込む）
+│  ├─ furniture-more.ts      # 足した家具・小物（約250種類）の名前・大きさと部品
 │  ├─ furniture-shapes.ts    # 2Dの記号と3Dで共通の形のデータ
 │  ├─ plan-style.ts          # 2Dの絵柄（モノクロ・ドット・筆・鉛筆・水彩・マンガ・設計図・ホラーなど18種類）の描き方
 │  ├─ templates.ts           # テンプレート（家・病院・洋館など）の分類と間取りのデータ
@@ -820,6 +835,7 @@ npm.cmd run dev
 
 ### 2026年10月21日
 
+- 対応言語に英語・韓国語・繁体字中国語を追加しました。上のバーの「言語」（JP・EN・KR・繁中）で切り替えると、ボタン・メニュー・家具やテンプレートの名前と説明など、画面の文字がその言語になり、ブラウザが覚えます（URL に ?lang=en・?lang=ko・?lang=zh-Hant を付けても開けます）。テンプレートの部屋の名前もその言語で作り、家具はその言語の名前でも探せます。自分で書いた部屋の名前や文字は、言語を変えてもそのままです
 - 壁の厚みを変えられるように。選んだ壁の欄の「厚み」で、ふつうの壁・コンクリート・レンガ・ブロック塀・石垣・生け垣などの厚みを変えられます。2Dと3Dの厚みは同じで、厚くした壁も角がすき間なくつながります
 - 2Dの上に「表示」を追加。部屋名の表示・部屋の広さ（帖・㎡）・方眼の表示と大きさ（25cm・50cm・半間・1m・1.5m・1間・2m・3m）を切り替えられます。方眼の大きさを決めると部屋の上にも方眼が重なり、画像の書き出しでは画像の左上からその大きさの方眼が並び、1マスの大きさ（px）も選べます（ココフォリアなどのマップのマス目に合わせられます）
 - 画像の書き出しで、背景を透明にしたり、画像をクリップボードにコピーしたりできるように
@@ -1207,6 +1223,17 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Translucent lower-floor reference in 2D
 - Per-floor visibility in 3D
 - Stacked floor heights, slabs, and top-floor wall caps
+
+### Languages (Japanese, English, Korean, Traditional Chinese)
+
+The language menu in the top bar (JP / EN / KR / 繁中) switches the language of the screen.
+
+- Buttons, menus, the selection panel, notices, confirmation dialogs, and furniture and template names and descriptions all change to that language, and the browser remembers the choice.
+- A link can add `?lang=en`, `?lang=ko` or `?lang=zh-Hant` to open in that language (it overrides the remembered language without changing it).
+- Templates create their room names in the chosen language. Room names and text you wrote yourself stay as they are; switching languages never changes the plan data.
+- Furniture and templates can be searched by their names in that language.
+- Without a choice the app is in Japanese (it does not follow the browser language). In other languages the top bar shows no notice or alpha note (the note is in "About this app").
+- The changelog is shown in English for languages other than Japanese.
 
 ### Plan-only edition (no 3D)
 
@@ -1710,9 +1737,13 @@ madori/
 │  ├─ plan-edition.mjs       # Places the plan-only edition (/plan/) after the build
 │  ├─ compare-2d-3d.mjs      # Side-by-side sheets of 2D symbols and 3D top views
 │  ├─ changelog-readme.mjs   # Rewrites the README changelog from src/changelog.ts
-│  └─ check-deploy.mjs       # Waits until a site serves the current commit
+│  ├─ check-deploy.mjs       # Waits until a site serves the current commit
+│  └─ i18n-strings.mjs       # Collects the Japanese text on screen and lists any without translations
 ├─ src/
 │  ├─ main.ts                # 2D editor, state, 3D generation, persistence, plan-only edition
+│  ├─ i18n.ts                # Screen language (replaces the Japanese text with English, Korean or Traditional Chinese from the dictionary)
+│  ├─ i18n/                  # Dictionaries (Japanese → [English, Korean, Traditional Chinese]; loaded only for other languages)
+│  ├─ furniture-more.ts      # The added furniture and small items (about 250): names, sizes and parts
 │  ├─ furniture-shapes.ts    # Shape data shared by 2D symbols and 3D models
 │  ├─ plan-style.ts          # 2D styles (17, such as dots, brush, pencil, watercolor, manga, blueprint, and horror)
 │  ├─ templates.ts           # Template groups and the plans of the newer templates
@@ -1859,6 +1890,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-21
 
+- Added English, Korean and Traditional Chinese. Switch with the language menu (JP / EN / KR / 繁中) in the top bar: buttons, menus, furniture and template names, descriptions and other text on screen change to that language, and the browser remembers the choice (links can also add ?lang=en, ?lang=ko or ?lang=zh-Hant). Templates name their rooms in that language and furniture can be searched by its translated name, while names and text you wrote yourself stay as they are
 - Wall thickness can be changed: the Thickness field of a selected wall works for plain walls, concrete, brick, block walls, stone walls, hedges and more. 2D and 3D match, and thick walls still meet cleanly at corners
 - A new 表示 (view) menu above the 2D plan toggles room names, shows room areas in tatami mats (帖) or square meters, and turns the grid on or off with a size of 25 cm, 50 cm, half a ken, 1 m, 1.5 m, one ken, 2 m or 3 m. A chosen grid size is drawn over rooms too, and image export starts the grid at the top-left corner with a selectable cell size in pixels, ready for online tabletop maps
 - Image export can leave the background transparent and copy the image to the clipboard

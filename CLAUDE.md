@@ -23,9 +23,10 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 2. **2Dと3Dは必ず一致**: 3Dを真上から見た形は、2Dの記号と同じにする。形のデータは `src/furniture-shapes.ts` に置き、2D（`src/main.ts`）と3D（`src/furniture-models.ts`）の両方がそこから作る。変えたら `npm run compare` の見比べ画像で確かめる。前のデザインは消さずに、デザインの1つとして残す。
 3. **2Dに文字を出さない**: 家具の記号に文字（「冷」「TV」など）を使わない。新しい部屋・床に既定の名前を付けない。出してよいのは、利用者が書いた名前・テキストだけ。
 4. **PL/GMの分け方は入れない**: GM専用の物・隠し扉・PL表示・PL/GM別の画像は 2026-10-02 に外した。頼まれない限り戻さない。
-5. **更新履歴を書く**: 使う人に見える変更は、同じコミットで `src/changelog.ts`（`ja` と `en`、新しい日付を先頭）に足し、`npm run changelog` で README の「## 更新履歴」「## Changelog」をそろえる（`tests/changelog.test.mjs` が食い違いを見つける）。取りやめた機能は載せない。
-6. **メールアドレスを出さない**: サイトに連絡用のメールアドレスを載せない（問い合わせは Google フォーム）。個人のメールアドレスをリポジトリに書かない。
-7. **消さないファイル**: `public/google6e6567f2912f5067.html` と `public/_redirects`（Google Search Console の確認用）。
+5. **画面の文字には3つの言語の訳を付ける**: 画面に出る日本語の文（ボタン・説明・家具やテンプレートの名前など）を足したり変えたりしたら、`src/i18n/dict-*.ts` に英語・韓国語・繁体字中国語の訳を足す（`tests/i18n.test.mjs` が抜けを見つける。`node --experimental-strip-types scripts/i18n-strings.mjs` で一覧）。画面は日本語で書き、ほかの言語は `src/i18n.ts` が辞書で置き換える。
+6. **更新履歴を書く**: 使う人に見える変更は、同じコミットで `src/changelog.ts`（`ja` と `en`、新しい日付を先頭）に足し、`npm run changelog` で README の「## 更新履歴」「## Changelog」をそろえる（`tests/changelog.test.mjs` が食い違いを見つける）。取りやめた機能は載せない。
+7. **メールアドレスを出さない**: サイトに連絡用のメールアドレスを載せない（問い合わせは Google フォーム）。個人のメールアドレスをリポジトリに書かない。
+8. **消さないファイル**: `public/google6e6567f2912f5067.html` と `public/_redirects`（Google Search Console の確認用）。
 
 ## コマンド
 
@@ -35,7 +36,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 | `npx playwright install chromium` | E2E・見比べ用のブラウザ。Windows は入っている Edge を使うので不要（ほかのOSだけ。`E2E_BROWSER_CHANNEL` で変えられる） |
 | `npm run dev` | 開発用サーバー（http://127.0.0.1:5173/） |
 | `npm test` | 単体テスト（Node の `--experimental-strip-types` で `src/*.ts` をそのまま読む） |
-| `npm run test:e2e` | 画面を動かすテスト（約12分。いまは `PASS:` の行が63本。`--free-shapes-only`・`--wall-styles-only`・`--map-tools-only`・`--three-style-only`・`--live-three-only`・`--combine-only`・`--double-press-only`・`--roof-color-only`・`--doors-only` などで一部だけも走らせられる） |
+| `npm run test:e2e` | 画面を動かすテスト（約12分。いまは `PASS:` の行が64本。`--languages-only`・`--free-shapes-only`・`--wall-styles-only`・`--map-tools-only`・`--three-style-only`・`--live-three-only`・`--combine-only`・`--double-press-only`・`--roof-color-only`・`--doors-only` などで一部だけも走らせられる） |
 | `npm run test:visual` | 3Dの家具の一覧画像（`.codex/furniture-quality/`） |
 | `npm run build` | 型チェック → ビルド → `/plan/` を作る |
 | `npm run compare -- [種類,…]` | 2Dの記号と3Dの真上図の見比べ画像（`.codex/compare/`） |
@@ -44,7 +45,7 @@ Claude Code はこのファイルを毎回最初に読む。詳しい引き継�
 
 ## コードで気をつけること
 
-- `src/main.ts` は約8500行。どこに何があるかは docs/handover.md の「コードの地図」。
+- `src/main.ts` は約13500行。どこに何があるかは docs/handover.md の「コードの地図」。
 - 起動の処理は `src/main.ts` のいちばん最後（`// ---- 起動 ----`）。上の方に置くと、後ろで宣言した `let` / `const` を読んで止まる（TDZ。過去に何度も起きた）。
 - `src/` のコードはテストが Node でそのまま読むので、`enum`・`namespace`・コンストラクタ引数のプロパティなど、型を消すだけで動かない書き方はしない。テストが読むファイル（`main.ts` 以外）は、読み込んだだけで DOM を触らない（`document` などを使うのは関数の中だけ）。
 - 2Dは全体で1つの `ctx` に描く。オフスクリーンの描画や2Dの絵柄（`src/plan-style.ts`）は `ctx` を差し替えて描く。
