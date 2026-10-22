@@ -160,13 +160,20 @@ export async function verifyUiExtras({ open, plan, output }) {
   const brick = { id: 'brick', type: 'wall', x1: 0, y1: 300, x2: 600, y2: 300, wallStyle: 'brick' };
   const hedgeCut = { id: 'hedgeCut', type: 'door', x1: 200, y1: 0, x2: 400, y2: 0, doorStyle: 'broken' };
   const brickCut = { id: 'brickCut', type: 'door', x1: 200, y1: 300, x2: 400, y2: 300, doorStyle: 'broken' };
-  const walls = await open(JSON.stringify(plan([room, hedge, brick, hedgeCut, brickCut])));
+  // 竹垣の大穴: 穴の下と上に竹垣が残る（ただの切れ目にしない）
+  const bamboo = { id: 'bamboo', type: 'wall', x1: 0, y1: 150, x2: 600, y2: 150, wallStyle: 'takegaki' };
+  const bambooHole = { id: 'bambooHole', type: 'door', x1: 240, y1: 150, x2: 360, y2: 150, doorStyle: 'hole' };
+  const walls = await open(JSON.stringify(plan([room, hedge, brick, hedgeCut, brickCut, bamboo, bambooHole])));
   try {
     await walls.locator('button[data-view-mode="split"]').first().click();
     await walls.waitForTimeout(300);
     const top = (id, x, y) => walls.evaluate(([id, x, y]) => window.__editorTest.topAt(id, x, y), [id, x, y]);
     const whole = await top('hedge', 60, 0), middle = await top('hedge', 300, 0);
     assert.ok(whole > 1.1 && middle < whole - 0.25, `the hedge is lower where it collapsed: ${middle} / ${whole}`);
+    const bambooPieces = await walls.evaluate(() => window.__editorTest.pieces('bamboo'));
+    // 高さの範囲 [下, 上]（m）: 穴の上に残る所と、穴の下に残る低い所がある
+    assert.ok(bambooPieces.some(([low]) => low > 0.8) && bambooPieces.some(([low, high]) => low < 0.2 && high < 0.6),
+      `the bamboo fence keeps a part above and below the hole: ${JSON.stringify(bambooPieces)}`);
     const rim = (await walls.evaluate(() => window.__editorTest.materials('brickCut'))).find((material) => material.name === 'wall-brick');
     assert.equal(rim?.color, 'a5523a', 'the brick wall breaks as brick');
     const group = walls.locator('details.palette-group', { has: walls.locator('summary', { hasText: /^壁$/ }) });

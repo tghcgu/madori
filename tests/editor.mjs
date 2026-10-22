@@ -66,6 +66,11 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         planGroup.updateMatrixWorld(true);
         return ray.intersectObjects(planGroup.children.filter(o => o.userData.entityId === id && !o.userData.ignoreSelection), true).some(hit => hit.object.isMesh);
       },
+      pieces(id) {
+        ensureThreeScene();
+        planGroup.updateMatrixWorld(true);
+        return planGroup.children.filter(o => o.userData.entityId === id && !(o instanceof THREE.BoxHelper)).map(o => { const box = new THREE.Box3().setFromObject(o, true); return [box.min.y, box.max.y]; });
+      },
       topAt(id, x, y) {
         ensureThreeScene();
         const ray = new THREE.Raycaster(new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D, 100, (y-threeSceneCenter.y)*SCALE_3D), new THREE.Vector3(0,-1,0));

@@ -43,7 +43,7 @@ import {
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 import {
-  BROKEN_CUT_MARGIN, DOOR_COLORS, DOOR_STYLES, brokenCutRange, brokenHoleEdges, brokenRubble, brokenTopAt, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
+  BROKEN_CUT_MARGIN, DOOR_COLORS, DOOR_STYLES, brokenCutRange, brokenHoleEdges, brokenHoleSpan, brokenRubble, brokenTopAt, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
   type BrokenStyle, type DoorStyle,
 } from "./opening-shapes";
 import { translateSelection } from "./selection";
@@ -6321,17 +6321,13 @@ function drawBrokenWall2d(door: LinearElement, style: BrokenStyle): void {
   });
   const edges: number[] = [];
   if (style === "hole") {
-    // 大穴: 床から1m（低い壁は半分）の高さで切った形。外の端から穴のふちまで、その壁が残る。
-    // 石垣・生け垣・竹垣・フェンスは、壁の高さまで切れるので残らない
-    if (info.freeKind) edges.push(-half, half);
-    else {
-      brokenHoleEdges(length, wallTopCm(info)).forEach((edge, index) => {
-        const side = index ? 1 : -1;
-        if (Math.abs(edge) >= half - t) return;
-        drawWallBody2d(wallPart(side * half, edge - side * t));
-        edges.push(edge);
-      });
-    }
+    // 大穴: 床から1m（低い壁は穴の真ん中）の高さで切った形。外の端から穴のふちまで、その壁が残る（竹垣・石垣なども同じ）
+    brokenHoleEdges(length, wallTopCm(info)).forEach((edge, index) => {
+      const side = index ? 1 : -1;
+      if (Math.abs(edge) >= half - t) return;
+      drawWallBody2d(wallPart(side * half, edge - side * t));
+      edges.push(edge);
+    });
   } else {
     // 崩れ落ちた壁: 低く残った壁を、その壁の描き方で薄めに描く
     ctx.save();
@@ -10594,12 +10590,11 @@ function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, y
   wallSections(wallItem, entities).forEach((section) => {
     // 石垣などは、床から立つ部分だけを、その区切りの線に沿った自由な形で作る（ドアの所はあく）
     if (info.freeKind) {
-      if (section.bottom > 1e-6) return;
-      if (section.top >= WALL_HEIGHT - 1e-6) addFurniture3d(freeWallItem(wallItem, info, section.from, section.to), center, yBase);
-      // 崩れ落ちた壁の所は、崩れたふちの高さに合わせて、高さを変えた短い区切りで作る
-      else for (const piece of brokenFreeWallPieces(wallItem, entities, section.from, section.to, wallTopCm(info))) {
-        addFurniture3d({ ...freeWallItem(wallItem, info, piece.from, piece.to), height: piece.height }, center, yBase);
-      }
+      // 壊れた壁（大穴・崩れ落ちた壁）の所は、穴や崩れたふちに合わせて、高さを変えた短い区切りで作る
+      const pieces = brokenFreeWallPieces(wallItem, entities, section.from, section.to, wallTopCm(info));
+      if (pieces) {
+        for (const piece of pieces) addFurniture3d({ ...freeWallItem(wallItem, info, piece.from, piece.to), height: piece.height }, center, yBase, piece.bottom / 100, true);
+      } else if (section.bottom <= 1e-6) addFurniture3d(freeWallItem(wallItem, info, section.from, section.to), center, yBase);
       return;
     }
     if (section.bottom >= top - 1e-6) return;
@@ -10769,23 +10764,41 @@ function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   addSelectionBox(group, item.id);
 }
 
-// 石垣・生け垣など自由な形の壁で、崩れ落ちた壁が切った from〜to cm を、崩れたふちの高さ（cm）ごとの短い区切りにする
-function brokenFreeWallPieces(wallItem: LinearElement, entities: Entity[], from: number, to: number, wallTop: number): { from: number; to: number; height: number }[] {
+// 石垣・生け垣・竹垣・フェンスなど自由な形の壁で、壊れた壁が切った from〜to cm に残す所（短い区切りごとの、下の高さと高さ。cm）。
+// 崩れ落ちた壁は崩れたふちの高さまで、大穴は穴の下と上に残す。壊れた壁の所でなければ null
+function brokenFreeWallPieces(wallItem: LinearElement, entities: Entity[], from: number, to: number, wallTop: number): { from: number; to: number; bottom: number; height: number }[] | null {
   const middle = (from + to) / 2;
-  const door = entities.find((entity): entity is LinearElement => entity.type === "door" && entity.doorStyle === "broken"
-    && openingIntervals(wallItem, [{ ...entity, type: "door" }], WALL_THICKNESS_2D).some((cut) => cut.from < middle && cut.to > middle));
-  const low = Math.max(10, Math.round(brokenCutRange("broken", wallTop)[0] * 100));
-  if (!door) return [{ from, to, height: low }];
-  // 壁に沿った開口の中心と、開口の向き（壁と逆向きに引いたドアなら、ぎざぎざも裏返す）
+  const door = entities.find((entity): entity is LinearElement => entity.type === "door" && isBrokenStyle(entity.doorStyle)
+    && openingIntervals(wallItem, [{ ...entity, type: "door" }], WALL_THICKNESS_2D).some((cut) => cut.from <= from + 0.5 && cut.to >= to - 0.5 && cut.from < middle && cut.to > middle));
+  if (!door || !isBrokenStyle(door.doorStyle)) return null;
+  // 壁に沿った開口の中心と、開口の向き（壁と逆向きに引いたドアなら、形も裏返す）
   const wallLength = distance(wallItem) || 1, length = distance(door);
   const ux = (wallItem.x2 - wallItem.x1) / wallLength, uy = (wallItem.y2 - wallItem.y1) / wallLength;
   const center = ((door.x1 + door.x2) / 2 - wallItem.x1) * ux + ((door.y1 + door.y2) / 2 - wallItem.y1) * uy;
   const sign = (door.x2 - door.x1) * ux + (door.y2 - door.y1) * uy >= 0 ? 1 : -1;
-  const steps = clamp(Math.round((to - from) / 30), 3, 9);
-  return Array.from({ length: steps }, (_, i) => {
+  const hole = door.doorStyle === "hole";
+  const steps = clamp(Math.round((to - from) / (hole ? 12 : 30)), hole ? 6 : 3, hole ? 18 : 9);
+  const pieces: { from: number; to: number; bottom: number; height: number }[] = [];
+  for (let i = 0; i < steps; i += 1) {
     const a = from + ((to - from) * i) / steps, b = from + ((to - from) * (i + 1)) / steps;
-    return { from: a, to: b, height: Math.max(10, Math.round(brokenTopAt(length, wallTop, ((a + b) / 2 - center) * sign))) };
-  });
+    const x = ((a + b) / 2 - center) * sign;
+    if (!hole) {
+      pieces.push({ from: a, to: b, bottom: 0, height: Math.max(10, Math.round(brokenTopAt(length, wallTop, x))) });
+      continue;
+    }
+    const span = brokenHoleSpan(length, wallTop, x);
+    if (!span) {
+      pieces.push({ from: a, to: b, bottom: 0, height: wallTop });
+      continue;
+    }
+    // 自由な形は10cmより低く作れないので、薄い所は10cmにして、上の所は壁の上にそろえる
+    if (span[0] >= 3) pieces.push({ from: a, to: b, bottom: 0, height: Math.max(10, Math.round(span[0])) });
+    if (wallTop - span[1] >= 3) {
+      const height = Math.max(10, Math.round(wallTop - span[1]));
+      pieces.push({ from: a, to: b, bottom: wallTop - height, height });
+    }
+  }
+  return pieces;
 }
 
 // ドア・窓が付いている壁（壊れた壁の色・厚み・高さに使う）
@@ -10813,9 +10826,10 @@ function brokenWallOptions(item: LinearElement): { wallColor?: string; wallThick
 
 // ---- 3D furniture ----
 
-function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number): void {
+// lift: 床から持ち上げる高さ（m。竹垣などの大穴の上に残す所）。postless: フェンス・竹垣の柱を立てない（壊れた所の短い区切り）
+function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number, lift = 0, postless = false): void {
   const floorTop = yBase === 0 ? 0.08 : 0;
-  const options = { ...furnitureItem, rise: FLOOR_SPACING - floorTop };
+  const options = { ...furnitureItem, rise: FLOOR_SPACING - floorTop, ...(postless ? { postless } : {}) };
   let group: THREE.Group;
   if (furnitureItem.kind === "evidenceMarker" || furnitureItem.kind === "paint" || furnitureItem.kind === "image") {
     // 文字・描いた絵・取り込んだ画像を貼る物は、1つずつ作る
@@ -10826,10 +10840,11 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number):
   } else {
     // 形を決める値が同じ家具は、作り置きを写して使う（リアルの絵柄では材質を変えるので分ける）
     const { kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose } = options;
-    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose]);
+    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose, postless]);
     group = cachedModel(`furniture:${key}`, () => buildFurnitureModel(options));
   }
   placeFurniture3d(group, furnitureItem, center, yBase);
+  group.position.y += lift;
   if (furnitureItem.flip) group.scale.x *= -1;
   markSelectable(group, furnitureItem.id);
   planGroup.add(group);

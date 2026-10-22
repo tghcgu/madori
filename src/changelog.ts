@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-22",
     items: [{
+      ja: "「壁の大穴」を、壁を突き破ったような形に作り直しました（ふちのぎざぎざな大きな丸い穴で、まわりの壁にひびが入ります）。竹垣・石垣・生け垣・フェンスにも、穴の上と下に垣が残る大穴があくようにしました（前はただの切れ目でした）",
+      en: "The large hole now looks blown through the wall: a big round hole with a ragged rim and cracks around it. Bamboo fences, stone walls, hedges and fences also get a real hole with the fence left above and below it (before, they only had a plain gap)",
+    }, {
       ja: "「崩れ落ちた壁」「壁の大穴」は、どの種類の壁でも、その壁の見た目のまま崩れるように（レンガ・ブロック塀・板塀・土塀はその色と形で崩れたふちが残り、石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけらになります。低い壁は、高さの半分ほどまで崩れます）。一覧の「壁」にも、壁の大穴・崩れ落ちた壁・壁のヒビ・崩れた壁・壁の穴を並べました",
       en: "The collapsed wall and the large hole now break every wall type in its own look: brick, block, board and earthen walls keep a jagged rim in their own color, stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height. The wall group in the palette also lists the large hole, the collapsed wall and the wall crack, broken wall and wall hole overlays",
     }, {

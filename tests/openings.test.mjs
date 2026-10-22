@@ -87,7 +87,7 @@ test('doors and windows with a color code alpha become translucent, opaque codes
 });
 
 // ---- 両開きドア・門扉と、和風の引き戸（障子・襖・格子戸・板戸） ----
-import { BROKEN_CUT_MARGIN, DOOR_STYLES, brokenCutRange, brokenHoleEdges, brokenRubble, brokenTopAt, brokenWallOutline, doorStyleInfo, isBrokenStyle, isDoorStyle, panelBars, slidingPanels } from '../src/opening-shapes.ts';
+import { BROKEN_CUT_MARGIN, DOOR_STYLES, brokenCutRange, brokenHoleCracks, brokenHoleEdges, brokenHolePolygon, brokenHoleSpan, brokenRubble, brokenTopAt, brokenWallOutline, doorStyleInfo, isBrokenStyle, isDoorStyle, panelBars, slidingPanels } from '../src/opening-shapes.ts';
 import { solidWallSections } from '../src/geometry.ts';
 
 test('every door style builds a closed door that stays inside the opening, at small and large widths', () => {
@@ -214,6 +214,37 @@ test('broken walls fill the cut with a jagged rim, and drop rubble at the same p
     assert.ok(middle > low && middle < wallTop * 0.8, `${wallTop}: the middle is low (${middle})`);
     assert.ok(Math.abs(end - wallTop) < 1e-6, `${wallTop}: the ends keep the wall height (${end})`);
   }
+  // 大穴の形: 切り抜いた所の中にあり（割れの先も）、床から少し上で、上にも壁が残る。ふちは交わらない1本の輪で、穴は大きい
+  const crosses = (a, b, c, d) => {
+    const side = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  };
+  for (const [length, wallTop] of [[60, 260], [110, 260], [300, 260], [110, 140], [110, 150], [120, 100]]) {
+    const hole = brokenHolePolygon(length, wallTop);
+    const half = length / 2 + BROKEN_CUT_MARGIN / 2, top = Math.min(200, wallTop);
+    const xs = hole.map(([x]) => x), ys = hole.map(([, y]) => y);
+    assert.ok(Math.min(...xs) > -half && Math.max(...xs) < half, `${length}/${wallTop}: inside the cut sideways`);
+    assert.ok(Math.min(...ys) > 0 && Math.max(...ys) < top - 5, `${length}/${wallTop}: wall stays below and above`);
+    assert.ok(Math.max(...xs) - Math.min(...xs) > length * 0.7 && Math.max(...ys) - Math.min(...ys) > top * 0.55, `${length}/${wallTop}: a big hole`);
+    for (let i = 0; i < hole.length; i += 1) {
+      for (let j = i + 2; j < hole.length; j += 1) {
+        if (i === 0 && j === hole.length - 1) continue;
+        assert.ok(!crosses(hole[i], hole[(i + 1) % hole.length], hole[j], hole[(j + 1) % hole.length]), `${length}/${wallTop}: the rim does not cross itself`);
+      }
+    }
+    // ひびは切り抜いた所の中
+    for (const line of brokenHoleCracks(length, wallTop)) {
+      assert.ok(line.length >= 2 && line.every(([x, y]) => Math.abs(x) <= half && y >= 0 && y <= top), 'cracks stay on the wall');
+    }
+    // 竹垣・石垣などに残す所: 真ん中は穴の下と上、穴の外は切らない
+    const span = brokenHoleSpan(length, wallTop, 0);
+    assert.ok(span && span[0] < top * 0.3 && span[1] > top * 0.6 && span[1] < top, `${length}/${wallTop}: the hole spans the middle (${span})`);
+    assert.equal(brokenHoleSpan(length, wallTop, half + 1), null);
+  }
+  // 3Dの大穴: 四角から穴を抜いた形で、両面にひび
+  const holeModel = buildOpeningModel({ type: 'door', doorStyle: 'hole', length: 1.1, wallThickness: 10, wallTop: 2.6, wallColor: '#f4f1ec', wallKind: 'box' });
+  assert.equal(holeModel.children.filter(part => part.name === 'crack').length, 1, 'cracks around the hole');
+  dispose(holeModel);
   // 2Dで描く穴のふち（1mの高さ。低い壁は半分の高さ）は、開口の中にあり、左が負・右が正
   for (const [length, wallTop] of [[60, 260], [110, 260], [300, 260], [110, 140]]) {
     const [left, right] = brokenHoleEdges(length, wallTop);

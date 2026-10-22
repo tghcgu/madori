@@ -122,26 +122,13 @@ function seeded(seed: number): () => number {
 }
 
 // 壁に残る部分の形（cm）。開口の中心が原点、x は壁に沿って、y は床からの高さ。切り抜いた所（幅は開口と BROKEN_CUT_MARGIN）を、
-// 大穴は「穴のまわり」、崩れ落ちた壁は「崩れて残った低い所」で埋める。wallTop は壁の高さ（cm）
+// 大穴は「穴のまわり」（この四角から brokenHolePolygon の穴を抜く）、崩れ落ちた壁は「崩れて残った低い所」で埋める。wallTop は壁の高さ（cm）
 export function brokenWallOutline(style: BrokenStyle, lengthCm: number, wallTop: number): [number, number][] {
-  const random = seeded(lengthCm * 7 + (style === "hole" ? 1 : 2));
+  const random = seeded(lengthCm * 7 + 2);
   const half = lengthCm / 2 + BROKEN_CUT_MARGIN / 2;
   if (style === "hole") {
-    // 大穴: 床から立ち上がって、ぎざぎざのアーチで閉じる穴。まわり（切り抜いた四角の残り）を壁で埋める
-    const top = Math.min(HOLE_TOP, wallTop), foot = lengthCm * 0.4;
-    const rim: [number, number][] = [[foot, 0]];
-    const sides = 5;
-    for (let i = 1; i <= sides; i += 1) rim.push([lengthCm * (0.42 + random() * 0.06), (top * 0.78 * i) / sides]);
-    const arch = Math.max(3, Math.round(lengthCm / 18));
-    for (let i = 1; i < arch; i += 1) {
-      const t = i / arch;
-      const x = lengthCm * 0.46 * Math.cos(Math.PI * t);
-      rim.push([x, Math.min(top - Math.min(4, top * 0.05), top * (0.8 + 0.14 * Math.sin(Math.PI * t)) + (random() - 0.5) * top * 0.07)]);
-    }
-    for (let i = sides; i >= 1; i -= 1) rim.push([-lengthCm * (0.42 + random() * 0.06), (top * 0.78 * i) / sides]);
-    rim.push([-foot, 0]);
-    // 左下から上・右へ回り、右の足もとから穴のふちをなぞって左の足もとへ
-    return [[-half, 0], [-half, top], [half, top], [half, 0], ...rim];
+    const top = Math.min(HOLE_TOP, wallTop);
+    return [[-half, 0], [-half, top], [half, top], [half, 0]];
   }
   // 崩れ落ちた壁: 切った所の下から、ぎざぎざに崩れた上の縁まで。両端は元の壁の高さまで
   const bottom = brokenCutRange("broken", wallTop)[0] * 100;
@@ -178,11 +165,11 @@ export interface RubblePiece {
 // 足もとに落ちたかけら。壁の両側に散らばる（2Dの記号と3Dの形は、同じ並びから作る）
 export function brokenRubble(style: BrokenStyle, lengthCm: number, thicknessCm: number): RubblePiece[] {
   const random = seeded(lengthCm * 13 + (style === "hole" ? 5 : 9));
-  const count = Math.max(4, Math.min(18, Math.round(lengthCm / (style === "hole" ? 12 : 9))));
+  const count = Math.max(4, Math.min(20, Math.round(lengthCm / 9)));
   const pieces: RubblePiece[] = [];
   for (let i = 0; i < count; i += 1) {
     const side = i % 2 ? 1 : -1;
-    const size = 5 + random() * (style === "hole" ? 9 : 13);
+    const size = 5 + random() * 13;
     pieces.push({
       x: (random() - 0.5) * lengthCm * 0.85,
       y: side * (thicknessCm / 2 + 3 + random() * 32),
@@ -195,19 +182,76 @@ export function brokenRubble(style: BrokenStyle, lengthCm: number, thicknessCm: 
   return pieces;
 }
 
-// 大穴の、ある高さ（cm）での左右のふち（開口の中心から cm）。2Dは床から1mの高さ（低い壁は半分の高さ）で切った形を描く
+// 大穴の、ある高さ（cm）での左右のふち（開口の中心から cm）。2Dは床から1mの高さ（低い壁は穴の真ん中の高さ）で切った形を描く
 export function brokenHoleEdges(lengthCm: number, wallTop: number, height = 100): [number, number] {
-  const rim = brokenWallOutline("hole", lengthCm, wallTop).slice(4);
-  const level = Math.min(height, Math.min(HOLE_TOP, wallTop) * 0.5);
-  const at = (points: [number, number][]) => {
-    for (let i = 1; i < points.length; i += 1) {
-      const [x0, y0] = points[i - 1], [x1, y1] = points[i];
-      if ((y0 - level) * (y1 - level) <= 0 && y0 !== y1) return x0 + ((x1 - x0) * (level - y0)) / (y1 - y0);
+  const hole = brokenHolePolygon(lengthCm, wallTop);
+  const ys = hole.map(([, y]) => y);
+  const level = Math.min(height, (Math.min(...ys) + Math.max(...ys)) / 2);
+  const crossings: number[] = [];
+  for (let i = 0; i < hole.length; i += 1) {
+    const [x0, y0] = hole[i], [x1, y1] = hole[(i + 1) % hole.length];
+    if ((y0 - level) * (y1 - level) <= 0 && y0 !== y1) crossings.push(x0 + ((x1 - x0) * (level - y0)) / (y1 - y0));
+  }
+  return [Math.min(...crossings), Math.max(...crossings)];
+}
+
+// 大穴の形（cm。開口の中心が原点）。壁を突き破ったような、ふちのぎざぎざな丸い穴。とがった所とへこんだ所が交互に並び、
+// ところどころ外へ深く割れる。下には低いふちが少し残り、上にも壁が残る。切り抜いた所の中に収まる（割れの先も含めて）
+export function brokenHolePolygon(lengthCm: number, wallTop: number): [number, number][] {
+  const random = seeded(lengthCm * 7 + 1);
+  const half = lengthCm / 2 + BROKEN_CUT_MARGIN / 2;
+  const cutTop = Math.min(HOLE_TOP, wallTop);
+  const bottom = Math.min(6, cutTop * 0.05);
+  const top = cutTop - Math.max(12, cutTop * 0.15);
+  const reach = 1.16;
+  const rx = Math.min(lengthCm * 0.5, half - 3) / reach, ry = (top - bottom) / 2 / reach, cy = (top + bottom) / 2;
+  const count = Math.max(32, Math.round((rx + ry) / 3));
+  // 外へ深く割れる所（4〜6か所。となり合わないように）
+  const cracks = new Set<number>();
+  const crackCount = 4 + Math.floor(random() * 3);
+  for (let i = 0; i < crackCount; i += 1) cracks.add((Math.floor((i + random() * 0.6) * count / crackCount) * 2 + 1) % count);
+  const points: [number, number][] = [];
+  for (let i = 0; i < count; i += 1) {
+    const angle = (i / count) * Math.PI * 2;
+    const scale = cracks.has(i) ? 1.07 + random() * 0.09 : i % 2 ? 0.78 + random() * 0.12 : 0.93 + random() * 0.09;
+    points.push([Math.cos(angle) * rx * scale, cy + Math.sin(angle) * ry * scale]);
+  }
+  return points;
+}
+
+// 大穴のまわりのひび（壁の両面に描く折れ線。cm）。穴の割れの先から、外へ向かって折れながらのびる。切り抜いた所からはみ出さない
+export function brokenHoleCracks(lengthCm: number, wallTop: number): [number, number][][] {
+  const random = seeded(lengthCm * 11 + 3);
+  const half = lengthCm / 2 + BROKEN_CUT_MARGIN / 2;
+  const cutTop = Math.min(HOLE_TOP, wallTop);
+  const hole = brokenHolePolygon(lengthCm, wallTop);
+  const cy = hole.reduce((sum, [, y]) => sum + y, 0) / hole.length;
+  // 中心からいちばん遠い（割れの）点と、そのほかの何か所か
+  const tips = hole.map((point, index) => ({ point, index, far: Math.hypot(point[0], (point[1] - cy) * (lengthCm / Math.max(cutTop, 1))) }))
+    .sort((a, b) => b.far - a.far).slice(0, 6);
+  const inside = ([x, y]: [number, number]): [number, number] => [Math.max(-half + 1, Math.min(half - 1, x)), Math.max(1, Math.min(cutTop - 1, y))];
+  return tips.map(({ point: [x, y] }) => {
+    const angle = Math.atan2(y - cy, x);
+    const line: [number, number][] = [[x, y]];
+    let px = x, py = y, heading = angle;
+    for (let step = 0; step < 3; step += 1) {
+      heading += (random() - 0.5) * 0.9;
+      const length = 6 + random() * 12;
+      [px, py] = inside([px + Math.cos(heading) * length, py + Math.sin(heading) * length]);
+      line.push([px, py]);
     }
-    return points[0][0];
-  };
-  // ふちは右の足もとから上り、アーチを通って左の足もとへ下りる。いちばん高い所で左右に分ける
-  const top = Math.max(...rim.map(([, y]) => y));
-  const middle = rim.findIndex(([, y]) => y === top);
-  return [at(rim.slice(middle).reverse()), at(rim.slice(0, middle + 1))];
+    return line;
+  });
+}
+
+// 大穴が、x（開口の中心から cm）の所で切る高さの範囲（cm）。穴の外なら null。石垣・竹垣など自由な形の壁は、
+// この下と上に、短い区切りで壁を残して穴にする
+export function brokenHoleSpan(lengthCm: number, wallTop: number, x: number): [number, number] | null {
+  const hole = brokenHolePolygon(lengthCm, wallTop);
+  const crossings: number[] = [];
+  for (let i = 0; i < hole.length; i += 1) {
+    const [x0, y0] = hole[i], [x1, y1] = hole[(i + 1) % hole.length];
+    if ((x0 - x) * (x1 - x) <= 0 && x0 !== x1) crossings.push(y0 + ((y1 - y0) * (x - x0)) / (x1 - x0));
+  }
+  return crossings.length >= 2 ? [Math.min(...crossings), Math.max(...crossings)] : null;
 }

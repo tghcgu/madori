@@ -41,6 +41,8 @@ export interface FurnitureModelOptions {
   density?: number;
   // 人: 姿勢と手足の角度
   pose?: PersonPose;
+  // 柱を立てない（フェンス・竹垣の、壊れた所の短い区切り。柱が並んで見えないように）
+  postless?: boolean;
   // 池・花壇・芝生・ラグの穴（道すじと同じ割合の輪）
   holes?: number[][][];
 }
@@ -469,7 +471,7 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
       const rail = m.material("fence", 0xc8b08a, 0.8, 0, true);
       for (const level of [0.3, 0.85]) strokeSolid(m, line, 4, tall * level, Math.min(tall, tall * level + 0.07), rail);
       const post = m.material("fence-post", 0x8d7a5c, 0.85);
-      for (const sample of freePosts(line, 150)) {
+      for (const sample of item.postless ? [] : freePosts(line, 150)) {
         const mesh = m.box(0.09, tall, 0.09, sample.x / 100, tall / 2, sample.y / 100, post, 0);
         mesh.rotation.y = -sample.angle;
       }
@@ -481,7 +483,7 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
       strokeSolid(m, line, 4, 0.05, tall - 0.06, bamboo);
       strokeSolid(m, line, 8, tall - 0.06, tall, m.material("bamboo-rail", 0xb59a5e, 0.75));
       const pole = m.material("bamboo-post", 0x6b5a3a, 0.8);
-      for (const sample of freePosts(line, 180)) m.cylinder(0.05, 0.05, tall, [sample.x / 100, tall / 2, sample.y / 100], pole, 12);
+      for (const sample of item.postless ? [] : freePosts(line, 180)) m.cylinder(0.05, 0.05, tall, [sample.x / 100, tall / 2, sample.y / 100], pole, 12);
       break;
     }
     case "railway": {

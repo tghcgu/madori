@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 // テストでは Node がそのまま読むため、値を読み込むときは拡張子まで書く
 import { parseColorCode } from "./colors.ts";
 import { applyOpacity } from "./translucency.ts";
 import {
-  DOOR_COLORS, brokenRubble, brokenWallOutline, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
+  DOOR_COLORS, brokenHoleCracks, brokenHolePolygon, brokenRubble, brokenWallOutline, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
   type BrokenStyle, type DoorStyle,
 } from "./opening-shapes.ts";
 
@@ -134,13 +135,39 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
         wall.side = THREE.DoubleSide;
       }
       const outline = brokenWallOutline(kind, w * 100, wallTop * 100);
-      const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), { depth: thickness, bevelEnabled: false });
+      const shape = new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
+      if (kind === "hole") shape.holes.push(new THREE.Path(brokenHolePolygon(w * 100, wallTop * 100).map(([x, y]) => new THREE.Vector2(x / 100, y / 100))));
+      const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
       geometry.translate(0, 0, -thickness / 2);
       const remain = new THREE.Mesh(geometry, wall);
       remain.name = "broken-wall";
       remain.castShadow = !wall.transparent;
       remain.receiveShadow = true;
       group.add(remain);
+      // 大穴のまわりのひび（壁の両面。細い溝を1つの形にまとめる）
+      if (kind === "hole" && !glassWall) {
+        const pieces: THREE.BufferGeometry[] = [];
+        for (const line of brokenHoleCracks(w * 100, wallTop * 100)) {
+          for (let i = 1; i < line.length; i += 1) {
+            const [x0, y0] = line[i - 1], [x1, y1] = line[i];
+            const length = Math.hypot(x1 - x0, y1 - y0) / 100;
+            if (length < 0.005) continue;
+            for (const side of [-1, 1]) {
+              const piece = new THREE.BoxGeometry(length + 0.008, 0.009, 0.004);
+              piece.rotateZ(Math.atan2(y1 - y0, x1 - x0));
+              piece.translate((x0 + x1) / 200, (y0 + y1) / 200, side * (thickness / 2 + 0.0015));
+              pieces.push(piece);
+            }
+          }
+        }
+        const merged = pieces.length ? mergeGeometries(pieces) : null;
+        pieces.forEach((piece) => piece.dispose());
+        if (merged) {
+          const crack = new THREE.Mesh(merged, material("crack", new THREE.Color(color).multiplyScalar(0.35), 0.9));
+          crack.name = "crack";
+          group.add(crack);
+        }
+      }
     }
     // かけら。ガラスの壁は、薄く透けるガラスのかけら
     const rubble = glassWall ? material("glass-shard", color, 0.08) : material("rubble-stone", new THREE.Color(color).multiplyScalar(0.82), 0.95);
