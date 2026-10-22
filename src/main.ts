@@ -43,7 +43,7 @@ import {
 import { buildFurnitureModel } from "./furniture-models";
 import { buildOpeningModel } from "./opening-models";
 import {
-  BROKEN_CUTS, DOOR_COLORS, DOOR_STYLES, brokenHoleEdges, brokenRubble, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
+  BROKEN_CUT_MARGIN, DOOR_COLORS, DOOR_STYLES, brokenCutRange, brokenHoleEdges, brokenRubble, brokenTopAt, doorStyleInfo, doubleLeaves, gateSlats, isBrokenStyle, isDoorStyle, panelBars, panelThickness, slidingPanels, trackOffset,
   type BrokenStyle, type DoorStyle,
 } from "./opening-shapes";
 import { translateSelection } from "./selection";
@@ -1470,6 +1470,9 @@ function buildFurniturePicker(): void {
     button.dataset.wallStyle = style.value;
     walls.items.appendChild(button);
   });
+  // 壊れた壁（壁の大穴・崩れ落ちた壁）と、壁に重ねるヒビ・崩れ・穴も、壁の欄に並べる（建具・建物の部分の欄と重ねて出す）
+  (["hole", "broken"] as const).forEach((style) => walls.items.appendChild(createDoorStyleButton(style)));
+  (["wallCrack", "collapsedWall", "wallHole"] as const).forEach((kind) => walls.items.appendChild(createFurnitureButton(kind)));
   sections.set("walls", walls.details);
 
   FURNITURE_GROUPS.forEach((category) => {
@@ -6306,48 +6309,65 @@ function drawBrokenWall2d(door: LinearElement, style: BrokenStyle): void {
   const thickness = host ? info.thickness : WALL_THICKNESS_2D;
   const length = Math.max(distance(door), 1);
   const mid = midpoint(door);
+  const ux = (door.x2 - door.x1) / length, uy = (door.y2 - door.y1) / length;
   const selected = state.selectedId === door.id;
   const ink = selected ? "#2775d1" : solidColor(door.color) ?? INK;
-  const wallFill = solidColor(host?.color) ?? (info.value === "plain" ? INK : info.color);
-  const half = length / 2 + thickness / 2, t = thickness / 2;
+  // 壁の帯は、2Dでは端を幅の半分だけ伸ばして描くので、そのぶん短くして渡す
+  const half = length / 2 + BROKEN_CUT_MARGIN / 2, t = wallTopWidth(info) / 2;
+  // 開口の中心から a〜b cm の所の壁（付いている壁と同じ種類・色・厚みで描く）
+  const wallPart = (a: number, b: number): LinearElement => ({
+    ...(host ?? { id: "", type: "wall" as const, x1: 0, y1: 0, x2: 0, y2: 0 }),
+    id: `${door.id}-broken`, type: "wall", x1: mid.x + ux * a, y1: mid.y + uy * a, x2: mid.x + ux * b, y2: mid.y + uy * b,
+  });
+  const edges: number[] = [];
+  if (style === "hole") {
+    // 大穴: 床から1m（低い壁は半分）の高さで切った形。外の端から穴のふちまで、その壁が残る。
+    // 石垣・生け垣・竹垣・フェンスは、壁の高さまで切れるので残らない
+    if (info.freeKind) edges.push(-half, half);
+    else {
+      brokenHoleEdges(length, wallTopCm(info)).forEach((edge, index) => {
+        const side = index ? 1 : -1;
+        if (Math.abs(edge) >= half - t) return;
+        drawWallBody2d(wallPart(side * half, edge - side * t));
+        edges.push(edge);
+      });
+    }
+  } else {
+    // 崩れ落ちた壁: 低く残った壁を、その壁の描き方で薄めに描く
+    ctx.save();
+    ctx.globalAlpha *= 0.55;
+    drawWallBody2d(wallPart(-half + t, half - t));
+    ctx.restore();
+  }
   ctx.save();
   ctx.translate(mid.x, mid.y);
   ctx.rotate(lineAngle(door));
   ctx.lineJoin = "round";
-  ctx.strokeStyle = ink;
-  ctx.lineWidth = (selected ? 2 : 1.2) / view.zoom;
-  if (style === "hole") {
-    // 残った壁の帯（外の端から穴のふちまで）。穴の側の端はぎざぎざ
-    brokenHoleEdges(length, thickness, WALL_HEIGHT * 100).forEach((edge, index) => {
-      const side = index ? 1 : -1, jag = side * Math.min(thickness * 0.6, 6);
+  ctx.lineCap = "round";
+  // ぎざぎざの線。白い縁を付けて、どの壁の上でも見えるようにする
+  const jagged = (points: [number, number][]) => {
+    for (const [color, width] of [["#ffffff", 3.4], [ink, selected ? 2 : 1.2]] as const) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width / view.zoom;
       ctx.beginPath();
-      ctx.moveTo(side * half, -t);
-      ctx.lineTo(edge, -t);
-      ctx.lineTo(edge - jag, -t / 3);
-      ctx.lineTo(edge + jag * 0.4, t / 4);
-      ctx.lineTo(edge - jag * 0.5, t);
-      ctx.lineTo(side * half, t);
-      ctx.closePath();
-      ctx.fillStyle = wallFill;
-      ctx.fill();
+      points.forEach(([x, y], index) => (index ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
       ctx.stroke();
-    });
-  } else {
-    // 低く残った壁: 細い線の帯（中は白）と、崩れたふちのぎざぎざの線
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(-half, -t, half * 2, t * 2);
-    ctx.strokeRect(-half, -t, half * 2, t * 2);
-    const steps = Math.max(4, Math.round(length / 12));
-    ctx.beginPath();
-    for (let i = 0; i <= steps; i += 1) {
-      const x = -half + (2 * half * i) / steps, y = (i % 2 ? 1 : -1) * t * 0.5;
-      if (i) ctx.lineTo(x, y);
-      else ctx.moveTo(x, y);
     }
-    ctx.stroke();
+  };
+  if (style === "hole") {
+    // 穴のふち（残った壁の端）は、壁を横切るぎざぎざ
+    for (const edge of edges) {
+      const jag = Math.sign(edge) * Math.min(t * 0.8, 6);
+      jagged([[edge, -t], [edge - jag, -t / 3], [edge + jag * 0.4, t / 4], [edge - jag * 0.5, t]]);
+    }
+  } else {
+    const steps = Math.max(4, Math.round(length / 12));
+    jagged(Array.from({ length: steps + 1 }, (_, i) => [-half + (2 * half * i) / steps, (i % 2 ? 1 : -1) * t * 0.5] as [number, number]));
   }
-  // 足もとのかけら（3Dの箱と同じ位置・大きさ・向き）
-  ctx.fillStyle = "#c9c3b8";
+  // 足もとのかけら（3Dの箱と同じ位置・大きさ・向き）。ガラスの壁は、ガラスのかけら
+  ctx.strokeStyle = info.glass ? "#5f93ad" : ink;
+  ctx.lineWidth = (selected ? 2 : 1.2) / view.zoom;
+  ctx.fillStyle = info.glass ? "rgba(191, 224, 238, 0.85)" : "#c9c3b8";
   for (const piece of brokenRubble(style, length, thickness)) {
     ctx.save();
     ctx.translate(piece.x, piece.y);
@@ -6358,6 +6378,11 @@ function drawBrokenWall2d(door: LinearElement, style: BrokenStyle): void {
   }
   ctx.restore();
   if (selected && !isLocked(door)) drawLineHandles(door);
+}
+
+// 壁の高さ（cm）。種類で決まった高さがなければ、ふつうの壁の高さ
+function wallTopCm(info: WallStyleInfo): number {
+  return info.height !== undefined ? Math.min(WALL_HEIGHT * 100, info.height) : WALL_HEIGHT * 100;
 }
 
 // 両開きドア・門扉: 両端のつりもとから、半分ずつの扉が同じ側へ開く（開いた扉と、開く道すじの円弧）。
@@ -10569,7 +10594,12 @@ function addWall3d(wallItem: LinearElement, entities: Entity[], center: Point, y
   wallSections(wallItem, entities).forEach((section) => {
     // 石垣などは、床から立つ部分だけを、その区切りの線に沿った自由な形で作る（ドアの所はあく）
     if (info.freeKind) {
-      if (section.bottom <= 1e-6) addFurniture3d(freeWallItem(wallItem, info, section.from, section.to), center, yBase);
+      if (section.bottom > 1e-6) return;
+      if (section.top >= WALL_HEIGHT - 1e-6) addFurniture3d(freeWallItem(wallItem, info, section.from, section.to), center, yBase);
+      // 崩れ落ちた壁の所は、崩れたふちの高さに合わせて、高さを変えた短い区切りで作る
+      else for (const piece of brokenFreeWallPieces(wallItem, entities, section.from, section.to, wallTopCm(info))) {
+        addFurniture3d({ ...freeWallItem(wallItem, info, piece.from, piece.to), height: piece.height }, center, yBase);
+      }
       return;
     }
     if (section.bottom >= top - 1e-6) return;
@@ -10727,8 +10757,8 @@ function addWindow3d(windowEl: LinearElement, center: Point, yBase: number): voi
 function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   if (item.type === "wall") return;
   const options = { ...item, type: item.type, length: distance(item) * SCALE_3D, floorTop: yBase === 0 ? 0.08 : 0, ...brokenWallOptions(item) };
-  const { type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName } = options;
-  const key = JSON.stringify([threeStyle === "real", type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName]);
+  const { type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName, wallKind } = options;
+  const key = JSON.stringify([threeStyle === "real", type, doorStyle, color, color3d, flip, floorTop, length, mullion, wallColor, wallThickness, wallTop, wallMaterialName, wallKind]);
   const group = cachedModel(`opening:${key}`, () => buildOpeningModel(options));
   const mid = midpoint(item);
   const position = to3d(mid.x, mid.y, center);
@@ -10739,6 +10769,25 @@ function addOpening3d(item: LinearElement, center: Point, yBase: number): void {
   addSelectionBox(group, item.id);
 }
 
+// 石垣・生け垣など自由な形の壁で、崩れ落ちた壁が切った from〜to cm を、崩れたふちの高さ（cm）ごとの短い区切りにする
+function brokenFreeWallPieces(wallItem: LinearElement, entities: Entity[], from: number, to: number, wallTop: number): { from: number; to: number; height: number }[] {
+  const middle = (from + to) / 2;
+  const door = entities.find((entity): entity is LinearElement => entity.type === "door" && entity.doorStyle === "broken"
+    && openingIntervals(wallItem, [{ ...entity, type: "door" }], WALL_THICKNESS_2D).some((cut) => cut.from < middle && cut.to > middle));
+  const low = Math.max(10, Math.round(brokenCutRange("broken", wallTop)[0] * 100));
+  if (!door) return [{ from, to, height: low }];
+  // 壁に沿った開口の中心と、開口の向き（壁と逆向きに引いたドアなら、ぎざぎざも裏返す）
+  const wallLength = distance(wallItem) || 1, length = distance(door);
+  const ux = (wallItem.x2 - wallItem.x1) / wallLength, uy = (wallItem.y2 - wallItem.y1) / wallLength;
+  const center = ((door.x1 + door.x2) / 2 - wallItem.x1) * ux + ((door.y1 + door.y2) / 2 - wallItem.y1) * uy;
+  const sign = (door.x2 - door.x1) * ux + (door.y2 - door.y1) * uy >= 0 ? 1 : -1;
+  const steps = clamp(Math.round((to - from) / 30), 3, 9);
+  return Array.from({ length: steps }, (_, i) => {
+    const a = from + ((to - from) * i) / steps, b = from + ((to - from) * (i + 1)) / steps;
+    return { from: a, to: b, height: Math.max(10, Math.round(brokenTopAt(length, wallTop, ((a + b) / 2 - center) * sign))) };
+  });
+}
+
 // ドア・窓が付いている壁（壊れた壁の色・厚み・高さに使う）
 function hostWallOf(item: LinearElement): LinearElement | undefined {
   const floor = state.floors.find((candidate) => candidate.entities.some((entity) => entity.id === item.id));
@@ -10747,7 +10796,7 @@ function hostWallOf(item: LinearElement): LinearElement | undefined {
 }
 
 // 壊れた壁の3Dに渡す、付いている壁の色・厚み（cm）・高さ（m）・材質の名前（リアルの模様に使う）
-function brokenWallOptions(item: LinearElement): { wallColor?: string; wallThickness?: number; wallTop?: number; wallMaterialName?: string } {
+function brokenWallOptions(item: LinearElement): { wallColor?: string; wallThickness?: number; wallTop?: number; wallMaterialName?: string; wallKind?: "box" | "glass" | "free" } {
   if (!isBrokenStyle(item.doorStyle)) return {};
   const host = hostWallOf(item);
   const info = wallInfoOf(host ?? { ...item, type: "wall" });
@@ -10757,6 +10806,8 @@ function brokenWallOptions(item: LinearElement): { wallColor?: string; wallThick
     wallThickness: host ? info.thickness : WALL_THICKNESS_2D,
     wallTop: info.height !== undefined ? Math.min(WALL_HEIGHT, info.height * SCALE_3D) : WALL_HEIGHT,
     wallMaterialName: plain ? "plaster-wall" : info.value === "wood" ? "wall-wood-plank" : info.value === "earthen" ? "plaster-earthen" : `wall-${info.value}`,
+    // 石垣・生け垣・竹垣・フェンスは、残る所を壁の側（addWall3d）で作るので、穴のまわりは埋めない。ガラスは透けるガラスで埋める
+    wallKind: info.freeKind ? "free" : info.glass ? "glass" : "box",
   };
 }
 
@@ -13954,9 +14005,10 @@ function getVisibleWallSegments(wallItem: LinearElement, entities: Entity[]): Li
 }
 
 function wallSections(wallItem: LinearElement, entities: Entity[]) {
-  // 壊れた壁（大穴・崩れ落ちた壁）は、決まった高さで切り抜く
+  // 壊れた壁（大穴・崩れ落ちた壁）は、その壁の高さに合わせた高さで切り抜く
+  const wallTop = wallTopCm(wallInfoOf(wallItem));
   const openings = entities.filter((entity): entity is LinearElement & { type: "door" | "window" } => entity.type === "door" || entity.type === "window")
-    .map((opening) => isBrokenStyle(opening.doorStyle) ? { ...opening, range: [BROKEN_CUTS[opening.doorStyle].bottom, BROKEN_CUTS[opening.doorStyle].top] as [number, number] } : opening);
+    .map((opening) => isBrokenStyle(opening.doorStyle) ? { ...opening, range: brokenCutRange(opening.doorStyle, wallTop) } : opening);
   return solidWallSections(distance(wallItem), openingIntervals(wallItem, openings, WALL_THICKNESS_2D), WALL_HEIGHT, DOOR_HEAD_Y, WINDOW_SILL_Y, WINDOW_HEAD_Y);
 }
 

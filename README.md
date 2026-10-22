@@ -87,7 +87,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 「線で囲んで床を作成」で点を順につなぎ、好きな輪郭の床を2D・3Dに作成。凹形、作図中の戻す・やり直す、タップ操作にも対応
 - 壁を直線・斜線で作成。壁の種類は、ふつうの壁・コンクリート・レンガ・ブロック塀・板塀・土塀（瓦の笠つき）・ガラス・石垣・生け垣・竹垣・フェンスから選べます（一覧の「壁」から選んで2Dをドラッグ。選んだ壁の種類も、選択中の欄の絵から変えられます）。厚み・高さ・色は種類ごとで、2Dは3Dを真上から見た形と同じです。石垣・生け垣・竹垣・フェンスは、自由な形と同じ見た目です。厚みは、選んだ壁の欄の「厚み」で変えられます（フェンス・竹垣を除く。厚くした壁も角がすき間なくつながります）
 - ドア（開き戸）、両開きドア、引き戸、和風の建具（障子・襖・格子戸の玄関戸・板戸）、門扉（門戸）、戸のない開口（壁の切れ目）、通常窓、中央区切り付き窓を配置。ドアの種類は、置いたあとでも「選択中」の「扉の種類」で変えられます。開口は2Dでは壁の切れ目だけ、3Dでは戸のない出入口です。壁をクリックするだけでも、いつもの幅（ドア80cm・両開き160cm・窓120cmなど）で壁の上に置けます（開き戸は押した側に開きます。ドア・窓の上を押すと、そのドア・窓を選びます）。開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます。ドア・窓のツールでは、選択中の欄で置く幅を決められます（選んだドア・窓の「幅」を変えると、次からその幅で置きます）
-- 扉の種類の「壁の大穴」（床から通り抜けられる穴）と「崩れ落ちた壁」（上が崩れて低くなった壁）は、壁をぎざぎざに切り抜き、足もとにかけらを散らします。3Dでは向こうが見え、2Dでは残った壁・崩れたふちと、3Dと同じ所のかけらを描きます（一覧の「建物の部分・工事」にもあります）
+- 扉の種類の「壁の大穴」（床から通り抜けられる穴）と「崩れ落ちた壁」（上が崩れて低くなった壁）は、壁をぎざぎざに切り抜き、足もとにかけらを散らします。3Dでは向こうが見え、2Dでは残った壁・崩れたふちと、3Dと同じ所のかけらを描きます。どの種類の壁でも、その壁の見た目のまま崩れます（石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけら。低い壁は高さの半分ほどまで崩れます）。一覧の「壁」と「建物の部分・工事」にもあります
 - 円、円弧、多角形を壁として3D化
 - 家具・設備を配置し、移動、サイズ変更、回転、左右反転。幅・奥行は1cm単位で決められます（小物も小さいまま。角のハンドルでも、小さな家具は細かく変わります）。壁の近くに置くと、背を壁に向けて壁に付きます（`Alt`を押しながら置くと付けません。人・小物・床に描く物などは付けません）
 - 部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。`Alt`を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます（「キャンセル」で部屋だけ）
@@ -244,7 +244,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 分類 | 収録要素 |
 | --- | --- |
 | 建具（ドア・窓） | ドア（開き戸）、両開きドア、引き戸、障子、襖、格子戸（玄関戸）、板戸、門扉（門戸）、開口（壁の切れ目）、壁の大穴、崩れ落ちた壁、窓、中央区切り付き窓 |
-| 壁 | 壁、コンクリート、レンガ、ブロック塀、板塀、土塀、ガラス、石垣、生け垣、竹垣、フェンス |
+| 壁 | 壁、コンクリート、レンガ、ブロック塀、板塀、土塀、ガラス、石垣、生け垣、竹垣、フェンス（壁の大穴、崩れ落ちた壁、壁のヒビ、崩れた壁、壁の穴） |
 | 椅子・ソファ | ソファ、2人掛けソファ、L字ソファ、1人掛け、椅子、オフィスチェア、座椅子、スツール、カウンターチェア、ベンチ（座布団、縁台、玉座、車椅子） |
 | テーブル・机 | ダイニングセット、丸テーブル、ローテーブル、サイドテーブル、こたつ、長テーブル、机、L字デスク、机と椅子、丸いダイニング（4人）（ちゃぶ台、カウンター、学校の机と椅子、教卓） |
 | ベッド・寝具 | シングルベッド、セミダブルベッド、ダブルベッド、二段ベッド、布団、ベビーベッド、天蓋付きベッド、ナイトテーブル（病院のベッド） |
@@ -844,12 +844,16 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
-### 2026年10月21日
+### 2026年10月22日
 
+- 「崩れ落ちた壁」「壁の大穴」は、どの種類の壁でも、その壁の見た目のまま崩れるように（レンガ・ブロック塀・板塀・土塀はその色と形で崩れたふちが残り、石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけらになります。低い壁は、高さの半分ほどまで崩れます）。一覧の「壁」にも、壁の大穴・崩れ落ちた壁・壁のヒビ・崩れた壁・壁の穴を並べました
 - 3Dで家具・ドア・窓にマウスを乗せると、薄い枠と「ダブルクリックで選択」の案内が出るように（1回だけクリックしたときは、案内を青く目立たせます）。物を選んでいる間は「選択中」の欄を2Dの上にも出します（選んだ物と反対の側に出し、つまみのドラッグで動かす・たたむ・左の欄に戻すができます。「表示」で切り替え）
 - 天井に付ける物を13種類追加（シャンデリア・ペンダントライト・シーリングライト・シーリングファン・ダウンライト・スポットライト・裸電球・ミラーボール・吊り鉢・プロジェクター・天井埋め込みエアコン・火災報知器・スプリンクラー）。一覧の「天井（照明など）」にあり、3Dでは天井の高さに付きます。扉の種類に「壁の大穴」と「崩れ落ちた壁」を追加（壁をぎざぎざに切り抜き、足もとにかけらが散らばります。向こうが見え、大穴は通り抜けられます。一覧の「建物の部分・工事」にもあります）
 - 家具の幅・奥行を1cm単位で決められるように（20cm刻みに丸めず、小物も小さいままにできます。角のハンドルでも、小さな家具は細かく変わります）。選んだドア・窓の欄は「長さ」を「幅」と表示し、ドア・窓のツールでは置く幅を決められます（選んだドア・窓の幅を変えると、次からその幅で置きます）。一覧の壁・ドア・窓のボタンに2Dの記号の絵を付け、壁の見本を大きくしました
 - どの家具・設備も「色 3D」で色を変えられるように（色を変えられる部品がなかった物は、いちばん大きい部品の色が変わります）。「リアル」の絵柄で、色を変えた金属の部品が暗く沈んで色が分からなかったのを直しました（塗った金属として、選んだ色で見せます）
+
+### 2026年10月21日
+
 - 壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます
 - 「削除」ツールでドラッグすると、通った所の家具・文字・ドア・窓を続けて消せるように（「元に戻す」1回で全部戻ります）。扉の種類に「開口（壁の切れ目）」を追加しました（戸のない出入口）。ドア・窓は、壁をクリックするだけで、いつもの幅で壁の上に置けます（開き戸は押した側に開きます）。選んだ開き戸は「吊元（ちょうつがい）を反対側に」で、ちょうつがいの位置を変えられます
 - ナイトモードを追加。上のバーの月のボタンで、画面のまわりと3Dの背景を暗くできます（2Dの間取りの紙は白のまま）。「表示」で間取りの名前を付けられるように（書き出すファイルの名前になります）。階のタブをダブルクリックすると、階に名前を付けられます（空にすると 1F・B1F などに戻ります）。Space を押しながらのドラッグと、中ボタンのドラッグでも2Dの画面を動かせます。文字に太字を追加。上のバーのお知らせの文は、横幅1600px以上の画面で出します
@@ -1184,7 +1188,7 @@ You can edit the starter plan immediately or load one of 153 templates, from hou
 - Draw rooms by dragging. New rooms and ground areas start without a name, so no text appears in 2D until you add one under Selection
 - Draw horizontal, vertical, and angled walls. Choose a wall type: plain, concrete, brick, block wall, board fence, earthen wall with a tile cap, glass, stone wall, hedge, bamboo fence or fence (pick one in the Walls group and drag on the 2D plan, or change a selected wall's type from pictures in the selection panel). Each type has its own thickness, height and color, and the 2D symbol matches the 3D view from above; stone walls, hedges, bamboo fences and fences look the same as the free shapes
 - Add swing doors, double doors, sliding doors, Japanese fittings (shoji, fusuma, a lattice entrance door and a plank door), gates, plain openings (a gap in the wall), windows, and divided windows. The door type can be changed later under Selection. An opening is just a gap in the wall in 2D and a doorway without a door in 3D. A click on a wall also places one with the usual width (80 cm for a door, 160 cm for a double door, 120 cm for a window and so on); a swing door opens toward the side you clicked, and clicking an existing door or window selects it. A swing door's hinge can be moved to the other end under Selection. With a door or window tool active, the Selection panel sets the width to place (changing the width of a selected door or window also sets it for the next ones)
-- The door types "large hole in the wall" (a hole you can walk through) and "collapsed wall" (a wall whose top has fallen in) cut the wall with jagged edges and scatter rubble on the floor. 3D shows the view through the gap; 2D draws what is left of the wall, the broken edge and the rubble in the same places as in 3D (also listed under building parts)
+- The door types "large hole in the wall" (a hole you can walk through) and "collapsed wall" (a wall whose top has fallen in) cut the wall with jagged edges and scatter rubble on the floor. 3D shows the view through the gap; 2D draws what is left of the wall, the broken edge and the rubble in the same places as in 3D. Every wall type breaks in its own look (stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height). Both are also listed in the wall and building-parts groups
 - Turn circles, arcs, and polygons into wall geometry
 - Place, move, resize, rotate, and flip furniture. Width and depth can be set to the centimeter (small items keep their size, and corner handles resize small pieces in finer steps). Furniture placed near a wall turns its back to the wall and touches it (hold `Alt` to skip; people, small items and floor marks never snap)
 - Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it as well (walls shared with the next room stay; hold `Alt` to move only the room). Deleting a room with things inside asks whether to delete them too (Cancel deletes only the room)
@@ -1339,7 +1343,7 @@ The furniture and equipment palette is ordered by how often things are used: ope
 | Category | Objects |
 | --- | --- |
 | Openings | Swing door, double door, sliding door, shoji, fusuma, lattice entrance door, plank door, gate, plain opening, large hole in the wall, collapsed wall, window, divided window |
-| Walls | Plain wall, concrete, brick, block wall, board fence, earthen wall, glass, stone wall, hedge, bamboo fence, fence |
+| Walls | Plain wall, concrete, brick, block wall, board fence, earthen wall, glass, stone wall, hedge, bamboo fence, fence (large hole in the wall, collapsed wall, wall crack, collapsed wall overlay, wall hole) |
 | Seating | Sofa, two-seat sofa, corner sofa, armchair, chair, office chair, floor chair (zaisu), stool, bar stool, bench (zabuton, veranda bench, throne, wheelchair) |
 | Tables and desks | Dining set, round table, low table, side table, kotatsu, long table, desk, L-shaped desk, desk and chair set, round dining set (4 seats) (chabudai, counter, school desk and chair, lectern) |
 | Beds and bedding | Single bed, semi-double bed, double bed, bunk bed, futon, crib, canopy bed, nightstand (hospital bed) |
@@ -1917,12 +1921,16 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 
 The same history as "更新履歴" in the app, newest first.
 
-### 2026-10-21
+### 2026-10-22
 
+- The collapsed wall and the large hole now break every wall type in its own look: brick, block, board and earthen walls keep a jagged rim in their own color, stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height. The wall group in the palette also lists the large hole, the collapsed wall and the wall crack, broken wall and wall hole overlays
 - In 3D, hovering over furniture, a door or a window shows a light outline and a “Double-click to select” tip next to the pointer (a single click makes the tip stand out in blue). While something is selected, the selection panel also floats over the 2D plan on the side away from the selection: drag its handle to move it, collapse it, or send it back to the left panel (toggle in the 表示 (view) menu)
 - Added 13 ceiling fixtures (chandelier, pendant light, ceiling light, ceiling fan, downlight, track spotlights, bare bulb, mirror ball, hanging plant, projector, ceiling cassette air conditioner, smoke detector and sprinkler) in the new “Ceiling (lights, etc.)” group; in 3D they hang from the ceiling. Two new door types break walls open: a large hole you can walk through and a collapsed wall, both cut with jagged edges and with rubble scattered on the floor (also listed under building parts)
 - Furniture width and depth can be set to the centimeter (no more rounding to 20 cm, so small items keep their size, and corner handles resize small pieces in finer steps). Selected doors and windows show a Width field, and the door and window tools let you choose the width to place (changing a selected door or window also sets the width for the next ones). Wall, door and window buttons in the palette now show their 2D symbols, with larger wall samples
 - Every piece of furniture and equipment now takes the 3D color (items without a colorable part change their largest part), and in the realistic look, recolored metal parts no longer sink into dark reflections: they show the chosen color as painted metal
+
+### 2026-10-21
+
 - Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too
 - Dragging the Delete tool removes every piece of furniture, text, door or window it crosses (one Undo brings them all back), and a plain opening (a gap in the wall, a doorway without a door) joins the door types. Doors and windows can be placed by just clicking a wall: they get the usual width and a swing door opens toward the side you clicked. A selected swing door can move its hinge to the other end
 - Added night mode: the moon button in the top bar darkens the frame of the screen and the 3D background (the 2D paper stays white). The 表示 (view) menu can name the plan, and exported files use the name. Double-click a floor tab to name the floor (leave it empty for 1F, B1F and so on). Space + drag and middle-button drag also pan the 2D plan. Text can be bold, and the notice in the top bar now shows on screens at least 1600 px wide

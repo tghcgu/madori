@@ -151,8 +151,32 @@ export async function verifyUiExtras({ open, plan, output }) {
     const lamp = await page.evaluate((id) => window.__editorTest.bounds(id), chandelier.id);
     assert.ok(lamp.max[1] > 2.55 && lamp.min[1] > 1.3, `it hangs from the ceiling: ${lamp.min[1]}..${lamp.max[1]}`);
     await page.screenshot({ path: `${output}/broken-walls-and-ceiling.png` });
-    console.log('PASS: UI extras: the double-click tip in 3D, the selection panel over the 2D plan, furniture sizes to the centimeter, door widths to place, pictures for wall, door and window buttons, broken walls and ceiling fixtures');
   } finally {
     await page.context().close();
   }
+
+  // どの種類の壁でも崩れる: 生け垣は崩れた所が段々に低くなり、レンガは同じレンガの色で崩れたふちを残す。一覧の「壁」にも並ぶ
+  const hedge = { id: 'hedge', type: 'wall', x1: 0, y1: 0, x2: 600, y2: 0, wallStyle: 'hedge' };
+  const brick = { id: 'brick', type: 'wall', x1: 0, y1: 300, x2: 600, y2: 300, wallStyle: 'brick' };
+  const hedgeCut = { id: 'hedgeCut', type: 'door', x1: 200, y1: 0, x2: 400, y2: 0, doorStyle: 'broken' };
+  const brickCut = { id: 'brickCut', type: 'door', x1: 200, y1: 300, x2: 400, y2: 300, doorStyle: 'broken' };
+  const walls = await open(JSON.stringify(plan([room, hedge, brick, hedgeCut, brickCut])));
+  try {
+    await walls.locator('button[data-view-mode="split"]').first().click();
+    await walls.waitForTimeout(300);
+    const top = (id, x, y) => walls.evaluate(([id, x, y]) => window.__editorTest.topAt(id, x, y), [id, x, y]);
+    const whole = await top('hedge', 60, 0), middle = await top('hedge', 300, 0);
+    assert.ok(whole > 1.1 && middle < whole - 0.25, `the hedge is lower where it collapsed: ${middle} / ${whole}`);
+    const rim = (await walls.evaluate(() => window.__editorTest.materials('brickCut'))).find((material) => material.name === 'wall-brick');
+    assert.equal(rim?.color, 'a5523a', 'the brick wall breaks as brick');
+    const group = walls.locator('details.palette-group', { has: walls.locator('summary', { hasText: /^壁$/ }) });
+    if (await group.getAttribute('open') === null) await group.locator('summary').click();
+    for (const selector of ['[data-door-style="hole"]', '[data-door-style="broken"]', '[data-furniture="wallCrack"]', '[data-furniture="collapsedWall"]', '[data-furniture="wallHole"]']) {
+      assert.equal(await group.locator(selector).count(), 1, `the wall group lists ${selector}`);
+    }
+    await walls.screenshot({ path: `${output}/broken-wall-types.png` });
+  } finally {
+    await walls.context().close();
+  }
+  console.log('PASS: UI extras: the double-click tip in 3D, the selection panel over the 2D plan, furniture sizes to the centimeter, door widths to place, pictures for wall, door and window buttons, broken walls on every wall type and in the wall group, and ceiling fixtures');
 }

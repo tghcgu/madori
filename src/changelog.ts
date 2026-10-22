@@ -8,8 +8,11 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
-    date: "2026-10-21",
+    date: "2026-10-22",
     items: [{
+      ja: "「崩れ落ちた壁」「壁の大穴」は、どの種類の壁でも、その壁の見た目のまま崩れるように（レンガ・ブロック塀・板塀・土塀はその色と形で崩れたふちが残り、石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけらになります。低い壁は、高さの半分ほどまで崩れます）。一覧の「壁」にも、壁の大穴・崩れ落ちた壁・壁のヒビ・崩れた壁・壁の穴を並べました",
+      en: "The collapsed wall and the large hole now break every wall type in its own look: brick, block, board and earthen walls keep a jagged rim in their own color, stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height. The wall group in the palette also lists the large hole, the collapsed wall and the wall crack, broken wall and wall hole overlays",
+    }, {
       ja: "3Dで家具・ドア・窓にマウスを乗せると、薄い枠と「ダブルクリックで選択」の案内が出るように（1回だけクリックしたときは、案内を青く目立たせます）。物を選んでいる間は「選択中」の欄を2Dの上にも出します（選んだ物と反対の側に出し、つまみのドラッグで動かす・たたむ・左の欄に戻すができます。「表示」で切り替え）",
       en: "In 3D, hovering over furniture, a door or a window shows a light outline and a “Double-click to select” tip next to the pointer (a single click makes the tip stand out in blue). While something is selected, the selection panel also floats over the 2D plan on the side away from the selection: drag its handle to move it, collapse it, or send it back to the left panel (toggle in the 表示 (view) menu)",
     }, {
@@ -21,7 +24,11 @@ export const CHANGELOG: ChangelogEntry[] = [
     }, {
       ja: "どの家具・設備も「色 3D」で色を変えられるように（色を変えられる部品がなかった物は、いちばん大きい部品の色が変わります）。「リアル」の絵柄で、色を変えた金属の部品が暗く沈んで色が分からなかったのを直しました（塗った金属として、選んだ色で見せます）",
       en: "Every piece of furniture and equipment now takes the 3D color (items without a colorable part change their largest part), and in the realistic look, recolored metal parts no longer sink into dark reflections: they show the chosen color as painted metal",
-    }, {
+    }],
+  },
+  {
+    date: "2026-10-21",
+    items: [{
       ja: "壁の近くに置いた家具は、背を壁に向けて壁に付くように（Alt を押しながら置くと付けません）。部屋を動かすと、中の家具・文字・その部屋の壁とドア・窓・載っている屋根も一緒に動きます（隣の部屋との境の壁は動かしません。Alt を押しながらなら部屋だけ）。中に物がある部屋を消すと、一緒に消すかを聞きます",
       en: "Furniture placed near a wall now turns its back to the wall and touches it (hold Alt to skip). Moving a room moves its furniture, text, its own walls, doors and windows, and the roof on it too (walls shared with the next room stay; hold Alt to move only the room), and deleting a room with things inside asks whether to delete them too",
     }, {

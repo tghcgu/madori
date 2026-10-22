@@ -66,6 +66,13 @@ const server = await createServer({ cacheDir: '.codex/vite-e2e', server: { host:
         planGroup.updateMatrixWorld(true);
         return ray.intersectObjects(planGroup.children.filter(o => o.userData.entityId === id && !o.userData.ignoreSelection), true).some(hit => hit.object.isMesh);
       },
+      topAt(id, x, y) {
+        ensureThreeScene();
+        const ray = new THREE.Raycaster(new THREE.Vector3((x-threeSceneCenter.x)*SCALE_3D, 100, (y-threeSceneCenter.y)*SCALE_3D), new THREE.Vector3(0,-1,0));
+        planGroup.updateMatrixWorld(true);
+        const hit = ray.intersectObjects(planGroup.children.filter(o => o.userData.entityId === id && !o.userData.ignoreSelection), true).find(hit => hit.object.isMesh && hit.object.material?.visible !== false);
+        return hit ? hit.point.y : null;
+      },
       incomingStairIds() { return incomingStairs(state.floors, state.activeFloor).map(item => item.id); },
       stairModelIds() { ensureThreeScene(); return planGroup.children.filter(o => !o.userData.ignoreSelection && isStair(findEntity(o.userData.entityId))).map(o => o.userData.entityId); },
       roomLabelBounds(id) {

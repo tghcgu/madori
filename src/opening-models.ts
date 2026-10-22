@@ -17,11 +17,12 @@ export interface OpeningModelOptions {
   flip?: boolean;
   color?: string;
   color3d?: string;
-  // 壊れた壁: 付いている壁の色・厚み（cm）・高さ（m）・材質の名前
+  // 壊れた壁: 付いている壁の色・厚み（cm）・高さ（m）・材質の名前・作り（ふつうの箱・ガラス・石垣などの自由な形）
   wallColor?: string;
   wallThickness?: number;
   wallTop?: number;
   wallMaterialName?: string;
+  wallKind?: "box" | "glass" | "free";
 }
 
 export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
@@ -122,19 +123,36 @@ export function buildOpeningModel(item: OpeningModelOptions): THREE.Group {
   function buildBrokenWall(kind: BrokenStyle): void {
     const thickness = (item.wallThickness ?? 10) / 100, wallTop = item.wallTop ?? 2.6;
     const color = custom ?? item.wallColor ?? DOOR_COLORS[kind];
-    const wall = material(item.wallMaterialName ?? "plaster-wall", color, 0.85);
-    const outline = brokenWallOutline(kind, w * 100, thickness * 100, wallTop * 100);
-    const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), { depth: thickness, bevelEnabled: false });
-    geometry.translate(0, 0, -thickness / 2);
-    const remain = new THREE.Mesh(geometry, wall);
-    remain.name = "broken-wall";
-    remain.castShadow = !wall.transparent;
-    remain.receiveShadow = true;
-    group.add(remain);
-    const rubble = material("rubble-stone", new THREE.Color(color).multiplyScalar(0.82), 0.95);
+    const glassWall = item.wallKind === "glass";
+    // 石垣・生け垣などは、残る所を壁の側で作るので、ここではかけらだけ
+    if (item.wallKind !== "free") {
+      const wall = material(item.wallMaterialName ?? "plaster-wall", color, glassWall ? 0.08 : 0.85);
+      if (glassWall) {
+        wall.transparent = true;
+        wall.opacity = 0.35;
+        wall.depthWrite = false;
+        wall.side = THREE.DoubleSide;
+      }
+      const outline = brokenWallOutline(kind, w * 100, wallTop * 100);
+      const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([x, y]) => new THREE.Vector2(x / 100, y / 100))), { depth: thickness, bevelEnabled: false });
+      geometry.translate(0, 0, -thickness / 2);
+      const remain = new THREE.Mesh(geometry, wall);
+      remain.name = "broken-wall";
+      remain.castShadow = !wall.transparent;
+      remain.receiveShadow = true;
+      group.add(remain);
+    }
+    // かけら。ガラスの壁は、薄く透けるガラスのかけら
+    const rubble = glassWall ? material("glass-shard", color, 0.08) : material("rubble-stone", new THREE.Color(color).multiplyScalar(0.82), 0.95);
+    if (glassWall) {
+      rubble.transparent = true;
+      rubble.opacity = 0.5;
+      rubble.depthWrite = false;
+    }
     const floor = item.floorTop ?? 0.08;
     for (const piece of brokenRubble(kind, w * 100, thickness * 100)) {
-      const mesh = part("rubble", piece.w / 100, piece.h / 100, piece.d / 100, piece.x / 100, floor + piece.h / 200, piece.y / 100, rubble, 0.012);
+      const height = glassWall ? 0.006 : piece.h / 100;
+      const mesh = part("rubble", piece.w / 100, height, piece.d / 100, piece.x / 100, floor + height / 2, piece.y / 100, rubble, glassWall ? 0.001 : 0.012);
       mesh.rotation.y = -piece.angle;
     }
   }

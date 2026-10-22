@@ -101,11 +101,16 @@ export function isBrokenStyle(style: unknown): style is BrokenStyle {
   return style === "hole" || style === "broken";
 }
 
-// 壁を切り抜く高さ（m）。大穴は床から、崩れ落ちた壁は途中から上まで（壁の上まで切る）
-export const BROKEN_CUTS: Record<BrokenStyle, { bottom: number; top: number }> = {
-  hole: { bottom: 0, top: 2 },
-  broken: { bottom: 0.6, top: Infinity },
-};
+// 開口の両端で、壁を余分に切る幅の合計（cm）。main.ts の wallSections が壁を切る幅（WALL_THICKNESS_2D）と同じ
+export const BROKEN_CUT_MARGIN = 10;
+// 大穴を切る高さ（cm）
+const HOLE_TOP = 200;
+
+// 壁を切り抜く高さ（m。壁の高さ wallTop は cm）。大穴は床から2mまで、崩れ落ちた壁は途中から上まで。
+// 低い壁（ブロック塀・石垣・生け垣など）も崩れて見えるよう、残す高さは壁の高さの半分ほどまでにする
+export function brokenCutRange(style: BrokenStyle, wallTop: number): [number, number] {
+  return style === "hole" ? [0, HOLE_TOP / 100] : [Math.min(0.6, (wallTop * 0.45) / 100), Infinity];
+}
 
 // 決まった並びの乱数（同じ幅なら、2Dと3Dで同じ形・同じかけらになる）
 function seeded(seed: number): () => number {
@@ -116,14 +121,14 @@ function seeded(seed: number): () => number {
   };
 }
 
-// 壁に残る部分の形（cm）。開口の中心が原点、x は壁に沿って、y は床からの高さ。切り抜いた所（幅は開口と壁の厚み）を、
+// 壁に残る部分の形（cm）。開口の中心が原点、x は壁に沿って、y は床からの高さ。切り抜いた所（幅は開口と BROKEN_CUT_MARGIN）を、
 // 大穴は「穴のまわり」、崩れ落ちた壁は「崩れて残った低い所」で埋める。wallTop は壁の高さ（cm）
-export function brokenWallOutline(style: BrokenStyle, lengthCm: number, thicknessCm: number, wallTop: number): [number, number][] {
+export function brokenWallOutline(style: BrokenStyle, lengthCm: number, wallTop: number): [number, number][] {
   const random = seeded(lengthCm * 7 + (style === "hole" ? 1 : 2));
-  const half = lengthCm / 2 + thicknessCm / 2;
+  const half = lengthCm / 2 + BROKEN_CUT_MARGIN / 2;
   if (style === "hole") {
     // 大穴: 床から立ち上がって、ぎざぎざのアーチで閉じる穴。まわり（切り抜いた四角の残り）を壁で埋める
-    const top = Math.min(BROKEN_CUTS.hole.top * 100, wallTop), foot = lengthCm * 0.4;
+    const top = Math.min(HOLE_TOP, wallTop), foot = lengthCm * 0.4;
     const rim: [number, number][] = [[foot, 0]];
     const sides = 5;
     for (let i = 1; i <= sides; i += 1) rim.push([lengthCm * (0.42 + random() * 0.06), (top * 0.78 * i) / sides]);
@@ -131,27 +136,38 @@ export function brokenWallOutline(style: BrokenStyle, lengthCm: number, thicknes
     for (let i = 1; i < arch; i += 1) {
       const t = i / arch;
       const x = lengthCm * 0.46 * Math.cos(Math.PI * t);
-      rim.push([x, Math.min(top - 4, top * (0.8 + 0.14 * Math.sin(Math.PI * t)) + (random() - 0.5) * 14)]);
+      rim.push([x, Math.min(top - Math.min(4, top * 0.05), top * (0.8 + 0.14 * Math.sin(Math.PI * t)) + (random() - 0.5) * top * 0.07)]);
     }
     for (let i = sides; i >= 1; i -= 1) rim.push([-lengthCm * (0.42 + random() * 0.06), (top * 0.78 * i) / sides]);
     rim.push([-foot, 0]);
     // 左下から上・右へ回り、右の足もとから穴のふちをなぞって左の足もとへ
     return [[-half, 0], [-half, top], [half, top], [half, 0], ...rim];
   }
-  // 崩れ落ちた壁: 切った所の下（床から BROKEN_CUTS.broken.bottom）から、ぎざぎざに崩れた上の縁まで。両端は元の壁の高さまで
-  const bottom = BROKEN_CUTS.broken.bottom * 100;
-  const low = Math.min(wallTop, bottom + 25);
+  // 崩れ落ちた壁: 切った所の下から、ぎざぎざに崩れた上の縁まで。両端は元の壁の高さまで
+  const bottom = brokenCutRange("broken", wallTop)[0] * 100;
+  const low = Math.min(wallTop, bottom + Math.max(6, (wallTop - bottom) * 0.12));
   const points: [number, number][] = [[-half, bottom], [-half, wallTop]];
   const steps = Math.max(4, Math.round(lengthCm / 16));
   for (let i = 1; i < steps; i += 1) {
     const t = i / steps;
     // 真ん中ほど低く崩れる（両端は元の高さに近い）
     const edge = Math.pow(Math.abs(t - 0.5) * 2, 1.6);
-    const y = low + (wallTop - low) * edge + (random() - 0.5) * 22;
-    points.push([-half + 2 * half * t, Math.max(bottom + 6, Math.min(wallTop, y))]);
+    const y = low + (wallTop - low) * edge + (random() - 0.5) * (wallTop - bottom) * 0.12;
+    points.push([-half + 2 * half * t, Math.max(bottom + 3, Math.min(wallTop, y))]);
   }
   points.push([half, wallTop], [half, bottom]);
   return points;
+}
+
+// 崩れ落ちた壁の、x（開口の中心から cm）での崩れたふちの高さ（cm）。石垣・生け垣など自由な形の壁を、段々に作るのに使う
+export function brokenTopAt(lengthCm: number, wallTop: number, x: number): number {
+  const edge = brokenWallOutline("broken", lengthCm, wallTop).slice(1, -1);
+  if (x <= edge[0][0]) return edge[0][1];
+  for (let i = 1; i < edge.length; i += 1) {
+    const [x0, y0] = edge[i - 1], [x1, y1] = edge[i];
+    if (x <= x1) return x1 === x0 ? y1 : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }
+  return edge[edge.length - 1][1];
 }
 
 export interface RubblePiece {
@@ -179,13 +195,14 @@ export function brokenRubble(style: BrokenStyle, lengthCm: number, thicknessCm: 
   return pieces;
 }
 
-// 大穴の、ある高さ（cm）での左右のふち（開口の中心から cm）。2Dは床から1mの高さで切った形を描く
-export function brokenHoleEdges(lengthCm: number, thicknessCm: number, wallTop: number, height = 100): [number, number] {
-  const rim = brokenWallOutline("hole", lengthCm, thicknessCm, wallTop).slice(4);
+// 大穴の、ある高さ（cm）での左右のふち（開口の中心から cm）。2Dは床から1mの高さ（低い壁は半分の高さ）で切った形を描く
+export function brokenHoleEdges(lengthCm: number, wallTop: number, height = 100): [number, number] {
+  const rim = brokenWallOutline("hole", lengthCm, wallTop).slice(4);
+  const level = Math.min(height, Math.min(HOLE_TOP, wallTop) * 0.5);
   const at = (points: [number, number][]) => {
     for (let i = 1; i < points.length; i += 1) {
       const [x0, y0] = points[i - 1], [x1, y1] = points[i];
-      if ((y0 - height) * (y1 - height) <= 0 && y0 !== y1) return x0 + ((x1 - x0) * (height - y0)) / (y1 - y0);
+      if ((y0 - level) * (y1 - level) <= 0 && y0 !== y1) return x0 + ((x1 - x0) * (level - y0)) / (y1 - y0);
     }
     return points[0][0];
   };
