@@ -89,10 +89,17 @@ select:focus-visible {
   border-radius: 8px;
 }
 
+/* アプリの名前（見出し）と、α版・間取り専用版の印を1行に並べる */
+.brand-title {
+  display: block;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .brand h1 {
   margin: 0;
   font-size: inherit;
-  display: block;
+  display: inline;
   line-height: 1.1;
   white-space: nowrap;
 }

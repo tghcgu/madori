@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-22",
     items: [{
+      ja: "テンプレートの階段の向きを直しました。学校・旅館・ホテル・図書館・警察署・博物館・アパート・シェアハウス・ガレージハウス・ロッジ・日本の城・洋館・メゾネット・冒険者の宿・ダンジョンで、上り口と上り切った所が壁ではなく通れる床に向くように、階段の向きと位置（必要な所は扉や家具も）を変えました",
+      en: "Fixed the direction of stairs in templates: in the school, ryokan, hotel, library, police station, museum, apartment, share house, garage house, lodge, Japanese castle, Western mansion, maisonette, adventurers' inn and dungeon, the stairs now start and arrive facing open floor instead of a wall (some doors and furniture moved to make room)",
+    }, {
       ja: "「壁の大穴」を、壁を突き破ったような形に作り直しました（ふちのぎざぎざな大きな丸い穴で、まわりの壁にひびが入ります）。竹垣・石垣・生け垣・フェンスにも、穴の上と下に垣が残る大穴があくようにしました（前はただの切れ目でした）",
       en: "The large hole now looks blown through the wall: a big round hole with a ragged rim and cracks around it. Bamboo fences, stone walls, hedges and fences also get a real hole with the fence left above and below it (before, they only had a plain gap)",
     }, {

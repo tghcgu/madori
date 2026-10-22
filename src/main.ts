@@ -12506,7 +12506,7 @@ function setupEdition(): void {
     document.title = "間取りクイック 間取り専用版";
     const heading = document.querySelector<HTMLHeadingElement>(".brand h1");
     if (heading?.firstChild?.nodeType === Node.TEXT_NODE) heading.firstChild.textContent = "間取りクイック";
-    heading?.querySelector(".alpha-badge")?.insertAdjacentHTML("beforebegin", '<span class="edition-badge">間取り専用版</span>');
+    document.querySelector(".brand .alpha-badge")?.insertAdjacentHTML("beforebegin", '<span class="edition-badge">間取り専用版</span>');
     // 本体で屋根を選んだまま開いたときは、選ばない状態から始める（屋根は3Dの部品なので出さない）
     if (state.roofs.some((item) => item.id === state.selectedId)) state.selectedId = null;
     return;

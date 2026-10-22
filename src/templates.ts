@@ -590,7 +590,7 @@ function apartment(b: PlanBuilder): void {
   const first = b.floor();
   first.area("", 0, 720, 1020, 200, "stone", C.stone)
     .area("", 0, 600, 900, 120, "stone", C.stone)
-    .area("", 900, 320, 120, 400, "stone", C.stone);
+    .area("", 900, 200, 120, 520, "stone", C.stone);
   [0, 300, 600].forEach((ux) => unit(first, ux));
   first.walls();
   [0, 300, 600].forEach((ux) => furnish(first, ux));
@@ -620,7 +620,7 @@ function westernMansion(b: PlanBuilder): void {
     .walls()
     .door(600, 250, 600, 350)
     .door(600, 800, 600, 880)
-    .item("stairs", 880, 400)
+    .item("stairs", 880, 400, { rot: 180 })
     .row("shelf", 100, 80, 4, 0, 120, { w: 400, h: 40 })
     .item("longTable", 380, 520, { w: 160, h: 60 })
     .item("wardrobe", 30, 620)
@@ -752,12 +752,12 @@ function lodge(b: PlanBuilder): void {
     .area("テラス", -320, 0, 320, 500, "wood", C.wood)
     .room("ラウンジ", 0, 0, 600, 500, C.wood, "wood")
     .room("食堂", 600, 0, 400, 500, C.wood, "wood")
-    .room("玄関", 0, 500, 300, 300, C.stone, "stone").label(60, 140)
+    .room("玄関", 0, 500, 300, 300, C.stone, "stone").label(30, 20)
     .room("浴室", 300, 500, 300, 300, C.tile, "tile").label(20, 110)
     .room("厨房", 600, 500, 400, 300, C.tile, "tile")
     .open(600, 100, 600, 400)
     .walls()
-    .door(60, 800, 160, 800)
+    .door(200, 800, 290, 800)
     .door(180, 500, 270, 500)
     .door(300, 700, 300, 780)
     .door(800, 500, 890, 500, { flip: true })
@@ -772,9 +772,9 @@ function lodge(b: PlanBuilder): void {
     .item("armchair", 60, 150, { rot: 270 })
     .item("table", 250, 220)
     .item("plantLarge", 520, 430)
-    .item("stairs", 10, 520, { rot: 90 })
-    .item("shoeCabinet", 5, 650, { rot: 270 })
-    .item("coatStand", 230, 640)
+    .item("stairsU", 10, 610, { rot: 180 })
+    .item("shoeCabinet", 260, 520, { rot: 90 })
+    .item("coatStand", 230, 650)
     .item("bath", 420, 520)
     .item("washbasin", 320, 520)
     .item("toilet", 540, 720, { rot: 180 })
@@ -815,7 +815,7 @@ function lodge(b: PlanBuilder): void {
     .door(780, 450, 860, 450)
     .window(100, 0, 400, 0, true).window(600, 0, 900, 0, true)
     .window(380, 800, 570, 800).window(730, 800, 920, 800).window(0, 550, 0, 700)
-    .item("stairs", 10, 520, { rot: 90 })
+    .item("stairsU", 10, 610, { rot: 180 })
     .item("plant", 940, 360)
     .item("bed", 40, 30).item("bed", 160, 30).item("sideTable", 270, 40)
     .item("desk", 360, 40, { w: 100, h: 50 }).item("chair", 388, 95, { rot: 180 })
@@ -901,7 +901,7 @@ function ryokan(b: PlanBuilder): void {
     .item("kitchen", 620, 935, { rot: 180 })
     .item("fridge", 920, 925)
     .item("longTable", 660, 800, { w: 200, h: 70 })
-    .item("stairsU", 410, 760);
+    .item("stairsU", 410, 760, { rot: 180 });
 
   // 2階: 中庭の上は吹き抜け。まわりの廊下と客室、階段の上に談話室
   const upper = b.floor();
@@ -935,7 +935,7 @@ function ryokan(b: PlanBuilder): void {
     .window(450, 0, 650, 0, true).window(750, 0, 950, 0, true)
     .window(1050, 0, 1350, 0, true).window(1400, 80, 1400, 420)
     .window(1400, 580, 1400, 920).window(1050, 1000, 1350, 1000, true).window(650, 1000, 950, 1000, true)
-    .item("stairsU", 410, 760)
+    .item("stairsU", 410, 760, { rot: 180 })
     // 桜・楓・萩
     .item("table", 220, 80, { w: 120, h: 70 }).item("zaisu", 252, 13).item("zaisu", 252, 155, { rot: 180 })
     .item("futon", 40, 230).item("futon", 150, 230)
@@ -998,7 +998,7 @@ function hotel(b: PlanBuilder): void {
     .item("desk", 1110, 860, { rot: 180 })
     .item("officeChair", 1140, 795)
     .item("toilet", 1290, 845, { rot: 180 }).item("toilet", 1370, 845, { rot: 180 })
-    .item("stairsU", 1500, 600, { w: 240, h: 240 });
+    .item("stairsU", 1500, 670, { w: 240, h: 240, rot: 180 });
 
   // 2・3階: 廊下の両側に客室（ツイン）が並ぶ
   for (const level of [2, 3]) {
@@ -1019,7 +1019,7 @@ function hotel(b: PlanBuilder): void {
       .sliding(1660, 170, 1750, 170)
       .door(1560, 520, 1650, 520)
       .window(1800, 650, 1800, 800)
-      .item("stairsU", 1500, 600, { w: 240, h: 240 })
+      .item("stairsU", 1500, 670, { w: 240, h: 240, rot: 180 })
       .item("bench", 1500, 300, { w: 150, h: 45 })
       .item("plantLarge", 1720, 320);
     for (let i = 0; i < 4; i += 1) {
@@ -1330,7 +1330,7 @@ function school(b: PlanBuilder): void {
     // トイレ・階段・昇降口
     .row("toilet", 1220, 1120, 4, 70, 0, { rot: 180 })
     .row("washbasin", 1205, 800, 2, 0, 80, { rot: 270 })
-    .item("stairsU", 1530, 900, { w: 240, h: 240 })
+    .item("stairsU", 1530, 900, { w: 240, h: 240, rot: 180 })
     .row("shoeCabinet", 1850, 850, 2, 250, 0, { w: 200, h: 40 })
     .row("shoeCabinet", 1850, 980, 2, 250, 0, { w: 200, h: 40 })
     .item("plantLarge", 2320, 1120);
@@ -1361,7 +1361,7 @@ function school(b: PlanBuilder): void {
       .window(0, 620, 0, 730).window(2400, 620, 2400, 730).window(2400, 800, 2400, 1150)
       .row("toilet", 1220, 1120, 4, 70, 0, { rot: 180 })
       .row("washbasin", 1205, 800, 2, 0, 80, { rot: 270 })
-      .item("stairsU", 1530, 900, { w: 240, h: 240 })
+      .item("stairsU", 1530, 900, { w: 240, h: 240, rot: 180 })
       .row("shelf", 830, 1165, 3, 100, 0, { rot: 180 })
       .item("desk", 1050, 950);
     if (level === 0) {
@@ -1467,7 +1467,7 @@ function library(b: PlanBuilder): void {
     .row("desk", 1150, 1100, 3, 150, 0, { rot: 180 })
     .row("officeChair", 1180, 1035, 3, 150, 0)
     .item("shelf", 1565, 850, { rot: 90 })
-    .item("stairs", 1470, 60);
+    .item("stairs", 1470, 100);
   // 2階の下にならない受付・書庫・事務室の屋根
   b.roof("flat", -30, 770, 1660, 460, f);
 
@@ -1482,7 +1482,7 @@ function library(b: PlanBuilder): void {
     .door(300, 650, 380, 650)
     .door(1000, 650, 1080, 650, { flip: true })
     .window(60, 0, 740, 0, true).window(0, 100, 0, 550).window(860, 0, 1290, 0).window(1600, 60, 1600, 600)
-    .item("stairs", 1470, 60)
+    .item("stairs", 1470, 100)
     .row("desk", 60, 120, 5, 140, 0)
     .row("officeChair", 90, 185, 5, 140, 0, { rot: 180 })
     .row("desk", 60, 360, 5, 140, 0)
@@ -1644,10 +1644,10 @@ function police(b: PlanBuilder): void {
     .row("chair", 1290, 195, 3, 80, 0)
     .row("chair", 1290, 345, 3, 80, 0, { rot: 180 })
     .item("shelf", 1585, 200, { w: 200, h: 12, rot: 90, color: "#ffffff" })
-    .item("longTable", 220, 680, { w: 260, h: 60 })
+    .item("longTable", 60, 680, { w: 260, h: 60 })
     .row("bench", 60, 850, 2, 0, 100, { w: 150, h: 45, rot: 180 })
     .item("trashCan", 20, 1050)
-    .item("stairs", 380, 760);
+    .item("stairs", 380, 700);
   for (const X of [500, 800]) {
     f.item("desk", X + 100, 900, { w: 100, h: 70 })
       .item("chair", X + 128, 850).item("chair", X + 128, 975, { rot: 180 })
@@ -1675,7 +1675,7 @@ function police(b: PlanBuilder): void {
     .door(1100, 750, 1180, 750)
     .window(60, 0, 740, 0, true).window(0, 100, 0, 500).window(860, 0, 1540, 0, true).window(1600, 420, 1600, 560)
     .window(560, 1100, 940, 1100).window(1100, 1100, 1500, 1100)
-    .item("stairs", 380, 760)
+    .item("stairs", 380, 700)
     .item("shelf", 340, 0, { w: 120, h: 30, color: "#8a6a4a" })
     .item("longTable", 1000, 240, { w: 400, h: 120 })
     .row("chair", 1020, 185, 5, 80, 0)
@@ -1775,7 +1775,7 @@ function museum(b: PlanBuilder): void {
     .row("desk", 1260, 860, 2, 200, 0)
     .row("officeChair", 1290, 925, 2, 200, 0, { rot: 180 })
     .item("shelf", 1765, 900, { rot: 90 })
-    .item("stairs", 880, 870, { rot: 90 });
+    .item("stairs", 790, 870, { rot: 90 });
 
   // 2階: 展示室4・5と、カフェ・収蔵庫
   const upper = b.floor();
@@ -1788,7 +1788,7 @@ function museum(b: PlanBuilder): void {
     .walls()
     .door(1200, 1050, 1200, 1130)
     .window(100, 0, 800, 0, true).window(1000, 0, 1700, 0, true).window(100, 1200, 500, 1200, true).window(0, 850, 0, 1150)
-    .item("stairs", 880, 870, { rot: 90 })
+    .item("stairs", 790, 870, { rot: 90 })
     .row("table", 100, 70, 3, 260, 0, { w: 160, h: 60, symbol: 1 })
     .row("sideTable", 150, 350, 3, 250, 0, { w: 60, h: 60 })
     .row("sideTable", 150, 600, 3, 250, 0, { w: 60, h: 60 })
@@ -1911,7 +1911,7 @@ function factory(b: PlanBuilder): void {
 function dungeon(b: PlanBuilder): void {
   const f = b.floor();
   const stone = C.darkStone;
-  f.room("入口", 800, 1100, 400, 300, stone, "stone").label(90, 130)
+  f.room("入口", 800, 1100, 400, 300, stone, "stone").label(270, 130)
     .room("", 950, 700, 100, 400, stone, "stone")
     .room("", 100, 600, 1700, 100, stone, "stone")
     .room("大広間", 650, 0, 700, 600, stone, "stone").label(110, 25)
@@ -1932,7 +1932,7 @@ function dungeon(b: PlanBuilder): void {
     .window(20, 300, 140, 300, true).door(145, 300, 195, 300)
     .window(220, 300, 340, 300, true).door(345, 300, 395, 300)
     .window(420, 300, 540, 300, true).door(545, 300, 595, 300)
-    .item("stairs", 1050, 1110)
+    .item("stairs", 950, 1110, { rot: 180 })
     .item("brazier", 820, 1120, { w: 60, h: 60 }).item("brazier", 820, 1320, { w: 60, h: 60 })
     .item("rug", 940, 100, { w: 120, h: 480, color: "#7a1e1e" })
     .item("longTable", 850, 250, { w: 300, h: 90 })
@@ -2107,7 +2107,7 @@ function shareHouse(b: PlanBuilder): void {
     .door(800, 400, 880, 400)
     .door(750, 700, 750, 780)
     .door(550, 300, 550, 380)
-    .door(550, 700, 550, 780)
+    .door(550, 800, 550, 880)
     .window(80, 0, 480, 0, true).window(0, 150, 0, 450, true)
     .window(0, 650, 0, 850).window(100, 900, 450, 900)
     .window(1000, 460, 1000, 590)
@@ -2127,7 +2127,7 @@ function shareHouse(b: PlanBuilder): void {
     .item("officeChair", 330, 775)
     // 玄関・廊下・水回り
     .item("shoeCabinet", 550, 60, { rot: 270 })
-    .item("stairs", 600, 580)
+    .item("stairs", 550, 510)
     .item("toilet", 925, 50, { rot: 90 })
     .item("washbasin", 945, 170, { rot: 90 })
     .item("washer", 930, 300)
@@ -2143,11 +2143,11 @@ function shareHouse(b: PlanBuilder): void {
     .room("個室5", 750, 450, 250, 300, C.wood, "wood")
     .room("トイレ", 750, 750, 250, 150, C.tile, "tile")
     .walls()
-    .door(550, 200, 550, 280).door(550, 700, 550, 780)
+    .door(550, 200, 550, 280).door(550, 800, 550, 880)
     .door(750, 200, 750, 280).door(750, 500, 750, 580).door(750, 790, 750, 860)
     .window(100, 0, 450, 0).window(0, 100, 0, 350).window(0, 550, 0, 800).window(100, 900, 450, 900)
     .window(800, 0, 950, 0).window(1000, 100, 1000, 350).window(1000, 500, 1000, 700).window(600, 0, 700, 0)
-    .item("stairs", 600, 580)
+    .item("stairs", 550, 510)
     .item("bed", 20, 220).item("desk", 400, 10).item("officeChair", 430, 75, { rot: 180 }).item("wardrobe", 150, 405, { rot: 180 })
     .item("bed", 20, 680).item("desk", 400, 460).item("officeChair", 430, 525, { rot: 180 })
     .item("desk", 870, 10).item("officeChair", 900, 75, { rot: 180 }).item("bed", 880, 220)
@@ -2995,7 +2995,7 @@ function adventurersInn(b: PlanBuilder): void {
     .door(300, 900, 400, 900)
     .door(800, 100, 800, 180)
     .door(900, 450, 980, 450)
-    .door(800, 760, 800, 840)
+    .door(800, 760, 800, 840, { flip: true })
     .window(0, 100, 0, 300).window(0, 600, 0, 800).window(500, 900, 700, 900).window(1200, 60, 1200, 240)
     // 暖炉・依頼の掲示板・カウンター
     .item("fireplace", 0, 380, { rot: 270 })
@@ -3003,7 +3003,7 @@ function adventurersInn(b: PlanBuilder): void {
     .item("longTable", 680, 250, { w: 400, h: 60, rot: 90 })
     .row("stool", 630, 270, 6, 0, 65)
     .row("shelf", 770, 300, 3, 0, 100, { rot: 90 })
-    .item("plantLarge", 720, 820);
+    .item("plantLarge", 640, 820);
   // 丸テーブルと丸椅子
   for (const [x, y] of [[150, 150], [400, 150], [150, 600], [400, 600]]) {
     ground.item("roundTable", x, y)
@@ -3014,7 +3014,7 @@ function adventurersInn(b: PlanBuilder): void {
     .item("longTable", 880, 200, { w: 160, h: 60 })
     .item("roundTable", 830, 380, { w: 60, h: 60, color: "#8a5a2b" })
     .row("roundTable", 830, 600, 4, 85, 0, { w: 70, h: 70, color: "#8a5a2b" })
-    .item("stairs", 880, 750, { rot: 90 });
+    .item("stairs", 830, 750, { rot: 90 });
 
   const upper = b.floor();
   upper.room("客室1", 0, 0, 300, 400, C.wood, "wood")
@@ -3027,7 +3027,7 @@ function adventurersInn(b: PlanBuilder): void {
     .room("", 800, 520, 400, 380, C.wood, "wood")
     .open(800, 520, 1200, 520)
     .walls()
-    .item("stairs", 880, 750, { rot: 90 });
+    .item("stairs", 830, 750, { rot: 90 });
   for (const x of [0, 300, 600, 900]) {
     upper.item("bed", x + 20, 180).item("sideTable", x + 130, 190).item("wardrobe", x + 180, 10, { w: 100, h: 45 })
       .door(x + 200, 400, x + 280, 400)
@@ -3174,7 +3174,7 @@ function maisonette(b: PlanBuilder): void {
     .row("chair", 320, 245, 2, 60, 0, { rot: 180 })
     .item("kitchen", 200, 420)
     .item("fridge", 130, 420)
-    .item("stairs", 490, 200)
+    .item("stairs", 490, 200, { rot: 180 })
     .item("shoeCabinet", 110, 655)
     .item("washbasin", 300, 630, { rot: 180 })
     .item("washer", 220, 620)
@@ -3369,15 +3369,14 @@ function garageHouse(b: PlanBuilder): void {
     .item("stool", 760, 160)
     .item("shelf", 520, 240)
     .item("shoeCabinet", 800, 520)
-    .item("stairs", 600, 400, { rot: 90 });
+    .item("stairs", 520, 400, { rot: 270 });
   const upper = b.floor();
   upper.room("LDK", 0, 0, 600, 600, C.wood, "wood")
     .room("寝室", 600, 0, 300, 350, C.wood, "wood")
     .room("", 600, 350, 300, 250, C.wood, "wood")
+    .open(600, 350, 600, 600)
     .walls()
     .door(600, 150, 600, 230)
-    .door(600, 450, 600, 530)
-    .door(700, 350, 780, 350)
     .window(60, 0, 540, 0, true).window(0, 80, 0, 520).window(900, 60, 900, 300)
     .item("kitchen", 30, 520)
     .item("fridge", 280, 525)
@@ -3571,7 +3570,7 @@ function japaneseCastle(b: PlanBuilder): void {
     .window(1200, 800, 1800, 800, true).window(1100, 900, 1100, 1300).window(1900, 900, 1900, 1300)
     .window(880, 2000, 1150, 2000)
     // 天守の中: 階段と武具
-    .item("stairs", 1150, 1050)
+    .item("stairs", 1190, 1020)
     .item("treasureChest", 1700, 1300)
     .item("crate", 1780, 1290)
     // 本丸御殿
@@ -3603,7 +3602,7 @@ function japaneseCastle(b: PlanBuilder): void {
   second.room("二の重", 1170, 860, 660, 480, C.wood, "wood").label(20, 20)
     .walls()
     .window(1250, 860, 1750, 860, true).window(1170, 950, 1170, 1250).window(1830, 950, 1830, 1250)
-    .item("stairs", 1600, 900)
+    .item("stairs", 1370, 900, { rot: 90 })
     .item("crate", 1300, 1250);
   b.roof("hip", 1110, 800, 780, 600, second, "#3f4549");
   const third = b.floor();

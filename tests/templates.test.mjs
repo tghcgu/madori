@@ -347,3 +347,56 @@ test('the three-story house has an unobstructed arrival hall before its third-fl
     assert.ok(!floor.entities.some(w=>w.type==='wall'&&w.y1===380&&w.y2===380&&Math.min(w.x1,w.x2)<x&&Math.max(w.x1,w.x2)>x));
   }
 });
+
+// 階段の向き: 上り口の前（その階）と、上り切った所の前（上の階）に、壁・家具にふさがれない床が75cm以上ある。
+// 上り口が壁や外に向いていたり、上の階で壁に突き当たったりしない（学校の階段が奥の壁を向いていたのを直したときに足した）
+test('template stairs start and arrive facing open floor, not a wall', () => {
+  const cross = (a, b, c, d) => {
+    const side = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+    return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0;
+  };
+  const world = (stair, [x, y]) => {
+    const a = stair.rotation * Math.PI / 180, cx = stair.x + stair.w / 2, cy = stair.y + stair.h / 2;
+    return [cx + x * Math.cos(a) - y * Math.sin(a), cy + x * Math.sin(a) + y * Math.cos(a)];
+  };
+  // from から to へ歩けるか（床の上で、ドア・開口以外の壁を横切らず、家具に当たらない）
+  const walkable = (entities, from, to, selfId) => {
+    if (!entities.some(room => room.type === 'room' && pointInPolygon(to[0], to[1], floorPolygon(room)))) return false;
+    const doors = entities.filter(item => item.type === 'door');
+    if (entities.some(wall => wall.type === 'wall' && cross(from, to, [wall.x1, wall.y1], [wall.x2, wall.y2]) && !doors.some(door => cross(from, to, [door.x1, door.y1], [door.x2, door.y2])))) return false;
+    return !entities.some(item => {
+      if (item.type !== 'furniture' || item.id === selfId || isFreeShapeKind(item.kind) || ['rug', 'paint', 'image', 'footprints', 'brokenGlass', 'bloodPool'].includes(item.kind)) return false;
+      const a = -(item.rotation ?? 0) * Math.PI / 180, dx = to[0] - item.x - item.w / 2, dy = to[1] - item.y - item.h / 2;
+      return Math.abs(dx * Math.cos(a) - dy * Math.sin(a)) < item.w / 2 && Math.abs(dx * Math.sin(a) + dy * Math.cos(a)) < item.h / 2;
+    });
+  };
+  const room = (stair, entities, edge, outward) => {
+    for (let d = 10; d <= 120; d += 10) {
+      if (!walkable(entities, world(stair, edge), world(stair, [edge[0] + outward[0] * d, edge[1] + outward[1] * d]), stair.id)) return d - 10;
+    }
+    return 120;
+  };
+  let checked = 0;
+  for (const key of keys.filter(hasTemplatePlan)) {
+    const plan = build(key);
+    plan.floors.forEach((floor, index) => {
+      for (const stair of floor.entities.filter(isStair)) {
+        if (stair.kind === 'stairsSpiral') continue;
+        const w = stair.w, h = stair.h, f = stair.flip ? -1 : 1;
+        // 上り口と上り切った所の端（階段の中心から）と、外への向き。直階段は縦なら南から北へ、横なら西から東へ上る。折り返し階段は、どちらも南の端
+        const [start, arrive, outStart, outArrive] = stair.kind === 'stairsU'
+          ? [[0.265 * w * f, h / 2], [-0.265 * w * f, h / 2], [0, 1], [0, 1]]
+          : h >= w ? [[0, h / 2], [0, -h / 2], [0, 1], [0, -1]] : [[-w / 2 * f, 0], [w / 2 * f, 0], [-f, 0], [f, 0]];
+        const below = room(stair, floor.entities, start, outStart);
+        assert.ok(below >= 75, `${key}: the stairs at (${stair.x}, ${stair.y}) on floor ${index} start facing a wall (${below} cm)`);
+        const upper = plan.floors[index + 1];
+        if (upper) {
+          const above = room(stair, upper.entities, arrive, outArrive);
+          assert.ok(above >= 75, `${key}: the stairs at (${stair.x}, ${stair.y}) on floor ${index} arrive facing a wall upstairs (${above} cm)`);
+        }
+        checked += 1;
+      }
+    });
+  }
+  assert.ok(checked >= 25, `stairs checked: ${checked}`);
+});

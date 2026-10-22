@@ -846,6 +846,7 @@ npm.cmd run dev
 
 ### 2026年10月22日
 
+- テンプレートの階段の向きを直しました。学校・旅館・ホテル・図書館・警察署・博物館・アパート・シェアハウス・ガレージハウス・ロッジ・日本の城・洋館・メゾネット・冒険者の宿・ダンジョンで、上り口と上り切った所が壁ではなく通れる床に向くように、階段の向きと位置（必要な所は扉や家具も）を変えました
 - 「壁の大穴」を、壁を突き破ったような形に作り直しました（ふちのぎざぎざな大きな丸い穴で、まわりの壁にひびが入ります）。竹垣・石垣・生け垣・フェンスにも、穴の上と下に垣が残る大穴があくようにしました（前はただの切れ目でした）
 - 「崩れ落ちた壁」「壁の大穴」は、どの種類の壁でも、その壁の見た目のまま崩れるように（レンガ・ブロック塀・板塀・土塀はその色と形で崩れたふちが残り、石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけらになります。低い壁は、高さの半分ほどまで崩れます）。一覧の「壁」にも、壁の大穴・崩れ落ちた壁・壁のヒビ・崩れた壁・壁の穴を並べました
 - 3Dで家具・ドア・窓にマウスを乗せると、薄い枠と「ダブルクリックで選択」の案内が出るように（1回だけクリックしたときは、案内を青く目立たせます）。物を選んでいる間は「選択中」の欄を2Dの上にも出します（選んだ物と反対の側に出し、つまみのドラッグで動かす・たたむ・左の欄に戻すができます。「表示」で切り替え）
@@ -1924,6 +1925,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-22
 
+- Fixed the direction of stairs in templates: in the school, ryokan, hotel, library, police station, museum, apartment, share house, garage house, lodge, Japanese castle, Western mansion, maisonette, adventurers' inn and dungeon, the stairs now start and arrive facing open floor instead of a wall (some doors and furniture moved to make room)
 - The large hole now looks blown through the wall: a big round hole with a ragged rim and cracks around it. Bamboo fences, stone walls, hedges and fences also get a real hole with the fence left above and below it (before, they only had a plain gap)
 - The collapsed wall and the large hole now break every wall type in its own look: brick, block, board and earthen walls keep a jagged rim in their own color, stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height. The wall group in the palette also lists the large hole, the collapsed wall and the wall crack, broken wall and wall hole overlays
 - In 3D, hovering over furniture, a door or a window shows a light outline and a “Double-click to select” tip next to the pointer (a single click makes the tip stand out in blue). While something is selected, the selection panel also floats over the 2D plan on the side away from the selection: drag its handle to move it, collapse it, or send it back to the left panel (toggle in the 表示 (view) menu)
