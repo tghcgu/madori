@@ -92,10 +92,11 @@
       <header class="topbar">
         <div class="brand">
           <button class="icon-button" id="panelToggle" type="button" title="ツールパネルをしまう / 出す" aria-label="ツールパネルをしまう / 出す" aria-pressed="false">
-            <i data-lucide="panel-left-close"></i>
+            <i data-lucide="panel-left-close" class="panel-icon-wide"></i>
+            <i data-lucide="menu" class="panel-icon-phone"></i>
           </button>
           <img class="brand-mark" src="%BASE_URL%favicon.svg" alt="" width="40" height="40" />
-          <div>
+          <div class="brand-text">
             <div class="brand-title"><h1>間取りクイック3D</h1><span class="alpha-badge" title="開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。">α版</span></div>
             <span id="saveStatus">保存済み</span>
           </div>
@@ -130,6 +131,10 @@
             <i data-lucide="box"></i>
             <span>3Dでも見る</span>
           </a>
+          <button class="icon-button top-more-button" id="topMoreButton" type="button" title="その他（書き出し・画像・読み込みなど）" aria-label="その他（書き出し・画像・読み込みなど）" aria-expanded="false" aria-controls="topMore">
+            <i data-lucide="ellipsis"></i>
+          </button>
+          <div class="top-more" id="topMore">
           <button class="text-button" id="exportButton" type="button" title="間取りをファイル（JSON）に書き出す">
             <i data-lucide="download"></i>
             <span>書き出し</span>
@@ -198,6 +203,7 @@
           <button class="icon-button theme-toggle" id="themeToggle" type="button" title="ナイトモード（画面を暗くする）" aria-label="ナイトモード（画面を暗くする）" aria-pressed="false">
             <i data-lucide="moon" class="theme-moon"></i>
             <i data-lucide="sun" class="theme-sun"></i>
+            <span class="top-more-label">ナイトモード</span>
           </button>
           <label class="language-select" title="言語 / Language" data-i18n-skip>
             <i data-lucide="languages"></i>
@@ -208,6 +214,7 @@
               <option value="zh-Hant" lang="zh-Hant">繁中</option>
             </select>
           </label>
+          </div>
           <input id="importInput" type="file" accept="application/json" hidden />
           <input id="combineInput" type="file" accept="application/json" multiple hidden />
         </div>
@@ -219,7 +226,7 @@
         <button type="button" id="recoveryCloseButton" title="閉じる" aria-label="閉じる"><i data-lucide="x"></i></button>
       </div>
       <div class="mobile-notice" id="mobileNotice" role="note">
-        <span>本ツールはPCでの利用を前提としています。スマートフォンやタブレットでは正しく表示されなかったり、操作が難しかったりするため、PCのブラウザからのご利用をおすすめします。</span>
+        <span>左上の ≡ で、道具・家具の一覧を開けます。選んでから間取りをタップすると置けます。細かい作業はPCのほうが楽です。</span>
         <button class="mobile-notice-close" id="mobileNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
       </div>
 

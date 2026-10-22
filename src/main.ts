@@ -1292,21 +1292,8 @@ function setupUi(): void {
   }
 
   const panelToggle = document.querySelector<HTMLButtonElement>("#panelToggle");
-  panelToggle?.addEventListener("click", () => {
-    const hidden = workspace.dataset.panel === "hidden";
-    if (hidden) {
-      delete workspace.dataset.panel;
-    } else {
-      workspace.dataset.panel = "hidden";
-    }
-    panelToggle.setAttribute("aria-pressed", String(!hidden));
-    requestAnimationFrame(() => {
-      resizeCanvases();
-      render2d();
-      render3dOnce();
-    });
-    scheduleViewStateSave();
-  });
+  panelToggle?.addEventListener("click", () => setPanelHidden(workspace.dataset.panel !== "hidden"));
+  setupPhoneLayout();
 
   document.querySelector<HTMLButtonElement>("#shadowToggle")?.addEventListener("click", () => {
     shadowsEnabled = !shadowsEnabled;
@@ -2399,6 +2386,66 @@ function loadViewState(): SavedViewState {
   }
 }
 
+// 道具の欄を出す・しまう
+function setPanelHidden(hidden: boolean): void {
+  if (hidden) workspace.dataset.panel = "hidden";
+  else delete workspace.dataset.panel;
+  document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", String(hidden));
+  requestAnimationFrame(() => {
+    resizeCanvases();
+    render2d();
+    render3dOnce();
+  });
+  scheduleViewStateSave();
+}
+
+// ---- スマホ（幅760px以下） ----
+// 道具の欄は、2D・3Dの上に重ねて左から出す引き出し（styles.css）。はじめは閉じ、指で道具や家具を選んだら閉じて、
+// すぐ間取りをタップして置けるようにする。うしろの暗い所を押しても閉じる。上のバーの「その他」は、書き出しなどのメニュー
+const PHONE_QUERY = "(max-width: 760px)";
+function isPhoneLayout(): boolean {
+  return window.matchMedia(PHONE_QUERY).matches;
+}
+
+function setupPhoneLayout(): void {
+  const panel = document.querySelector<HTMLElement>(".tool-panel");
+  // 指で押したか（マウスのクリックでは、広い画面と同じく開いたままにする）
+  let touchPress = false;
+  panel?.addEventListener("pointerdown", (event) => { touchPress = event.pointerType !== "mouse"; }, true);
+  panel?.addEventListener("click", (event) => {
+    if (!isPhoneLayout() || !touchPress) return;
+    const chosen = (event.target as HTMLElement).closest("[data-tool], .furniture-items button, [data-roof-add], [data-template], #imageImportButton");
+    if (chosen) requestAnimationFrame(() => setPanelHidden(true));
+  });
+  // 引き出しのうしろの暗い所（2D・3Dの欄の上に重ねた幕）を押したら閉じる
+  workspace.addEventListener("click", (event) => {
+    if (event.target === workspace && isPhoneLayout() && workspace.dataset.panel !== "hidden") setPanelHidden(true);
+  });
+  // 「その他」のメニュー。外を押すか Esc で閉じる
+  const moreButton = document.querySelector<HTMLButtonElement>("#topMoreButton");
+  const more = document.querySelector<HTMLElement>("#topMore");
+  const setMoreOpen = (open: boolean) => {
+    more?.classList.toggle("is-open", open);
+    moreButton?.setAttribute("aria-expanded", String(open));
+  };
+  moreButton?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setMoreOpen(!more?.classList.contains("is-open"));
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!more?.classList.contains("is-open")) return;
+    const target = event.target as HTMLElement;
+    if (!target.closest("#topMore, #topMoreButton, .image-export-menu")) setMoreOpen(false);
+  });
+  window.addEventListener("keydown", (event) => { if (event.key === "Escape") setMoreOpen(false); });
+  // すぐ終わる物（書き出し・読み込み・新規・ナイトモード）を押したら閉じる。画像・組み合わせはメニューが開くので閉じない
+  for (const id of ["#exportButton", "#importButton", "#resetButton", "#themeToggle"]) {
+    document.querySelector(id)?.addEventListener("click", () => setMoreOpen(false));
+  }
+  // 広い画面とスマホを行き来したら、選択中の欄の置き場所を決め直す
+  window.matchMedia(PHONE_QUERY).addEventListener("change", placePropertiesPanel);
+}
+
 // 画面を作る前に戻しておく設定（階・屋根の表示、ツールパネル、家具の2D記号）
 function applySavedDisplaySettings(): void {
   const floorIds = new Set(state.floors.map((floor) => floor.id));
@@ -2407,7 +2454,7 @@ function applySavedDisplaySettings(): void {
   }
   if (typeof viewState.roofs2d === "boolean") roofVisible2d = viewState.roofs2d;
   if (typeof viewState.roofs3d === "boolean") roofVisible3d = viewState.roofs3d;
-  if (viewState.panelHidden === true) {
+  if (viewState.panelHidden === true || window.matchMedia("(max-width: 760px)").matches) {
     workspace.dataset.panel = "hidden";
     document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", "true");
   }
@@ -2752,7 +2799,7 @@ function setupSelectionPanel(): void {
   const bar = document.querySelector<HTMLElement>("#planSelectionBar");
   let grab: { pointerId: number; x: number; y: number; right: number; top: number } | null = null;
   bar?.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+    if (event.button !== 0 || (event.target as HTMLElement).closest("button") || window.matchMedia(PHONE_QUERY).matches) return;
     grab = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, right: selectionPanelPlace.right, top: selectionPanelPlace.top };
     bar.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -2812,7 +2859,11 @@ function placePropertiesPanel(): void {
   const home = document.querySelector<HTMLElement>("#propertiesHome");
   const away = document.querySelector<HTMLElement>("#propertiesAway");
   if (!floating || !body || !home || !away) return;
-  const onPlan = selectionOnPlan && viewMode !== "three" && selectedEntities().length > 0 && window.matchMedia(WIDE_LAYOUT_QUERY).matches;
+  // スマホでは道具の欄を閉じているので、選んだ物があれば、どの表示でも下から出す（3Dだけの表示でも出すよう、2Dの欄の外に置く）
+  const phone = window.matchMedia(PHONE_QUERY).matches;
+  const onPlan = selectedEntities().length > 0 && (phone || (selectionOnPlan && viewMode !== "three" && window.matchMedia(WIDE_LAYOUT_QUERY).matches));
+  const holder = phone ? workspace : planPane;
+  if (floating.parentElement !== holder) holder.appendChild(floating);
   if (onPlan && propertiesPanel.parentElement !== body) body.appendChild(propertiesPanel);
   if (!onPlan && propertiesPanel.parentElement !== home) home.insertBefore(propertiesPanel, away);
   floating.hidden = !onPlan;
@@ -2826,7 +2877,8 @@ function placePropertiesPanel(): void {
 function positionSelectionPanel(): void {
   const floating = document.querySelector<HTMLElement>("#planSelection");
   const pane = floating?.parentElement;
-  if (!floating || !pane || floating.hidden) return;
+  // スマホでは下から出る欄なので、場所は styles.css で決める
+  if (!floating || !pane || floating.hidden || window.matchMedia(PHONE_QUERY).matches) return;
   const bar = pane.querySelector<HTMLElement>(".pane-bar");
   const barHeight = bar?.offsetHeight ?? 0;
   const width = floating.offsetWidth, height = floating.offsetHeight;

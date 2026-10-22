@@ -23,7 +23,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | ソースコード / Repository | https://github.com/tghcgu/madori |
 
 > [!IMPORTANT]
-> 本ツールはPC向けのα版です。スマートフォンやタブレットでは表示できても、編集操作が正しく動かない場合があります。最新のChromeまたはEdgeを推奨します。
+> 本ツールはPC向けのα版です。スマートフォンでも使えるように画面を整えていますが、細かい作業はPCのほうが楽です。最新のChromeまたはEdgeを推奨します。
 
 ![間取りクイック3Dの2D・3D同時表示](./docs/images/madori-overview.png)
 
@@ -832,7 +832,7 @@ npm.cmd run dev
 ## 現在の制限
 
 - α版のため、データ形式やUIが予告なく変わる可能性があります。
-- PC操作を前提としており、スマートフォン・タブレット編集は非推奨です。スマートフォンやタブレットで開くと、PCでの利用をおすすめする案内を画面上部に表示します（「PC版サイトを表示」にしていても表示されます。閉じても次に開いたときはまた表示されます）。
+- PC操作を前提にしていますが、スマートフォンでも使えます。幅760px以下では、画面の高さに収めて開いてすぐ間取りを見せ、道具・家具の一覧は左上の ≡ で開く引き出し（指で選ぶと閉じます）、書き出しなどは上のバーの「…」、選んだ物の設定は下から出る欄になります。スマートフォンやタブレットで開くと、使い方の案内を画面上部に表示します（「PC版サイトを表示」にしていても表示されます。閉じても次に開いたときはまた表示されます）。
 - 建築CAD、構造計算、法規確認、施工図作成の代替ではありません。
 - 寸法、壁厚、建具、家具、屋根の表現は簡易モデルです。
 - クラウド保存、ログイン、共同編集、URL共有はありません。
@@ -846,6 +846,7 @@ npm.cmd run dev
 
 ### 2026年10月22日
 
+- スマホで使いやすくしました。画面の高さに収めて、開いてすぐ間取りが見えます（2D・3Dの欄の外はスクロールしません）。道具・家具の一覧は左上の ≡ で開く引き出しにし、指で選ぶと閉じて、そのまま間取りをタップして置けます。上のバーは1行にまとめ、書き出し・画像・読み込みなどは「…」の中に。選んだ物の設定は下から出る欄で直せます（たためます）。3Dの設定の欄も小さくしました
 - テンプレートの階段の向きを直しました。学校・旅館・ホテル・図書館・警察署・博物館・アパート・シェアハウス・ガレージハウス・ロッジ・日本の城・洋館・メゾネット・冒険者の宿・ダンジョンで、上り口と上り切った所が壁ではなく通れる床に向くように、階段の向きと位置（必要な所は扉や家具も）を変えました
 - 「壁の大穴」を、壁を突き破ったような形に作り直しました（ふちのぎざぎざな大きな丸い穴で、まわりの壁にひびが入ります）。竹垣・石垣・生け垣・フェンスにも、穴の上と下に垣が残る大穴があくようにしました（前はただの切れ目でした）
 - 「崩れ落ちた壁」「壁の大穴」は、どの種類の壁でも、その壁の見た目のまま崩れるように（レンガ・ブロック塀・板塀・土塀はその色と形で崩れたふちが残り、石垣・生け垣・竹垣・フェンスは崩れた所が段々に低くなり、ガラスは透けるガラスのかけらになります。低い壁は、高さの半分ほどまで崩れます）。一覧の「壁」にも、壁の大穴・崩れ落ちた壁・壁のヒビ・崩れた壁・壁の穴を並べました
@@ -1911,7 +1912,7 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Current Limitations
 
 - This is alpha software, so the UI and file format may change without notice.
-- Editing is designed for desktop PCs. Phones and tablets are not recommended. Opening the app on a phone or tablet shows a notice at the top recommending a PC (also when the browser requests the desktop site). Closing it hides it only until the next visit.
+- Editing is designed for desktop PCs, but phones work too. At 760 px wide or less, the app fits the screen and opens straight to the plan; the tool and furniture list is a drawer opened with ≡ at the top left (choosing with a finger closes it), export and the rest are under “…” in the top bar, and the selected item's settings rise from the bottom. Opening the app on a phone or tablet shows a short how-to notice at the top (also when the browser requests the desktop site). Closing it hides it only until the next visit.
 - It is not a replacement for architectural CAD, structural analysis, code review, or construction drawings.
 - Dimensions, wall thicknesses, openings, furniture, and roofs are simplified representations.
 - There is no account, cloud save, collaboration, or share-by-URL feature.
@@ -1925,6 +1926,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-22
 
+- Phones are easier to use: the app now fits the screen and opens straight to the plan (only the 2D and 3D panes scroll). The tool and furniture list is a drawer opened with ≡ at the top left; choosing something with a finger closes it so you can tap the plan to place it. The top bar fits on one line, with export, image, open and the rest under “…”, the selected item's settings rise from the bottom (and can be collapsed), and the 3D settings take less room
 - Fixed the direction of stairs in templates: in the school, ryokan, hotel, library, police station, museum, apartment, share house, garage house, lodge, Japanese castle, Western mansion, maisonette, adventurers' inn and dungeon, the stairs now start and arrive facing open floor instead of a wall (some doors and furniture moved to make room)
 - The large hole now looks blown through the wall: a big round hole with a ragged rim and cracks around it. Bamboo fences, stone walls, hedges and fences also get a real hole with the fence left above and below it (before, they only had a plain gap)
 - The collapsed wall and the large hole now break every wall type in its own look: brick, block, board and earthen walls keep a jagged rim in their own color, stone walls, hedges, bamboo fences and fences step down where they fell, glass breaks into see-through shards, and low walls collapse to about half their height. The wall group in the palette also lists the large hole, the collapsed wall and the wall crack, broken wall and wall hole overlays

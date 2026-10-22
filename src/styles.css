@@ -2496,72 +2496,257 @@ body[data-resizing="down"] {
   }
 }
 
+/* 「その他」のボタンと、スマホの「≡」の絵は、広い画面では出さない（その他の中のボタンは、上のバーにそのまま並ぶ） */
+.top-more {
+  display: contents;
+}
+
+.top-more-button,
+.panel-icon-phone,
+.top-more-label {
+  display: none;
+}
+
+/* ---- スマホ（幅760px以下） ----
+   画面の高さちょうどに収め、ページは動かさない（地図は2D・3Dの欄の中で動かす）。
+   道具の欄は左から出る引き出しにして、はじめは閉じる（≡ で開き、道具や家具を選ぶと閉じる）。
+   上のバーは1行にし、書き出し・画像・読み込みなどは「その他」の中へ。選んだ物の欄は、下から出る欄にする */
 @media (max-width: 760px) {
-  body {
-    overflow: auto;
-  }
-
   #app {
-    min-height: 100%;
-    height: auto;
+    height: 100dvh;
   }
 
+  /* 上のバーとそのメニューは、引き出しや下から出る欄より手前 */
   .topbar {
+    z-index: 75;
     height: auto;
-    align-items: flex-start;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .brand {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  .brand-mark,
+  .brand-text {
+    display: none;
+  }
+
+  .panel-icon-wide {
+    display: none;
+  }
+
+  .panel-icon-phone {
+    display: block;
   }
 
   .top-actions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 6px;
   }
 
-  /* 入りきらないときは、ボタンを縮めずに横へ流す */
   .top-actions > * {
     flex-shrink: 0;
   }
 
+  /* 表示の切り替えは絵だけ（文字は読み上げ用に残す） */
   .view-switch {
-    min-width: 204px;
-    grid-template-columns: repeat(3, 68px);
+    min-width: 0;
+    grid-template-columns: repeat(3, 42px);
   }
 
-  .workspace {
+  .view-switch button {
+    position: relative;
+    padding: 0;
+  }
+
+  .view-switch button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .top-more-button {
+    display: inline-grid;
+  }
+
+  .top-more {
+    position: fixed;
+    z-index: 70;
+    top: 54px;
+    right: 8px;
+    display: none;
+    width: min(270px, calc(100vw - 16px));
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+
+  .top-more.is-open {
+    display: flex;
+  }
+
+  /* その他の中では、文字の付いたボタンを横いっぱいにして、文字も出す */
+  .top-more .text-button,
+  .top-more .theme-toggle,
+  .top-more .language-select {
+    position: static;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .top-more .top-more-label {
+    display: inline;
+    color: var(--ink);
+  }
+
+  .top-more .text-button > span {
+    position: static;
+    width: auto;
     height: auto;
-    min-height: calc(100vh - 112px);
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 62vh 58vh;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .top-more .image-export {
+    width: 100%;
+  }
+
+  /* 画像の書き出し・組み合わせのメニューは、画面の幅に合わせて上に出す */
+  .image-export-menu {
+    position: fixed;
+    z-index: 80;
+    top: 54px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+  }
+
+  /* 2D・3Dの欄: 上のバーの下を全部使う。同時表示は上が2D、下が3D */
+  .workspace {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) !important;
+  }
+
+  .workspace[data-view-mode="split"][data-split] {
+    grid-template-rows: minmax(120px, var(--plan-fr)) minmax(120px, var(--three-fr)) !important;
   }
 
   .workspace[data-view-mode="plan"],
   .workspace[data-view-mode="three"] {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(68vh, 1fr);
-  }
-
-  .tool-panel {
-    grid-row: auto;
-    max-height: none;
+    grid-template-rows: minmax(0, 1fr) !important;
   }
 
   .plan-pane,
   .three-pane {
-    grid-column: auto;
+    grid-column: 1 !important;
+    min-height: 0;
+  }
+
+  .workspace[data-view-mode="split"] .plan-pane {
+    grid-row: 1;
+  }
+
+  .workspace[data-view-mode="split"] .three-pane {
+    grid-row: 2;
   }
 
   .workspace[data-view-mode="plan"] .plan-pane,
   .workspace[data-view-mode="three"] .three-pane {
-    grid-column: 1;
-    grid-row: 2;
-    height: 68vh;
+    grid-row: 1;
   }
 
-  /* スマホでは2Dと3Dの高さの合計（120vh）を、境目の位置で分ける */
-  .workspace[data-view-mode="split"][data-split]:not([data-panel="hidden"]) {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto calc(var(--plan-share) * 120vh) calc((1 - var(--plan-share)) * 120vh);
+  /* 道具の欄: 左から出る引き出し。2D・3Dの上に重ね、うしろを少し暗くする（暗い所を押すと閉じる） */
+  .tool-panel {
+    position: absolute;
+    z-index: 60;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(88vw, 360px);
+    max-height: none;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    box-shadow: var(--shadow);
+  }
+
+  .workspace:not([data-panel="hidden"])::before {
+    content: "";
+    position: absolute;
+    z-index: 59;
+    inset: 0;
+    background: rgba(15, 20, 30, 0.35);
+  }
+
+  /* 3Dの設定の欄は小さくまとめる（見出しの行は出さない）。3Dが隠れすぎないように */
+  .three-overlay {
+    top: 6px;
+    left: 6px;
+    max-width: calc(100% - 12px);
+    gap: 4px;
+    padding: 5px 6px;
+  }
+
+  .three-overlay-row:first-child {
+    display: none;
+  }
+
+  .three-settings {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .light-select-label select {
+    max-width: 96px;
+  }
+
+  /* 選んだ物の欄: 下から出る欄（たためる）。左の欄へ戻すボタンとつまみは出さない */
+  .plan-selection {
+    position: fixed;
+    z-index: 50;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: 42dvh !important;
+    border-bottom: 0;
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* 下から出る欄があるときは、2Dの左下の案内を出さない（重なるため） */
+  .workspace:has(> .plan-selection:not([hidden])) .tool-hint {
+    display: none;
+  }
+
+  .plan-selection-bar {
+    cursor: default;
+  }
+
+  .plan-selection-bar > svg,
+  #planSelectionDock {
+    display: none;
   }
 }
 

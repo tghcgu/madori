@@ -20,6 +20,7 @@ export const UI: Record<string, Translations> = {
   "同時": ["Both", "동시", "同時"],
   "元に戻す": ["Undo", "실행 취소", "復原"],
   "ナイトモード（画面を暗くする）": ["Night mode (darken the screen)", "나이트 모드 (화면을 어둡게)", "夜間模式（讓畫面變暗）"],
+  "ナイトモード": ["Night mode", "나이트 모드", "夜間模式"],
   "ライトモード（画面を明るくする）": ["Light mode (brighten the screen)", "라이트 모드 (화면을 밝게)", "淺色模式（讓畫面變亮）"],
   "やり直す": ["Redo", "다시 실행", "重做"],
   "3Dも使える版で、同じ間取りを開く": ["Open the same plan in the edition with 3D", "3D도 쓸 수 있는 판에서 같은 평면도 열기", "以含 3D 的版本開啟相同平面圖"],
@@ -80,7 +81,8 @@ export const UI: Record<string, Translations> = {
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
   "閉じる": ["Close", "닫기", "關閉"],
-  "本ツールはPCでの利用を前提としています。スマートフォンやタブレットでは正しく表示されなかったり、操作が難しかったりするため、PCのブラウザからのご利用をおすすめします。": ["This tool is designed for PCs. On smartphones and tablets it may not display correctly or may be hard to use, so we recommend a PC browser.", "이 도구는 PC에서의 사용을 전제로 합니다. 스마트폰이나 태블릿에서는 제대로 표시되지 않거나 조작이 어려울 수 있으므로 PC 브라우저 사용을 권장합니다.", "本工具以電腦使用為前提。在手機或平板上可能無法正確顯示或不易操作，建議使用電腦瀏覽器。"],
+  "左上の ≡ で、道具・家具の一覧を開けます。選んでから間取りをタップすると置けます。細かい作業はPCのほうが楽です。": ["Open the tools and furniture with ≡ at the top left, choose one, then tap the plan to place it. Detailed work is easier on a PC.", "왼쪽 위의 ≡ 로 도구와 가구 목록을 열 수 있습니다. 고른 다음 평면도를 탭하면 놓을 수 있습니다. 세밀한 작업은 PC가 더 편합니다.", "點左上的 ≡ 可開啟工具與家具清單。選好後點一下平面圖即可放置。細部作業用電腦比較方便。"],
+  "その他（書き出し・画像・読み込みなど）": ["More (export, image, open and so on)", "기타 (내보내기·이미지·불러오기 등)", "其他（匯出・圖片・讀取等）"],
   "このお知らせを閉じる": ["Close this notice", "이 안내 닫기", "關閉此通知"],
   "元データ保護中・自動保存停止": ["Original data protected · autosave paused", "원본 데이터 보호 중·자동 저장 중지", "原始資料保護中・自動儲存已停止"],
   "保存データを完全には読み込めません。元データを保護するため、自動保存を停止しています。編集中の内容は書き出してください。": ["The saved data could not be fully loaded. Autosave is paused to protect the original data. Please export what you are editing.", "저장된 데이터를 완전히 불러올 수 없습니다. 원본 데이터를 보호하기 위해 자동 저장을 중지했습니다. 편집 중인 내용은 내보내기로 저장해 주세요.", "無法完整讀取已儲存的資料。為了保護原始資料，已停止自動儲存。請將編輯中的內容匯出。"],

@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-22",
     items: [{
+      ja: "スマホで使いやすくしました。画面の高さに収めて、開いてすぐ間取りが見えます（2D・3Dの欄の外はスクロールしません）。道具・家具の一覧は左上の ≡ で開く引き出しにし、指で選ぶと閉じて、そのまま間取りをタップして置けます。上のバーは1行にまとめ、書き出し・画像・読み込みなどは「…」の中に。選んだ物の設定は下から出る欄で直せます（たためます）。3Dの設定の欄も小さくしました",
+      en: "Phones are easier to use: the app now fits the screen and opens straight to the plan (only the 2D and 3D panes scroll). The tool and furniture list is a drawer opened with ≡ at the top left; choosing something with a finger closes it so you can tap the plan to place it. The top bar fits on one line, with export, image, open and the rest under “…”, the selected item's settings rise from the bottom (and can be collapsed), and the 3D settings take less room",
+    }, {
       ja: "テンプレートの階段の向きを直しました。学校・旅館・ホテル・図書館・警察署・博物館・アパート・シェアハウス・ガレージハウス・ロッジ・日本の城・洋館・メゾネット・冒険者の宿・ダンジョンで、上り口と上り切った所が壁ではなく通れる床に向くように、階段の向きと位置（必要な所は扉や家具も）を変えました",
       en: "Fixed the direction of stairs in templates: in the school, ryokan, hotel, library, police station, museum, apartment, share house, garage house, lodge, Japanese castle, Western mansion, maisonette, adventurers' inn and dungeon, the stairs now start and arrive facing open floor instead of a wall (some doors and furniture moved to make room)",
     }, {

@@ -1691,6 +1691,32 @@ try {
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.panel), 'hidden', 'the tool drawer starts closed on a phone');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), true, 'the phone page fits the screen');
+  await page.locator('button[data-view-mode="plan"]').tap();
+  await page.locator('#panelToggle').tap();
+  const phoneChair = page.locator('button[data-furniture="chair"]').first();
+  const phoneGroup = phoneChair.locator('xpath=ancestor::details');
+  if (await phoneGroup.getAttribute('open') === null) await phoneGroup.locator('summary').tap();
+  await phoneChair.tap();
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.panel), 'hidden', 'choosing furniture closes the drawer');
+  const phoneCanvas = await page.locator('#planCanvas').boundingBox();
+  const phoneCount = async () => page.evaluate(() => window.__editorTest.snapshot().floors[0].entities.length);
+  const phoneBefore = await phoneCount();
+  await page.touchscreen.tap(phoneCanvas.x + phoneCanvas.width * 0.5, phoneCanvas.y + phoneCanvas.height * 0.3);
+  await page.waitForTimeout(300);
+  assert.equal(await phoneCount(), phoneBefore + 1, 'a tap places the chair');
+  assert.equal(await page.locator('#planSelection').isVisible(), true, 'the selected chair shows its settings from the bottom');
+  assert.equal(await page.locator('#planSelection #furnitureWInput').count(), 1);
+  await page.screenshot({ path: `${output}/mobile-selection.png` });
+  await page.locator('#topMoreButton').tap();
+  assert.equal(await page.locator('#exportButton').isVisible(), true, 'export is in the more menu');
+  await page.locator('#topMoreButton').tap();
+  assert.equal(await page.locator('#exportButton').isVisible(), false);
+  // 選択を外すと、下の欄は消える（2Dと3Dの境目が隠れないように）
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#planSelection').isVisible(), false);
   await page.locator('button[data-view-mode="split"]').click();
   assert.equal(await page.locator('#splitDivider').getAttribute('aria-orientation'), 'horizontal');
   const mobilePlan = async () => (await page.locator('.plan-pane').boundingBox()).height;

@@ -170,8 +170,12 @@ export async function verifyFloorUi({ page, importPlan, planPoint, move, change,
     await mobile.locator('#importInput').setInputFiles({name:'touch.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(plan([base])))});
     await mobile.waitForTimeout(200);
     await mobile.locator('button[data-view-mode="plan"]').tap();
-    await mobile.locator('[data-tool="floor"]').tap();
+    // スマホでは道具の欄は閉じて始まる。≡ で開いて道具を選ぶと、欄は閉じて間取りが見える
+    assert.equal(await mobile.locator('[data-tool="floor"]').isVisible(), false, 'the tool drawer starts closed on a phone');
     await mobile.locator('#panelToggle').tap();
+    await mobile.locator('[data-tool="floor"]').tap();
+    await mobile.waitForTimeout(100);
+    assert.equal(await mobile.locator('[data-tool="floor"]').isVisible(), false, 'choosing a tool closes the drawer');
     await mobile.locator('#fitButton').tap();
     const canvas = await mobile.locator('#planCanvas').boundingBox();
     for (const [x,y] of [[.2,.35],[.8,.35],[.8,.7],[.2,.7]]) await mobile.touchscreen.tap(canvas.x+canvas.width*x,canvas.y+canvas.height*y);

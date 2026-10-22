@@ -88,9 +88,9 @@ export async function verifyRoofShapes({ page, importPlan, choose, planPoint, pr
   await move({x:box.x+box.width*.85,y:box.y+box.height*.25},70,35);
   assert.notEqual((await pixels()).hash,hash,'roofs remain interactive in 3D');
   await page.setViewportSize({width:390,height:844});
+  await page.locator('#panelToggle').click();
   await page.locator('#fitButton').click();
   await page.locator('button[data-view-mode="three"]').click();
-  await page.locator('#panelToggle').click();
   assert.ok((await pixels()).colors>20);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   await page.screenshot({path:`${output}/roof-shapes-mobile.png`});
