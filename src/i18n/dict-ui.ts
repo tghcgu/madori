@@ -81,7 +81,7 @@ export const UI: Record<string, Translations> = {
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
   "閉じる": ["Close", "닫기", "關閉"],
-  "左上の ≡ で、道具・家具の一覧を開けます。選んでから間取りをタップすると置けます。細かい作業はPCのほうが楽です。": ["Open the tools and furniture with ≡ at the top left, choose one, then tap the plan to place it. Detailed work is easier on a PC.", "왼쪽 위의 ≡ 로 도구와 가구 목록을 열 수 있습니다. 고른 다음 평면도를 탭하면 놓을 수 있습니다. 세밀한 작업은 PC가 더 편합니다.", "點左上的 ≡ 可開啟工具與家具清單。選好後點一下平面圖即可放置。細部作業用電腦比較方便。"],
+  "お知らせ：スマホ版を使いやすくしました。左上の ≡ で道具・家具の一覧を開き、選んでから間取りをタップすると置けます。書き出しなどは右上の … にあります。": ["News: the phone version is now easier to use. Open the tools and furniture with ≡ at the top left, choose one, then tap the plan to place it. Export and the rest are under … at the top right.", "알림: 스마트폰 버전을 쓰기 편하게 바꾸었습니다. 왼쪽 위의 ≡ 로 도구와 가구 목록을 열고, 고른 다음 평면도를 탭하면 놓을 수 있습니다. 내보내기 등은 오른쪽 위의 … 에 있습니다.", "公告：手機版變得更好用了。點左上的 ≡ 開啟工具與家具清單，選好後點一下平面圖即可放置。匯出等功能在右上的 … 裡。"],
   "その他（書き出し・画像・読み込みなど）": ["More (export, image, open and so on)", "기타 (내보내기·이미지·불러오기 등)", "其他（匯出・圖片・讀取等）"],
   "このお知らせを閉じる": ["Close this notice", "이 안내 닫기", "關閉此通知"],
   "元データ保護中・自動保存停止": ["Original data protected · autosave paused", "원본 데이터 보호 중·자동 저장 중지", "原始資料保護中・自動儲存已停止"],

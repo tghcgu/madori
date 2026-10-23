@@ -1710,12 +1710,21 @@ try {
   assert.equal(await page.locator('#planSelection').isVisible(), true, 'the selected chair shows its settings from the bottom');
   assert.equal(await page.locator('#planSelection #furnitureWInput').count(), 1);
   await page.screenshot({ path: `${output}/mobile-selection.png` });
+  // タップのあとのクリックは少し遅れて届くので、開く・閉じるのを待つ
   await page.locator('#topMoreButton').tap();
+  await page.locator('#exportButton').waitFor({ state: 'visible', timeout: 3000 });
   assert.equal(await page.locator('#exportButton').isVisible(), true, 'export is in the more menu');
+  // メニューは「…」の下に出る（重なると、もう一度押して閉じられない）
+  const moreButtonBox = await page.locator('#topMoreButton').boundingBox();
+  assert.ok((await page.locator('#topMore').boundingBox()).y >= moreButtonBox.y + moreButtonBox.height, 'the more menu opens below its button');
   await page.locator('#topMoreButton').tap();
+  await page.locator('#exportButton').waitFor({ state: 'hidden', timeout: 3000 });
   assert.equal(await page.locator('#exportButton').isVisible(), false);
-  // 選択を外すと、下の欄は消える（2Dと3Dの境目が隠れないように）
+  // 選択を外すと、下の欄は消える（2Dと3Dの境目が隠れないように）。置いた直後は椅子を置く道具のままなので、
+  // 1回目の Esc で道具を「選択」に戻し、2回目で選択を外す
   await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.locator('#planSelection').waitFor({ state: 'hidden', timeout: 3000 });
   assert.equal(await page.locator('#planSelection').isVisible(), false);
   await page.locator('button[data-view-mode="split"]').click();
   assert.equal(await page.locator('#splitDivider').getAttribute('aria-orientation'), 'horizontal');

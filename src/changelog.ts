@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-23",
+    items: [{
+      ja: "スマホで開いたときの上のお知らせで、スマホ版を使いやすくしたことと、≡（道具・家具の一覧）と …（書き出しなど）の使い方を知らせるように",
+      en: "The notice at the top on phones now says the phone version was improved and explains ≡ (tools and furniture) and … (export and more)",
+    }],
+  },
+  {
     date: "2026-10-22",
     items: [{
       ja: "スマホで使いやすくしました。画面の高さに収めて、開いてすぐ間取りが見えます（2D・3Dの欄の外はスクロールしません）。道具・家具の一覧は左上の ≡ で開く引き出しにし、指で選ぶと閉じて、そのまま間取りをタップして置けます。上のバーは1行にまとめ、書き出し・画像・読み込みなどは「…」の中に。選んだ物の設定は下から出る欄で直せます（たためます）。3Dの設定の欄も小さくしました",
