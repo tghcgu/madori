@@ -303,6 +303,8 @@ const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
 const MOBILE_NOTICE_KEY = "madori-quick-3d-mobile-notice";
+// PCで閉じたお知らせ（index.html の data-news）
+const NEWS_CLOSED_KEY = "madori-quick-3d-news-closed";
 const SPLIT_KEY = "madori-quick-3d-split";
 const VIEW_STATE_KEY = "madori-quick-3d-view-state";
 // 同時表示での2Dの広さの割合（2Dと3Dの合計に対して）。どちらも狭くなりすぎないよう範囲を決める
@@ -1273,6 +1275,21 @@ function setupUi(): void {
   ghostToggle?.setAttribute("aria-pressed", String(showGhostFloor));
 
   const mobileNotice = document.querySelector<HTMLElement>("#mobileNotice");
+  const closeNotice = (remember: () => void) => {
+    document.querySelector<HTMLButtonElement>("#mobileNoticeClose")?.addEventListener("click", () => {
+      mobileNotice?.classList.add("is-dismissed");
+      try {
+        remember();
+      } catch {
+        // 覚えられなくても、いまの画面では閉じる
+      }
+      requestAnimationFrame(() => {
+        resizeCanvases();
+        render2d();
+        render3dOnce();
+      });
+    });
+  };
   if (mobileNotice && isMobileOrTabletDevice()) {
     mobileNotice.classList.add("is-mobile-device");
     // 閉じた記録を残し続けると二度と出なくなるため、閉じても開いている間だけ隠す。以前の記録は消す
@@ -1280,15 +1297,20 @@ function setupUi(): void {
     if (sessionStorage.getItem(MOBILE_NOTICE_KEY) === "dismissed") {
       mobileNotice.classList.add("is-dismissed");
     }
-    document.querySelector<HTMLButtonElement>("#mobileNoticeClose")?.addEventListener("click", () => {
-      mobileNotice.classList.add("is-dismissed");
-      sessionStorage.setItem(MOBILE_NOTICE_KEY, "dismissed");
-      requestAnimationFrame(() => {
-        resizeCanvases();
-        render2d();
-        render3dOnce();
-      });
-    });
+    closeNotice(() => sessionStorage.setItem(MOBILE_NOTICE_KEY, "dismissed"));
+  } else if (mobileNotice?.dataset.news) {
+    // PCでは、閉じるまで出す。閉じたら覚えて、次のお知らせ（data-news が変わる）まで出さない
+    const news = mobileNotice.dataset.news;
+    let closed = "";
+    try {
+      closed = localStorage.getItem(NEWS_CLOSED_KEY) ?? "";
+    } catch {
+      // 読めないときは出す
+    }
+    if (closed !== news) {
+      mobileNotice.classList.add("is-desktop-news");
+      closeNotice(() => localStorage.setItem(NEWS_CLOSED_KEY, news));
+    }
   }
 
   const panelToggle = document.querySelector<HTMLButtonElement>("#panelToggle");
@@ -2773,6 +2795,10 @@ let selectionPanelPlace: { right: number; top: number; collapsed: boolean; manua
 let selectionOnPlan = true;
 // 寄せる側を決めたときの選択（選び直したときだけ決め直す。動かしている間に左右へ飛ばないように）
 let selectionPanelFor = "";
+// スマホの下の欄は、選び直すたびに見出しの行だけにたたんで出し、見出しを押すと開く（開いたままだと2Dの下半分が隠れて、
+// その下の物をタップで選べないため）。開いているかは覚えない
+let phoneSheetOpen = false;
+let phoneSheetFor = "";
 
 function setupSelectionPanel(): void {
   try {
@@ -2790,6 +2816,11 @@ function setupSelectionPanel(): void {
   document.querySelector("#planSelectionDock")?.addEventListener("click", () => setSelectionOnPlan(false));
   document.querySelector("#propertiesBackButton")?.addEventListener("click", () => setSelectionOnPlan(false));
   document.querySelector("#planSelectionCollapse")?.addEventListener("click", () => {
+    if (window.matchMedia(PHONE_QUERY).matches) {
+      phoneSheetOpen = !phoneSheetOpen;
+      placePropertiesPanel();
+      return;
+    }
     selectionPanelPlace.collapsed = !selectionPanelPlace.collapsed;
     saveSelectionPanelPlace();
     placePropertiesPanel();
@@ -2818,6 +2849,12 @@ function setupSelectionPanel(): void {
   };
   bar?.addEventListener("pointerup", release);
   bar?.addEventListener("pointercancel", release);
+  // スマホでは、見出しの行のどこを押しても開く・たたむ
+  bar?.addEventListener("click", (event) => {
+    if (!window.matchMedia(PHONE_QUERY).matches || (event.target as HTMLElement).closest("button")) return;
+    phoneSheetOpen = !phoneSheetOpen;
+    placePropertiesPanel();
+  });
   // 2Dの欄の大きさが変わったら、はみ出さないように置き直す
   if (panel) new ResizeObserver(() => positionSelectionPanel()).observe(panel.parentElement ?? panel);
   window.matchMedia(WIDE_LAYOUT_QUERY).addEventListener("change", placePropertiesPanel);
@@ -2868,8 +2905,14 @@ function placePropertiesPanel(): void {
   if (!onPlan && propertiesPanel.parentElement !== home) home.insertBefore(propertiesPanel, away);
   floating.hidden = !onPlan;
   away.hidden = !onPlan;
-  floating.classList.toggle("is-collapsed", selectionPanelPlace.collapsed);
-  document.querySelector("#planSelectionCollapse")?.setAttribute("aria-expanded", String(!selectionPanelPlace.collapsed));
+  const key = selectedEntities().map((item) => item.id).join(",");
+  if (phone && key !== phoneSheetFor) {
+    phoneSheetFor = key;
+    phoneSheetOpen = false;
+  }
+  const collapsed = phone ? !phoneSheetOpen : selectionPanelPlace.collapsed;
+  floating.classList.toggle("is-collapsed", collapsed);
+  document.querySelector("#planSelectionCollapse")?.setAttribute("aria-expanded", String(!collapsed));
   if (onPlan) positionSelectionPanel();
 }
 
@@ -3667,6 +3710,14 @@ function handlePointerUp(event: PointerEvent): void {
     lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: pressedId ?? placedId, revert: Boolean(pressedId) };
   } else if (clicked && erasedId) {
     lastPlanClick = { at: performance.now(), x: event.clientX, y: event.clientY, history: historyIndex, select: erasedId, revert: true };
+  }
+  // スマホで指で1つ置いたら、選択ツールに戻す。道具の欄（引き出し）は閉じていていまの道具が見えず、
+  // 置く道具のままだと、次にタップした物を選べずに、もう1つ重ねて置いてしまうため
+  if (placedId && findEntity(placedId) && (tool === "furniture" || tool === "text" || isOpeningTool(tool)) && event.pointerType !== "mouse" && isPhoneLayout()) {
+    activeTool = "select";
+    pathRedrawId = null;
+    setActiveButton("[data-tool]", activeTool);
+    updateUi();
   }
 
   drag = {

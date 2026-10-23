@@ -832,7 +832,7 @@ npm.cmd run dev
 ## 現在の制限
 
 - α版のため、データ形式やUIが予告なく変わる可能性があります。
-- PC操作を前提にしていますが、スマートフォンでも使えます。幅760px以下では、画面の高さに収めて開いてすぐ間取りを見せ、道具・家具の一覧は左上の ≡ で開く引き出し（指で選ぶと閉じます）、書き出しなどは上のバーの「…」、選んだ物の設定は下から出る欄になります。スマートフォンやタブレットで開くと、スマホ版を使いやすくしたお知らせと使い方の案内（≡ と …）を画面上部に表示します（「PC版サイトを表示」にしていても表示されます。閉じても次に開いたときはまた表示されます）。
+- PC操作を前提にしていますが、スマートフォンでも使えます。幅760px以下では、画面の高さに収めて開いてすぐ間取りを見せ、道具・家具の一覧は左上の ≡ で開く引き出し（指で選ぶと閉じます）、書き出しなどは上のバーの「…」、選んだ物の設定は下から出る欄（見出しだけにたたんで出し、見出しを押すと開きます）になります。指で1つ置くと「選択」に戻るので、続けてほかの物をタップで選べます。スマートフォンやタブレットで開くと、スマホ版を使いやすくしたお知らせと使い方の案内（≡ と …）を画面上部に表示します（「PC版サイトを表示」にしていても表示されます。閉じても次に開いたときはまた表示されます）。PCでは、お知らせがあるときに短い文を画面上部に表示します（閉じると、次のお知らせまで表示しません）。
 - 建築CAD、構造計算、法規確認、施工図作成の代替ではありません。
 - 寸法、壁厚、建具、家具、屋根の表現は簡易モデルです。
 - クラウド保存、ログイン、共同編集、URL共有はありません。
@@ -846,7 +846,8 @@ npm.cmd run dev
 
 ### 2026年10月23日
 
-- スマホで開いたときの上のお知らせで、スマホ版を使いやすくしたことと、≡（道具・家具の一覧）と …（書き出しなど）の使い方を知らせるように
+- スマホの2Dで、置いた後や選んだ後に、ほかの物をタップしても選べないことがあったのを直しました。指で1つ置いたら「選択」に戻り、選んだ物の設定の欄は見出しだけにたたんで出します（見出しを押すと開きます）
+- 上のお知らせで、スマホ版を使いやすくしたことを知らせるように（スマホでは ≡（道具・家具の一覧）と …（書き出しなど）の使い方も。PCでは閉じるまで出します）
 
 ### 2026年10月22日
 
@@ -1930,7 +1931,8 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-23
 
-- The notice at the top on phones now says the phone version was improved and explains ≡ (tools and furniture) and … (export and more)
+- Fixed phones where, after placing or selecting something in 2D, tapping another object did not select it. Placing one item with a finger now switches back to Select, and the settings sheet opens folded to its title (tap the title to open it)
+- The notice at the top now says the phone version was improved (on phones it also explains ≡ for tools and furniture and … for export and more; on PCs it shows until you close it)
 
 ### 2026-10-22
 

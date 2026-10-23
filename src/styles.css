@@ -410,8 +410,19 @@ select:focus-visible {
   background: rgba(146, 64, 14, 0.12);
 }
 
-.mobile-notice.is-mobile-device {
+.mobile-notice.is-mobile-device,
+.mobile-notice.is-desktop-news {
   display: flex;
+}
+
+.mobile-notice > span {
+  flex: 1 1 auto;
+}
+
+/* スマホ・タブレットでは使い方の案内つきの文、PCでは短い文 */
+.mobile-notice.is-mobile-device .notice-desktop,
+.mobile-notice:not(.is-mobile-device) .notice-phone {
+  display: none;
 }
 
 .topbar {
@@ -2740,8 +2751,18 @@ body[data-resizing="down"] {
     display: none;
   }
 
+  /* 見出しの行を押すと開く・たたむ。下から出る欄なので、矢印は開く向き（たたんでいるときは上） */
   .plan-selection-bar {
-    cursor: default;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  .plan-selection #planSelectionCollapse svg {
+    transform: rotate(180deg);
+  }
+
+  .plan-selection.is-collapsed #planSelectionCollapse svg {
+    transform: none;
   }
 
   .plan-selection-bar > svg,

@@ -81,6 +81,7 @@ export const UI: Record<string, Translations> = {
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
   "閉じる": ["Close", "닫기", "關閉"],
+  "お知らせ：スマホ版を使いやすくしました。スマホでも同じアドレスで開けます。": ["News: the phone version is now easier to use. Open the same address on your phone.", "알림: 스마트폰 버전을 쓰기 편하게 바꾸었습니다. 스마트폰에서도 같은 주소로 열 수 있습니다.", "公告：手機版變得更好用了。用手機開啟同一個網址即可使用。"],
   "お知らせ：スマホ版を使いやすくしました。左上の ≡ で道具・家具の一覧を開き、選んでから間取りをタップすると置けます。書き出しなどは右上の … にあります。": ["News: the phone version is now easier to use. Open the tools and furniture with ≡ at the top left, choose one, then tap the plan to place it. Export and the rest are under … at the top right.", "알림: 스마트폰 버전을 쓰기 편하게 바꾸었습니다. 왼쪽 위의 ≡ 로 도구와 가구 목록을 열고, 고른 다음 평면도를 탭하면 놓을 수 있습니다. 내보내기 등은 오른쪽 위의 … 에 있습니다.", "公告：手機版變得更好用了。點左上的 ≡ 開啟工具與家具清單，選好後點一下平面圖即可放置。匯出等功能在右上的 … 裡。"],
   "その他（書き出し・画像・読み込みなど）": ["More (export, image, open and so on)", "기타 (내보내기·이미지·불러오기 등)", "其他（匯出・圖片・讀取等）"],
   "このお知らせを閉じる": ["Close this notice", "이 안내 닫기", "關閉此通知"],

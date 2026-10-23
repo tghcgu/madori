@@ -29,6 +29,8 @@ import { verifyPlanExtras } from './plan-extras-editor.mjs';
 import { verifyUiExtras } from './ui-extras-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
+// PCで出るお知らせ（index.html の data-news）。ふだんのテストでは閉じたことにして、画面の大きさを変えない
+const news = (await readFile('index.html', 'utf8')).match(/data-news="([^"]+)"/)?.[1] ?? '';
 const output = '.codex/regression';
 await mkdir(output, { recursive: true });
 // Read-only geometry probes are added only by this isolated test server.
@@ -213,13 +215,14 @@ async function open(raw = JSON.stringify(plan()), extra = {}) {
   target.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   // サーバーのエラー（500 など）は、どのファイルかが分かるように記録する
   target.on('response', response => { if (response.status() >= 500) errors.push(`HTTP ${response.status()} ${response.url()}`); });
-  await target.addInitScript(({ key, raw }) => {
+  await target.addInitScript(({ key, raw, news }) => {
     if (sessionStorage.getItem('seeded')) return;
     localStorage.setItem(key, raw);
+    localStorage.setItem('madori-quick-3d-news-closed', news);
     // 「選択中」の欄を2Dの上に出さずに始める（地図の上の欄が、2Dをクリックするテストの邪魔をしないように。出すのは ui-extras で確かめる）
     localStorage.setItem('madori-quick-3d-selection-on-plan', 'off');
     sessionStorage.setItem('seeded', 'yes');
-  }, { key, raw });
+  }, { key, raw, news });
   // 再読み込みは、画面のコードが動き出したら（DOMContentLoaded）進む。まれに読み込みが終わらないまま止まる
   // （ネットワークの切り替わりなど。docs/handover.md の「取ってきたばかりの環境の E2E」）ので、そのときは1回だけやり直す
   // ネットワークの切り替わりで読み込みが止まったり打ち切られたりしたとき（ERR_NETWORK_CHANGED・ERR_ABORTED）も、やり直す
@@ -255,6 +258,16 @@ try {
   browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
   page = await open();
   assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  // PCでは、お知らせ（短い文）を閉じるまで出し、閉じたら次に開いても出さない
+  assert.ok(news, 'index.html has a news id');
+  await page.evaluate(() => localStorage.removeItem('madori-quick-3d-news-closed'));
+  await page.reload();
+  assert.equal(await page.locator('#mobileNotice .notice-desktop').isVisible(), true, 'the news shows on a PC');
+  assert.equal(await page.locator('#mobileNotice .notice-phone').isVisible(), false);
+  await page.locator('#mobileNoticeClose').click();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  await page.reload();
+  assert.equal(await page.locator('#mobileNotice').isVisible(), false, 'a closed news item stays closed');
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await verifyUiExtras({ open, plan, output });
   if (!process.argv.includes('--ui-extras-only')) {
@@ -1392,8 +1405,9 @@ try {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   if (await page.locator('#imageExportMenu').isHidden()) await page.locator('#imageExportButton').click();
   await page.locator('#imageExportMenu [data-copy-credit="ja"]').click();
+  // 「コピーしました」は1.6秒で元に戻るので、先に確かめる
+  await page.waitForFunction(() => document.querySelector('#imageExportMenu [data-copy-credit="ja"]').textContent === 'コピーしました', null, { timeout: 1500 });
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '間取りクイック3D https://madori-5yu.pages.dev/');
-  assert.equal(await page.locator('#imageExportMenu [data-copy-credit="ja"]').textContent(), 'コピーしました');
   await page.locator('.topbar h1').click({ position: { x: 10, y: 8 } });
   await page.locator('.credit-box [data-copy-credit="en"]').evaluate(button => button.click());
   assert.equal(await page.evaluate(() => navigator.clipboard.readText()), 'Madori Quick 3D https://madori-5yu.pages.dev/');
@@ -1691,6 +1705,8 @@ try {
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
   assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  assert.equal(await page.locator('#mobileNotice .notice-phone').isVisible(), true, 'phones get the notice with the how-to');
+  assert.equal(await page.locator('#mobileNotice .notice-desktop').isVisible(), false);
   assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.panel), 'hidden', 'the tool drawer starts closed on a phone');
   assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), true, 'the phone page fits the screen');
   await page.locator('button[data-view-mode="plan"]').tap();
@@ -1709,7 +1725,20 @@ try {
   assert.equal(await phoneCount(), phoneBefore + 1, 'a tap places the chair');
   assert.equal(await page.locator('#planSelection').isVisible(), true, 'the selected chair shows its settings from the bottom');
   assert.equal(await page.locator('#planSelection #furnitureWInput').count(), 1);
+  // 下の欄は見出しの行だけにたたんで出し（2Dの下半分を隠さない）、見出しを押すと開く・もう一度押すとたたむ
+  assert.equal(await page.locator('#planSelection #furnitureWInput').isVisible(), false, 'the sheet starts folded');
+  assert.ok((await page.locator('#planSelection').boundingBox()).height < 60);
+  await page.locator('#planSelectionBar strong').tap();
+  await page.locator('#planSelection #furnitureWInput').waitFor({ state: 'visible', timeout: 3000 });
   await page.screenshot({ path: `${output}/mobile-selection.png` });
+  await page.locator('#planSelectionBar strong').tap();
+  await page.locator('#planSelection #furnitureWInput').waitFor({ state: 'hidden', timeout: 3000 });
+  // 置いたら選択ツールに戻るので、次にタップした物（床）を選べる（椅子をもう1つ重ねて置かない）
+  const phoneFloor = await planPoint(30, 30);
+  await page.touchscreen.tap(phoneFloor.x, phoneFloor.y);
+  await page.waitForTimeout(300);
+  assert.deepEqual(await page.evaluate(() => window.__editorTest.selection()), ['grass'], 'a tap after placing selects what is there');
+  assert.equal(await phoneCount(), phoneBefore + 1, 'the second tap does not place another chair');
   // タップのあとのクリックは少し遅れて届くので、開く・閉じるのを待つ
   await page.locator('#topMoreButton').tap();
   await page.locator('#exportButton').waitFor({ state: 'visible', timeout: 3000 });
@@ -1720,9 +1749,7 @@ try {
   await page.locator('#topMoreButton').tap();
   await page.locator('#exportButton').waitFor({ state: 'hidden', timeout: 3000 });
   assert.equal(await page.locator('#exportButton').isVisible(), false);
-  // 選択を外すと、下の欄は消える（2Dと3Dの境目が隠れないように）。置いた直後は椅子を置く道具のままなので、
-  // 1回目の Esc で道具を「選択」に戻し、2回目で選択を外す
-  await page.keyboard.press('Escape');
+  // 選択を外すと、下の欄は消える（2Dと3Dの境目が隠れないように）
   await page.keyboard.press('Escape');
   await page.locator('#planSelection').waitFor({ state: 'hidden', timeout: 3000 });
   assert.equal(await page.locator('#planSelection').isVisible(), false);

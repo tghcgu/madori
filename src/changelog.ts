@@ -10,8 +10,11 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-23",
     items: [{
-      ja: "スマホで開いたときの上のお知らせで、スマホ版を使いやすくしたことと、≡（道具・家具の一覧）と …（書き出しなど）の使い方を知らせるように",
-      en: "The notice at the top on phones now says the phone version was improved and explains ≡ (tools and furniture) and … (export and more)",
+      ja: "スマホの2Dで、置いた後や選んだ後に、ほかの物をタップしても選べないことがあったのを直しました。指で1つ置いたら「選択」に戻り、選んだ物の設定の欄は見出しだけにたたんで出します（見出しを押すと開きます）",
+      en: "Fixed phones where, after placing or selecting something in 2D, tapping another object did not select it. Placing one item with a finger now switches back to Select, and the settings sheet opens folded to its title (tap the title to open it)",
+    }, {
+      ja: "上のお知らせで、スマホ版を使いやすくしたことを知らせるように（スマホでは ≡（道具・家具の一覧）と …（書き出しなど）の使い方も。PCでは閉じるまで出します）",
+      en: "The notice at the top now says the phone version was improved (on phones it also explains ≡ for tools and furniture and … for export and more; on PCs it shows until you close it)",
     }],
   },
   {
