@@ -1710,6 +1710,9 @@ try {
   await page.context().close();
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
+  // 選択中の欄を2Dの上（スマホでは下から出る欄）に出す、いつもの設定にする（ふだんのテストでは切っている。open()）
+  await page.evaluate(() => localStorage.setItem('madori-quick-3d-selection-on-plan', 'on'));
+  await page.reload();
   // スマホでは、上のバーのお知らせを、ボタンの列の下の段に1つ出す
   assert.equal(await page.locator('#editionNote').isVisible(), true, 'phones show the notice under the top bar buttons');
   const noteBox = await page.locator('#topNote').boundingBox(), buttonsBox = await page.locator('.top-actions').boundingBox();
@@ -1740,6 +1743,18 @@ try {
   await page.screenshot({ path: `${output}/mobile-selection.png` });
   await page.locator('#planSelectionBar strong').tap();
   await page.locator('#planSelection #furnitureWInput').waitFor({ state: 'hidden', timeout: 3000 });
+  assert.equal(await page.locator('#planSelection .plan-selection-tap').isVisible(), true, 'the folded sheet says it opens on a tap');
+  // 引き出し（≡）を開いている間は、選択中の中身を引き出しの中に出す（下の欄は幕に隠れるため）。閉じると下の欄に戻る
+  await page.locator('#panelToggle').tap();
+  await page.locator('#propertiesHome #furnitureWInput').waitFor({ state: 'visible', timeout: 3000 });
+  assert.equal(await page.locator('#planSelection').isVisible(), false, 'the sheet steps aside while the drawer is open');
+  assert.equal(await page.locator('#propertiesAway').isVisible(), false, 'no "shown on the plan" note in the drawer');
+  // 開いたときは「選択中」の所まで送ってある
+  const drawerBox = await page.locator('.tool-panel').boundingBox(), homeBox = await page.locator('#propertiesHome').boundingBox();
+  assert.ok(homeBox.y >= drawerBox.y - 1 && homeBox.y < drawerBox.y + 40, `the drawer opens at the selection: ${homeBox.y} vs ${drawerBox.y}`);
+  await page.locator('#panelToggle').tap();
+  await page.locator('#planSelection').waitFor({ state: 'visible', timeout: 3000 });
+  assert.equal(await page.locator('#planSelection #furnitureWInput').count(), 1, 'the settings go back to the sheet');
   // 置いたら選択ツールに戻るので、次にタップした物（床）を選べる（椅子をもう1つ重ねて置かない）
   const phoneFloor = await planPoint(30, 30);
   await page.touchscreen.tap(phoneFloor.x, phoneFloor.y);
@@ -1782,6 +1797,9 @@ try {
   await page.locator('#topMoreButton').tap();
   await page.locator('#exportButton').waitFor({ state: 'visible', timeout: 3000 });
   assert.equal(await page.locator('#exportButton').isVisible(), true, 'export is in the more menu');
+  // ナイトモードも、ほかのボタンと同じく絵と文字が1行に並ぶ（文字がボタンからはみ出さない）
+  const themeBox = await page.locator('#themeToggle').boundingBox(), themeLabel = await page.locator('#themeToggle .top-more-label').boundingBox();
+  assert.ok(themeLabel.y >= themeBox.y - 1 && themeLabel.y + themeLabel.height <= themeBox.y + themeBox.height + 1 && themeBox.height < 50, 'the night mode label sits on one line inside its button');
   // メニューは「…」の下に出る（重なると、もう一度押して閉じられない）
   const moreButtonBox = await page.locator('#topMoreButton').boundingBox();
   assert.ok((await page.locator('#topMore').boundingBox()).y >= moreButtonBox.y + moreButtonBox.height, 'the more menu opens below its button');

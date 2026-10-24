@@ -8,6 +8,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-25",
+    items: [{
+      ja: "スマホで ≡ の引き出しを開いたとき、「選択中」に選んだ物の設定が出ず、「ここに戻す」も効かなかったのを直しました。引き出しを開くと「選択中」の所に設定を出し（そこまで送って開きます）、閉じると画面の下の欄に戻ります。たたんだ下の欄には「タップで開く」と出します",
+      en: "Fixed phones where the ≡ drawer did not show the selected item's settings under Selection and “Show here” did nothing. Opening the drawer now shows the settings there (scrolled into view), and closing it moves them back to the sheet at the bottom, which says “Tap to open” while folded",
+    }, {
+      ja: "スマホの「…」の中で、ナイトモードのボタンの絵と文字が縦に重なって崩れていたのを直しました",
+      en: "Fixed the night mode button in the phone … menu, whose icon and label were stacked and cut off",
+    }],
+  },
+  {
     date: "2026-10-24",
     items: [{
       ja: "スマホ・タブレットの2Dで、指でドラッグしても間取りや家具を動かせず、大きさも変えられなかったのを直しました。タップで選び、選んだ物はドラッグで動かす（つまみで大きさを変える）。ほかの所をドラッグすると地図が動き、2本指でつまむと拡大・縮小します",

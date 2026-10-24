@@ -2182,6 +2182,13 @@ select:focus-visible {
   color: var(--muted);
 }
 
+/* 「タップで開く」は、スマホでたたんでいるときだけ出す */
+.plan-selection-tap {
+  display: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .plan-selection-bar strong {
   flex: 1;
   font-size: 13px;
@@ -2593,6 +2600,11 @@ body[data-resizing="down"] {
     padding: 0 12px;
   }
 
+  .top-more .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
   .top-more .top-more-label {
     display: inline;
     color: var(--ink);
@@ -2732,6 +2744,10 @@ body[data-resizing="down"] {
 
   .plan-selection.is-collapsed #planSelectionCollapse svg {
     transform: none;
+  }
+
+  .plan-selection.is-collapsed .plan-selection-tap {
+    display: inline;
   }
 
   .plan-selection-bar > svg,

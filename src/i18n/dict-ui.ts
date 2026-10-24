@@ -256,6 +256,7 @@ export const UI: Record<string, Translations> = {
 
   // ---- 2Dの上の案内 ----
   "Escで選択に戻る": ["Esc to return to Select", "Esc로 선택으로 돌아가기", "按 Esc 回到選取"],
+  "タップで開く": ["Tap to open", "탭해서 열기", "點一下開啟"],
   "選んだ物はドラッグで動かす": ["Drag the selection to move it", "선택한 것은 드래그로 이동", "拖曳選取的物件即可移動"],
   "タップで選ぶ": ["Tap to select", "탭해서 선택", "點一下即可選取"],
   "ほかの所はドラッグで地図を動かす": ["Drag elsewhere to move the map", "다른 곳은 드래그로 지도 이동", "拖曳其他地方即可移動地圖"],

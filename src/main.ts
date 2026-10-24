@@ -2364,6 +2364,14 @@ function setPanelHidden(hidden: boolean): void {
   if (hidden) workspace.dataset.panel = "hidden";
   else delete workspace.dataset.panel;
   document.querySelector<HTMLButtonElement>("#panelToggle")?.setAttribute("aria-pressed", String(hidden));
+  // スマホでは、引き出しを開いている間は、選択中の欄を引き出しの中に出す（placePropertiesPanel）。
+  // 選んだ物があるときに開いたら、その「選択中」が見える所まで送る
+  placePropertiesPanel();
+  const drawer = document.querySelector<HTMLElement>(".tool-panel");
+  const home = document.querySelector<HTMLElement>("#propertiesHome");
+  if (!hidden && isPhoneLayout() && selectedEntities().length && drawer && home) {
+    drawer.scrollTop += home.getBoundingClientRect().top - drawer.getBoundingClientRect().top - 8;
+  }
   requestAnimationFrame(() => {
     resizeCanvases();
     render2d();
@@ -2850,9 +2858,11 @@ function placePropertiesPanel(): void {
   const home = document.querySelector<HTMLElement>("#propertiesHome");
   const away = document.querySelector<HTMLElement>("#propertiesAway");
   if (!floating || !body || !home || !away) return;
-  // スマホでは道具の欄を閉じているので、選んだ物があれば、どの表示でも下から出す（3Dだけの表示でも出すよう、2Dの欄の外に置く）
+  // スマホでは、選んだ物があれば、どの表示でも下から出す（3Dだけの表示でも出すよう、2Dの欄の外に置く）。
+  // ただし道具の欄（引き出し）を開いている間は、その中の「選択中」に出す（下の欄は引き出しのうしろの幕に隠れるため）
   const phone = window.matchMedia(PHONE_QUERY).matches;
-  const onPlan = selectedEntities().length > 0 && (phone || (selectionOnPlan && viewMode !== "three" && window.matchMedia(WIDE_LAYOUT_QUERY).matches));
+  const drawerOpen = phone && workspace.dataset.panel !== "hidden";
+  const onPlan = selectedEntities().length > 0 && selectionOnPlan && (phone ? !drawerOpen : viewMode !== "three" && window.matchMedia(WIDE_LAYOUT_QUERY).matches);
   const holder = phone ? workspace : planPane;
   if (floating.parentElement !== holder) holder.appendChild(floating);
   if (onPlan && propertiesPanel.parentElement !== body) body.appendChild(propertiesPanel);
