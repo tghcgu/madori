@@ -1739,6 +1739,38 @@ try {
   await page.waitForTimeout(300);
   assert.deepEqual(await page.evaluate(() => window.__editorTest.selection()), ['grass'], 'a tap after placing selects what is there');
   assert.equal(await phoneCount(), phoneBefore + 1, 'the second tap does not place another chair');
+  // 指のドラッグはブラウザのスクロールにならず（touch-action: none）、選んだ物は動き、ほかの所は地図が動く。2本指でつまんで拡大
+  const touchInput = await page.context().newCDPSession(page);
+  const fingers = async (type, points) => touchInput.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  const fingerDrag = async (from, to) => {
+    await fingers('touchStart', [from]);
+    for (let i = 1; i <= 6; i++) { await fingers('touchMove', [{ x: from.x + (to.x - from.x) * i / 6, y: from.y + (to.y - from.y) * i / 6 }]); await page.waitForTimeout(16); }
+    await fingers('touchEnd', []);
+    await page.waitForTimeout(200);
+  };
+  const grassX = async () => page.evaluate(() => window.__editorTest.snapshot().floors[0].entities.find(item => item.id === 'grass').x);
+  const grassBefore = await grassX();
+  // 部屋の名前（左上）をつかむと名前だけ動くので、名前のない所から
+  await fingerDrag(await planPoint(550, 350), await planPoint(590, 350));
+  assert.ok(Math.abs(await grassX() - grassBefore - 40) < 11, `a finger drags the selected room: ${grassBefore} -> ${await grassX()}`);
+  const stoneBefore = await page.evaluate(() => JSON.stringify(window.__editorTest.snapshot().floors[0].entities.find(item => item.id === 'stone')));
+  const mapBefore = await planPoint(0, 0);
+  await fingerDrag(await planPoint(300, 200), await planPoint(340, 240));
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__editorTest.snapshot().floors[0].entities.find(item => item.id === 'stone'))), stoneBefore, 'dragging something not selected does not move it');
+  assert.ok((await planPoint(0, 0)).x - mapBefore.x > 5, 'dragging something not selected moves the map');
+  assert.deepEqual(await page.evaluate(() => window.__editorTest.selection()), ['grass']);
+  const phoneBox = await page.locator('#planCanvas').boundingBox();
+  const center = { x: phoneBox.x + phoneBox.width / 2, y: phoneBox.y + phoneBox.height / 3 };
+  const spread = d => [{ x: center.x - d / 2, y: center.y, id: 0 }, { x: center.x + d / 2, y: center.y, id: 1 }];
+  const [zoomA, zoomB] = [await planPoint(0, 0), await planPoint(100, 0)];
+  await fingers('touchStart', [spread(80)[0]]);
+  await fingers('touchStart', spread(80));
+  for (let i = 1; i <= 6; i++) { await fingers('touchMove', spread(80 + 80 * i / 6)); await page.waitForTimeout(16); }
+  await fingers('touchEnd', []);
+  await page.waitForTimeout(200);
+  const [zoomC, zoomD] = [await planPoint(0, 0), await planPoint(100, 0)];
+  assert.ok(Math.abs((zoomD.x - zoomC.x) / (zoomB.x - zoomA.x) - 2) < 0.1, 'two fingers zoom the plan');
+  assert.ok(Math.abs(await grassX() - grassBefore - 40) < 11, 'pinching does not move the room');
   // タップのあとのクリックは少し遅れて届くので、開く・閉じるのを待つ
   await page.locator('#topMoreButton').tap();
   await page.locator('#exportButton').waitFor({ state: 'visible', timeout: 3000 });

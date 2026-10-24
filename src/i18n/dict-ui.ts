@@ -258,6 +258,10 @@ export const UI: Record<string, Translations> = {
 
   // ---- 2Dの上の案内 ----
   "Escで選択に戻る": ["Esc to return to Select", "Esc로 선택으로 돌아가기", "按 Esc 回到選取"],
+  "選んだ物はドラッグで動かす": ["Drag the selection to move it", "선택한 것은 드래그로 이동", "拖曳選取的物件即可移動"],
+  "タップで選ぶ": ["Tap to select", "탭해서 선택", "點一下即可選取"],
+  "ほかの所はドラッグで地図を動かす": ["Drag elsewhere to move the map", "다른 곳은 드래그로 지도 이동", "拖曳其他地方即可移動地圖"],
+  "2本指で拡大・縮小": ["Pinch with two fingers to zoom", "두 손가락으로 확대·축소", "用兩指縮放"],
   "{0}個を選択中": ["{0} selected", "{0}개 선택 중", "已選取 {0} 個"],
   "ドラッグでまとめて動かす": ["Drag to move them together", "드래그로 한꺼번에 이동", "拖曳一起移動"],
   "Ctrl+クリックで足す・外す": ["Ctrl+click to add or remove", "Ctrl+클릭으로 추가·제외", "Ctrl+點選加入或移除"],

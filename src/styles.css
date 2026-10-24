@@ -2045,6 +2045,8 @@ select:focus-visible {
 
 #planCanvas {
   cursor: crosshair;
+  /* 指のドラッグ・つまむ操作は、ブラウザのスクロール・拡大にせず、2Dの操作にする（main.ts の「2Dのタッチ」） */
+  touch-action: none;
   /* 2Dの間取りの紙は、ナイトモードでも白のまま（書き出す画像と同じ見え方） */
   background: #fff;
   /* 長押しで選ぶとき、スマホで文字の選択や長押しのメニューが出ないように */

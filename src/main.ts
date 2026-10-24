@@ -722,6 +722,8 @@ let drag: PointerState = {
 const LONG_PRESS_MS = 450;
 // 押してから離すまでにこれより動かなければクリック（画面のpx）
 const CLICK_SLOP = 5;
+// 指のタップは少しずれるので、ゆるめに見る
+const TOUCH_TAP_SLOP = 10;
 // 置く・消すツールのまま、同じ所を続けて押したら（ダブルクリック・2回タップ）、そこにある物を選ぶ。
 // 1回目のクリックで置いた（消した）物は取り消す。何もない所に置いたときは、置いた物を選ぶ
 const DOUBLE_PRESS_MS = 500;
@@ -1383,6 +1385,12 @@ function setupUi(): void {
   planCanvas.addEventListener("pointermove", handlePointerMove);
   planCanvas.addEventListener("pointerup", handlePointerUp);
   planCanvas.addEventListener("pointercancel", cancelPlanDrag);
+  // 2Dの外で離した指も忘れる（残ると、次の1本指を2本目と間違える）
+  for (const type of ["pointerup", "pointercancel"] as const) document.addEventListener(type, (event) => {
+    if (!planTouches.delete(event.pointerId) || planTouches.size >= 2 || !planPinch) return;
+    planPinch = null;
+    scheduleViewStateSave();
+  });
   // 2Dから外れたら（タッチは指を離したら）ペン先の丸を消す
   planCanvas.addEventListener("pointerleave", hidePenCursor);
   planCanvas.addEventListener("pointerup", (event) => {
@@ -2963,7 +2971,60 @@ function setupSpacePan(): void {
   window.addEventListener("blur", () => { spacePan = false; });
 }
 
+// ---- 2Dのタッチ ----
+// 2Dの欄はブラウザにスクロール・拡大をさせない（styles.css の touch-action: none）ので、指の操作はここで決める。
+// 1本指: 選んでいる物（とそのつまみ）はドラッグで動かす・大きさを変える。ほかの所や選んでいない物をドラッグしたら地図を動かし、
+// タップならその物を選ぶ（部屋が地図の大半をおおうので、なぞるたびに部屋が動かないように）。
+// 2本指: つまんで拡大・縮小、そのまま動かして地図を動かす（1本目の指でしていた操作はやめる）
+const planTouches = new Map<number, Point>();
+let planPinch: { distance: number; world: Point; zoom: number } | null = null;
+
+function planTouchPair(): { mid: Point; distance: number } {
+  const [a, b] = [...planTouches.values()];
+  const rect = planCanvas.getBoundingClientRect();
+  return { mid: { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top }, distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
+}
+
+// 2本目の指が来たら、つまむ操作にする。つまんでいる間の指の動きは true（ほかの処理をしない）
+function handlePlanTouchDown(event: PointerEvent): boolean {
+  if (event.pointerType !== "touch") return false;
+  planTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (planPinch) return true;
+  if (planTouches.size < 2) return false;
+  cancelPlanDrag();
+  const { mid, distance } = planTouchPair();
+  planPinch = { distance, world: { x: (mid.x - view.x) / view.zoom, y: (mid.y - view.y) / view.zoom }, zoom: view.zoom };
+  return true;
+}
+
+function handlePlanTouchMove(event: PointerEvent): boolean {
+  if (event.pointerType !== "touch" || !planTouches.has(event.pointerId)) return false;
+  planTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (!planPinch) return false;
+  if (planTouches.size < 2) return true;
+  // つまみ始めに指の間にあった所が、指の間に付いてくるように
+  const { mid, distance } = planTouchPair();
+  view.zoom = clamp(planPinch.zoom * distance / planPinch.distance, MIN_PLAN_ZOOM, MAX_PLAN_ZOOM);
+  view.x = mid.x - planPinch.world.x * view.zoom;
+  view.y = mid.y - planPinch.world.y * view.zoom;
+  render2d();
+  return true;
+}
+
+function handlePlanTouchUp(event: PointerEvent): boolean {
+  if (event.pointerType !== "touch") return false;
+  planTouches.delete(event.pointerId);
+  if (!planPinch) return false;
+  // 指が1本になったら、つまむのは終わり（残った指は、離すまで何もしない）
+  if (planTouches.size < 2) {
+    planPinch = null;
+    scheduleViewStateSave();
+  }
+  return true;
+}
+
 function handlePointerDown(event: PointerEvent): void {
+  if (handlePlanTouchDown(event)) return;
   if (drag.pointerId !== null || (event.button !== 0 && event.button !== 1 && event.button !== 2)) return;
   cancelLongPress();
   if (event.button === 2 || event.button === 1 || (event.button === 0 && spacePan)) {
@@ -3044,6 +3105,12 @@ function handlePointerDown(event: PointerEvent): void {
 
   if (activeTool === "select") {
     const members = selectedEntities();
+    // 指: 選んでいない物や何もない所は、地図を動かす（タップなら、離したときにその物を選ぶ。handlePointerUp）
+    if (event.pointerType === "touch" && !(hit.entity && members.some((item) => item.id === hit.entity!.id))) {
+      drag.dragMode = "pan";
+      drag.pressedId = hit.entity?.id;
+      return;
+    }
     if (hit.entity && members.length > 1 && members.some((item) => item.id === hit.entity!.id)) {
       drag.origins = members.map(cloneEntity);
       drag.dragMode = isLocked(hit.entity) ? "none" : "move";
@@ -3406,9 +3473,11 @@ function toolHintParts(): string[] | null {
     const names: Record<Tool, string> = { select: "選択", room: "部屋", floor: "床", wall: "壁", door: doorStyleInfo(activeDoorStyle).label, slidingDoor: "引き戸", window: "窓", window2: "窓", circle: "円", ellipse: "楕円", arc: "円弧", polygon: "多角形", furniture: FURNITURE_DEFS[activeFurniture].label, text: "文字", paint: "ペン", erase: "消去" };
     return action ? [names[activeTool], ...action, "Escで選択に戻る"] : null;
   }
-  // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す（Ctrl のないスマホ・タブレットでは出さない）
-  if (window.matchMedia?.("(pointer: coarse)").matches) return null;
+  // 選択ツール: 選んでいるときだけ、まとめて選ぶ方法を出す。スマホ・タブレット（Ctrl がない）では、指での使い方
   const count = selectedEntities().length;
+  if (window.matchMedia?.("(pointer: coarse)").matches) {
+    return [count > 1 ? `${count}個を選択中` : count === 1 ? "選択中" : "選択", count ? "選んだ物はドラッグで動かす" : "タップで選ぶ", "ほかの所はドラッグで地図を動かす", "2本指で拡大・縮小"];
+  }
   if (count > 1) return [`${count}個を選択中`, "ドラッグでまとめて動かす", "Ctrl+クリックで足す・外す", "Escで選択を外す"];
   if (count === 1) return ["選択中", "Ctrl+クリックで、ほかの物も選ぶ", "Ctrl+ドラッグで囲んで選ぶ"];
   return null;
@@ -3455,6 +3524,7 @@ function toolAction(): [string, string] | null {
 }
 
 function handlePointerMove(event: PointerEvent): void {
+  if (handlePlanTouchMove(event)) return;
   if (drag.pointerId === event.pointerId && drag.dragMode === "pan") {
     view.x = drag.startView.x + event.clientX - drag.startScreen.x;
     view.y = drag.startView.y + event.clientY - drag.startScreen.y;
@@ -3580,7 +3650,16 @@ function handlePointerMove(event: PointerEvent): void {
 }
 
 function handlePointerUp(event: PointerEvent): void {
+  if (handlePlanTouchUp(event)) return;
   if (drag.pointerId !== event.pointerId) return;
+  // 選択ツールで、選んでいない物・何もない所を指でタップした: その物を選ぶ（何もない所なら選択を外す）。ずれた分は地図を戻す
+  if (drag.dragMode === "pan" && event.pointerType === "touch" && activeTool === "select"
+    && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= TOUCH_TAP_SLOP) {
+    view.x = drag.startView.x;
+    view.y = drag.startView.y;
+    selectOnly(drag.pressedId ?? null);
+    updateUi();
+  }
 
   const tool = activeTool, pressedId = drag.pressedId;
   let erasedId: string | null = null;

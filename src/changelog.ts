@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-10-24",
+    items: [{
+      ja: "スマホ・タブレットの2Dで、指でドラッグしても間取りや家具を動かせず、大きさも変えられなかったのを直しました。タップで選び、選んだ物はドラッグで動かす（つまみで大きさを変える）。ほかの所をドラッグすると地図が動き、2本指でつまむと拡大・縮小します",
+      en: "Fixed phones and tablets where a finger drag in 2D could not move rooms or furniture or change their size. Tap to select, drag the selection to move it (or its handles to resize it), drag anywhere else to move the map, and pinch with two fingers to zoom",
+    }],
+  },
+  {
     date: "2026-10-23",
     items: [{
       ja: "スマホの2Dで、置いた後や選んだ後に、ほかの物をタップしても選べないことがあったのを直しました。指で1つ置いたら「選択」に戻り、選んだ物の設定の欄は見出しだけにたたんで出します（見出しを押すと開きます）",
