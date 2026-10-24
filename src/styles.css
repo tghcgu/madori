@@ -299,7 +299,7 @@ select:focus-visible {
   vertical-align: 2px;
 }
 
-/* 上のバーの文（間取り専用版のお知らせ・開発中の注意書き）。×で消せる */
+/* 上のバーの文（お知らせ・間取り専用版のお知らせ・開発中の注意書き）。×で消せる */
 .top-note {
   display: flex;
   align-items: flex-start;
@@ -320,7 +320,8 @@ select:focus-visible {
   overflow: hidden;
 }
 
-.edition-note {
+.edition-note,
+.news-note {
   color: #1d4f86;
 }
 
@@ -374,55 +375,6 @@ select:focus-visible {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-}
-
-.mobile-notice {
-  display: none;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px 8px 14px;
-  background: #fef3c7;
-  color: #92400e;
-  border-bottom: 1px solid #fcd34d;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.mobile-notice.is-dismissed {
-  display: none !important;
-}
-
-.mobile-notice-close {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 6px;
-  background: transparent;
-  color: #92400e;
-  font-size: 16px;
-  line-height: 1;
-}
-
-.mobile-notice-close:hover {
-  background: rgba(146, 64, 14, 0.12);
-}
-
-.mobile-notice.is-mobile-device,
-.mobile-notice.is-desktop-news {
-  display: flex;
-}
-
-.mobile-notice > span {
-  flex: 1 1 auto;
-}
-
-/* スマホ・タブレットでは使い方の案内つきの文、PCでは短い文 */
-.mobile-notice.is-mobile-device .notice-desktop,
-.mobile-notice:not(.is-mobile-device) .notice-phone {
-  display: none;
 }
 
 .topbar {
@@ -2539,9 +2491,24 @@ body[data-resizing="down"] {
     padding: 6px 8px;
   }
 
+  /* 上のバーの文（お知らせ）は、ボタンの下の2段目に出す（.brand の中身を上のバーに直に並べ、≡ とボタンを1段目に）。
+     開発中の注意書きは出さない（「このアプリについて」から読める） */
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
   .brand {
-    flex: 0 0 auto;
-    gap: 6px;
+    display: contents;
+  }
+
+  :root .topbar .brand .top-note:not([hidden]):not([data-showing="alpha"]) {
+    display: flex;
+    order: 3;
+    flex: 1 0 100%;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
   .brand-mark,
@@ -2595,11 +2562,11 @@ body[data-resizing="down"] {
   .top-more {
     position: fixed;
     z-index: 70;
-    top: 54px;
+    top: var(--phone-menu-top, 54px);
     right: 8px;
     display: none;
     width: min(270px, calc(100vw - 16px));
-    max-height: calc(100dvh - 64px);
+    max-height: calc(100dvh - var(--phone-menu-top, 54px) - 10px);
     overflow-y: auto;
     flex-direction: column;
     align-items: stretch;
@@ -2647,11 +2614,11 @@ body[data-resizing="down"] {
   .image-export-menu {
     position: fixed;
     z-index: 80;
-    top: 54px;
+    top: var(--phone-menu-top, 54px);
     left: 8px;
     right: 8px;
     width: auto;
-    max-height: calc(100dvh - 64px);
+    max-height: calc(100dvh - var(--phone-menu-top, 54px) - 10px);
     overflow-y: auto;
   }
 
@@ -2864,7 +2831,8 @@ html[data-i18n-pending] body {
 }
 
 :root[data-theme="dark"] .edition-note,
-:root[data-theme="dark"] .edition-note a {
+:root[data-theme="dark"] .edition-note a,
+:root[data-theme="dark"] .news-note {
   color: var(--accent-text);
 }
 

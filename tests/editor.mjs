@@ -29,7 +29,7 @@ import { verifyPlanExtras } from './plan-extras-editor.mjs';
 import { verifyUiExtras } from './ui-extras-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
-// PCで出るお知らせ（index.html の data-news）。ふだんのテストでは閉じたことにして、画面の大きさを変えない
+// 上のバーの新しいお知らせ（index.html の #newsNote の data-news）。ふだんのテストでは閉じたことにして、間取り専用版のお知らせなどを確かめる
 const news = (await readFile('index.html', 'utf8')).match(/data-news="([^"]+)"/)?.[1] ?? '';
 const output = '.codex/regression';
 await mkdir(output, { recursive: true });
@@ -257,17 +257,21 @@ async function freshPage() {
 try {
   browser = await chromium.launch({ channel: process.env.E2E_BROWSER_CHANNEL || (process.platform === 'win32' ? 'msedge' : undefined), headless: true });
   page = await open();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
-  // PCでは、お知らせ（短い文）を閉じるまで出し、閉じたら次に開いても出さない
+  // 新しいお知らせは、上のバーの文の所に、間取り専用版のお知らせより先に出す。×で消すと次のお知らせ（間取り専用版）に替わり、
+  // 消したお知らせは次に開いても出さない。画面の高さは使わない
   assert.ok(news, 'index.html has a news id');
+  await page.setViewportSize({ width: 1680, height: 1000 });
   await page.evaluate(() => localStorage.removeItem('madori-quick-3d-news-closed'));
   await page.reload();
-  assert.equal(await page.locator('#mobileNotice .notice-desktop').isVisible(), true, 'the news shows on a PC');
-  assert.equal(await page.locator('#mobileNotice .notice-phone').isVisible(), false);
-  await page.locator('#mobileNoticeClose').click();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  assert.equal(await page.locator('#newsNote').isVisible(), true, 'the news shows in the top bar');
+  assert.equal(await page.locator('#editionNote').isVisible(), false);
+  assert.ok(Math.abs((await page.locator('.workspace').boundingBox()).y - (await page.locator('.topbar').boundingBox()).height) < 2, 'the news takes no height');
+  await page.locator('#topNoteClose').click();
+  assert.equal(await page.locator('#newsNote').isVisible(), false);
+  assert.equal(await page.locator('#editionNote').isVisible(), true, 'the next notice comes after the news is closed');
   await page.reload();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), false, 'a closed news item stays closed');
+  assert.equal(await page.locator('#newsNote').isVisible(), false, 'a closed news item stays closed');
+  await page.setViewportSize({ width: 1440, height: 1000 });
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await verifyUiExtras({ open, plan, output });
   if (!process.argv.includes('--ui-extras-only')) {
@@ -1370,7 +1374,8 @@ try {
     await page.setViewportSize({ width, height: 900 });
     await page.waitForTimeout(150);
     assert.deepEqual(await squeezed(), [], `the top bar fits at ${width} px`);
-    assert.equal(await page.locator('#topNote').isVisible(), width >= 1600, `the notice shows only where it fits (${width} px)`);
+    // スマホの幅では、上のバーの2段目に出す
+    assert.equal(await page.locator('#topNote').isVisible(), width >= 1600 || width <= 760, `the notice shows only where it fits (${width} px)`);
   }
   console.log('PASS: top bar: buttons never squeezed from 390 to 1680 px, the notice hides where it does not fit');
 
@@ -1704,9 +1709,10 @@ try {
   await page.context().close();
 
   page = await open(JSON.stringify(surfaces), { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' });
-  assert.equal(await page.locator('#mobileNotice').isVisible(), true);
-  assert.equal(await page.locator('#mobileNotice .notice-phone').isVisible(), true, 'phones get the notice with the how-to');
-  assert.equal(await page.locator('#mobileNotice .notice-desktop').isVisible(), false);
+  // スマホでは、上のバーのお知らせを、ボタンの列の下の段に1つ出す
+  assert.equal(await page.locator('#editionNote').isVisible(), true, 'phones show the notice under the top bar buttons');
+  const noteBox = await page.locator('#topNote').boundingBox(), buttonsBox = await page.locator('.top-actions').boundingBox();
+  assert.ok(noteBox.y >= buttonsBox.y + buttonsBox.height - 1 && noteBox.height < 40, 'the notice is a slim row below the buttons');
   assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.panel), 'hidden', 'the tool drawer starts closed on a phone');
   assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), true, 'the phone page fits the screen');
   await page.locator('button[data-view-mode="plan"]').tap();
@@ -1800,18 +1806,15 @@ try {
   assert.ok((await pixels()).colors > 20);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: `${output}/mobile.png`, fullPage: true });
-  // Closing the notice hides it only while this visit lasts; it comes back on the next visit.
-  await page.locator('#mobileNoticeClose').click();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
+  // スマホでも、新しいお知らせを先に出し、×で次のお知らせへ。開発中の注意書きはスマホでは出さない
+  await page.evaluate(() => localStorage.removeItem('madori-quick-3d-news-closed'));
   await page.reload();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), false);
-  await page.context().close();
-  // A phone showing the desktop site (desktop user agent) is still recognized by its touch-first screen,
-  // and an old permanent "dismissed" record no longer hides the notice.
-  page = await open(JSON.stringify(plan()), { viewport: { width: 412, height: 915 }, screen: { width: 412, height: 915 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' });
-  await page.evaluate(() => localStorage.setItem('madori-quick-3d-mobile-notice', 'dismissed'));
-  await page.reload();
-  assert.equal(await page.locator('#mobileNotice').isVisible(), true);
+  assert.equal(await page.locator('#newsNote').isVisible(), true, 'the news shows on a phone');
+  await page.locator('#topNoteClose').tap();
+  assert.equal(await page.locator('#editionNote').isVisible(), true);
+  await page.locator('#topNoteClose').tap();
+  assert.equal(await page.locator('#topNote').isVisible(), false, 'no alpha note row on a phone');
+  assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1), true);
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');

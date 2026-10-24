@@ -302,8 +302,7 @@ const SHADOWS_KEY = "madori-quick-3d-shadows";
 const LIGHT_DIRECTION_KEY = "madori-quick-3d-light-direction";
 const LIGHT_LEVEL_KEY = "madori-quick-3d-light-level";
 const GHOST_FLOOR_KEY = "madori-quick-3d-ghost-floor";
-const MOBILE_NOTICE_KEY = "madori-quick-3d-mobile-notice";
-// PCで閉じたお知らせ（index.html の data-news）
+// 閉じたお知らせ（index.html の #newsNote の data-news）
 const NEWS_CLOSED_KEY = "madori-quick-3d-news-closed";
 const SPLIT_KEY = "madori-quick-3d-split";
 const VIEW_STATE_KEY = "madori-quick-3d-view-state";
@@ -338,23 +337,6 @@ const WINDOW_SILL_Y = 0.84;
 const WINDOW_HEAD_Y = 1.96;
 // 光量5段階の倍率
 const LIGHT_LEVELS = [0.5, 0.75, 1, 1.3, 1.6];
-
-function isMobileOrTabletDevice(): boolean {
-  const navigatorWithUserAgentData = navigator as Navigator & {
-    userAgentData?: { mobile?: boolean };
-  };
-  const isIpadOs = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  // 「PC版サイトを表示」にしているスマホは名乗りがPCと同じになるため、指で操作する小さめの画面かどうかでも見分ける
-  const touchFirstScreen =
-    window.matchMedia("(pointer: coarse) and (hover: none)").matches &&
-    Math.min(window.screen.width, window.screen.height) <= 1100;
-  return Boolean(
-    navigatorWithUserAgentData.userAgentData?.mobile ||
-      isIpadOs ||
-      touchFirstScreen ||
-      /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent),
-  );
-}
 
 const INK = "#000000";
 const TEXT_FONT = '"Yu Gothic UI", "Hiragino Sans", Meiryo, sans-serif';
@@ -1275,45 +1257,6 @@ function setupUi(): void {
   });
   ghostToggle?.classList.toggle("is-active", showGhostFloor);
   ghostToggle?.setAttribute("aria-pressed", String(showGhostFloor));
-
-  const mobileNotice = document.querySelector<HTMLElement>("#mobileNotice");
-  const closeNotice = (remember: () => void) => {
-    document.querySelector<HTMLButtonElement>("#mobileNoticeClose")?.addEventListener("click", () => {
-      mobileNotice?.classList.add("is-dismissed");
-      try {
-        remember();
-      } catch {
-        // 覚えられなくても、いまの画面では閉じる
-      }
-      requestAnimationFrame(() => {
-        resizeCanvases();
-        render2d();
-        render3dOnce();
-      });
-    });
-  };
-  if (mobileNotice && isMobileOrTabletDevice()) {
-    mobileNotice.classList.add("is-mobile-device");
-    // 閉じた記録を残し続けると二度と出なくなるため、閉じても開いている間だけ隠す。以前の記録は消す
-    localStorage.removeItem(MOBILE_NOTICE_KEY);
-    if (sessionStorage.getItem(MOBILE_NOTICE_KEY) === "dismissed") {
-      mobileNotice.classList.add("is-dismissed");
-    }
-    closeNotice(() => sessionStorage.setItem(MOBILE_NOTICE_KEY, "dismissed"));
-  } else if (mobileNotice?.dataset.news) {
-    // PCでは、閉じるまで出す。閉じたら覚えて、次のお知らせ（data-news が変わる）まで出さない
-    const news = mobileNotice.dataset.news;
-    let closed = "";
-    try {
-      closed = localStorage.getItem(NEWS_CLOSED_KEY) ?? "";
-    } catch {
-      // 読めないときは出す
-    }
-    if (closed !== news) {
-      mobileNotice.classList.add("is-desktop-news");
-      closeNotice(() => localStorage.setItem(NEWS_CLOSED_KEY, news));
-    }
-  }
 
   const panelToggle = document.querySelector<HTMLButtonElement>("#panelToggle");
   panelToggle?.addEventListener("click", () => setPanelHidden(workspace.dataset.panel !== "hidden"));
@@ -2455,6 +2398,9 @@ function setupPhoneLayout(): void {
   const moreButton = document.querySelector<HTMLButtonElement>("#topMoreButton");
   const more = document.querySelector<HTMLElement>("#topMore");
   const setMoreOpen = (open: boolean) => {
+    // メニューは上のバーのすぐ下に出す（お知らせの段があると上のバーが高くなるので、開くたびに測る）
+    const bar = document.querySelector<HTMLElement>(".topbar");
+    if (open && bar) document.documentElement.style.setProperty("--phone-menu-top", `${Math.round(bar.getBoundingClientRect().bottom) + 4}px`);
     more?.classList.toggle("is-open", open);
     moreButton?.setAttribute("aria-expanded", String(open));
   };
@@ -12695,23 +12641,35 @@ function setupEdition(): void {
   }
 }
 
-// 上のバーの文。本体では間取り専用版のお知らせを、それを消したあと（と間取り専用版）は開発中の注意書きを出す。
-// どちらも×で消せて、消した文は次からも出さない。画面の高さは使わない
+// 上のバーの文。新しいお知らせ、間取り専用版のお知らせ（本体だけ）、開発中の注意書きの順に、1つずつ出す。
+// どれも×で消せて、消した文は次からも出さない（新しいお知らせは data-news の値で覚えるので、次のお知らせはまた出る）。
+// 広い画面では上のバーの中に出し、画面の高さは使わない。スマホでは上のバーの2段目に出す（注意書きは出さない。styles.css）
 function setupTopNote(): void {
   const note = document.querySelector<HTMLDivElement>("#topNote");
+  const news = document.querySelector<HTMLSpanElement>("#newsNote");
   const edition = document.querySelector<HTMLSpanElement>("#editionNote");
   const alpha = document.querySelector<HTMLSpanElement>("#alphaNote");
   const close = document.querySelector<HTMLButtonElement>("#topNoteClose");
-  if (!note || !edition || !alpha || !close) return;
+  if (!note || !news || !edition || !alpha || !close) return;
   const closed = (key: string) => localStorage.getItem(key) === "closed";
+  const newsId = news.dataset.news ?? "";
   const show = () => {
-    edition.hidden = PLAN_EDITION || closed(EDITION_NOTICE_KEY);
-    alpha.hidden = !edition.hidden || closed(ALPHA_NOTE_KEY);
-    note.hidden = edition.hidden && alpha.hidden;
+    news.hidden = !newsId || localStorage.getItem(NEWS_CLOSED_KEY) === newsId;
+    edition.hidden = !news.hidden || PLAN_EDITION || closed(EDITION_NOTICE_KEY);
+    alpha.hidden = !news.hidden || !edition.hidden || closed(ALPHA_NOTE_KEY);
+    note.hidden = news.hidden && edition.hidden && alpha.hidden;
+    note.dataset.showing = !news.hidden ? "news" : !edition.hidden ? "edition" : "alpha";
   };
   close.addEventListener("click", () => {
-    localStorage.setItem(edition.hidden ? ALPHA_NOTE_KEY : EDITION_NOTICE_KEY, "closed");
+    if (!news.hidden) localStorage.setItem(NEWS_CLOSED_KEY, newsId);
+    else localStorage.setItem(edition.hidden ? ALPHA_NOTE_KEY : EDITION_NOTICE_KEY, "closed");
     show();
+    // スマホでは上のバーの高さが変わるので、2D・3Dの大きさを合わせ直す
+    requestAnimationFrame(() => {
+      resizeCanvases();
+      render2d();
+      render3dOnce();
+    });
   });
   show();
 }

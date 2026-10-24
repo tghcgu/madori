@@ -12,6 +12,9 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [{
       ja: "スマホ・タブレットの2Dで、指でドラッグしても間取りや家具を動かせず、大きさも変えられなかったのを直しました。タップで選び、選んだ物はドラッグで動かす（つまみで大きさを変える）。ほかの所をドラッグすると地図が動き、2本指でつまむと拡大・縮小します",
       en: "Fixed phones and tablets where a finger drag in 2D could not move rooms or furniture or change their size. Tap to select, drag the selection to move it (or its handles to resize it), drag anywhere else to move the map, and pinch with two fingers to zoom",
+    }, {
+      ja: "お知らせは、上のバーの文の所（間取り専用版のお知らせと同じ所）に出すようにしました。スマホでは、上のバーのボタンの下に1行で出します。×で消すと、次のお知らせまで出ません。画面の上の黄色い案内の帯はなくしました",
+      en: "Notices now appear as a small line in the top bar, in the same place as the plan-only edition notice. On phones they show as one line under the top bar buttons. Close one with × and it stays closed until the next notice. The yellow strip at the top is gone",
     }],
   },
   {
@@ -19,9 +22,6 @@ export const CHANGELOG: ChangelogEntry[] = [
     items: [{
       ja: "スマホの2Dで、置いた後や選んだ後に、ほかの物をタップしても選べないことがあったのを直しました。指で1つ置いたら「選択」に戻り、選んだ物の設定の欄は見出しだけにたたんで出します（見出しを押すと開きます）",
       en: "Fixed phones where, after placing or selecting something in 2D, tapping another object did not select it. Placing one item with a finger now switches back to Select, and the settings sheet opens folded to its title (tap the title to open it)",
-    }, {
-      ja: "上のお知らせで、スマホ版を使いやすくしたことを知らせるように（スマホでは ≡（道具・家具の一覧）と …（書き出しなど）の使い方も。PCでは閉じるまで出します）",
-      en: "The notice at the top now says the phone version was improved (on phones it also explains ≡ for tools and furniture and … for export and more; on PCs it shows until you close it)",
     }],
   },
   {

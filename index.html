@@ -101,6 +101,8 @@
             <span id="saveStatus">保存済み</span>
           </div>
           <div class="top-note" id="topNote">
+            <!-- 新しいお知らせ。次のお知らせを出すときは、文と data-news を変える（消した人にも、また出る） -->
+            <span class="top-note-text news-note" id="newsNote" data-news="2026-10-23-phone" hidden>お知らせ：スマホ・タブレットでも使いやすくしました。</span>
             <span class="top-note-text edition-note" id="editionNote" hidden>お知らせ：3Dを使わない「間取り専用版」もできました。<a href="%BASE_URL%plan/">間取り専用版を開く</a></span>
             <span class="top-note-text" id="alphaNote">開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。</span>
             <button class="top-note-close" id="topNoteClose" type="button" title="この文を消す" aria-label="この文を消す">×</button>
@@ -224,13 +226,6 @@
         <span id="recoveryMessage"></span>
         <button type="button" id="recoveryExportButton"><i data-lucide="download"></i>元データを書き出し</button>
         <button type="button" id="recoveryCloseButton" title="閉じる" aria-label="閉じる"><i data-lucide="x"></i></button>
-      </div>
-      <!-- お知らせ。スマホ・タブレットでは使い方の案内つき（閉じても次に開いたときはまた出す）。
-           PCでは短いお知らせを、閉じるまで出す（閉じたら data-news を覚えて、次のお知らせまで出さない） -->
-      <div class="mobile-notice" id="mobileNotice" role="note" data-news="2026-10-23-phone">
-        <span class="notice-phone">お知らせ：スマホ版を使いやすくしました。左上の ≡ で道具・家具の一覧を開き、選んでから間取りをタップすると置けます。書き出しなどは右上の … にあります。</span>
-        <span class="notice-desktop">お知らせ：スマホ版を使いやすくしました。スマホでも同じアドレスで開けます。</span>
-        <button class="mobile-notice-close" id="mobileNoticeClose" type="button" title="このお知らせを閉じる" aria-label="このお知らせを閉じる">×</button>
       </div>
 
       <main class="workspace">

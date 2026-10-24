@@ -10,6 +10,7 @@ export const UI: Record<string, Translations> = {
   "α版": ["Alpha", "알파판", "α版"],
   "ツールパネルをしまう / 出す": ["Hide / show the tool panel", "도구 패널 숨기기 / 보이기", "收合 / 展開工具面板"],
   "開発途中のテスト公開版です。不具合が残っていたり、機能や仕様が予告なく変更されたりする場合があります。": ["Early test release: bugs may remain, and features may change without notice.", "개발 중인 테스트판입니다. 버그나 예고 없는 사양 변경이 있을 수 있습니다.", "開發中的測試版，可能有錯誤，功能也可能未經通知變更。"],
+  "お知らせ：スマホ・タブレットでも使いやすくしました。": ["News: easier to use on phones and tablets too.", "알림: 스마트폰·태블릿에서도 쓰기 편해졌습니다.", "公告：手機與平板也更好用了。"],
   "お知らせ：3Dを使わない「間取り専用版」もできました。": ["New: a plan-only edition without 3D.", "알림: 3D 없는 평면도 전용판도 생겼습니다.", "公告：推出了不含 3D 的平面圖專用版。"],
   "間取り専用版を開く": ["Open it", "열기", "開啟"],
   "この文を消す": ["Dismiss", "이 문구 닫기", "關閉此訊息"],
@@ -81,10 +82,7 @@ export const UI: Record<string, Translations> = {
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
   "閉じる": ["Close", "닫기", "關閉"],
-  "お知らせ：スマホ版を使いやすくしました。スマホでも同じアドレスで開けます。": ["News: the phone version is now easier to use. Open the same address on your phone.", "알림: 스마트폰 버전을 쓰기 편하게 바꾸었습니다. 스마트폰에서도 같은 주소로 열 수 있습니다.", "公告：手機版變得更好用了。用手機開啟同一個網址即可使用。"],
-  "お知らせ：スマホ版を使いやすくしました。左上の ≡ で道具・家具の一覧を開き、選んでから間取りをタップすると置けます。書き出しなどは右上の … にあります。": ["News: the phone version is now easier to use. Open the tools and furniture with ≡ at the top left, choose one, then tap the plan to place it. Export and the rest are under … at the top right.", "알림: 스마트폰 버전을 쓰기 편하게 바꾸었습니다. 왼쪽 위의 ≡ 로 도구와 가구 목록을 열고, 고른 다음 평면도를 탭하면 놓을 수 있습니다. 내보내기 등은 오른쪽 위의 … 에 있습니다.", "公告：手機版變得更好用了。點左上的 ≡ 開啟工具與家具清單，選好後點一下平面圖即可放置。匯出等功能在右上的 … 裡。"],
   "その他（書き出し・画像・読み込みなど）": ["More (export, image, open and so on)", "기타 (내보내기·이미지·불러오기 등)", "其他（匯出・圖片・讀取等）"],
-  "このお知らせを閉じる": ["Close this notice", "이 안내 닫기", "關閉此通知"],
   "元データ保護中・自動保存停止": ["Original data protected · autosave paused", "원본 데이터 보호 중·자동 저장 중지", "原始資料保護中・自動儲存已停止"],
   "保存データを完全には読み込めません。元データを保護するため、自動保存を停止しています。編集中の内容は書き出してください。": ["The saved data could not be fully loaded. Autosave is paused to protect the original data. Please export what you are editing.", "저장된 데이터를 완전히 불러올 수 없습니다. 원본 데이터를 보호하기 위해 자동 저장을 중지했습니다. 편집 중인 내용은 내보내기로 저장해 주세요.", "無法完整讀取已儲存的資料。為了保護原始資料，已停止自動儲存。請將編輯中的內容匯出。"],
   "保存データに読み込めない項目がありました。元データを退避し、読み込める内容を復旧しました。": ["Some saved items could not be loaded. The original data was set aside and everything readable was restored.", "저장된 데이터에 불러올 수 없는 항목이 있었습니다. 원본 데이터를 따로 보관하고 불러올 수 있는 내용을 복구했습니다.", "已儲存的資料中有無法讀取的項目。已另存原始資料，並復原可讀取的內容。"],
