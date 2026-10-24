@@ -261,7 +261,8 @@ try {
   // 消したお知らせは次に開いても出さない。画面の高さは使わない
   assert.ok(news, 'index.html has a news id');
   await page.setViewportSize({ width: 1680, height: 1000 });
-  await page.evaluate(() => localStorage.removeItem('madori-quick-3d-news-closed'));
+  // 前のお知らせ（画面の上の黄色い帯）を消した記録があっても、新しいお知らせは出る
+  await page.evaluate(() => localStorage.setItem('madori-quick-3d-news-closed', '2026-10-23-phone'));
   await page.reload();
   assert.equal(await page.locator('#newsNote').isVisible(), true, 'the news shows in the top bar');
   assert.equal(await page.locator('#editionNote').isVisible(), false);
