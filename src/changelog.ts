@@ -10,6 +10,9 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-10-25",
     items: [{
+      ja: "3Dの直階段・折り返し階段を、段の下を斜めの板にして、その下をあけた形にしました（学校の階段のような形）。前の、下を床まで埋めた形は、階段の設定の「階段の下を埋める」で選べます",
+      en: "Straight and U-shaped stairs in 3D are now open underneath, with a sloped slab under the steps like school stairs. The previous shape, filled down to the floor, is still available with “Fill under the stairs” in the stair settings",
+    }, {
       ja: "スマホで ≡ の引き出しを開いたとき、「選択中」に選んだ物の設定が出ず、「ここに戻す」も効かなかったのを直しました。引き出しを開くと「選択中」の所に設定を出し（そこまで送って開きます）、閉じると画面の下の欄に戻ります。たたんだ下の欄には「タップで開く」と出します",
       en: "Fixed phones where the ≡ drawer did not show the selected item's settings under Selection and “Show here” did nothing. Opening the drawer now shows the settings there (scrolled into view), and closing it moves them back to the sheet at the bottom, which says “Tap to open” while folded",
     }, {

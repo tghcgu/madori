@@ -254,7 +254,7 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 | 家電 | 冷蔵庫、洗濯機、テレビ台、エアコン、室外機、扇風機、ストーブ（複合機、自動販売機） |
 | 照明・インテリア | 観葉植物、大きな観葉植物、ラグ、フロアライト、暖炉、壁掛け時計、ホールクロック、水槽、ピアノ、ゴミ箱、キャットタワー、カーテン、グランドピアノ、蓄音機（行灯、屏風、障子の衝立、囲炉裏、火鉢、提灯、パーティション） |
 | 天井（照明など） | シャンデリア、ペンダントライト、シーリングライト、シーリングファン、ダウンライト、スポットライト（レール）、裸電球、ミラーボール、吊り鉢（ハンギングプラント）、プロジェクター（天井）、天井埋め込みエアコン、火災報知器（煙感知器）、スプリンクラー（3Dでは天井の高さに付きます） |
-| 階段 | 直階段、折り返し階段、らせん階段 |
+| 階段 | 直階段、折り返し階段、らせん階段（直階段・折り返し階段は、3Dで段の下を斜めの板にして下をあけた形。設定の「階段の下を埋める」で、床まで詰まった形にもできます） |
 | なぞって形を決める | ペン、池、花壇、芝生、ラグ、川、小道、生け垣、石垣、フェンス、竹垣、線路、飛び石、足跡、破片（床・地面の素材と部屋も、ぐるっとなぞるとその形） |
 | 床・地面 | 標準、フローリング、ヘリンボーン、ウッドデッキ・板張り、畳、カーペット、タイル、モザイクタイル、市松・チェッカー、大理石、石の床、石畳、レンガ、コンクリート、アスファルト、鉄板（縞鋼板）、草地・芝生、土・土間、砂・砂浜、砂利、雪、水面 |
 | 屋外・庭 | 木、針葉樹、ヤシの木、低木・植え込み、岩、飛び石、花壇、池、芝生、川、小道、生け垣、石垣、フェンス、竹垣、外灯、石灯籠、墓石、十字架の墓、郵便ポスト、物置、犬小屋、パラソル、物干し台、ブランコ、井戸、噴水、石像、焚き火、テント（門扉、ベンチ、つくばい、縁台、鳥居、室外機、自転車、車） |
@@ -846,6 +846,7 @@ npm.cmd run dev
 
 ### 2026年10月25日
 
+- 3Dの直階段・折り返し階段を、段の下を斜めの板にして、その下をあけた形にしました（学校の階段のような形）。前の、下を床まで埋めた形は、階段の設定の「階段の下を埋める」で選べます
 - スマホで ≡ の引き出しを開いたとき、「選択中」に選んだ物の設定が出ず、「ここに戻す」も効かなかったのを直しました。引き出しを開くと「選択中」の所に設定を出し（そこまで送って開きます）、閉じると画面の下の欄に戻ります。たたんだ下の欄には「タップで開く」と出します
 - スマホの「…」の中で、ナイトモードのボタンの絵と文字が縦に重なって崩れていたのを直しました
 
@@ -1940,6 +1941,7 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-10-25
 
+- Straight and U-shaped stairs in 3D are now open underneath, with a sloped slab under the steps like school stairs. The previous shape, filled down to the floor, is still available with “Fill under the stairs” in the stair settings
 - Fixed phones where the ≡ drawer did not show the selected item's settings under Selection and “Show here” did nothing. Opening the drawer now shows the settings there (scrolled into view), and closing it moves them back to the sheet at the bottom, which says “Tap to open” while folded
 - Fixed the night mode button in the phone … menu, whose icon and label were stacked and cut off
 

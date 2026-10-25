@@ -1,5 +1,10 @@
 export const STAIR_KINDS = ["stairs", "stairsU", "stairsSpiral"] as const;
 
+// 下を床まで埋めた形にもできる階段（らせん階段は柱で支えるので、ない）
+export function hasStairBase(kind: string): boolean {
+  return kind === "stairs" || kind === "stairsU";
+}
+
 export interface StairPlacement {
   id: string;
   type: "furniture";

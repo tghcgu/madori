@@ -96,5 +96,24 @@ export async function verifyStairs({ page, importPlan, planPoint, output }) {
   assert.equal((await models()).includes('duplicate'), true);
   await page.locator('#redoButton').click();
   assert.equal((await models()).includes('duplicate'), false);
-  console.log('PASS: incoming stairs: 2D, external bounds, PNG, no 3D copies, reload, edits, locks and undoable duplicate removal');
+  // 直階段・折り返し階段は、3Dで下をあけた形が標準。「階段の下を埋める」で床まで詰まった形にでき、読み込み直しても残る。
+  // らせん階段には、この設定はない
+  await switchFloor('1F');
+  const solidOf = async () => (await state()).floors[0].entities.find(item => item.id === 'straight').solid;
+  const straightPoint = await planPoint(550, 240);
+  await page.mouse.click(straightPoint.x, straightPoint.y);
+  assert.equal(await page.locator('#stairSolidInput').isChecked(), false, 'stairs are open underneath by default');
+  await page.locator('#stairSolidInput').check();
+  assert.equal(await solidOf(), true);
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.__editorTest));
+  assert.equal(await solidOf(), true, 'the filled underside is kept after a reload');
+  const spiralPoint = await planPoint(110, 320);
+  await page.mouse.click(spiralPoint.x, spiralPoint.y);
+  assert.equal(await page.locator('#furnitureKindInput').inputValue(), 'stairsSpiral');
+  assert.equal(await page.locator('#stairSolidInput').count(), 0, 'spiral stairs have no underside to fill');
+  await page.mouse.click(straightPoint.x, straightPoint.y);
+  await page.locator('#stairSolidInput').uncheck();
+  assert.equal(await solidOf(), undefined, 'unchecking goes back to the open stairs');
+  console.log('PASS: incoming stairs: 2D, external bounds, PNG, no 3D copies, reload, edits, locks, undoable duplicate removal and the open or filled underside');
 }

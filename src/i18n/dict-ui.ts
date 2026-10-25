@@ -256,6 +256,7 @@ export const UI: Record<string, Translations> = {
 
   // ---- 2Dの上の案内 ----
   "Escで選択に戻る": ["Esc to return to Select", "Esc로 선택으로 돌아가기", "按 Esc 回到選取"],
+  "階段の下を埋める（3Dで、床まで詰まった形）": ["Fill under the stairs (solid down to the floor in 3D)", "계단 아래 채우기 (3D에서 바닥까지 막힌 형태)", "填滿樓梯下方（3D 中一直到地板的實心樣式）"],
   "タップで開く": ["Tap to open", "탭해서 열기", "點一下開啟"],
   "選んだ物はドラッグで動かす": ["Drag the selection to move it", "선택한 것은 드래그로 이동", "拖曳選取的物件即可移動"],
   "タップで選ぶ": ["Tap to select", "탭해서 선택", "點一下即可選取"],

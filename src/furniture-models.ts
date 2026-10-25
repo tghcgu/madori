@@ -34,6 +34,8 @@ export interface FurnitureModelOptions {
   height?: number;
   // 別デザインの番号（1から）。2Dの記号と同じ番号で、3Dも同じデザインになる
   symbol?: number;
+  // 階段（直階段・折り返し階段）: 下を床まで埋めた形にする。標準は、段の下を斜めの板にして下をあけた形
+  solid?: boolean;
   // 足跡・破片: なぞった道すじ（幅・奥行に対する割合）、足跡の歩幅 cm、破片をまく幅 cm と量
   path?: number[][];
   stride?: number;
@@ -589,6 +591,35 @@ function fanGeometry(apex: THREE.Vector3, ring: THREE.Vector3[]): THREE.BufferGe
 
 function polygonShape(points: Point2[]): THREE.Shape {
   return new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x / 100, y / 100)));
+}
+
+// 階段の段の並び（1つの流れ）の下地。横から見ると、上は段の形、下は斜めの板（厚み STAIR_SLAB m）で、その下はあける。
+// start は上り始めの端（幅の真ん中）、angle は上る向き（0 で +x、π/2 で -z、-π/2 で +z）。段の上は、踏み板の厚みだけ低くする。
+// fromFloor（床から上る流れ）なら、床より下は切る。踊り場から上る流れは、下の端を踊り場の板に重ねる
+const STAIR_SLAB = 0.15;
+const STAIR_TREAD = 0.025;
+function stairFlightBody(m: Model, start: Position, angle: number, run: number, width: number, count: number, climb: number, fromFloor: boolean, material: Material): void {
+  const t = run / count, h = climb / count;
+  // 斜めの板の下の線: 段の付け根を結ぶ線から、板の厚み（縦の長さに直す）だけ下
+  const drop = STAIR_TREAD + STAIR_SLAB * Math.hypot(t, h) / t;
+  const bottom = (s: number) => s * h / t - drop;
+  const points: [number, number][] = [];
+  if (fromFloor) {
+    points.push([0, 0]);
+    const floorEnd = drop * t / h;
+    if (floorEnd < run) points.push([floorEnd, 0]);
+    points.push([run, Math.max(0, bottom(run))]);
+  } else {
+    points.push([0, bottom(0)], [run, bottom(run)]);
+  }
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const top = (i + 1) * h - STAIR_TREAD;
+    points.push([(i + 1) * t, top], [i * t, top]);
+  }
+  const geometry = new THREE.ExtrudeGeometry(new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y))), { depth: width, bevelEnabled: false });
+  geometry.translate(0, 0, -width / 2);
+  geometry.rotateY(angle);
+  m.mesh(geometry, start, material);
 }
 
 export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true): THREE.Group {
@@ -1554,10 +1585,12 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
       const rise = item.rise ?? 2.67;
       if (item.kind === "stairs") {
         const horizontal = w > d, count = 14, run = horizontal ? w : d, width = horizontal ? d : w;
+        // 標準は下をあけた階段（段の下は斜めの板）。下を埋めた形は、段ごとに床から積んだ箱
+        if (!item.solid) stairFlightBody(m, horizontal ? [-run / 2, 0, 0] : [0, 0, run / 2], horizontal ? 0 : Math.PI / 2, run, width, count, rise, true, white);
         for (let i = 0; i < count; i += 1) {
           const y = rise * (i + 1) / count, p = -run / 2 + (i + 0.5) * run / count;
           const x = horizontal ? p : 0, z = horizontal ? 0 : -p;
-          m.box(horizontal ? run / count : width, y - 0.025, horizontal ? width : run / count, x, (y - 0.025) / 2, z, white, 0);
+          if (item.solid) m.box(horizontal ? run / count : width, y - 0.025, horizontal ? width : run / count, x, (y - 0.025) / 2, z, white, 0);
           m.box(horizontal ? run / count : width, 0.025, horizontal ? width : run / count, x, y - 0.0125, z, wood, 0.004);
           for (const sign of [-1, 1]) if (i % 2 === 0 || i === count - 1) {
             const pos: Position = horizontal ? [p, y, sign * width * 0.45] : [sign * width * 0.45, y, -p];
@@ -1570,11 +1603,17 @@ export function buildFurnitureModel(item: FurnitureModelOptions, optimize = true
         for (let flight = 0; flight < 2; flight += 1) for (let i = 0; i < count; i += 1) {
           const y = rise * (flight + (i + 1) / count) / 2;
           const z = flight ? -d / 2 + landing + run * (i + 0.5) / count : d / 2 - run * (i + 0.5) / count;
-          m.box(w * 0.47, y - 0.025, run / count, flight ? -w * 0.265 : w * 0.265, (y - 0.025) / 2, z, white, 0);
+          if (item.solid) m.box(w * 0.47, y - 0.025, run / count, flight ? -w * 0.265 : w * 0.265, (y - 0.025) / 2, z, white, 0);
           m.box(w * 0.47, 0.025, run / count, flight ? -w * 0.265 : w * 0.265, y - 0.0125, z, wood, 0.004);
           if (i % 2 === 0) m.rod([flight ? -w * 0.47 : w * 0.47, y, z], [flight ? -w * 0.47 : w * 0.47, y + 0.85, z], 0.012, metal);
         }
-        m.box(w, rise / 2 - 0.025, landing, 0, (rise / 2 - 0.025) / 2, -d / 2 + landing / 2, white, 0);
+        if (item.solid) m.box(w, rise / 2 - 0.025, landing, 0, (rise / 2 - 0.025) / 2, -d / 2 + landing / 2, white, 0);
+        else {
+          // 下をあけた形: 手前から奥へ上る流れ、踊り場の板、奥から手前へ上る流れ（踊り場の高さから）
+          stairFlightBody(m, [w * 0.265, 0, d / 2], Math.PI / 2, run, w * 0.47, count, rise / 2, true, white);
+          m.box(w, STAIR_SLAB + 0.05, landing, 0, rise / 2 - 0.025 - (STAIR_SLAB + 0.05) / 2, -d / 2 + landing / 2, white, 0);
+          stairFlightBody(m, [-w * 0.265, rise / 2, -d / 2 + landing], -Math.PI / 2, run, w * 0.47, count, rise / 2, false, white);
+        }
         m.box(w, 0.025, landing, 0, rise / 2 - 0.0125, -d / 2 + landing / 2, wood);
         for (const sign of [-1, 1]) m.rod([sign * w * 0.47, (sign > 0 ? rise / 14 : rise) + 0.85, d / 2 - run / 14], [sign * w * 0.47, rise / 2 + 0.85, -d / 2 + landing], 0.024, darkWood);
         m.rod([-w * 0.47, rise / 2 + 0.85, -d / 2 + 0.025], [w * 0.47, rise / 2 + 0.85, -d / 2 + 0.025], 0.024, darkWood);

@@ -495,3 +495,44 @@ test('free shapes drawn along a path build 3D models on the same points as the 2
   dispose(narrow);
   dispose(wide);
 });
+
+// 3Dの階段の、ある範囲（x・z の条件）にある頂点のいちばん低い所（m）
+function lowestIn(group, inside) {
+  group.updateMatrixWorld(true);
+  let lowest = Infinity;
+  const point = new THREE.Vector3();
+  group.traverse(object => {
+    const position = object.geometry?.attributes?.position;
+    if (!position) return;
+    for (let i = 0; i < position.count; i += 1) {
+      point.fromBufferAttribute(position, i).applyMatrix4(object.matrixWorld);
+      if (inside(point.x, point.z)) lowest = Math.min(lowest, point.y);
+    }
+  });
+  return lowest;
+}
+
+test('straight and U-shaped stairs are open underneath by default, and filled down to the floor when asked', () => {
+  for (const solid of [false, true]) {
+    // 直階段（縦）: 上り口は南（+z）、上り切った所は北（-z）。上の方（北の4分の1）の下
+    const straight = buildFurnitureModel({ kind: 'stairs', w: 100, h: 280, rise: 2.67, ...(solid ? { solid } : {}) });
+    const straightLow = lowestIn(straight, (x, z) => z < -0.7);
+    // 折り返し階段: 2つ目の流れ（西の半分。奥の踊り場から手前へ上る）の手前の下
+    const turn = buildFurnitureModel({ kind: 'stairsU', w: 240, h: 240, rise: 2.67, ...(solid ? { solid } : {}) });
+    const turnLow = lowestIn(turn, (x, z) => x < -0.3 && z > 0.3);
+    if (solid) {
+      assert.ok(straightLow < 0.05 && turnLow < 0.05, `filled stairs reach the floor: ${straightLow}, ${turnLow}`);
+    } else {
+      assert.ok(straightLow > 1.5, `the high end of a straight flight has room underneath: ${straightLow}`);
+      assert.ok(turnLow > 1.8, `the second flight of a U-shaped stair has room underneath: ${turnLow}`);
+    }
+    // どちらも、床から始まり、上の階の床の高さまで届く
+    for (const group of [straight, turn]) {
+      const bounds = new THREE.Box3().setFromObject(group);
+      assert.ok(Math.abs(bounds.min.y) < 1e-6, 'starts on the floor');
+      assert.ok(bounds.max.y > 2.67, 'reaches the floor above (with the handrail on top)');
+    }
+    dispose(straight);
+    dispose(turn);
+  }
+});

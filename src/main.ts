@@ -47,7 +47,7 @@ import {
   type BrokenStyle, type DoorStyle,
 } from "./opening-shapes";
 import { translateSelection } from "./selection";
-import { STAIR_KINDS, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
+import { STAIR_KINDS, hasStairBase, incomingStairs, isStair, sameStairPlacement, stairsBelow } from "./stairs";
 import { layoutText, type TextLayout, type WritingMode } from "./text-layout";
 import { floorPoints, floorPolygon, multiPolygonTester, normalizeOutline, normalizeFloorHoles, outlineFromPoints, pointInPolygon, tracedFloorPoints, visibleFloorPolygons, MAX_FLOOR_VERTICES } from "./floor-outline";
 import { openTemplateStairwells } from "./template-floors";
@@ -130,6 +130,8 @@ interface Furniture {
   flip?: boolean;
   // 2D記号の別デザインの番号（1から）。0（標準）のときは持たない
   symbol?: number;
+  // 階段（直階段・折り返し階段）: 下を床まで埋めた形（3D）。下をあけた標準の形のときは持たない
+  solid?: boolean;
   // 木やフェンスなど、高さを変えられる家具の高さ cm。標準の高さのときは持たない
   height?: number;
   // 番号の印に書く文字（番号）。番号の印だけが持つ
@@ -1005,6 +1007,7 @@ function normalizeEntity(value: unknown): Entity {
       ...entity, ...base, color: color(entity.color), color3d: color(entity.color3d),
       rotation: finite(entity.rotation) ? entity.rotation : 0,
       symbol: validSymbol(entity.kind, entity.symbol) || undefined,
+      solid: hasStairBase(entity.kind) && entity.solid === true ? true : undefined,
       markerLabel: entity.kind === "evidenceMarker" && typeof entity.markerLabel === "string" ? entity.markerLabel.slice(0, MAX_MARKER_LABEL) : undefined,
       path: entity.kind === "footprints" || entity.kind === "brokenGlass" || isFreeShapeKind(entity.kind) ? normalizeFootprintPath(entity.path) : undefined,
       holes: isFreeAreaKind(entity.kind) && normalizeFootprintPath(entity.path) ? normalizeFreeHoles(entity.holes) : undefined,
@@ -10977,8 +10980,8 @@ function addFurniture3d(furnitureItem: Furniture, center: Point, yBase: number, 
     else applyPaintTexture(group, furnitureItem);
   } else {
     // 形を決める値が同じ家具は、作り置きを写して使う（リアルの絵柄では材質を変えるので分ける）
-    const { kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose } = options;
-    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose, postless]);
+    const { kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose, solid } = options;
+    const key = JSON.stringify([threeStyle === "real", kind, w, h, color, color3d, rise, height, symbol, path, holes, stride, brush, density, pose, postless, solid]);
     group = cachedModel(`furniture:${key}`, () => buildFurnitureModel(options));
   }
   placeFurniture3d(group, furnitureItem, center, yBase);
@@ -12174,6 +12177,7 @@ function renderPropertiesPanel(): void {
       ${isFreeShapeKind(selectedFurniture.kind) ? freeShapeEditorHtml(selectedFurniture, placementDisabled) : ""}
       <label>回転（R: 90° / Shift+R: 15°）<input id="furnitureRotationInput" type="number" step="5" value="${selectedFurniture.rotation}" ${placementDisabled} /></label>
       <label class="check"><input id="furnitureFlipInput" type="checkbox" ${selectedFurniture.flip ? "checked" : ""} ${placementDisabled} /> 左右反転（Fキー）</label>
+      ${hasStairBase(selectedFurniture.kind) && !PLAN_EDITION ? `<label class="check"><input id="stairSolidInput" type="checkbox" ${selectedFurniture.solid ? "checked" : ""} /> 階段の下を埋める（3Dで、床まで詰まった形）</label>` : ""}
       ${orderRowHtml()}
       ${colorField("furnitureColorInput", "色 2D", selectedFurniture.color ?? MARK_FILLS[selectedFurniture.kind] ?? INK)}
       ${PLAN_EDITION ? "" : colorField("furnitureColor3dInput", "色 3D", selectedFurniture.color3d ?? selectedFurniture.color ?? "#b9c0c8")}
@@ -12201,6 +12205,7 @@ function renderPropertiesPanel(): void {
     delete selectedFurniture.pose;
     setFurnitureSymbol(selectedFurniture, lastSymbolByKind[kind] ?? 0);
     delete selectedFurniture.height;
+    if (!hasStairBase(kind)) delete selectedFurniture.solid;
     if (kind !== "evidenceMarker") delete selectedFurniture.markerLabel;
     else selectedFurniture.markerLabel ??= nextMarkerLabel();
   });
@@ -12228,6 +12233,11 @@ function renderPropertiesPanel(): void {
   bindNumber("#furnitureHInput", (value) => (selectedFurniture.h = Math.max(MIN_FURNITURE_SIZE, roundTenth(value))));
   bindNumber("#furnitureRotationInput", (value) => (selectedFurniture.rotation = value % 360));
   bindCheckbox("#furnitureFlipInput", (checked) => (selectedFurniture.flip = checked));
+  // 見た目だけの設定なので、配置を固定していても変えられる
+  bindCheckbox("#stairSolidInput", (checked) => {
+    if (checked) selectedFurniture.solid = true;
+    else delete selectedFurniture.solid;
+  });
   bindColor("#furnitureColorInput", (value) => (selectedFurniture.color = value));
   bindColor("#furnitureColor3dInput", (value) => (selectedFurniture.color3d = value));
 }
