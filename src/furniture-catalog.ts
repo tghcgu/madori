@@ -391,7 +391,7 @@ export type PaletteSection = "fittings" | "walls" | "stairs" | "trace" | "surfac
 // 近いものを並べて、よく使う順に: 壁と建具 → 室内の家具 → 建物の部材 → 外まわり → 和風 →
 // 施設 → 人とコマ → 街と乗り物 → 設備・産業 → 創作（ファンタジーなど） → 図形の壁
 export const PALETTE_ORDER: string[] = [
-  "fittings", "walls",
+  "walls", "fittings",
   "seating", "tables", "beds", "storage", "kitchen", "bath", "appliances", "decor", "ceiling",
   "stairs", "surfaces", "roofs", "structure",
   "trace", "outdoor",

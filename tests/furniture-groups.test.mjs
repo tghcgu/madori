@@ -27,8 +27,8 @@ test('the palette is ordered by use: household furniture first, Japanese and the
   // 「種類」の選択欄（FURNITURE_GROUPS の並び）も、一覧と同じ順
   assert.deepEqual(FURNITURE_GROUPS.map(group => group.id), PALETTE_ORDER.filter(id => !sections.includes(id)));
   const at = id => PALETTE_ORDER.indexOf(id);
-  assert.equal(at('fittings'), 0, 'doors and windows come first');
-  assert.equal(at('walls'), 1, 'wall types come right after doors and windows');
+  assert.equal(at('walls'), 0, 'wall types come first: you draw the walls, then put doors and windows in them');
+  assert.equal(at('fittings'), 1, 'doors and windows come right after the wall types');
   assert.equal(at('seating'), 2);
   for (const id of ['tables', 'beds', 'storage', 'kitchen', 'bath', 'appliances', 'decor', 'outdoor']) assert.ok(at(id) < at('japanese'), `${id} comes before the Japanese group`);
   for (const id of ['shrine', 'play', 'fantasy']) assert.ok(at('japanese') < at(id), `${id} comes after the Japanese group`);
