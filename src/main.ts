@@ -25,7 +25,7 @@ import {
   isPostStyle, isThreeStyle, postStyleId, realColorCode, realMaterialKind, realSurfaceCode, type ThreeStyle,
 } from "./three-style";
 import {
-  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, RAILWAY, curveThrough, defaultFreePath, freeRiverRipples, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
+  FREE_AREA_KINDS, FREE_LINE_KINDS, FREE_WIDTH_RANGE, railwayMetrics, curveThrough, defaultFreePath, freeRiverRipples, sharpCorners, distanceToFreeLine, freeCenterLine, freeFlowerBed, freeFrame, freeLawn, freeLineWidth, freeMargin,
   freeOutline, freePathPoints, freePond, freePosts, freeSteppingStones, isAlwaysFreeKind, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable,
   offsetFreeLine, freeHoleOutlines, freeHolePoints, normalizeFreeHoles, pointInFreeRegion, type FreeKind,
 } from "./free-shapes";
@@ -8864,18 +8864,19 @@ function drawFreeShape2d(kind: FreeKind, w: number, h: number, item?: Furniture)
       break;
     }
     case "railway": {
-      strokeFreeBand(line, 300, "#ebe8e2");
+      const rails = railwayMetrics(item?.brush);
+      strokeFreeBand(line, rails.ballastWidth, "#ebe8e2");
       ctx.fillStyle = tint ?? OUTDOOR_TRUNK;
-      for (const sleeper of freePosts(line, RAILWAY.sleeperSpacing)) {
+      for (const sleeper of freePosts(line, rails.sleeperSpacing)) {
         ctx.save();
         ctx.translate(sleeper.x, sleeper.y);
         ctx.rotate(sleeper.angle);
-        strokeRoundedRect(-RAILWAY.sleeperWidth / 2, -RAILWAY.sleeperLength / 2, RAILWAY.sleeperWidth, RAILWAY.sleeperLength, 1, true);
+        strokeRoundedRect(-rails.sleeperWidth / 2, -rails.sleeperLength / 2, rails.sleeperWidth, rails.sleeperLength, 1, true);
         ctx.restore();
       }
       for (const side of [1, -1]) {
-        const rail = offsetFreeLine(line, side * (RAILWAY.gauge / 2 + RAILWAY.railWidth / 2), false);
-        strokeFreeBand(rail, RAILWAY.railWidth, String(ctx.strokeStyle), false, false);
+        const rail = offsetFreeLine(line, side * (rails.gauge / 2 + rails.railWidth / 2), false);
+        strokeFreeBand(rail, rails.railWidth, String(ctx.strokeStyle), false, false);
       }
       break;
     }

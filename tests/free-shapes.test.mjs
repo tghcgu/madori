@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   FREE_AREA_KINDS, FREE_LINE_KINDS, ALWAYS_FREE_KINDS, RAILWAY, bandOutline, defaultFreePath, distanceToFreeLine, freeBand, freeFlowerBed,
   freeLawn, freeLineLength, freeLineWidth, freeMargin, freeOutline, freePathPoints, freePond, freePosts, freeShapeLine, freeSteppingStones,
-  curveThrough, freeCenterLine, isAlwaysFreeKind, sharpCorners, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
+  curveThrough, freeCenterLine, isAlwaysFreeKind, sharpCorners, isFreeAreaKind, isFreeShapeKind, isFreeWidthAdjustable, railwayMetrics, offsetFreeLine, pointInFreePolygon, polygonArea, samplesAlong,
   smoothFreeLine, freeFrame, freeHoleOutlines, freeHolePoints, normalizeFreeHoles, pointInFreeRegion, pointsInside,
 } from '../src/free-shapes.ts';
 
@@ -20,6 +20,24 @@ test('free shapes are split into closed areas and lines along a path', () => {
   assert.equal(freeLineWidth('river', 300), 300);
   assert.equal(freeLineWidth('river', 99999), 2000, 'widths are limited');
   assert.equal(freeLineWidth('fence', 300), 6, 'fences keep their own thickness');
+});
+
+test('the railway width can be changed, and the rails and sleepers grow with it', () => {
+  assert.ok(isFreeWidthAdjustable('railway'));
+  const usual = railwayMetrics();
+  assert.equal(usual.ballastWidth, 300, 'the usual ballast is 300cm wide');
+  assert.equal(usual.gauge, RAILWAY.gauge, 'the usual gauge stays 1067mm');
+  assert.equal(usual.sleeperLength, RAILWAY.sleeperLength);
+  const wide = railwayMetrics(600);
+  assert.equal(wide.ballastWidth, 600);
+  assert.equal(wide.gauge, RAILWAY.gauge * 2, 'twice as wide doubles the gauge');
+  assert.equal(wide.sleeperLength, RAILWAY.sleeperLength * 2);
+  assert.equal(wide.sleeperSpacing, RAILWAY.sleeperSpacing * 2);
+  assert.equal(wide.railHeight, RAILWAY.railHeight * 2, 'the rails get taller too, so the shape keeps its proportions');
+  const narrow = railwayMetrics(150);
+  assert.equal(narrow.gauge, RAILWAY.gauge / 2);
+  // 枕木はいつも道床の中に収まる
+  for (const metrics of [usual, wide, narrow]) assert.ok(metrics.sleeperLength < metrics.ballastWidth, String(metrics.ballastWidth));
 });
 
 test('default paths fit inside their frame with room for the margin', () => {

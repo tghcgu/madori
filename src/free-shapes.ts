@@ -31,7 +31,7 @@ const LINE_WIDTH: Record<FreeLineKind, number> = {
 };
 export const FREE_WIDTH_RANGE = { min: 10, max: 2000 };
 export function isFreeWidthAdjustable(kind: string): boolean {
-  return kind === "river" || kind === "pathway" || kind === "hedge" || kind === "stoneWall";
+  return kind === "river" || kind === "pathway" || kind === "hedge" || kind === "stoneWall" || kind === "railway";
 }
 export function freeLineWidth(kind: FreeLineKind, brush?: number): number {
   return isFreeWidthAdjustable(kind) && typeof brush === "number" && Number.isFinite(brush)
@@ -407,8 +407,25 @@ export function freeSteppingStones(line: Point2[]): StoneSlab[] {
   });
 }
 
-// 線路の寸法（cm）: 線路の幅（レールの間）1067mm、枕木 210×22cm を 60cm ごと
+// 線路の寸法（cm）: 線路の幅（レールの間）1067mm、枕木 210×22cm を 60cm ごと。道床の幅 300cm のときの値
 export const RAILWAY = { gauge: 107, sleeperLength: 210, sleeperWidth: 22, sleeperSpacing: 60, railWidth: 7, ballastHeight: 10, sleeperHeight: 8, railHeight: 14 };
+
+// 幅を変えた線路の寸法。道床の幅に合わせて、レールの間も枕木も同じ割合で伸び縮みさせる（2Dと3Dで同じ値を使う）
+export function railwayMetrics(brush?: number): typeof RAILWAY & { ballastWidth: number } {
+  const ballastWidth = freeLineWidth("railway", brush);
+  const scale = ballastWidth / LINE_WIDTH.railway;
+  return {
+    ballastWidth,
+    gauge: RAILWAY.gauge * scale,
+    sleeperLength: RAILWAY.sleeperLength * scale,
+    sleeperWidth: RAILWAY.sleeperWidth * scale,
+    sleeperSpacing: RAILWAY.sleeperSpacing * scale,
+    railWidth: RAILWAY.railWidth * scale,
+    ballastHeight: RAILWAY.ballastHeight * scale,
+    sleeperHeight: RAILWAY.sleeperHeight * scale,
+    railHeight: RAILWAY.railHeight * scale,
+  };
+}
 
 // 道すじを持つ家具の、なめらかにした中心線または輪郭（cm）
 export function freeShapeLine(kind: FreeKind, path: number[][], w: number, h: number): Point2[] {

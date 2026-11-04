@@ -8,6 +8,16 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-04",
+    items: [{
+      ja: "線路の幅を変えられるようにしました（川・小道・生け垣・石垣と同じく「選択中」の「幅」で決めます）。幅に合わせて、レールの間も枕木も同じ割合で伸び縮みするので、細いトロッコの線路から広い複線まで引けます",
+      en: "The railway width can now be changed, with Width under Selection, the same as rivers, paths, hedges and stone walls. The gauge and the sleepers grow and shrink with it, so you can draw anything from a narrow mine cart track to a wide double track",
+    }, {
+      ja: "左の「家具・設備」の欄の並びを、近いものどうしが隣に来るように整えました。壁と建具 → 室内の家具 → 建物の部材（階段・床・屋根・建物の部分）→ 外まわり → 和風（和風・神社・寺）→ 施設 → 人とコマ → 街と乗り物 → 設備・産業 → 創作の順です。「神社・寺」は「和風」の隣に、「建物の部分・工事」は階段や屋根の隣に移りました",
+      en: "Reordered the Furniture and fittings list on the left so related groups sit next to each other: walls and doors, then indoor furniture, then building parts (stairs, floors, roofs, building pieces), outdoors, Japanese style (Japanese rooms with shrines and temples), venues, people and tokens, streets and vehicles, utilities and industry, and finally the fantasy groups. Shrines and temples now sit beside the Japanese group, and building pieces beside stairs and roofs",
+    }],
+  },
+  {
     date: "2026-10-25",
     items: [{
       ja: "3Dの直階段・折り返し階段を、段の下を斜めの板にして、その下をあけた形にしました（学校の階段のような形）。前の、下を床まで埋めた形は、階段の設定の「階段の下を埋める」で選べます",

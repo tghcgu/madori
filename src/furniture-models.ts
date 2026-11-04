@@ -15,7 +15,7 @@ import {
   PART_MATERIALS, furnitureParts, isMountedPartKind, isPartKind, partRise, tintedPartMaterials,
 } from "./furniture-shapes.ts";
 import {
-  RAILWAY, defaultFreePath, freeCenterLine, freeFlowerBed, freeHoleOutlines, freeHolePoints, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
+  railwayMetrics, defaultFreePath, freeCenterLine, freeFlowerBed, freeHoleOutlines, freeHolePoints, freeLawn, freeLineWidth, freeOutline, freePathPoints, freePond, freePosts,
   freeRiverRipples, freeSteppingStones, isAlwaysFreeKind, isFreeShapeKind, offsetFreeLine, type FreeKind,
 } from "./free-shapes.ts";
 import { parseColorCode } from "./colors.ts";
@@ -489,19 +489,20 @@ function buildFreeShape(m: Model, item: FurnitureModelOptions, kind: FreeKind, t
       break;
     }
     case "railway": {
-      // 砂利の道床、枕木、2本のレール（1067mm）
-      strokeSolid(m, line, 300, 0, RAILWAY.ballastHeight / 100, m.material("ballast-stone", 0x8e8a84, 1));
+      // 砂利の道床、枕木、2本のレール（1067mm）。幅を変えると、どれも同じ割合で伸び縮みする
+      const rails = railwayMetrics(item.brush);
+      strokeSolid(m, line, rails.ballastWidth, 0, rails.ballastHeight / 100, m.material("ballast-stone", 0x8e8a84, 1));
       // 色を決めたら枕木の色にする（2Dの枕木と同じ）
       const sleeper = m.material("sleeper-wood", 0x6e5641, 0.9, 0, true);
-      const bottom = RAILWAY.ballastHeight / 100, top = bottom + RAILWAY.sleeperHeight / 100;
-      for (const sample of freePosts(line, RAILWAY.sleeperSpacing)) {
-        const mesh = m.box(RAILWAY.sleeperWidth / 100, RAILWAY.sleeperHeight / 100, RAILWAY.sleeperLength / 100, sample.x / 100, (bottom + top) / 2, sample.y / 100, sleeper, 0);
+      const bottom = rails.ballastHeight / 100, top = bottom + rails.sleeperHeight / 100;
+      for (const sample of freePosts(line, rails.sleeperSpacing)) {
+        const mesh = m.box(rails.sleeperWidth / 100, rails.sleeperHeight / 100, rails.sleeperLength / 100, sample.x / 100, (bottom + top) / 2, sample.y / 100, sleeper, 0);
         mesh.rotation.y = -sample.angle;
       }
       const steel = m.material("rail-steel", 0x6a6e73, 0.35, 0.8);
       for (const side of [1, -1]) {
-        const rail = offsetFreeLine(line, side * (RAILWAY.gauge / 2 + RAILWAY.railWidth / 2), false);
-        strokeSolid(m, rail, RAILWAY.railWidth, top, top + RAILWAY.railHeight / 100, steel);
+        const rail = offsetFreeLine(line, side * (rails.gauge / 2 + rails.railWidth / 2), false);
+        strokeSolid(m, rail, rails.railWidth, top, top + rails.railHeight / 100, steel);
       }
       break;
     }
