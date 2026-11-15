@@ -27,6 +27,8 @@ import { verifyLanguages } from './i18n-editor.mjs';
 import { verifyRoomTools } from './room-tools-editor.mjs';
 import { verifyPlanExtras } from './plan-extras-editor.mjs';
 import { verifyUiExtras } from './ui-extras-editor.mjs';
+import { verifyFloorOrder } from './floor-order-editor.mjs';
+import { verifyRecoveredBackup } from './recovery-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 // 上のバーの新しいお知らせ（index.html の #newsNote の data-news）。ふだんのテストでは閉じたことにして、間取り専用版のお知らせなどを確かめる
@@ -277,6 +279,9 @@ try {
   assert.equal(await page.locator('vite-error-overlay').count(), 0);
   await verifyUiExtras({ open, plan, output });
   if (!process.argv.includes('--ui-extras-only')) {
+  await verifyFloorOrder({ open });
+  await verifyRecoveredBackup({ open, plan });
+  if (!process.argv.includes('--floor-order-only')) {
   await verifyRoomTools({ open, plan });
   if (!process.argv.includes('--room-tools-only')) {
   await verifyPlanExtras({ open, plan });
@@ -677,34 +682,43 @@ try {
   await importPlan(plan());
   await page.locator('button[data-view-mode="split"]').click();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const addBasementButton = page.locator('#floorTabs button[title^="地下の階を追加"]');
   const addAboveButton = page.locator('#floorTabs button[title="上の階を追加"]');
   const floorNames = async () => (await saved()).floors.map(floor => floor.name);
-  await addBasementButton.click();
+  // 地下の追加・削除などは、2Dの欄が狭いときは「…」のメニューの中にある（見えているほうを押す）
+  const floorAction = async (name) => {
+    const button = page.locator(`#floorTabs button[title^="${name}"]`);
+    if (await button.isVisible()) return button.click();
+    await page.locator('#floorTabs .floor-tab-more').click();
+    await page.locator('.floor-menu button').filter({ hasText: name }).click();
+  };
+  await floorAction('地下の階を追加');
   assert.deepEqual(await floorNames(), ['B1F', '1F']);
   assert.equal((await saved()).basements, 1);
   assert.equal((await saved()).activeFloor, 0);
-  await addBasementButton.click();
+  await floorAction('地下の階を追加');
   assert.deepEqual(await floorNames(), ['B2F', 'B1F', '1F']);
   for (let i = 0; i < 5; i += 1) await addAboveButton.click();
   assert.deepEqual(await floorNames(), ['B2F', 'B1F', '1F', '2F', '3F', '4F', '5F', '6F']);
-  // With many floors only the floor tabs scroll: the add/remove buttons and the active tab stay visible, and the 2D pane keeps its width.
+  // With many floors only the floor tabs scroll: no floor button is cut off (the rarer ones fold into the … menu),
+  // the add button and the active tab stay visible, and the 2D pane keeps its width.
   const tabLayout = await page.evaluate(() => {
     const box = selector => document.querySelector(selector).getBoundingClientRect();
     const list = document.querySelector('.floor-tab-list'), shown = list.getBoundingClientRect(), active = list.querySelector('.is-active').getBoundingClientRect();
-    return { pane: box('.plan-pane').width, canvas: box('#planCanvas').width, bar: box('.pane-bar').right, add: box('#floorTabs button[title="上の階を追加"]').right,
-      remove: box('#floorTabs button[title="表示中の階を削除"]').right, scrolls: list.scrollWidth > list.clientWidth,
+    const right = box('.pane-left').right;
+    const clipped = [...document.querySelectorAll('#floorTabs > *')].filter(item => item.getClientRects().length && item.getBoundingClientRect().right > right + 0.5).map(item => item.title || item.className);
+    return { pane: box('.plan-pane').width, canvas: box('#planCanvas').width, clipped, add: document.querySelector('#floorTabs button[title="上の階を追加"]').getClientRects().length > 0,
+      more: document.querySelector('#floorTabs .floor-tab-more').getClientRects().length > 0, scrolls: list.scrollWidth > list.clientWidth,
       activeVisible: active.left >= shown.left - 1 && active.right <= shown.right + 1, stats: getComputedStyle(document.querySelector('#planStats')).display };
   });
   assert.ok(Math.abs(tabLayout.canvas - tabLayout.pane) < 1, `the 2D canvas stays inside its pane: ${JSON.stringify(tabLayout)}`);
-  assert.ok(tabLayout.scrolls && tabLayout.add <= tabLayout.bar && tabLayout.remove <= tabLayout.bar, `the add and remove buttons stay visible: ${JSON.stringify(tabLayout)}`);
+  assert.ok(tabLayout.scrolls && tabLayout.add && tabLayout.more && !tabLayout.clipped.length, `no floor button is cut off: ${JSON.stringify(tabLayout)}`);
   assert.ok(tabLayout.activeVisible, 'the active floor tab is scrolled into view');
   assert.equal(tabLayout.stats, 'none', 'the counts give way to the floor tabs');
   assert.match(await page.locator('#threeStats').textContent(), /^地上6階・地下2階/);
   // Deleting a basement renumbers the rest; the plan keeps one ground floor.
   await page.locator('#floorTabs button').filter({ hasText: /^B2F$/ }).click();
   page.once('dialog', dialog => dialog.accept());
-  await page.locator('#floorTabs button[title="表示中の階を削除"]').click();
+  await floorAction('表示中の階を削除');
   assert.deepEqual(await floorNames(), ['B1F', '1F', '2F', '3F', '4F', '5F', '6F']);
   assert.equal((await saved()).basements, 1);
   await importPlan({ floors: [{ id: 'b1', name: '', entities: [room('cellar')] }, { id: 'f1', name: '', entities: [room()] }], basements: 1, activeFloor: 1, selectedId: null, roofs: [] });
@@ -1856,6 +1870,7 @@ try {
   await page.context().close();
   assert.deepEqual(errors, []);
   console.log('PASS: mobile canvas, layout and no browser errors');
+  }
   }
   }
   }

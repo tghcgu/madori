@@ -6,7 +6,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { SURFACE_DEFS, isRoomSurface, surfaceCanvas, surfaceTileCm, type RoomSurface } from "./surfaces";
 import { CAP_COLOR, WALL_STYLES, WALL_THICKNESS_RANGE, isWallStyle, isWallThicknessAdjustable, wallJoints, wallStyleInfo, wallStyleWithThickness, wallTopWidth, type WallStyle, type WallStyleInfo } from "./wall-styles";
 import { openingIntervals, segmentInterval, solidWallSections, visibleRectangles, type Rectangle } from "./geometry";
-import { readStoredPlan, type Recovery } from "./persistence";
+import { listBackups, readStoredPlan, type Recovery } from "./persistence";
 import { FURNITURE_DEFS, FURNITURE_GROUPS, FURNITURE_VARIANTS, FURNITURE_VARIANTS_2D_ONLY, PALETTE_ORDER, type FurnitureKind } from "./furniture-catalog";
 import { MORE_DEFS, MORE_SMALL_KINDS, isMorePartKind } from "./furniture-more";
 import { colorAlpha, parseColorCode, solidColor, withAlpha } from "./colors";
@@ -686,6 +686,15 @@ function ghostOpacity(): number {
   return tint && tint.alpha < 1 ? tint.alpha : ghostSettings.opacity;
 }
 let storageRecovery: Recovery | null = null;
+// 保存データを読む（下の loadInitialState → normalizePlan）ときに使う値。読むより前に宣言しておく
+// （後ろに置くと、まだ宣言されていない値を読んで止まり、名前を付けた階・間取りや取り込んだ画像のある保存データが読み込めなくなる。
+// tests/startup-order.test.mjs が見張る）
+// 階に付けた名前と、間取りの名前の長さの上限
+const MAX_FLOOR_LABEL = 20;
+const MAX_PLAN_NAME = 60;
+// 取り込んだ画像: data URL のまま間取りに入れる（自動保存・書き出しのファイルにも入る）。大きすぎる画像は、取り込むときに縮める
+const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp|gif);base64,/;
+const MAX_IMAGE_DATA = 12_000_000;
 let state: PlanState = loadInitialState();
 let history: PlanState[] = [cloneState(state)];
 let historyIndex = 0;
@@ -940,8 +949,7 @@ function normalizePlan(parsed: unknown, recover = false): PlanState | null {
   return null;
 }
 
-// 階に付けた名前（20文字まで）。空なら持たない
-const MAX_FLOOR_LABEL = 20;
+// 階に付けた名前（20文字まで。MAX_FLOOR_LABEL は let state の前）。空なら持たない
 function floorLabelOf(value: unknown): { label?: string } {
   const label = typeof value === "string" ? value.trim().slice(0, MAX_FLOOR_LABEL) : "";
   return label ? { label } : {};
@@ -965,8 +973,7 @@ function renameFloor(index: number): void {
   redrawAll();
 }
 
-// 間取りの名前（60文字まで）。空なら持たない
-const MAX_PLAN_NAME = 60;
+// 間取りの名前（60文字まで。MAX_PLAN_NAME は let state の前）。空なら持たない
 function planName(value: unknown): { name?: string } {
   const name = typeof value === "string" ? value.trim().slice(0, MAX_PLAN_NAME) : "";
   return name ? { name } : {};
@@ -1320,7 +1327,7 @@ function setupUi(): void {
     requiredElement<HTMLButtonElement>("#recoveryCloseButton").addEventListener("click", () => {
       requiredElement<HTMLElement>("#recoveryNotice").hidden = true;
     });
-  }
+  } else offerRecoveredBackup();
 
   // ほかの所（一覧のボタンなど）を押したら、ダブルクリックの1回目の記録を捨てる（別の家具を選んで同じ所に置けるように）
   document.addEventListener("pointerdown", (event) => {
@@ -1690,13 +1697,17 @@ function applyPaletteSearch(): void {
 let floorTabsKey = "";
 
 function renderFloorTabs(): void {
-  const key = JSON.stringify([state.floors.map((floor) => floorTitle(floor)), state.activeFloor, planStats.textContent]);
+  // 並べ替えで名前が同じ並びのままでも作り直すよう、階の id も見る
+  const key = JSON.stringify([state.floors.map((floor) => [floor.id, floorTitle(floor)]), state.activeFloor, planStats.textContent]);
   if (key === floorTabsKey && floorTabs.childElementCount) return;
   floorTabsKey = key;
+  floorTabDrag = null;
+  closeFloorMenu();
   floorTabs.innerHTML = "";
+  // floor-tab-extra: 欄が狭いときに「…」のメニューへまとめるボタン（fitPlanBar）
   const basement = document.createElement("button");
   basement.type = "button";
-  basement.className = "floor-tab floor-tab-ghost";
+  basement.className = "floor-tab floor-tab-ghost floor-tab-extra";
   basement.textContent = "＋B";
   basement.title = "地下の階を追加（いちばん下に増えます）";
   basement.addEventListener("click", addBasement);
@@ -1709,9 +1720,16 @@ function renderFloorTabs(): void {
     button.type = "button";
     button.className = `floor-tab${index === state.activeFloor ? " is-active" : ""}`;
     button.textContent = floorTitle(floor);
-    button.title = `${floorTitle(floor)}を編集（ダブルクリックで名前を変える）`;
-    button.addEventListener("click", () => setActiveFloorIndex(index));
+    button.title = state.floors.length > 1
+      ? `${floorTitle(floor)}を編集（ダブルクリックで名前を変える・左右にドラッグで階を並べ替える）`
+      : `${floorTitle(floor)}を編集（ダブルクリックで名前を変える）`;
+    button.addEventListener("click", () => {
+      // ドラッグで並べ替えたあとのクリックは、階の切り替えにしない
+      if (floorTabDragEnded) { floorTabDragEnded = false; return; }
+      setActiveFloorIndex(index);
+    });
     button.addEventListener("dblclick", () => renameFloor(index));
+    button.addEventListener("pointerdown", (event) => startFloorTabDrag(event, list, index));
     list.appendChild(button);
   });
   // 縦のホイールでも横にスクロールできるようにする
@@ -1731,22 +1749,250 @@ function renderFloorTabs(): void {
   // この階を複製（2つ重ねた四角の絵）
   const duplicate = document.createElement("button");
   duplicate.type = "button";
-  duplicate.className = "floor-tab floor-tab-ghost floor-tab-duplicate";
+  duplicate.className = "floor-tab floor-tab-ghost floor-tab-duplicate floor-tab-extra";
   duplicate.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="5.5" y="1.5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="1.5" y="5.5" width="9" height="9" rx="1.5" style="fill: var(--panel)" stroke="currentColor" stroke-width="1.4"/></svg>`;
   duplicate.title = `${floorTitle(activeFloor())}を複製（すぐ上に同じ階を足す）`;
   duplicate.setAttribute("aria-label", "この階を複製");
   duplicate.addEventListener("click", duplicateActiveFloor);
   floorTabs.appendChild(duplicate);
   if (state.floors.length > 1) {
+    // 編集中の階を、となりの階と入れ替える（タブは左が下の階なので、左向きが1つ下・右向きが1つ上）
+    const active = state.activeFloor;
+    const moves: [number, string, string][] = [
+      [-1, `${floorTitle(activeFloor())}を1つ下の階と入れ替える`, `<path d="M10 3.5 5.5 8l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`],
+      [1, `${floorTitle(activeFloor())}を1つ上の階と入れ替える`, `<path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`],
+    ];
+    const group = document.createElement("span");
+    group.className = "floor-move floor-tab-extra";
+    for (const [step, title, path] of moves) {
+      const move = document.createElement("button");
+      move.type = "button";
+      move.className = "floor-tab floor-tab-ghost floor-tab-move";
+      move.dataset.floorMove = step < 0 ? "down" : "up";
+      move.innerHTML = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">${path}</svg>`;
+      move.title = title;
+      move.setAttribute("aria-label", title);
+      move.disabled = active + step < 0 || active + step >= state.floors.length;
+      move.addEventListener("click", () => moveFloor(state.activeFloor, state.activeFloor + step));
+      group.appendChild(move);
+    }
+    floorTabs.appendChild(group);
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "floor-tab floor-tab-ghost";
+    remove.className = "floor-tab floor-tab-ghost floor-tab-extra";
     remove.textContent = "×";
     remove.title = "表示中の階を削除";
     remove.addEventListener("click", removeActiveFloor);
     floorTabs.appendChild(remove);
   }
+  // 欄が狭くて入りきらないときだけ出す「…」。地下の追加・複製・入れ替え・名前・削除をメニューにまとめる
+  const more = document.createElement("button");
+  more.type = "button";
+  more.className = "floor-tab floor-tab-ghost floor-tab-more";
+  more.textContent = "…";
+  more.title = "階の操作（地下の追加・複製・入れ替え・名前・削除）";
+  more.setAttribute("aria-label", "階の操作");
+  more.setAttribute("aria-haspopup", "menu");
+  more.setAttribute("aria-expanded", "false");
+  more.addEventListener("click", () => {
+    if (floorMenu && !floorMenu.hidden) closeFloorMenu();
+    else openFloorMenu(more);
+  });
+  floorTabs.appendChild(more);
   fitPlanBar();
+}
+
+// ---- 階の操作のメニュー（欄が狭いときの「…」） ----
+let floorMenu: HTMLDivElement | null = null;
+
+function openFloorMenu(button: HTMLButtonElement): void {
+  if (!floorMenu) {
+    // 2Dの欄のバーは、はみ出した所を隠すので、メニューは画面のいちばん外側に置く
+    const menu = document.createElement("div");
+    menu.className = "floor-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "階の操作");
+    menu.hidden = true;
+    document.body.appendChild(menu);
+    document.addEventListener("pointerdown", (event) => {
+      const target = event.target as Element | null;
+      if (menu.hidden || menu.contains(target) || target?.closest?.(".floor-tab-more")) return;
+      closeFloorMenu();
+    }, true);
+    window.addEventListener("resize", closeFloorMenu);
+    menu.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      closeFloorMenu();
+      floorTabs.querySelector<HTMLButtonElement>(".floor-tab-more")?.focus();
+    });
+    floorMenu = menu;
+  }
+  const title = floorTitle(activeFloor());
+  const index = state.activeFloor;
+  const items: [string, () => void, boolean][] = [
+    ["地下の階を追加（いちばん下に増えます）", addBasement, true],
+    [`${title}を複製（すぐ上に同じ階を足す）`, duplicateActiveFloor, true],
+    [`${title}を1つ下の階と入れ替える`, () => moveFloor(state.activeFloor, state.activeFloor - 1), index > 0],
+    [`${title}を1つ上の階と入れ替える`, () => moveFloor(state.activeFloor, state.activeFloor + 1), index < state.floors.length - 1],
+    [`${title}の名前を変える`, () => renameFloor(state.activeFloor), true],
+  ];
+  if (state.floors.length > 1) items.push(["表示中の階を削除", removeActiveFloor, true]);
+  floorMenu.innerHTML = "";
+  for (const [label, run, enabled] of items) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.setAttribute("role", "menuitem");
+    item.textContent = label;
+    item.disabled = !enabled;
+    item.addEventListener("click", () => {
+      closeFloorMenu();
+      run();
+    });
+    floorMenu.appendChild(item);
+  }
+  floorMenu.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+  const rect = button.getBoundingClientRect();
+  const width = floorMenu.getBoundingClientRect().width;
+  floorMenu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+  floorMenu.style.top = `${rect.bottom + 6}px`;
+  floorMenu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+}
+
+function closeFloorMenu(): void {
+  if (!floorMenu || floorMenu.hidden) return;
+  floorMenu.hidden = true;
+  floorTabs.querySelector(".floor-tab-more")?.setAttribute("aria-expanded", "false");
+}
+
+// ---- 階のタブのドラッグ（並べ替え） ----
+// マウス・ペンで押したまま左右に少し動かすと、ドラッグになる（動かすまでは、ただのクリック）。
+// 指では欄の横スクロールと区別しにくいので、入れ替えのボタンを使う
+const FLOOR_TAB_DRAG_START = 6;
+let floorTabDrag: {
+  pointerId: number;
+  list: HTMLElement;
+  tabs: HTMLElement[];
+  from: number;
+  to: number;
+  startX: number;
+  startScroll: number;
+  dragging: boolean;
+  // ドラッグを始めたときの、タブの左端・右端（欄の中の位置）
+  lefts: number[];
+  rights: number[];
+  gap: number;
+} | null = null;
+// ドラッグを終えた直後のクリックを、階の切り替えにしない
+let floorTabDragEnded = false;
+let floorTabDragListening = false;
+
+function startFloorTabDrag(event: PointerEvent, list: HTMLElement, index: number): void {
+  floorTabDragEnded = false;
+  if (event.button !== 0 || event.pointerType === "touch" || state.floors.length < 2) return;
+  if (!floorTabDragListening) {
+    floorTabDragListening = true;
+    window.addEventListener("pointermove", moveFloorTabDrag);
+    window.addEventListener("pointerup", (pointer) => endFloorTabDrag(pointer, true));
+    window.addEventListener("pointercancel", (pointer) => endFloorTabDrag(pointer, false));
+    window.addEventListener("keydown", (key) => {
+      if (key.key !== "Escape" || !floorTabDrag?.dragging) return;
+      key.preventDefault();
+      key.stopPropagation();
+      resetFloorTabDrag(true);
+    }, true);
+  }
+  const tabs = [...list.querySelectorAll<HTMLElement>(".floor-tab")];
+  floorTabDrag = { pointerId: event.pointerId, list, tabs, from: index, to: index, startX: event.clientX, startScroll: list.scrollLeft, dragging: false, lefts: [], rights: [], gap: 0 };
+}
+
+function moveFloorTabDrag(event: PointerEvent): void {
+  const drag = floorTabDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const { list, tabs, from } = drag;
+  if (!drag.dragging) {
+    if (Math.abs(event.clientX - drag.startX) < FLOOR_TAB_DRAG_START) return;
+    drag.dragging = true;
+    const origin = list.getBoundingClientRect().left - list.scrollLeft;
+    drag.lefts = tabs.map((tab) => tab.getBoundingClientRect().left - origin);
+    drag.rights = tabs.map((tab) => tab.getBoundingClientRect().right - origin);
+    drag.gap = tabs.length > 1 ? Math.max(0, drag.lefts[1] - drag.rights[0]) : 0;
+    list.classList.add("is-dragging");
+    tabs[from].classList.add("is-dragged");
+    try { tabs[from].setPointerCapture(event.pointerId); } catch { /* 押したままでなければ取れない */ }
+  }
+  event.preventDefault();
+  // 欄に入りきらないときは、端に寄せると横にスクロールする
+  const rect = list.getBoundingClientRect();
+  if (event.clientX < rect.left + 16) list.scrollLeft -= 12;
+  else if (event.clientX > rect.right - 16) list.scrollLeft += 12;
+  const { lefts, rights, gap } = drag;
+  const width = rights[from] - lefts[from];
+  const end = rights[rights.length - 1];
+  const shift = clamp(event.clientX - drag.startX + list.scrollLeft - drag.startScroll, -lefts[from], end - rights[from]);
+  const center = (lefts[from] + rights[from]) / 2 + shift;
+  // ずらしたタブの真ん中が、ほかのタブの真ん中を越えたら、そこへ入れる
+  let to = from;
+  for (let index = 0; index < from; index++) if (center < (lefts[index] + rights[index]) / 2) { to = index; break; }
+  for (let index = tabs.length - 1; to === from && index > from; index--) if (center > (lefts[index] + rights[index]) / 2) to = index;
+  drag.to = to;
+  tabs.forEach((tab, index) => {
+    let offset = 0;
+    if (index === from) offset = shift;
+    else if (from < index && index <= to) offset = -(width + gap);
+    else if (to <= index && index < from) offset = width + gap;
+    tab.style.transform = offset ? `translateX(${offset}px)` : "";
+  });
+}
+
+function endFloorTabDrag(event: PointerEvent, drop: boolean): void {
+  const drag = floorTabDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const { from, to, dragging } = drag;
+  resetFloorTabDrag(dragging);
+  if (drop && dragging && to !== from) moveFloor(from, to);
+}
+
+// ドラッグの見た目を戻す。dragged ならこのあとのクリックを無視する（クリックが来なくても、次の処理の前に戻す）
+function resetFloorTabDrag(dragged: boolean): void {
+  const drag = floorTabDrag;
+  floorTabDrag = null;
+  if (!drag) return;
+  drag.list.classList.remove("is-dragging");
+  drag.tabs.forEach((tab) => {
+    tab.classList.remove("is-dragged");
+    tab.style.transform = "";
+  });
+  if (!dragged) return;
+  floorTabDragEnded = true;
+  window.setTimeout(() => { floorTabDragEnded = false; }, 0);
+}
+
+// 階の並びを変える（from の階を to の位置へ。となり同士なら入れ替え）。地下の数はそのままで、1F・B1F などの名前は並びの位置で付け直す。
+// 部屋・壁・家具・付けた名前・3Dに出すかどうかは、その階と一緒に動く。屋根もその階と一緒に動くが、いちばん上の階の屋根（建物の屋根）は、
+// 並べ替えたあとのいちばん上の階に載せ替える。床の穴（階段の吹き抜け）は作り直さない。動かした階を、編集中の階にする
+function moveFloor(from: number, to: number): void {
+  const count = state.floors.length;
+  if (from === to || from < 0 || from >= count || to < 0 || to >= count) return;
+  const editing = activeFloor().id;
+  const top = state.floors[count - 1].id;
+  const [floor] = state.floors.splice(from, 1);
+  state.floors.splice(to, 0, floor);
+  const nextTop = state.floors[count - 1].id;
+  state.roofs.forEach((roofItem) => {
+    const owner = roofItem.floorId ?? top;
+    roofItem.floorId = owner === top ? nextTop : owner;
+  });
+  renameFloors();
+  state.activeFloor = to;
+  // 編集中の階を動かしたときは、選んでいる物もそのまま。ほかの階を動かしたときは、その階に切り替える
+  const switched = floor.id !== editing;
+  if (switched) selectOnly(null);
+  else selectionFloor = to;
+  commitState();
+  if (switched) fitPlanToCanvas();
+  redrawAll();
 }
 
 // 2Dの欄が狭くて階のタブが入りきらないときは、部屋や壁の数の表示をしまい、
@@ -1755,7 +2001,17 @@ function fitPlanBar(): void {
   const list = floorTabs.querySelector<HTMLElement>(".floor-tab-list");
   if (!list) return;
   planStats.hidden = false;
+  delete floorTabs.dataset.compact;
   if (list.scrollWidth > list.clientWidth + 1) planStats.hidden = true;
+  // それでも入りきらない（右端のボタンが欄の外に出る・階のタブがタブ2つ分ほどの幅しかなく全部は見えない）ときは、
+  // 地下の追加・複製・入れ替え・削除のボタンを「…」のメニューにまとめる
+  const paneRight = floorTabs.parentElement?.getBoundingClientRect().right ?? Infinity;
+  const overflow = [...floorTabs.children].some((child) => child.getBoundingClientRect().right > paneRight + 0.5);
+  const squeezed = list.scrollWidth > list.clientWidth + 1 && list.clientWidth <= 100;
+  if (overflow || squeezed) {
+    floorTabs.dataset.compact = "";
+    if (list.scrollWidth > list.clientWidth + 1) planStats.hidden = true;
+  } else closeFloorMenu();
   const active = list.querySelector<HTMLElement>(".is-active");
   if (!active || list.scrollWidth <= list.clientWidth) return;
   const listRect = list.getBoundingClientRect();
@@ -4428,8 +4684,16 @@ function handleKeyDown(event: KeyboardEvent): void {
     exportPlan();
     return;
   }
-  // 階の切り替え（[ 下の階・] 上の階）、方眼の表示（G）、全体を表示（0）、拡大・縮小（+ / -）
+  // 階の切り替え（[ 下の階・] 上の階）、階の入れ替え（Shift+[ 1つ下の階と・Shift+] 1つ上の階と）、
+  // 方眼の表示（G）、全体を表示（0）、拡大・縮小（+ / -）
   if (!event.ctrlKey && !event.metaKey && !event.altKey && drag.pointerId === null) {
+    // Shift+[ は、日本語と英語のキーボードでは { になる
+    if (event.key === "{" || event.key === "}" || (event.shiftKey && (event.key === "[" || event.key === "]"))) {
+      event.preventDefault();
+      const step = event.key === "}" || event.key === "]" ? 1 : -1;
+      moveFloor(state.activeFloor, state.activeFloor + step);
+      return;
+    }
     if (event.key === "[" || event.key === "]") {
       const next = state.activeFloor + (event.key === "]" ? 1 : -1);
       if (next >= 0 && next < state.floors.length) setActiveFloorIndex(next);
@@ -6809,9 +7073,7 @@ function furnitureSymbolFill(kind: FurnitureKind): string {
 }
 
 // ---- 取り込んだ画像 ----
-// 画像は data URL のまま間取りに入れる（自動保存・書き出しのファイルにも入る）。大きすぎる画像は、取り込むときに縮める
-const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp|gif);base64,/;
-const MAX_IMAGE_DATA = 12_000_000;
+// 画像の data URL の形と大きさの上限（IMAGE_DATA_URL・MAX_IMAGE_DATA）は、保存データを読むときに使うので上の方（let state の前）
 const IMAGE_MAX_SIDE = 1600;
 const imageElements = new Map<string, HTMLImageElement>();
 
@@ -13060,6 +13322,58 @@ function localDateStamp(): string {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+// ---- 前に読み込めなかった保存データを開き直す ----
+// 2026-10-21〜11-15 は、名前を付けた階・間取りや取り込んだ画像のある保存データを、開き直したときに読み込めなかった（起動の順番の不具合）。
+// そのとき退避した元データのうち、いまは読み込めるもの（いちばん新しいもの）を、お知らせから開けるようにする。
+// 開くか閉じたものは次から出さない（退避した元データは消さない。開いたあとも、元に戻すで前の間取りに戻せる）
+const RECOVERY_SEEN_KEY = "madori-quick-3d-recovery-seen";
+
+function offerRecoveredBackup(): void {
+  let seen: string[] = [];
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(RECOVERY_SEEN_KEY) ?? "[]");
+    if (Array.isArray(stored)) seen = stored.filter((item): item is string => typeof item === "string");
+  } catch {
+    // 記録が読めなければ、まだ何も見ていないことにする
+  }
+  const current = localStorage.getItem(STORAGE_KEY);
+  let found: { name: string; time: number; raw: string; plan: PlanState } | null = null;
+  for (const backup of listBackups(localStorage, STORAGE_KEY)) {
+    if (seen.includes(backup.name) || backup.raw === current) continue;
+    try {
+      const plan = normalizePlan(JSON.parse(backup.raw));
+      if (plan && (plan.roofs.length || plan.floors.some((floor) => floor.entities.length))) { found = { ...backup, plan }; break; }
+    } catch {
+      // いまも読み込めない元データは、ここでは出さない
+    }
+  }
+  if (!found) return;
+  const backup = found;
+  const notice = requiredElement<HTMLElement>("#recoveryNotice");
+  const open = requiredElement<HTMLButtonElement>("#recoveryOpenButton");
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const when = new Date(backup.time);
+  const stamp = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+  const remember = () => {
+    try {
+      localStorage.setItem(RECOVERY_SEEN_KEY, JSON.stringify([...seen, backup.name]));
+    } catch {
+      // 記録できなくても、開く・閉じるはできる
+    }
+    notice.hidden = true;
+  };
+  requiredElement<HTMLElement>("#recoveryMessage").textContent =
+    `前に開いたときに読み込めなかった間取り（${stamp}）を、読み込めるようになりました。「この間取りを開く」で、いまの間取りと入れ替えます（元に戻すで、いまの間取りに戻せます）。`;
+  open.hidden = false;
+  notice.hidden = false;
+  open.addEventListener("click", () => {
+    remember();
+    replaceState(backup.plan, true);
+  });
+  requiredElement<HTMLButtonElement>("#recoveryExportButton").addEventListener("click", () => downloadJson(backup.raw, `madori-recovery-${localDateStamp()}.json`));
+  requiredElement<HTMLButtonElement>("#recoveryCloseButton").addEventListener("click", remember);
 }
 
 function downloadJson(json: string, filename: string): void {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readStoredPlan } from '../src/persistence.ts';
+import { listBackups, readStoredPlan } from '../src/persistence.ts';
 
 const key = 'plan';
 function storage(raw, full = false) {
@@ -64,4 +64,14 @@ test('reopening the same broken autosave does not pile up backups', () => {
     assert.deepEqual(readStoredPlan(source, key, normalize), { plan: null, recovery: { raw, backupSaved: true } });
   }
   assert.equal(source.entries.size, 2);
+});
+
+test('backups of unreadable autosaves are listed newest first, other keys are ignored', () => {
+  const source = storage('{}');
+  source.setItem(`${key}-recovery-1000-aaaaaa`, 'old');
+  source.setItem(`${key}-recovery-3000-bbbbbb`, 'new');
+  source.setItem(`${key}-recovery-2000-cccccc`, 'middle');
+  source.setItem('other-recovery-9000-dddddd', 'someone else');
+  assert.deepEqual(listBackups(source, key).map(backup => [backup.time, backup.raw]), [[3000, 'new'], [2000, 'middle'], [1000, 'old']]);
+  assert.deepEqual(listBackups({ getItem: () => null, setItem() {} }, key), [], 'a storage that cannot be listed has no backups');
 });

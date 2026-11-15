@@ -698,6 +698,7 @@ select:focus-visible {
   gap: 6px;
   min-height: 32px;
 }
+.recovery-notice button[hidden] { display: none; }
 .recovery-notice svg { width: 16px; height: 16px; }
 
 .furniture-items button {
@@ -872,6 +873,84 @@ select:focus-visible {
 
 .floor-tab {
   flex: 0 0 auto;
+}
+
+/* 編集中の階を、となりの階と入れ替えるボタン（タブは左が下の階なので、左向きが1つ下・右向きが1つ上） */
+.floor-move {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+/* 欄が狭いときだけ出す「…」（階の操作のメニュー）。出すときは、地下の追加・複製・入れ替え・削除のボタンをしまう（fitPlanBar） */
+.floor-tab.floor-tab-more,
+.floor-tabs[data-compact] .floor-tab-extra {
+  display: none;
+}
+
+.floor-tabs[data-compact] .floor-tab.floor-tab-more {
+  display: inline-block;
+}
+
+.floor-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(20, 30, 45, 0.16);
+}
+
+.floor-menu[hidden] {
+  display: none;
+}
+
+.floor-menu button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+}
+
+.floor-menu button:hover:not(:disabled),
+.floor-menu button:focus-visible {
+  background: var(--panel-strong);
+}
+
+.floor-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 階のタブのドラッグ（並べ替え）。ほかのタブは、空いた所へ滑らせる */
+.floor-tab-list.is-dragging {
+  user-select: none;
+}
+
+.floor-tab-list.is-dragging .floor-tab {
+  transition: transform 140ms ease;
+}
+
+.floor-tab-list.is-dragging .floor-tab.is-dragged {
+  position: relative;
+  z-index: 1;
+  transition: none;
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floor-tab-list.is-dragging .floor-tab {
+    transition: none;
+  }
 }
 
 /* 階が多いときは、階のタブより先に部屋や壁の数の表示を縮めて省略する */
@@ -1472,6 +1551,26 @@ select:focus-visible {
 .floor-tab.floor-tab-ghost {
   color: var(--muted);
   font-weight: 600;
+}
+
+.floor-tab.floor-tab-move {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  padding: 0 5px;
+}
+
+.floor-tab:disabled,
+.floor-tab:disabled:hover {
+  border-color: var(--line);
+  background: var(--panel);
+  opacity: 0.4;
+  cursor: default;
+}
+
+.floor-tab-list.is-dragging .floor-tab.is-dragged {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .segmented button,

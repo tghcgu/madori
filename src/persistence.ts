@@ -41,6 +41,29 @@ export function readStoredPlan<T>(storage: PlanStorage, key: string, normalize: 
   return { plan, recovery: { raw, backupSaved } };
 }
 
+export interface Backup {
+  name: string;
+  // 退避した時刻（ミリ秒）。名前の「-recovery-」のあとの数
+  time: number;
+  raw: string;
+}
+
+// 前に読み込めずに退避した保存データ（新しい順）
+export function listBackups(storage: PlanStorage, key: string): Backup[] {
+  if (typeof storage.key !== "function" || typeof storage.length !== "number") return [];
+  const prefix = `${key}-recovery-`;
+  const found: Backup[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const name = storage.key(index);
+    if (!name?.startsWith(prefix)) continue;
+    const raw = storage.getItem(name);
+    if (raw === null) continue;
+    const time = Number(name.slice(prefix.length).split("-")[0]);
+    found.push({ name, time: Number.isFinite(time) ? time : 0, raw });
+  }
+  return found.sort((a, b) => b.time - a.time);
+}
+
 function hasBackup(storage: PlanStorage, prefix: string, raw: string): boolean {
   if (typeof storage.key !== "function" || typeof storage.length !== "number") return false;
   for (let index = 0; index < storage.length; index += 1) {

@@ -10,6 +10,15 @@ export const CHANGELOG: ChangelogEntry[] = [
   {
     date: "2026-11-15",
     items: [{
+      ja: "階を簡単に入れ替えられるようにしました。階のタブを左右にドラッグすると、並べ替えられます。編集中の階は、タブの右の「＜」「＞」か Shift+[ / Shift+] で、1つ下・1つ上の階と入れ替えられます。部屋・家具・付けた名前は階と一緒に動き、1F・B1F などの名前は並びの位置で付け直します。いちばん上の階の屋根は、並べ替えたあとも、いちばん上の階に載ります（ほかの屋根は、その階と一緒に動きます）。元に戻すこともできます",
+      en: "Floors can now be reordered easily. Drag a floor tab left or right to move it. The floor you are editing can also be swapped with the one below or above with the ‹ › buttons next to the tabs, or with Shift+[ / Shift+]. Rooms, furniture and floor names move with the floor, and the 1F / B1F labels follow the new order. The roof of the top floor stays on the top floor (other roofs move with their floor). Undo works as usual",
+    }, {
+      ja: "2Dと3Dを同時に出していて2Dの欄が狭いとき、階のタブの右の「×」などが欄からはみ出して押せなかったのを直しました。入りきらないときは、地下の追加・複製・入れ替え・名前・削除を「…」のメニューにまとめます",
+      en: "Fixed floor buttons such as × being cut off and impossible to click when the 2D pane is narrow in the side-by-side view. When they do not fit, adding a basement, duplicating, reordering, renaming and deleting move into a “…” menu",
+    }, {
+      ja: "階や間取りに名前を付けたり、画像を取り込んだりした間取りが、ページを開き直したときに読み込めず「保存データが壊れていた」と出ていたのを直しました（2026-10-21からの不具合です。ご迷惑をおかけしました）。そのとき読み込めなかった間取りは、次に開いたときのお知らせの「この間取りを開く」で開けます（同じブラウザで開いた場合）",
+      en: "Fixed plans with a floor name, a plan name or an imported image failing to load after reopening the page, with a message saying the saved data was broken (a bug since 2026-10-21; sorry for the trouble). A plan that failed to load then can be opened from the notice shown next time, with “Open this plan” (in the same browser)",
+    }, {
       ja: "上のバーの表示の切り替え（同時・2D・3D）の左に、間取り専用版（3Dなし）を開くボタンをいつも出すようにしました（お知らせを消しても残ります）。同じ間取りのまま開きます",
       en: "The top bar now always has a button to open the plan-only edition (no 3D), left of the view switch, even after the notice is closed. It opens the same plan",
     }, {

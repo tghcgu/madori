@@ -82,6 +82,12 @@ export const UI: Record<string, Translations> = {
 
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
+  "この間取りを開く": ["Open this plan", "이 평면도 열기", "開啟此平面圖"],
+  "前に開いたときに読み込めなかった間取り（{0}）を、読み込めるようになりました。「この間取りを開く」で、いまの間取りと入れ替えます（元に戻すで、いまの間取りに戻せます）。": [
+    "A plan that could not be loaded last time ({0}) can now be loaded. “Open this plan” replaces the current plan with it (Undo brings the current plan back).",
+    "지난번에 불러오지 못한 평면도({0})를 이제 불러올 수 있습니다. ‘이 평면도 열기’를 누르면 지금 평면도와 바뀝니다(실행 취소로 지금 평면도로 돌아갈 수 있습니다).",
+    "上次無法載入的平面圖（{0}）現在可以載入了。按「開啟此平面圖」會取代目前的平面圖（可用復原回到目前的平面圖）。",
+  ],
   "閉じる": ["Close", "닫기", "關閉"],
   "その他（書き出し・画像・読み込みなど）": ["More (export, image, open and so on)", "기타 (내보내기·이미지·불러오기 등)", "其他（匯出・圖片・讀取等）"],
   "元データ保護中・自動保存停止": ["Original data protected · autosave paused", "원본 데이터 보호 중·자동 저장 중지", "原始資料保護中・自動儲存已停止"],
@@ -173,6 +179,13 @@ export const UI: Record<string, Translations> = {
   "{0}を複製（すぐ上に同じ階を足す）": ["Duplicate {0} (adds the same floor right above)", "{0} 복제 (바로 위에 같은 층을 추가)", "複製 {0}（在正上方加入相同樓層）"],
   "この階を複製": ["Duplicate this floor", "이 층 복제", "複製此樓層"],
   "表示中の階を削除": ["Delete the current floor", "표시 중인 층 삭제", "刪除目前樓層"],
+  "{0}を編集（ダブルクリックで名前を変える・左右にドラッグで階を並べ替える）": ["Edit {0} (double-click to rename, drag left or right to reorder floors)", "{0} 편집 (더블클릭으로 이름 변경, 좌우로 드래그해 층 순서 변경)", "編輯 {0}（雙擊可重新命名，左右拖曳可調整樓層順序）"],
+  "{0}を1つ下の階と入れ替える": ["Swap {0} with the floor below", "{0}을(를) 바로 아래층과 맞바꾸기", "將 {0} 與下一層對調"],
+  "{0}を1つ上の階と入れ替える": ["Swap {0} with the floor above", "{0}을(를) 바로 위층과 맞바꾸기", "將 {0} 與上一層對調"],
+  "{0}の名前を変える": ["Rename {0}", "{0} 이름 바꾸기", "重新命名 {0}"],
+  "階の操作": ["Floor actions", "층 작업", "樓層操作"],
+  "階の操作（地下の追加・複製・入れ替え・名前・削除）": ["Floor actions (add basement, duplicate, reorder, rename, delete)", "층 작업 (지하 추가·복제·순서 변경·이름·삭제)", "樓層操作（新增地下、複製、調換、命名、刪除）"],
+  "いまの階を1つ下 / 1つ上の階と入れ替える（階のタブのドラッグでも並べ替えられる）": ["Swap the current floor with the one below / above (you can also drag the floor tabs)", "현재 층을 아래층 / 위층과 맞바꾸기 (층 탭을 드래그해도 순서를 바꿀 수 있음)", "將目前樓層與下一層 / 上一層對調（也可拖曳樓層分頁調整順序）"],
   "{0}（{1}個の要素・屋根{2}枚）を削除します。実行しますか？": ["Delete {0} ({1} items, {2} roofs)?", "{0}({1}개 요소·지붕 {2}개)을(를) 삭제합니다. 계속할까요?", "要刪除 {0}（{1} 個物件、{2} 個屋頂）嗎？"],
   "{0}を3Dから一時的に隠す": ["Hide {0} in 3D for now", "{0}을(를) 3D에서 잠시 숨기기", "暫時在 3D 中隱藏 {0}"],
   "{0}を3Dに表示": ["Show {0} in 3D", "{0}을(를) 3D에 표시", "在 3D 中顯示 {0}"],

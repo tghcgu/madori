@@ -146,6 +146,8 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 - 階はタブで切り替え（増えて入りきらないときは横にスクロール。`[` `]`キーでも下の階・上の階へ）。階を消すと残りの階の名前を付け直します
 - 階のタブをダブルクリックすると、階に名前を付けられます（例: 地下牢・屋上）。タブ・3Dの表示の切り替え・書き出す画像の見出しとファイルの名前に出ます。空にすると、いつもの名前（1F・B1F など）に戻ります
 - タブの右の重ねた四角のボタンで、いまの階を複製（すぐ上に同じ階が増え、この階の屋根は上の階へ移ります）
+- 階のタブを左右にドラッグすると、階を並べ替えられます。いまの階は、タブの右の「＜」「＞」か Shift+[ / Shift+] で、1つ下・1つ上の階と入れ替えられます。中の物と付けた名前は階と一緒に動き、1F・B1F などの名前は並びの位置で付け直します。いちばん上の階の屋根は、いちばん上の階に残ります
+- 2Dの欄が狭くて入りきらないときは、地下の追加・複製・入れ替え・名前・削除を「…」のメニューにまとめます
 - ほかの階をゴースト表示（透かす階・色・濃さを選択可）
 - 3Dでは階ごとに表示・非表示を切り替え
 - 階高、床スラブ、最上階の壁上端を考慮して積層。地下の階は地面より下に積み、1Fの床が地下の天井をふさぎます
@@ -848,6 +850,9 @@ npm.cmd run dev
 
 ### 2026年11月15日
 
+- 階を簡単に入れ替えられるようにしました。階のタブを左右にドラッグすると、並べ替えられます。編集中の階は、タブの右の「＜」「＞」か Shift+[ / Shift+] で、1つ下・1つ上の階と入れ替えられます。部屋・家具・付けた名前は階と一緒に動き、1F・B1F などの名前は並びの位置で付け直します。いちばん上の階の屋根は、並べ替えたあとも、いちばん上の階に載ります（ほかの屋根は、その階と一緒に動きます）。元に戻すこともできます
+- 2Dと3Dを同時に出していて2Dの欄が狭いとき、階のタブの右の「×」などが欄からはみ出して押せなかったのを直しました。入りきらないときは、地下の追加・複製・入れ替え・名前・削除を「…」のメニューにまとめます
+- 階や間取りに名前を付けたり、画像を取り込んだりした間取りが、ページを開き直したときに読み込めず「保存データが壊れていた」と出ていたのを直しました（2026-10-21からの不具合です。ご迷惑をおかけしました）。そのとき読み込めなかった間取りは、次に開いたときのお知らせの「この間取りを開く」で開けます（同じブラウザで開いた場合）
 - 上のバーの表示の切り替え（同時・2D・3D）の左に、間取り専用版（3Dなし）を開くボタンをいつも出すようにしました（お知らせを消しても残ります）。同じ間取りのまま開きます
 - 画面の幅が1040〜1270pxくらいのとき、上のバーでアプリの名前がボタンの下に隠れていたのを直しました。入りきらないときは、お知らせの文を隠す → ボタンを絵だけにする → 表示の切り替えも絵だけにする → 名前を隠す（ロゴは残す）の順に、実際の幅を測って詰めます。英語・韓国語・繁体字中国語でも崩れません
 - 線路の幅を変えたとき、選べる所（クリックの当たり）やペンの太さの表示が、前の幅のままだったのを直しました
@@ -1278,6 +1283,8 @@ When a wall overlaps a door or window, the opening takes priority. The wall is s
 - Add floors above with "＋" and basements with "＋B"; switch floors with the tabs or the `[` and `]` keys
 - Double-click a floor tab to name the floor (for example, a dungeon or a rooftop). The name shows on the tabs, the 3D floor toggles, and exported image headings and file names; leave it empty to go back to the usual name (1F, B1F and so on)
 - The overlapping-squares button next to the tabs duplicates the current floor directly above it (this floor's roofs move up onto the copy)
+- Drag a floor tab left or right to reorder the floors. The current floor can be swapped with the one below or above with the ‹ › buttons next to the tabs or Shift+[ / Shift+]. Contents and floor names move with the floor, the 1F / B1F labels follow the new order, and the roof of the top floor stays on the top floor
+- When the 2D pane is too narrow, adding a basement, duplicating, reordering, renaming and deleting move into a “…” menu
 - Translucent lower-floor reference in 2D
 - Per-floor visibility in 3D
 - Stacked floor heights, slabs, and top-floor wall caps
@@ -1957,6 +1964,9 @@ The same history as "更新履歴" in the app, newest first.
 
 ### 2026-11-15
 
+- Floors can now be reordered easily. Drag a floor tab left or right to move it. The floor you are editing can also be swapped with the one below or above with the ‹ › buttons next to the tabs, or with Shift+[ / Shift+]. Rooms, furniture and floor names move with the floor, and the 1F / B1F labels follow the new order. The roof of the top floor stays on the top floor (other roofs move with their floor). Undo works as usual
+- Fixed floor buttons such as × being cut off and impossible to click when the 2D pane is narrow in the side-by-side view. When they do not fit, adding a basement, duplicating, reordering, renaming and deleting move into a “…” menu
+- Fixed plans with a floor name, a plan name or an imported image failing to load after reopening the page, with a message saying the saved data was broken (a bug since 2026-10-21; sorry for the trouble). A plan that failed to load then can be opened from the notice shown next time, with “Open this plan” (in the same browser)
 - The top bar now always has a button to open the plan-only edition (no 3D), left of the view switch, even after the notice is closed. It opens the same plan
 - Fixed the app name hiding under the top bar buttons at window widths of about 1040–1270 px. When the bar is too narrow it now measures and tightens step by step: hide the notice, then show the buttons as icons only, then the view switch too, and last hide the name (the logo stays). This also works in English, Korean and Traditional Chinese
 - Fixed railways whose clickable area and pen preview kept the old width after the width was changed

@@ -164,6 +164,9 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
   - `PlanState` / `Entity`（部屋・壁・ドア・窓・家具・図形・テキスト）と `state`
   - 読み込むときは `normalizePlan` / `normalizeEntity` で値を確かめて直す（保存データ、JSONの読み込み、テンプレートのどれも通る）
   - 変更は `commitState()` で「元に戻す」の履歴に入れ、ブラウザに保存する。丸ごとの入れ替えは `replaceState()`
+  - 保存データを読むのは `let state = loadInitialState()`（ファイルの上の方）。そこから呼ぶ関数が使う値は、その行より前に宣言する（`tests/startup-order.test.mjs` が見張る）。前に読み込めずに退避した元データを開き直すお知らせは `offerRecoveredBackup()`（`persistence.ts` の `listBackups`）
+- **階**
+  - タブは `renderFloorTabs()`、狭いときの詰め方は `fitPlanBar()`（「…」のメニューは `openFloorMenu()`）。追加・複製・削除は `addBasement`・`addFloorAbove`・`duplicateActiveFloor`・`removeActiveFloor`、並べ替えは `moveFloor`（タブのドラッグは `startFloorTabDrag` ほか）、名前は `renameFloor`
 - **上のバー**
   - お知らせの文 `setupTopNote()`、入りきらないときの詰め方 `fitTopbar()`・`topbarFits()`・`setupTopbarFit()`（styles.css の `data-compact`）
 - **2Dの描画**
@@ -250,6 +253,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `tests/plan-style.test.mjs` | 2Dの絵柄の部品（17種類の一覧と分類・地の色、書体、ドットの線、破線、筆の線、塗り、色、マンガのトーン、鉛筆の線、レトロゲームの4色、画面の外の切り落とし） |
 | `tests/templates.test.mjs` | テンプレート153種類（分類、ドア・窓が壁の上にある、家具が部屋の中にあって壁を突き抜けない、部屋の名前が部屋に収まって家具に隠れない、家具どうしが重ならない、ドアの開く所と前後40cmに家具がない、壁で囲んだ部屋の上に屋根か上の階がある） |
 | `tests/changelog.test.mjs` | 更新履歴の並び順と、README と同じか |
+| `tests/startup-order.test.mjs` | `main.ts` の起動の順番（トップレベルの文が、後ろで宣言した値を読まないか。TDZ） |
 | `tests/colors.test.mjs` ほか | 色、壁の開口、建具、保存データの復旧 |
 | `tests/editor.mjs`（E2E） | 実際のブラウザ（Windows では入っている Edge、ほかのOSでは Playwright の Chromium）で操作する。描く・選ぶ・動かす・元に戻す・保存・読み込み・全家具・人の模型・ペン・足跡・破片・絵柄（9種類とメニューの見本）・テンプレート・画像の書き出し・間取り専用版・フォーム・上のバーの幅（390〜1360px）。結果の画像は `.codex/regression/` |
 | `tests/furniture-visual.mjs` | 3Dの家具の一覧画像（`.codex/furniture-quality/`）。目でも見る |
@@ -334,6 +338,9 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
   - Google のサイト名: `alternateName` にサブドメインを戻し、サイトマップの日付をビルドで入れるようにした（下の「気をつけること」）。
   - 全153テンプレートを一覧画像（`.codex/template-gallery.mjs`）で見直した。実行時のエラーは0件。入口のない物を `.codex/door-check.mjs` で探し、本当になかった「魔法学校」に正面玄関（両開き）を付けた（ほかに出た物は、石・コンクリート・デッキの床の屋外に出るドア、教室など建物の一部だけの間取り、乗り物、地下で、問題なし）。迷宮・地下牢は、3Dで屋根が迷路や部屋の上をふさぐが、2026-10-19 に「屋根のない部屋は直す」と決めているので、そのままにした（3Dの「屋根」で隠せる。屋根なしにするかはユーザーに聞く）。
   - E2E が途中で落ちる（EBUSY）のを直した（`vite.config.ts` が `.codex/` を見張らない）。
+  - （マージのあと）「階を簡単に入れ替えられるように」で、階の並べ替え（`main.ts` の `moveFloor`）。階のタブのドラッグ（`startFloorTabDrag`・`moveFloorTabDrag`・`endFloorTabDrag`。マウスとペンだけ。指は欄の横スクロールと区別しにくいのでボタン）、編集中の階をとなりと入れ替える「＜」「＞」（`data-floor-move`）、Shift+[ / Shift+]（日本語・英語のキーボードでは `{` `}` になる）。地下の数（`basements`）はそのままで、1F・B1F の名前は位置で付け直す。付けた名前・中の物・3Dで隠した階（`hiddenFloorIds` は id で持つ）は階と一緒に動く。屋根は `floorId` でその階に付いて動くが、**いちばん上の階の屋根だけは、並べ替えたあとのいちばん上の階に載せ替える**（1Fと2Fを入れ替えても建物の屋根が真ん中に挟まらないように。上に階を足してから下へ動かすときも、元の屋根が上に残る）。この決まりのため、いちばん上へ動かした階を手で戻すと、その階に付いていた屋根も上に残る（元に戻すなら正確に戻る）。床の穴（階段の吹き抜け）は作り直さない（保存済みのプランには生成処理をかけない）。
+  - 2Dの欄が狭いと（同時表示の1366pxなど）、前から階のタブの右の「×」が欄の外に出て押せなかった。入りきらないとき（ボタンが欄の外に出る・階のタブがタブ2つ分の幅しかない）は、`fitPlanBar` が `#floorTabs` に `data-compact` を付け、地下の追加・複製・入れ替え・削除（`.floor-tab-extra`）をしまって「…」（`.floor-tab-more`）のメニュー（`openFloorMenu`。2Dの欄のバーははみ出しを隠すので、メニューは `body` に置く `position: fixed`）にまとめる。「＋」（上の階を追加）と階のタブは残す。
+  - **保存データの読み込みの不具合**（2026-10-21〜11-15）: `let state = loadInitialState()` が、後ろで宣言した `MAX_FLOOR_LABEL`・`MAX_PLAN_NAME`・`IMAGE_DATA_URL`・`MAX_IMAGE_DATA` を読んで止まり（TDZ）、名前を付けた階・間取りのある保存データは開き直すと丸ごと読み込めず（「保存データが壊れていた」と出て空の間取り）、取り込んだ画像は消えていた。E2E は名前を付けたまま開き直していなかったので気づけなかった。4つの値を `let state` の前に移し、`tests/startup-order.test.mjs`（TypeScript で main.ts を読み、トップレベルの文がその場で呼ぶ関数をたどって、後ろで宣言した const / let を読んでいないかを見る。関数の名前を書いただけの所は数えない）で見張る。そのとき退避された元データ（`madori-quick-3d-plan-recovery-<時刻>-…`）のうち、いまは読み込めるいちばん新しい物を、開いたときのお知らせ（`offerRecoveredBackup`。「この間取りを開く」で `replaceState`、元に戻すで戻せる）で開けるようにした。開くか閉じた物は `madori-quick-3d-recovery-seen` に覚えて次から出さない（退避した元データは消さない）。
 - **2026-10-19（その9）**: 「重い」「ペンで描くなのに範囲になってる」「ドーナツも描けるように」「川の真ん中の線」「すべて見直せ」への対応。
   - 軽くする（`src/main.ts`）: `rebuildThreeScene` は2Dだけを表示中なら作らず（`threeSceneKey = null`、3Dを見るときに `ensureThreeScene`）、間取り・屋根・隠した階・屋根の表示・絵柄の JSON（`threeSceneSignature`）が前と同じなら選択の枠だけ直す（`refreshSelectionBoxes`。枠を付ける物には `userData.selectionTarget`）。家具・ドア・窓は形を決める値の JSON を鍵に作り置きを `clone` して使い（`cachedModel`。形と材質は `cachedResources` に入れ、`disposeGroup`・`removeThreeObjects` では捨てない。3回の作り直しで使われなければ `trimModelCache` で捨てる）、草の置き場所も作り置き（`grassCache`）。捨てる形・材質は次に3Dを描いた後で捨てる（`pendingDisposal` → `flushDisposal`。先に捨てるとシェーダーを組み直して重い）。影は `renderer.shadowMap.autoUpdate = false` で、物や光が変わったときだけ `needsUpdate`。シーンを作り直さずに3Dを変える所（`syncThreeWhileDragging`）では `threeSceneKey = null`。E2E の3Dを調べる関数は先に `ensureThreeScene()` を呼ぶ。測り方は `.codex/perf.mjs`・`.codex/cpu.mjs`（作業用）。
   - ペンで塗る（`src/brush-area.ts`）: 描き方に `brush`（床と、池・花壇・芝生・ラグだけ。`isAreaKey`）。線を幅のある帯（区切りの四角と点の丸）にして `polygon-clipping` で合わせ（`brushStroke`）、重なった同じ物（床は同じ素材で名前のない物、自由な形は同じ種類）と `unionRegions`、けずるときは `subtractRegion`。床は `floorFromRegion`（輪郭128点・穴32まで）、自由な形は `freeFrame(outer, margin, holes)` で `path` と `holes`（割合の輪）にする（`paintFloor`・`paintFreeArea`）。ペンのツールでは閉じる形ははじめから塗る（`drawMethodFor`）。床の「囲んで描く」と「ペンで塗る」は部屋のツール。
@@ -368,6 +375,8 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
 - **2Dの絵柄の重さ**: 家具がとても多い間取りでは、ドット・筆・古地図・黒板で動かしたときに少し重いことがある。
 - **取ってきたばかりの環境の E2E**: 2026-10-09 に新しく clone した所で8回試したら、2回、人の模型のテストの後の再読み込み（`page.reload`）が止まって失敗した（待ち時間を120秒にしても止まったままだったので、遅いのではなく止まっている）。どちらも初めのころの実行で、同じ所で繰り返すと6回とも通った。いつもの作業場所では一度も起きていない。開発用サーバー（Vite）とテストの組み合わせで起きているとみているが、原因は分かっていない。公開中のサイトでは起きていない。失敗したら、もう一度実行する。続くようなら調べる（止まったときに `Debugger.pause` でページの処理の場所を見る方法を試した。そのときは再現しなかった）。
 - **上のバーの詰め方**（2026-11-15）: 固定の幅（1599px・1039px）で詰めていたら、1040〜1270px くらいでアプリの名前がボタンの下に潜り込んでいた（間取り専用版でも。E2E はボタンの押しつぶしだけ見ていて気づけなかった）。いまは `main.ts` の `fitTopbar` が実際に並べて測り、入りきらない分だけ `.topbar` の `data-compact` に段階を足す（`note` 文を隠す → `link` 間取り専用版のボタンを絵だけ → `buttons` 文字のボタンを全部絵だけ → `view` 表示の切り替えも絵だけ → `title` アプリの名前を隠す・ロゴは残す。CSS は styles.css の「上のバーの詰め方」）。言語・字体・お知らせの文の長さで幅が変わるため、測って決める。幅が変わったとき・言語を変えたとき（`onLanguageChange`）・文を消したときに決め直す。スマホ（幅760px以下）は `data-compact` を付けず、styles.css の並べ方のまま。E2E はアプリの名前が隠れないこと・文が途中で切れないことも見る。
+- **起動の順番（TDZ）**: `main.ts` は上から順に実行される。トップレベルの文（`let state = loadInitialState()` など）が呼ぶ関数の中で、その文より後ろの `const` / `let` を読むと止まる。止まる所が保存データの読み込みだと、例外は「保存データが壊れていた」として扱われ、利用者の間取りが開かなくなる（2026-11-15 に見つけて直した）。`tests/startup-order.test.mjs` が見つけるので、落ちたら値の宣言を前に移す。
+- **階の並べ替えと屋根**: いちばん上の階の屋根は、並べ替えたあとのいちばん上の階に載せ替え、ほかの屋根はその階と一緒に動く（理由は上の 2026-11-15）。屋根の「設置階」で、あとから選び直せる。
 - **間取り専用版への入り口**: 本体の上のバーの `#planEditionLink`（表示の切り替えの左。間取り専用版の中では `.plan-edition-link` で隠す）と、左の欄の「間取り専用版（3Dなし）を開く」。上のバーのお知らせ（`#editionNote`）は消せるが、ボタンはいつも出る。
 - **`.codex/`**: 作業用（git に入らない）。テストの結果画像や一時的なスクリプトが入る。消えても困らない物だけ置く。テンプレートの見直し用の `template-gallery.mjs`（全テンプレートの3Dと各階の2Dの一覧画像）と `door-check.mjs`（地上階に外へのドアがあるか）を置いた（消えても作り直せる）。
 - **`public/sitemap.xml`**: 公開する物の最終更新日は、ビルドのときにコミットの日付になる（`vite.config.ts` の `sitemapLastmod`）。
