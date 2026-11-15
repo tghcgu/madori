@@ -199,6 +199,11 @@ select:focus-visible {
   min-width: 0;
 }
 
+/* リンクのボタン（間取り専用版・3Dでも見る）も、ほかのボタンと同じ見た目にする（下線を付けない） */
+.top-actions a.text-button {
+  text-decoration: none;
+}
+
 .icon-button svg,
 .text-button svg,
 .tool-button svg,
@@ -349,32 +354,44 @@ select:focus-visible {
   color: var(--ink);
 }
 
-/* 上のバーに文が2行で入りきらない幅では、文を出さない（ボタンを押しつぶさないように。.top-note の指定より後に置く）。
-   ボタンの幅は約850px（ナイトモードと言語の選択を含む）、ロゴと名前は約260pxで、文には300pxほど要る */
-@media (max-width: 1599px) {
-  .brand .top-note {
-    display: none;
-  }
+/* ---- 上のバーの詰め方（src/main.ts の fitTopbar が、詰めた段階の名前を data-compact に並べる） ----
+   入りきらないときは、文を隠す → 間取り専用版のリンクを絵だけ → 文字のボタンを全部絵だけ → 表示の切り替えも絵だけ →
+   アプリの名前を隠す（ロゴは残す）の順に詰める。言語・字体・お知らせの文で幅が変わるので、固定の幅では決めずに測って決める。
+   スマホ（幅760px以下）は、下の @media で別の並べ方にする（data-compact は付けない）。.top-note の指定より後に置く */
+.topbar[data-compact~="note"] .brand .top-note,
+.topbar[data-compact~="title"] .brand-text {
+  display: none;
 }
 
-/* 文字の付いたボタンも入りきらない幅では、上の文字のボタンを絵だけにする。文字は読み上げ用に残す */
-@media (max-width: 1039px) {
-  .top-actions .text-button {
-    /* 隠した文字がボタンの中に収まるように（外へはみ出すと、スマホで画面が横に動いてしまう） */
-    position: relative;
-    width: 38px;
-    padding: 0;
-    gap: 0;
-  }
+/* 文字の付いたボタンを絵だけにする。文字は読み上げ用に残す */
+.topbar[data-compact~="link"] #planEditionLink,
+.topbar[data-compact~="buttons"] .top-actions .text-button {
+  /* 隠した文字がボタンの中に収まるように（外へはみ出すと、画面が横に動いてしまう） */
+  position: relative;
+  width: 38px;
+  padding: 0;
+  gap: 0;
+}
 
-  .top-actions .text-button > span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+.topbar[data-compact~="link"] #planEditionLink > span,
+.topbar[data-compact~="buttons"] .top-actions .text-button > span,
+.topbar[data-compact~="view"] .view-switch button > span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.topbar[data-compact~="view"] .view-switch {
+  min-width: 0;
+  grid-template-columns: repeat(3, 42px);
+}
+
+.topbar[data-compact~="view"] .view-switch button {
+  position: relative;
+  padding: 0;
 }
 
 .topbar {
@@ -2509,6 +2526,10 @@ body[data-resizing="down"] {
     display: contents;
   }
 
+  .brand .top-note {
+    display: none;
+  }
+
   :root .topbar .brand .top-note:not([hidden]):not([data-showing="alpha"]) {
     display: flex;
     order: 3;
@@ -2554,6 +2575,23 @@ body[data-resizing="down"] {
   }
 
   .view-switch button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* 上のバーに直に並ぶ文字のボタン（間取り専用版・3Dでも見る）も絵だけ。「その他」の中のボタンは文字も出す（下） */
+  .top-actions > .text-button {
+    position: relative;
+    width: 38px;
+    padding: 0;
+    gap: 0;
+  }
+
+  .top-actions > .text-button > span {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -2807,7 +2845,7 @@ html[data-i18n-pending] body {
 }
 
 /* 日本語以外では、上のバーの文（お知らせ・注意書き）を出さない（ボタンの文字が長くなり、文の入る幅がなくなるため。
-   間取り専用版へはテンプレートの欄の下から、注意書きは「このアプリについて」から読める） */
+   間取り専用版へは上のバーのボタンから開け、注意書きは「このアプリについて」から読める） */
 :root:not(:lang(ja)) .brand .top-note {
   display: none;
 }

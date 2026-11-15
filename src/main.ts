@@ -8921,11 +8921,11 @@ function freeShapeTester(item: Furniture, reach: number): (point: Point) => bool
   };
 }
 
-// 線の形の、見えている帯の幅（川は岸、小道は縁石も含める。線路は枕木の長さ）
+// 線の形の、見えている帯の幅（川は岸、小道は縁石も含める。線路は道床の幅で、幅を変えると一緒に変わる）
 function freeBandWidth(kind: FreeKind, brush?: number): number {
   if (isFreeAreaKind(kind)) return 0;
   const line = kind as Parameters<typeof freeLineWidth>[0];
-  return kind === "railway" ? 300 : kind === "river" ? freeLineWidth(line, brush) + 28 : kind === "pathway" ? freeLineWidth(line, brush) + 8 : Math.max(freeLineWidth(line, brush), 12);
+  return kind === "railway" ? railwayMetrics(brush).ballastWidth : kind === "river" ? freeLineWidth(line, brush) + 28 : kind === "pathway" ? freeLineWidth(line, brush) + 8 : Math.max(freeLineWidth(line, brush), 12);
 }
 
 // なぞり終えたとき。短ければ（クリック）いつもの形で置き、長ければ、なぞった形で作る（または「なぞり直す」の物を描き直す）。
@@ -12685,6 +12685,8 @@ function setupTopNote(): void {
     if (!news.hidden) localStorage.setItem(NEWS_CLOSED_KEY, newsId);
     else localStorage.setItem(edition.hidden ? ALPHA_NOTE_KEY : EDITION_NOTICE_KEY, "closed");
     show();
+    // 次の文は長さが違うので、上のバーの詰め方を決め直す
+    fitTopbar();
     // スマホでは上のバーの高さが変わるので、2D・3Dの大きさを合わせ直す
     requestAnimationFrame(() => {
       resizeCanvases();
@@ -12693,6 +12695,65 @@ function setupTopNote(): void {
     });
   });
   show();
+}
+
+// ---- 上のバーの詰め方 ----
+// 上のバーに入りきらないときは、順に詰める（styles.css の data-compact）: 文を隠す → 間取り専用版のリンクを絵だけ →
+// 文字のボタンを全部絵だけ → 表示の切り替えも絵だけ → アプリの名前を隠す（ロゴは残す）。
+// 言語・字体・お知らせの文で文字の幅が変わるので、固定の幅では決めずに、実際に並べて測る。
+// スマホ（幅760px以下）は styles.css の並べ方にまかせる
+const TOPBAR_STEPS = ["note", "link", "buttons", "view", "title"];
+// アプリの名前・お知らせの文と、右のボタンの間に空ける幅（上のバーの gap より少し狭くてよい）
+const TOPBAR_GAP = 12;
+
+function fitTopbar(): void {
+  const topbar = document.querySelector<HTMLElement>(".topbar");
+  if (!topbar) return;
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    delete topbar.dataset.compact;
+    return;
+  }
+  const steps: string[] = [];
+  topbar.dataset.compact = "";
+  for (const step of TOPBAR_STEPS) {
+    if (topbarFits(topbar)) return;
+    steps.push(step);
+    topbar.dataset.compact = steps.join(" ");
+  }
+}
+
+// アプリの名前とお知らせの文が、右のボタンにかからず、文も途中で切れずに収まっているか
+function topbarFits(topbar: HTMLElement): boolean {
+  const actions = topbar.querySelector<HTMLElement>(".top-actions");
+  if (!actions) return true;
+  const box = actions.getBoundingClientRect();
+  if (box.left < 0 || box.right > window.innerWidth + 1) return false;
+  const limit = box.left - TOPBAR_GAP;
+  const shown = (element: Element | null | undefined): element is HTMLElement => element instanceof HTMLElement && element.getClientRects().length > 0;
+  const title = topbar.querySelector(".brand-title");
+  if (shown(title)) {
+    const rect = title.getBoundingClientRect();
+    if (Math.max(rect.right, rect.left + title.scrollWidth) > limit) return false;
+  }
+  const note = topbar.querySelector(".top-note");
+  if (shown(note)) {
+    if (note.getBoundingClientRect().right > limit) return false;
+    const text = [...note.querySelectorAll(".top-note-text")].find(shown);
+    if (text && (text.scrollHeight > text.clientHeight + 1 || text.scrollWidth > text.clientWidth + 1)) return false;
+  }
+  return true;
+}
+
+// 幅が変わったとき・言語を変えたとき・字体を読み終えたときに、詰め方を決め直す
+function setupTopbarFit(): void {
+  let frame = 0;
+  window.addEventListener("resize", () => {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(fitTopbar);
+  });
+  onLanguageChange(() => fitTopbar());
+  void document.fonts?.ready.then(fitTopbar);
+  fitTopbar();
 }
 
 // ---- 画像の書き出し（2Dの間取り・3D） ----
@@ -14431,6 +14492,8 @@ applySavedDisplaySettings();
 
 createIcons({ icons });
 setupUi();
+// ボタンの絵が入り、お知らせの文が決まってから測る
+setupTopbarFit();
 void initI18n();
 fitPlanToCanvas();
 render2d();

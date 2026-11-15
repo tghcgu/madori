@@ -62,7 +62,7 @@
         "@id": "https://madori-5yu.pages.dev/#website",
         "url": "https://madori-5yu.pages.dev/",
         "name": "間取りクイック3D",
-        "alternateName": ["Madori Quick 3D", "間取りクイック"],
+        "alternateName": ["Madori Quick 3D", "間取りクイック", "madori-5yu.pages.dev"],
         "description": "漫画・イラストの背景資料、小説やゲームの舞台、TRPGのマップを作るクリエイター向けの無料ツール。2Dで間取りを描くと、その場で3Dになり、好きな角度から見られます。家具・小物は400種類以上、学校・洋館・城などのテンプレートは150種類以上。登録不要、ブラウザだけで使えます。",
         "inLanguage": "ja"
       }
@@ -109,6 +109,11 @@
           </div>
         </div>
         <div class="top-actions">
+          <!-- 間取り専用版（/plan/）への入り口。間取り専用版の中では出さない（逆向きは「3Dでも見る」） -->
+          <a class="text-button plan-edition-link" id="planEditionLink" href="%BASE_URL%plan/" title="3Dを使わない間取り専用版で、同じ間取りを開く">
+            <i data-lucide="map"></i>
+            <span>間取り専用版</span>
+          </a>
           <div class="view-switch" aria-label="表示切替">
             <button class="is-active" type="button" data-view-mode="split" title="2Dと3Dを同時表示">
               <i data-lucide="columns-2"></i>

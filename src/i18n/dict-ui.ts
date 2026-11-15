@@ -26,6 +26,7 @@ export const UI: Record<string, Translations> = {
   "やり直す": ["Redo", "다시 실행", "重做"],
   "3Dも使える版で、同じ間取りを開く": ["Open the same plan in the edition with 3D", "3D도 쓸 수 있는 판에서 같은 평면도 열기", "以含 3D 的版本開啟相同平面圖"],
   "3Dでも見る": ["View in 3D", "3D로도 보기", "也用 3D 查看"],
+  "3Dを使わない間取り専用版で、同じ間取りを開く": ["Open the same plan in the plan-only edition without 3D", "3D 없는 평면도 전용판에서 같은 평면도 열기", "以不含 3D 的平面圖專用版開啟相同平面圖"],
   "間取りをファイル（JSON）に書き出す": ["Export the plan as a file (JSON)", "평면도를 파일(JSON)로 내보내기", "將平面圖匯出為檔案（JSON）"],
   "書き出し": ["Export", "내보내기", "匯出"],
   "間取りや3Dを画像にする": ["Save the plan or 3D view as an image", "평면도나 3D를 이미지로 만들기", "將平面圖或 3D 存成圖片"],

@@ -3,9 +3,9 @@
 このファイルは、作業していたPCが壊れても、別のPCや別の人・別のAIがここから続けられるように書いた引き継ぎです。
 作業のきまりの要約はリポジトリ直下の [CLAUDE.md](../CLAUDE.md)（Claude Code が毎回読む）、使い方の説明は [README.md](../README.md) にあります。
 
-- 更新日: 2026-10-12
-- この時点の作業: 文字サイズ・縦書き、自由形の床、3Dのダブルクリック移動・画面方向のパン、全テンプレートの階段開口と円形の塔を追加。公開状態は `git log origin/develop` と `git log origin/main`、`npm run check:deploy` で確認する
-- その前に本番に出た変更: テンプレート27種類と2Dの絵柄9種類（2026-10-09）、テンプレート「サンプル（作例）」の差し替え（2026-10-07）
+- 更新日: 2026-11-15
+- この時点の作業: 上のバーに間取り専用版のボタン、上のバーの詰め方を測って決める方式に（アプリの名前が隠れる不具合を直した）、Google のサイト名の控え、線路の幅、テンプレート「魔法学校」の入口。公開状態は `git log origin/develop` と `git log origin/main`、`npm run check:deploy` で確認する
+- その前に本番に出た変更: 家具・設備の欄の並べ替え（壁を先頭に）と線路の幅（2026-11-04）
 
 ---
 
@@ -41,7 +41,7 @@
 3. **動くか確かめる**
    ```
    npm run dev        # http://127.0.0.1:5173/ を開く
-   npm test           # 単体テスト（373件）
+   npm test           # 単体テスト（1374件）
    npm run test:e2e   # 画面のテスト（約12分。PASS: の行が60本）
    npm run build
    ```
@@ -80,6 +80,8 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 - `vite.config.ts`
   - GitHub Pages 用のビルド（`DEPLOY_TARGET=github`）では、置き場所を `/madori/` にする
   - ビルドしたコミットの番号を `__APP_COMMIT__` としてアプリに入れる。Cloudflare では `CF_PAGES_COMMIT_SHA`、GitHub では `GITHUB_SHA`、手元では `git rev-parse` から取る
+  - 公開する `dist/sitemap.xml` の `<lastmod>` を、ビルドするコミットの日付にする（`sitemapLastmod`。`public/sitemap.xml` の日付は手で直さない）
+  - 開発用サーバーは `.codex/` を見張らない（`server.watch.ignored`）。見張っていると、Windows で E2E が書き込み中の画像を見張ろうとして止まり（EBUSY）、E2E が途中で落ちた（2026-11-12）
 - `scripts/plan-edition.mjs`: ビルドした `index.html` を `dist/plan/index.html` にも置く。`index.html` の先頭で場所が `/plan/` なら、`data-edition="plan"` を付けて間取り専用版として動く
 - **公開されたかの確かめ方**: `npm run check:deploy -- develop`（または `main`）。公開中の JavaScript に、いまのコミットの番号が出るまで待つ
 - 公開されないときに見る所:
@@ -162,6 +164,8 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
   - `PlanState` / `Entity`（部屋・壁・ドア・窓・家具・図形・テキスト）と `state`
   - 読み込むときは `normalizePlan` / `normalizeEntity` で値を確かめて直す（保存データ、JSONの読み込み、テンプレートのどれも通る）
   - 変更は `commitState()` で「元に戻す」の履歴に入れ、ブラウザに保存する。丸ごとの入れ替えは `replaceState()`
+- **上のバー**
+  - お知らせの文 `setupTopNote()`、入りきらないときの詰め方 `fitTopbar()`・`topbarFits()`・`setupTopbarFit()`（styles.css の `data-compact`）
 - **2Dの描画**
   - `render2d()` → `drawStyledPlan()`（絵柄の切り替え）→ `drawPlan()`
   - `drawPlan()` は、方眼・部屋・ほかの階の透過・ラグとペン・壁・窓・ドア・家具・図形・屋根・テキスト・選択のつまみの順に描く
@@ -323,6 +327,13 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
     - 2026-10-25（その3）: 「（階段の）下の厚いのをなくせるように」「（学校の写真のような）下がない階段をデフォルトに」で、3Dの直階段・折り返し階段の標準を、段の形の下に斜めの板（厚み `STAIR_SLAB` 0.15 m）を付けて下をあけた形にした（`furniture-models.ts` の `stairFlightBody`。横から見た形を `THREE.Shape` で作って幅の分だけ押し出し、上る向きへ回す。床から上る流れは床より下を切る）。折り返し階段は、踊り場を厚み 0.2 m の板にして、2つ目の流れは踊り場の高さから上る。前の形（段ごとに床から積んだ箱で、下が床まで詰まる）は、家具の `solid: true`（設定の「階段の下を埋める」。らせん階段にはない。`hasStairBase`）で残した。真上から見た形は変わらない（`npm run compare -- stairs,stairsU`）。テストは `tests/furniture.test.mjs`（上の方の下に何もないか・埋めた形は床まであるか）と `tests/stairs-editor.mjs` の最後（設定が保存され、らせん階段には出ない）。
     - 壁や天井に付く物（`mounted`）は、上から見た大きさを保つ見えない板（`reserveFootprint`）を床ではなく物の下の端に置く（床にあると、3Dで真下の床を押したときにその物が選ばれていた）。
     - 「PHPの脆弱性大丈夫？」には、PHP を使っていない（静的なサイトで、`.php` は1つもない）と答えた。
+- **2026-11-04**: 「家具・設備の順番もっと考えて」で、`PALETTE_ORDER` を、よく使う順のまま近いものが隣に来るようにした（壁 → 建具 → 室内の家具 → 建物の部材（階段・床・屋根・建物の部分）→ なぞって形を決める・屋外 → 和風・神社寺 → 施設 → 人とコマ → 街と乗り物 → 設備・産業 → 創作 → 図形の壁）。「壁は一段上かな」で壁を建具より上（いちばん上）にした（壁を引いてから建具を入れる順）。`tests/furniture-groups.test.mjs` がこの並びの決まりを確かめる。「線路の幅固定にすんな」で、線路も幅を変えられるようにした（`free-shapes.ts` の `railwayMetrics`: 道床の幅に合わせて、レールの間・枕木・レールを同じ割合で伸び縮み。2Dも3Dもこれを使う）。デモ動画（約2分）を `.codex/demo-video.mjs` で録った（実際の画面を Playwright で動かして録画。MP4 にするには winget の ffmpeg）。
+- **2026-11-15**: 「変なのないか見直せ」「テンプレとか2dとか3dとかに改善点ないかみて」「google 検索が相変わらずクラウドフレア」「このあたりに2d専用サイト貼れないかな」で:
+  - 上のバーの表示の切り替えの左に、間取り専用版を開くボタン `#planEditionLink` を足した。足したら幅が足りなくなり、調べると前から1040〜1270px でアプリの名前がボタンの下に潜っていたので、上のバーの詰め方を、測って決める `fitTopbar` にした（上の「気をつけること」）。
+  - 11-04 の線路の幅で、選ぶ当たり・ペンの太さ（`main.ts` の `freeBandWidth`）が300cm のままだったのを直した。
+  - Google のサイト名: `alternateName` にサブドメインを戻し、サイトマップの日付をビルドで入れるようにした（下の「気をつけること」）。
+  - 全153テンプレートを一覧画像（`.codex/template-gallery.mjs`）で見直した。実行時のエラーは0件。入口のない物を `.codex/door-check.mjs` で探し、本当になかった「魔法学校」に正面玄関（両開き）を付けた（ほかに出た物は、石・コンクリート・デッキの床の屋外に出るドア、教室など建物の一部だけの間取り、乗り物、地下で、問題なし）。迷宮・地下牢は、3Dで屋根が迷路や部屋の上をふさぐが、2026-10-19 に「屋根のない部屋は直す」と決めているので、そのままにした（3Dの「屋根」で隠せる。屋根なしにするかはユーザーに聞く）。
+  - E2E が途中で落ちる（EBUSY）のを直した（`vite.config.ts` が `.codex/` を見張らない）。
 - **2026-10-19（その9）**: 「重い」「ペンで描くなのに範囲になってる」「ドーナツも描けるように」「川の真ん中の線」「すべて見直せ」への対応。
   - 軽くする（`src/main.ts`）: `rebuildThreeScene` は2Dだけを表示中なら作らず（`threeSceneKey = null`、3Dを見るときに `ensureThreeScene`）、間取り・屋根・隠した階・屋根の表示・絵柄の JSON（`threeSceneSignature`）が前と同じなら選択の枠だけ直す（`refreshSelectionBoxes`。枠を付ける物には `userData.selectionTarget`）。家具・ドア・窓は形を決める値の JSON を鍵に作り置きを `clone` して使い（`cachedModel`。形と材質は `cachedResources` に入れ、`disposeGroup`・`removeThreeObjects` では捨てない。3回の作り直しで使われなければ `trimModelCache` で捨てる）、草の置き場所も作り置き（`grassCache`）。捨てる形・材質は次に3Dを描いた後で捨てる（`pendingDisposal` → `flushDisposal`。先に捨てるとシェーダーを組み直して重い）。影は `renderer.shadowMap.autoUpdate = false` で、物や光が変わったときだけ `needsUpdate`。シーンを作り直さずに3Dを変える所（`syncThreeWhileDragging`）では `threeSceneKey = null`。E2E の3Dを調べる関数は先に `ensureThreeScene()` を呼ぶ。測り方は `.codex/perf.mjs`・`.codex/cpu.mjs`（作業用）。
   - ペンで塗る（`src/brush-area.ts`）: 描き方に `brush`（床と、池・花壇・芝生・ラグだけ。`isAreaKey`）。線を幅のある帯（区切りの四角と点の丸）にして `polygon-clipping` で合わせ（`brushStroke`）、重なった同じ物（床は同じ素材で名前のない物、自由な形は同じ種類）と `unionRegions`、けずるときは `subtractRegion`。床は `floorFromRegion`（輪郭128点・穴32まで）、自由な形は `freeFrame(outer, margin, holes)` で `path` と `holes`（割合の輪）にする（`paintFloor`・`paintFreeArea`）。ペンのツールでは閉じる形ははじめから塗る（`drawMethodFor`）。床の「囲んで描く」と「ペンで塗る」は部屋のツール。
@@ -356,10 +367,13 @@ E2E は `PASS: …` の行が出れば、その項目は成功（この時点で
 - **画像付きフォームの自動入力**: 確かめられていない（上の表）。
 - **2Dの絵柄の重さ**: 家具がとても多い間取りでは、ドット・筆・古地図・黒板で動かしたときに少し重いことがある。
 - **取ってきたばかりの環境の E2E**: 2026-10-09 に新しく clone した所で8回試したら、2回、人の模型のテストの後の再読み込み（`page.reload`）が止まって失敗した（待ち時間を120秒にしても止まったままだったので、遅いのではなく止まっている）。どちらも初めのころの実行で、同じ所で繰り返すと6回とも通った。いつもの作業場所では一度も起きていない。開発用サーバー（Vite）とテストの組み合わせで起きているとみているが、原因は分かっていない。公開中のサイトでは起きていない。失敗したら、もう一度実行する。続くようなら調べる（止まったときに `Debugger.pause` でページの処理の場所を見る方法を試した。そのときは再現しなかった）。
-- **お知らせの表示**: 上のバーのお知らせは、幅1340px以上のときだけ出る（それより狭いと、ボタンを押しつぶすため隠す）。左の欄の「間取り専用版を開く」は、どの幅でも出る。
-- **`.codex/`**: 作業用（git に入らない）。テストの結果画像や一時的なスクリプトが入る。消えても困らない物だけ置く。
-- **`public/sitemap.xml`**: 最終更新日は 2026-10-10。
+- **上のバーの詰め方**（2026-11-15）: 固定の幅（1599px・1039px）で詰めていたら、1040〜1270px くらいでアプリの名前がボタンの下に潜り込んでいた（間取り専用版でも。E2E はボタンの押しつぶしだけ見ていて気づけなかった）。いまは `main.ts` の `fitTopbar` が実際に並べて測り、入りきらない分だけ `.topbar` の `data-compact` に段階を足す（`note` 文を隠す → `link` 間取り専用版のボタンを絵だけ → `buttons` 文字のボタンを全部絵だけ → `view` 表示の切り替えも絵だけ → `title` アプリの名前を隠す・ロゴは残す。CSS は styles.css の「上のバーの詰め方」）。言語・字体・お知らせの文の長さで幅が変わるため、測って決める。幅が変わったとき・言語を変えたとき（`onLanguageChange`）・文を消したときに決め直す。スマホ（幅760px以下）は `data-compact` を付けず、styles.css の並べ方のまま。E2E はアプリの名前が隠れないこと・文が途中で切れないことも見る。
+- **間取り専用版への入り口**: 本体の上のバーの `#planEditionLink`（表示の切り替えの左。間取り専用版の中では `.plan-edition-link` で隠す）と、左の欄の「間取り専用版（3Dなし）を開く」。上のバーのお知らせ（`#editionNote`）は消せるが、ボタンはいつも出る。
+- **`.codex/`**: 作業用（git に入らない）。テストの結果画像や一時的なスクリプトが入る。消えても困らない物だけ置く。テンプレートの見直し用の `template-gallery.mjs`（全テンプレートの3Dと各階の2Dの一覧画像）と `door-check.mjs`（地上階に外へのドアがあるか）を置いた（消えても作り直せる）。
+- **`public/sitemap.xml`**: 公開する物の最終更新日は、ビルドのときにコミットの日付になる（`vite.config.ts` の `sitemapLastmod`）。
 - **Google の検索結果のサイト名が「Cloudflare」になる**（2026-10-10 にユーザーから）: `*.pages.dev` は Cloudflare の名前で出ることがある。`index.html` の WebSite の構造化データ（2026-07-24 から入っている）に、`alternateName`（Madori Quick 3D・間取りクイック・madori-5yu.pages.dev）を足した。Google の説明では、名前の候補が使われないときは、サブドメインそのもの（madori-5yu.pages.dev）を名前にすると使われやすい。反映には Google が読み直すまで日数がかかる（Search Console の「URL 検査」→「インデックス登録をリクエスト」で早まる）。いちばん確実なのは独自ドメイン。
+  - 2026-10-21 に `alternateName` からドメインを外していたが、11月になっても「Cloudflare」のままだった（11-10 にユーザーから）。Google のサイト名の説明（https://developers.google.com/search/docs/appearance/site-names の「What to do if your preferred site name isn't selected」）では、希望の名前が選ばれないときは、まず `alternateName`、次にドメイン・サブドメインを**小文字で** `alternateName` に入れると「強く考慮する」とある（`name` そのものをドメインにするのは最後の手段）。ドメインの候補は希望の名前（間取りクイック3D）と取り合うのではなく、選ばれないときの控えなので、2026-11-15 に `madori-5yu.pages.dev` を戻した。外してしまわないよう `tests/site-name.test.mjs` が確かめる（WebSite の節は1つ・`name`・`url`・控えのサブドメイン、title・og:site_name・application-name・見出し・canonical がそろっているか）。同じ症状の vercel.app の例（Vercel のコミュニティ、2026-01）も、読み直しを待つ以外の答えは出ていない。
+  - 直したあとは、Search Console で本番のトップを「URL 検査」→「インデックス登録をリクエスト」すると早まる（ユーザーの操作。Google への自動の問い合わせは、ロボットよけの画面になるので使えない）。
 
 ---
 

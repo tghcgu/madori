@@ -170,9 +170,11 @@ A browser-based floor plan editor that turns a 2D plan into an interactive 3D vi
 3Dを使わずに2Dの間取りだけを編集したいときは、間取り専用版（https://madori-5yu.pages.dev/plan/ ）を使えます。
 
 - 2Dの画面だけで、3Dの欄・表示の切り替え・3Dの色・高さ・屋根・3Dの画像の書き出しは出しません
+- 本体の上のバーの「間取り専用版」ボタン（表示の切り替えの左。狭い画面では地図の絵のボタン）からいつでも開けます
 - 間取りのデータは本体と共通です。間取り専用版で描いた間取りを、上部の「3Dでも見る」から本体で開いて3Dで確かめられます（同じブラウザのとき）
 - 本体の表示の切り替えや3Dで見ていた向きは、間取り専用版を開いても変わりません
-- 上のバーの文字の所に、新しいお知らせ、間取り専用版のお知らせ（本体だけ）、開発中の注意書きの順に1つずつ出します（横幅1600px以上の画面のとき。スマートフォンでは、上のバーのボタンの下に1行で出します）。×で消すと次の文に替わり、消した文は次からも出ません（新しいお知らせは、次のお知らせが出るとまた出ます）。広い画面では画面の高さは使いません
+- 上のバーの文字の所に、新しいお知らせ、間取り専用版のお知らせ（本体だけ）、開発中の注意書きの順に1つずつ出します（文が入りきる広い画面のとき。スマートフォンでは、上のバーのボタンの下に1行で出します）。×で消すと次の文に替わり、消した文は次からも出ません（新しいお知らせは、次のお知らせが出るとまた出ます）。広い画面では画面の高さは使いません
+- 上のバーが入りきらない幅では、お知らせの文を隠す → ボタンを絵だけにする → 表示の切り替えも絵だけにする → アプリの名前を隠す（ロゴは残す）の順に詰めます。言語によって文字の幅が違うので、実際の幅を測って決めます
 
 ### 2Dの絵柄
 
@@ -844,6 +846,13 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年11月15日
+
+- 上のバーの表示の切り替え（同時・2D・3D）の左に、間取り専用版（3Dなし）を開くボタンをいつも出すようにしました（お知らせを消しても残ります）。同じ間取りのまま開きます
+- 画面の幅が1040〜1270pxくらいのとき、上のバーでアプリの名前がボタンの下に隠れていたのを直しました。入りきらないときは、お知らせの文を隠す → ボタンを絵だけにする → 表示の切り替えも絵だけにする → 名前を隠す（ロゴは残す）の順に、実際の幅を測って詰めます。英語・韓国語・繁体字中国語でも崩れません
+- 線路の幅を変えたとき、選べる所（クリックの当たり）やペンの太さの表示が、前の幅のままだったのを直しました
+- テンプレート「魔法学校」に入口がなかったので、廊下に正面玄関（両開きのドア）を付けました
+
 ### 2026年11月4日
 
 - 線路の幅を変えられるようにしました（川・小道・生け垣・石垣と同じく「選択中」の「幅」で決めます）。幅に合わせて、レールの間も枕木も同じ割合で伸び縮みするので、細いトロッコの線路から広い複線まで引けます
@@ -1293,9 +1302,11 @@ The language menu in the top bar (JP / EN / KR / 繁中) switches the language o
 For editing just the 2D floor plan, open the plan-only edition at https://madori-5yu.pages.dev/plan/.
 
 - It shows only the 2D editor: no 3D pane, view switch, 3D colors, heights, roofs, or 3D image export.
+- The full app always links to it from the "間取り専用版" button in the top bar, left of the view switch (a map icon on narrow screens).
 - It shares the saved plan with the full app, so "3Dでも見る" opens the same plan in 3D (in the same browser).
 - It leaves the full app's view mode and 3D camera untouched.
-- The full app shows a notice about the plan-only edition in the text area of the top bar (on screens at least 1600 px wide), where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
+- The full app shows a notice about the plan-only edition in the text area of the top bar (on screens wide enough for it), where the alpha note was. Its × closes it and brings back the alpha note, which can also be closed; closed texts stay closed. The notice takes no extra height.
+- When the top bar is too narrow, it tightens step by step: hide the notice, show the buttons as icons only, then the view switch too, and last hide the app name (the logo stays). Text widths differ by language, so it measures instead of using fixed widths.
 
 ### 2D styles
 
@@ -1943,6 +1954,13 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-11-15
+
+- The top bar now always has a button to open the plan-only edition (no 3D), left of the view switch, even after the notice is closed. It opens the same plan
+- Fixed the app name hiding under the top bar buttons at window widths of about 1040–1270 px. When the bar is too narrow it now measures and tightens step by step: hide the notice, then show the buttons as icons only, then the view switch too, and last hide the name (the logo stays). This also works in English, Korean and Traditional Chinese
+- Fixed railways whose clickable area and pen preview kept the old width after the width was changed
+- The Magic school template had no way in, so its corridor now has a front entrance with double doors
 
 ### 2026-11-04
 

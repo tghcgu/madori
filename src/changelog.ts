@@ -8,6 +8,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-15",
+    items: [{
+      ja: "上のバーの表示の切り替え（同時・2D・3D）の左に、間取り専用版（3Dなし）を開くボタンをいつも出すようにしました（お知らせを消しても残ります）。同じ間取りのまま開きます",
+      en: "The top bar now always has a button to open the plan-only edition (no 3D), left of the view switch, even after the notice is closed. It opens the same plan",
+    }, {
+      ja: "画面の幅が1040〜1270pxくらいのとき、上のバーでアプリの名前がボタンの下に隠れていたのを直しました。入りきらないときは、お知らせの文を隠す → ボタンを絵だけにする → 表示の切り替えも絵だけにする → 名前を隠す（ロゴは残す）の順に、実際の幅を測って詰めます。英語・韓国語・繁体字中国語でも崩れません",
+      en: "Fixed the app name hiding under the top bar buttons at window widths of about 1040–1270 px. When the bar is too narrow it now measures and tightens step by step: hide the notice, then show the buttons as icons only, then the view switch too, and last hide the name (the logo stays). This also works in English, Korean and Traditional Chinese",
+    }, {
+      ja: "線路の幅を変えたとき、選べる所（クリックの当たり）やペンの太さの表示が、前の幅のままだったのを直しました",
+      en: "Fixed railways whose clickable area and pen preview kept the old width after the width was changed",
+    }, {
+      ja: "テンプレート「魔法学校」に入口がなかったので、廊下に正面玄関（両開きのドア）を付けました",
+      en: "The Magic school template had no way in, so its corridor now has a front entrance with double doors",
+    }],
+  },
+  {
     date: "2026-11-04",
     items: [{
       ja: "線路の幅を変えられるようにしました（川・小道・生け垣・石垣と同じく「選択中」の「幅」で決めます）。幅に合わせて、レールの間も枕木も同じ割合で伸び縮みするので、細いトロッコの線路から広い複線まで引けます",

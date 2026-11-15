@@ -260,7 +260,8 @@ try {
   // 新しいお知らせは、上のバーの文の所に、間取り専用版のお知らせより先に出す。×で消すと次のお知らせ（間取り専用版）に替わり、
   // 消したお知らせは次に開いても出さない。画面の高さは使わない
   assert.ok(news, 'index.html has a news id');
-  await page.setViewportSize({ width: 1680, height: 1000 });
+  // 文が入りきる広さ（入りきらない幅では文を隠す。fitTopbar）
+  await page.setViewportSize({ width: 1920, height: 1000 });
   // 前のお知らせ（画面の上の黄色い帯）を消した記録があっても、新しいお知らせは出る
   await page.evaluate(() => localStorage.setItem('madori-quick-3d-news-closed', '2026-10-23-phone'));
   await page.reload();
@@ -1357,7 +1358,8 @@ try {
   assert.ok(white.every(value => value > 240), `back to the plain drawing: ${white}`);
   console.log('PASS: 2D styles: 18 line styles in five groups and 14 backgrounds with samples, combined freely, exported images, editing, undo and kept after a reload');
 
-  // The top bar never squeezes its buttons: the notice hides and the buttons turn into icons when the window is narrower.
+  // The top bar never squeezes its buttons or runs the app name under them. When the window is narrower it hides the notice,
+  // then turns the plan-only link into an icon, then the other buttons, then the view switch, and last hides the name (fitTopbar).
   const squeezed = () => page.evaluate(() => {
     const problems = [];
     for (const button of document.querySelectorAll('.top-actions button, .top-actions a')) {
@@ -1369,30 +1371,47 @@ try {
       }
     }
     if (document.documentElement.scrollWidth > window.innerWidth + 1) problems.push(`page ${document.documentElement.scrollWidth} > ${window.innerWidth}`);
+    const shown = element => Boolean(element) && element.getClientRects().length > 0;
+    const buttons = document.querySelector('.top-actions').getBoundingClientRect();
+    const title = document.querySelector('.brand-title');
+    if (shown(title)) {
+      const box = title.getBoundingClientRect();
+      if (Math.max(box.right, box.left + title.scrollWidth) > buttons.left - 4) problems.push('the app name runs under the buttons');
+    }
+    const note = [...document.querySelectorAll('#topNote .top-note-text')].find(shown);
+    if (note && note.scrollHeight > note.clientHeight + 1) problems.push('the notice is cut off');
+    if (!shown(document.querySelector('#planEditionLink'))) problems.push('no link to the plan-only edition');
     return problems;
   });
-  for (const width of [1680, 1360, 1280, 1100, 1024, 900, 820, 390]) {
+  const nameShown = selector => page.locator(`${selector} > span`).evaluate(span => getComputedStyle(span).position !== 'absolute');
+  for (const width of [1920, 1680, 1360, 1280, 1100, 1024, 900, 820, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.waitForTimeout(150);
     assert.deepEqual(await squeezed(), [], `the top bar fits at ${width} px`);
-    // スマホの幅では、上のバーの2段目に出す
-    assert.equal(await page.locator('#topNote').isVisible(), width >= 1600 || width <= 760, `the notice shows only where it fits (${width} px)`);
+    // 文は、入りきる広い画面と、スマホ（上のバーの2段目）で出す
+    if (width === 1920 || width === 390) assert.equal(await page.locator('#topNote').isVisible(), true, `the notice shows at ${width} px`);
+    // 間取り専用版へのリンクは、入りきる幅では名前も出す（狭い幅では絵だけ）
+    if (width >= 1680) assert.equal(await nameShown('#planEditionLink'), true, `the plan-only link shows its name at ${width} px`);
+    if (width <= 1280) assert.equal(await nameShown('#planEditionLink'), false, `the plan-only link is an icon at ${width} px`);
   }
-  console.log('PASS: top bar: buttons never squeezed from 390 to 1680 px, the notice hides where it does not fit');
+  console.log('PASS: top bar: buttons never squeezed and the app name never under them from 390 to 1920 px, the notice hides where it does not fit, and the plan-only link is always there');
 
   // The plan-only edition at /plan/ shows the same plan without the 3D pane or 3D-only settings, and the full app announces it.
-  await page.setViewportSize({ width: 1680, height: 1000 });
+  await page.setViewportSize({ width: 1920, height: 1000 });
   assert.equal(await page.locator('#editionNote').isVisible(), true, 'the full app announces the plan-only edition in the top bar');
   assert.equal(await page.locator('#alphaNote').isVisible(), false, 'in place of the alpha note');
   await page.setViewportSize({ width: 1440, height: 1000 });
   assert.match(await page.locator('#editionNote a').getAttribute('href'), /\/plan\/$/);
+  // 文を消しても、上のバーにいつも間取り専用版への入り口がある
+  assert.equal(await page.locator('#planEditionLink').isVisible(), true, 'the full app always links to the plan-only edition');
+  assert.match(await page.locator('#planEditionLink').getAttribute('href'), /\/plan\/$/);
   const fullModeBefore = await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode);
   const planBefore = await saved();
   await page.goto(new URL('plan/', server.resolvedUrls.local[0]).href);
   await page.waitForFunction(() => Boolean(window.__editorTest));
   assert.equal(await page.evaluate(() => document.documentElement.dataset.edition), 'plan');
   assert.equal(await page.title(), '間取りクイック 間取り専用版');
-  for (const selector of ['.three-pane', '.view-switch', '#roofCategory', '#imageExport3d', '#editionNote']) {
+  for (const selector of ['.three-pane', '.view-switch', '#roofCategory', '#imageExport3d', '#editionNote', '#planEditionLink']) {
     assert.equal(await page.locator(selector).isVisible(), false, `${selector} is not in the plan-only edition`);
   }
   assert.equal(await page.locator('#fullEditionLink').isVisible(), true, 'a link back to the full app');
@@ -1435,8 +1454,8 @@ try {
   assert.equal(await page.evaluate(() => document.querySelector('.workspace').dataset.viewMode), fullModeBefore, 'the plan-only edition keeps the view mode of the full app');
   // The notice does not take any height: the 2D pane starts right below the top bar.
   assert.ok(Math.abs((await page.locator('.workspace').boundingBox()).y - (await page.locator('.topbar').boundingBox()).height) < 2);
-  // 文は広い画面でだけ出る
-  await page.setViewportSize({ width: 1680, height: 1000 });
+  // 文は、入りきる広い画面でだけ出る
+  await page.setViewportSize({ width: 1920, height: 1000 });
   await page.locator('#topNoteClose').click();
   assert.equal(await page.locator('#editionNote').isVisible(), false);
   assert.equal(await page.locator('#alphaNote').isVisible(), true, 'the alpha note comes back after the notice is closed');

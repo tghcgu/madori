@@ -5384,6 +5384,8 @@ function magicSchool(b: PlanBuilder): void {
     .door(400, 700, 500, 700)
     .door(1150, 700, 1250, 700)
     .door(1000, 300, 1000, 380)
+    // 正面玄関（廊下の外壁。像とらせん階段の間）
+    .door(950, 900, 1110, 900, { style: "double" })
     .window(60, 0, 940, 0, true).window(1500, 80, 1500, 620)
     .item("blackboard", 320, 0)
     .item("lectern", 440, 60)

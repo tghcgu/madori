@@ -28,7 +28,7 @@ function freeShape(item) {
   const points = freePathPoints(item.path ?? defaultFreePath(item.kind), item.w, item.h).map(([x, y]) => [item.x + item.w / 2 + x, item.y + item.h / 2 + y]);
   const area = isFreeAreaKind(item.kind);
   const line = area ? freeOutline(points) : freeCenterLine(points);
-  const reach = area ? 0 : (item.kind === 'railway' ? 300 : item.kind === 'river' ? freeLineWidth(item.kind, item.brush) + 28 : freeLineWidth(item.kind, item.brush)) / 2;
+  const reach = area ? 0 : (item.kind === 'river' ? freeLineWidth(item.kind, item.brush) + 28 : freeLineWidth(item.kind, item.brush)) / 2;
   return { area, line, reach };
 }
 
