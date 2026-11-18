@@ -127,6 +127,24 @@ export async function verifyFloorOrder({ open }) {
     await page.keyboard.press('Escape');
     await page.mouse.up();
     assert.deepEqual(await order(), ['f1', 'f2', 'b1'], 'Escape cancels the drag');
+    // 幅の広いタブ（書斎）も、幅の狭いタブ（2F・B1F）の先の、いちばん端まで動かせる（前は真ん中どうしで比べていて届かなかった）
+    const dragTo = async (index, x) => {
+      const box = await list.nth(index).boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(x, box.y + box.height / 2, { steps: 10 });
+      await page.mouse.up();
+    };
+    const widths = await list.evaluateAll(tabs => tabs.map(tab => tab.getBoundingClientRect().width));
+    assert.ok(widths[1] > widths[0] && widths[1] > widths[2], `the named tab is the widest: ${widths}`);
+    const strip = await page.locator('#floorTabs .floor-tab-list').boundingBox();
+    await dragTo(1, strip.x + strip.width + 40);
+    assert.deepEqual(await order(), ['f1', 'b1', 'f2'], 'a wide tab goes past a narrow one to the right end');
+    await page.keyboard.press('Control+z');
+    await dragTo(1, strip.x - 40);
+    assert.deepEqual(await order(), ['f2', 'f1', 'b1'], 'a wide tab goes past a narrow one to the left end');
+    await page.keyboard.press('Control+z');
+    assert.deepEqual(await order(), ['f1', 'f2', 'b1']);
     await page.keyboard.press('Control+z');
     assert.deepEqual(await order(), ['b1', 'f1', 'f2'], 'undo puts the floors back after a drag');
 

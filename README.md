@@ -848,6 +848,10 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年11月18日
+
+- 階のタブをドラッグして並べ替えるとき、となりより幅の広いタブ（B1F や名前を付けた階など）を、いちばん端へ動かせないことがあったのを直しました
+
 ### 2026年11月15日
 
 - 階を簡単に入れ替えられるようにしました。階のタブを左右にドラッグすると、並べ替えられます。編集中の階は、タブの右の「＜」「＞」か Shift+[ / Shift+] で、1つ下・1つ上の階と入れ替えられます。部屋・家具・付けた名前は階と一緒に動き、1F・B1F などの名前は並びの位置で付け直します。いちばん上の階の屋根は、並べ替えたあとも、いちばん上の階に載ります（ほかの屋根は、その階と一緒に動きます）。元に戻すこともできます
@@ -1961,6 +1965,10 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-11-18
+
+- Fixed dragging a floor tab that is wider than its neighbor (such as B1F or a named floor) failing to reach the very end of the tabs
 
 ### 2026-11-15
 

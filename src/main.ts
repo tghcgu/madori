@@ -1931,11 +1931,15 @@ function moveFloorTabDrag(event: PointerEvent): void {
   const width = rights[from] - lefts[from];
   const end = rights[rights.length - 1];
   const shift = clamp(event.clientX - drag.startX + list.scrollLeft - drag.startScroll, -lefts[from], end - rights[from]);
-  const center = (lefts[from] + rights[from]) / 2 + shift;
-  // ずらしたタブの真ん中が、ほかのタブの真ん中を越えたら、そこへ入れる
+  // ずらしたタブの進む側の端が、ほかのタブの真ん中を越えたら、そこへ入れる（真ん中どうしで比べると、
+  // 幅の広いタブは端まで寄せても端のタブの真ん中を越えられず、いちばん端へ動かせなかった）
+  const leading = shift < 0 ? lefts[from] + shift : rights[from] + shift;
   let to = from;
-  for (let index = 0; index < from; index++) if (center < (lefts[index] + rights[index]) / 2) { to = index; break; }
-  for (let index = tabs.length - 1; to === from && index > from; index--) if (center > (lefts[index] + rights[index]) / 2) to = index;
+  if (shift < 0) {
+    for (let index = 0; index < from; index++) if (leading < (lefts[index] + rights[index]) / 2) { to = index; break; }
+  } else {
+    for (let index = tabs.length - 1; index > from; index--) if (leading > (lefts[index] + rights[index]) / 2) { to = index; break; }
+  }
   drag.to = to;
   tabs.forEach((tab, index) => {
     let offset = 0;

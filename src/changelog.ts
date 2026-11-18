@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-18",
+    items: [{
+      ja: "階のタブをドラッグして並べ替えるとき、となりより幅の広いタブ（B1F や名前を付けた階など）を、いちばん端へ動かせないことがあったのを直しました",
+      en: "Fixed dragging a floor tab that is wider than its neighbor (such as B1F or a named floor) failing to reach the very end of the tabs",
+    }],
+  },
+  {
     date: "2026-11-15",
     items: [{
       ja: "階を簡単に入れ替えられるようにしました。階のタブを左右にドラッグすると、並べ替えられます。編集中の階は、タブの右の「＜」「＞」か Shift+[ / Shift+] で、1つ下・1つ上の階と入れ替えられます。部屋・家具・付けた名前は階と一緒に動き、1F・B1F などの名前は並びの位置で付け直します。いちばん上の階の屋根は、並べ替えたあとも、いちばん上の階に載ります（ほかの屋根は、その階と一緒に動きます）。元に戻すこともできます",
