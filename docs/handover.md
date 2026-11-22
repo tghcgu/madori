@@ -3,8 +3,8 @@
 このファイルは、作業していたPCが壊れても、別のPCや別の人・別のAIがここから続けられるように書いた引き継ぎです。
 作業のきまりの要約はリポジトリ直下の [CLAUDE.md](../CLAUDE.md)（Claude Code が毎回読む）、使い方の説明は [README.md](../README.md) にあります。
 
-- 更新日: 2026-11-18
-- この時点の作業: 階のタブのドラッグで、幅の広いタブを端へ動かせなかったのを直した。公開状態は `git log origin/develop` と `git log origin/main`、`npm run check:deploy` で確認する
+- 更新日: 2026-11-23
+- この時点の作業: 回した家具の大きさを変えるつまみ（四隅）と、その当たりを回したあとの角にした（2026-11-23）。その前に、階のタブのドラッグで幅の広いタブを端へ動かせなかったのを直した（2026-11-23 に本番）。公開状態は `git log origin/develop` と `git log origin/main`、`npm run check:deploy` で確認する
 - その前に本番に出た変更（2026-11-18）: 階の並べ替え（タブのドラッグ・＜＞・Shift+[ ]）、狭い2Dの欄で階のボタンを「…」のメニューにまとめる、名前を付けた階・間取りや取り込んだ画像のある保存データが開き直すと読み込めなかった不具合（起動の順番。2026-10-21〜）の修正と、読み込めなかった間取りを開き直すお知らせ。その前（2026-11-15）は、上のバーの間取り専用版のボタンと詰め方、Google のサイト名の控え、線路の幅、「魔法学校」の入口
 - **2026-11-16 19:01〜19:02 に、作業フォルダのファイルが何者かに消されていた**（原因は分からない）: `public/` の sitemap.xml 以外の13個（アイコン・robots.txt・Search Console の確認用・`_redirects` など。コミット前に気づいて git から戻した）と、`node_modules` の中の10か所ほど（`@types/three/build` の型など。型チェックが落ちたので `npm ci` で入れ直した）。git の中身（`git fsck`）と、git に入っているファイルは無事だった。`tests/public-files.test.mjs` が public/ を見張る。型チェックや E2E が急に「見つからない」で落ちたら、まず `git status` と `npm ci`
 
@@ -260,7 +260,7 @@ PowerShell の実行ポリシーで `npm.ps1` が止められることがある�
 | `tests/editor.mjs`（E2E） | 実際のブラウザ（Windows では入っている Edge、ほかのOSでは Playwright の Chromium）で操作する。描く・選ぶ・動かす・元に戻す・保存・読み込み・全家具・人の模型・ペン・足跡・破片・絵柄（9種類とメニューの見本）・テンプレート・画像の書き出し・間取り専用版・フォーム・上のバーの幅（390〜1360px）。結果の画像は `.codex/regression/` |
 | `tests/furniture-visual.mjs` | 3Dの家具の一覧画像（`.codex/furniture-quality/`）。目でも見る |
 
-E2E は `PASS: …` の行が出れば、その項目は成功（2026-11-18 の時点で69本）。失敗すると止まって、理由が出る。
+E2E は `PASS: …` の行が出れば、その項目は成功（2026-11-23 の時点で70本）。失敗すると止まって、理由が出る。
 
 ---
 
@@ -344,6 +344,7 @@ E2E は `PASS: …` の行が出れば、その項目は成功（2026-11-18 の�
   - 2Dの欄が狭いと（同時表示の1366pxなど）、前から階のタブの右の「×」が欄の外に出て押せなかった。入りきらないとき（ボタンが欄の外に出る・階のタブがタブ2つ分の幅しかない）は、`fitPlanBar` が `#floorTabs` に `data-compact` を付け、地下の追加・複製・入れ替え・削除（`.floor-tab-extra`）をしまって「…」（`.floor-tab-more`）のメニュー（`openFloorMenu`。2Dの欄のバーははみ出しを隠すので、メニューは `body` に置く `position: fixed`）にまとめる。「＋」（上の階を追加）と階のタブは残す。
   - **保存データの読み込みの不具合**（2026-10-21〜11-15）: `let state = loadInitialState()` が、後ろで宣言した `MAX_FLOOR_LABEL`・`MAX_PLAN_NAME`・`IMAGE_DATA_URL`・`MAX_IMAGE_DATA` を読んで止まり（TDZ）、名前を付けた階・間取りのある保存データは開き直すと丸ごと読み込めず（「保存データが壊れていた」と出て空の間取り）、取り込んだ画像は消えていた。E2E は名前を付けたまま開き直していなかったので気づけなかった。4つの値を `let state` の前に移し、`tests/startup-order.test.mjs`（TypeScript で main.ts を読み、トップレベルの文がその場で呼ぶ関数をたどって、後ろで宣言した const / let を読んでいないかを見る。関数の名前を書いただけの所は数えない）で見張る。そのとき退避された元データ（`madori-quick-3d-plan-recovery-<時刻>-…`）のうち、いまは読み込めるいちばん新しい物を、開いたときのお知らせ（`offerRecoveredBackup`。「この間取りを開く」で `replaceState`、元に戻すで戻せる）で開けるようにした。開くか閉じた物は `madori-quick-3d-recovery-seen` に覚えて次から出さない（退避した元データは消さない）。
 - **2026-11-18**: 「変なのないかチェック」で、上の消えたファイルを見つけて戻した。「マージ」で 11-15 の分を本番に出したあと、本番で階のタブのドラッグを試すと、幅の広いタブ（B1F・名前を付けた階）をいちばん端へ動かせなかった（ずらしたタブの真ん中と、ほかのタブの真ん中で比べていて、端まで寄せても端のタブの真ん中を越えられなかった）。進む側の端がほかのタブの真ん中を越えたら入れ替えるようにし、E2E に幅の広いタブを両端へ動かす確かめを足した（前の E2E は、端のタブがたまたま幅の広い名前付きの階だったので通っていた）。
+- **2026-11-23**: 「回転したときに当たり判定が回転しない直せ」で、家具の大きさを変えるつまみ（`boxCorners`。`drawResizeHandles` と `getCornerHit` の両方が使う）を、回したあとの角にした。家具は90°回しても縦横を入れ替えず `rotation` だけを変えるので、前は回した家具ならどれも（90°でも）つまみが回す前の四角の角に出ていた。しかも `hitTest` は選んでいない家具でも角を先に調べるので、回した家具のまわりの何もない所を押すと、その家具をつかんでいた（体の当たりは前から回したあとの形）。回した家具の大きさは `resizeRotatedFurniture` が家具の向きに沿って変え、つかんだ角の向かいの角を動かさない（回していない家具は前のまま、角を間取りの目盛りに合わせる）。`getEntitiesBounds`（全体表示・画像の書き出し）も、家具は `entityBox`（回したあとの形の範囲）にした。E2E は `tests/rotation-editor.mjs`。 同じ日、E2E の絵柄の「壁が地より目立つ」（`tests/editor.mjs`）が鉛筆で1回落ちた。描き方は前と1画素も変わっておらず（直す前と後で同じ画素）、鉛筆の壁は2本の線なので、壁の真ん中の1点だけを見ると線の間のすき間に当たっていた。壁の線のまわり ±3cm でいちばん目立つ所を見るようにした。
 - **2026-10-19（その9）**: 「重い」「ペンで描くなのに範囲になってる」「ドーナツも描けるように」「川の真ん中の線」「すべて見直せ」への対応。
   - 軽くする（`src/main.ts`）: `rebuildThreeScene` は2Dだけを表示中なら作らず（`threeSceneKey = null`、3Dを見るときに `ensureThreeScene`）、間取り・屋根・隠した階・屋根の表示・絵柄の JSON（`threeSceneSignature`）が前と同じなら選択の枠だけ直す（`refreshSelectionBoxes`。枠を付ける物には `userData.selectionTarget`）。家具・ドア・窓は形を決める値の JSON を鍵に作り置きを `clone` して使い（`cachedModel`。形と材質は `cachedResources` に入れ、`disposeGroup`・`removeThreeObjects` では捨てない。3回の作り直しで使われなければ `trimModelCache` で捨てる）、草の置き場所も作り置き（`grassCache`）。捨てる形・材質は次に3Dを描いた後で捨てる（`pendingDisposal` → `flushDisposal`。先に捨てるとシェーダーを組み直して重い）。影は `renderer.shadowMap.autoUpdate = false` で、物や光が変わったときだけ `needsUpdate`。シーンを作り直さずに3Dを変える所（`syncThreeWhileDragging`）では `threeSceneKey = null`。E2E の3Dを調べる関数は先に `ensureThreeScene()` を呼ぶ。測り方は `.codex/perf.mjs`・`.codex/cpu.mjs`（作業用）。
   - ペンで塗る（`src/brush-area.ts`）: 描き方に `brush`（床と、池・花壇・芝生・ラグだけ。`isAreaKey`）。線を幅のある帯（区切りの四角と点の丸）にして `polygon-clipping` で合わせ（`brushStroke`）、重なった同じ物（床は同じ素材で名前のない物、自由な形は同じ種類）と `unionRegions`、けずるときは `subtractRegion`。床は `floorFromRegion`（輪郭128点・穴32まで）、自由な形は `freeFrame(outer, margin, holes)` で `path` と `holes`（割合の輪）にする（`paintFloor`・`paintFreeArea`）。ペンのツールでは閉じる形ははじめから塗る（`drawMethodFor`）。床の「囲んで描く」と「ペンで塗る」は部屋のツール。

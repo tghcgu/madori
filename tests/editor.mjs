@@ -29,6 +29,7 @@ import { verifyPlanExtras } from './plan-extras-editor.mjs';
 import { verifyUiExtras } from './ui-extras-editor.mjs';
 import { verifyFloorOrder } from './floor-order-editor.mjs';
 import { verifyRecoveredBackup } from './recovery-editor.mjs';
+import { verifyRotatedHits } from './rotation-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
 // 上のバーの新しいお知らせ（index.html の #newsNote の data-news）。ふだんのテストでは閉じたことにして、間取り専用版のお知らせなどを確かめる
@@ -281,6 +282,7 @@ try {
   if (!process.argv.includes('--ui-extras-only')) {
   await verifyFloorOrder({ open });
   await verifyRecoveredBackup({ open, plan });
+  await verifyRotatedHits({ open });
   if (!process.argv.includes('--floor-order-only')) {
   await verifyRoomTools({ open, plan });
   if (!process.argv.includes('--room-tools-only')) {
@@ -1323,8 +1325,13 @@ try {
     assert.equal(await page.locator('#planStyleLabel').textContent(), look.label);
     const ground = shown(await pixelAt(452, 333));
     assert.ok(look.ground(ground), `${style}: a white room takes the look of the style: ${ground}`);
+    // 壁の線のまわり（±3cm）でいちばん目立つ所を見る（鉛筆などは壁を2本の線で描くので、真ん中の1点だけだと線の間のすき間に当たることがある）
     const walls = [];
-    for (const y of [80, 160, 240, 320]) walls.push(Math.abs(lightness(shown(await pixelAt(600, y))) - lightness(ground)) > 60);
+    for (const y of [80, 160, 240, 320]) {
+      let most = 0;
+      for (const dx of [-3, -1.5, 0, 1.5, 3]) most = Math.max(most, Math.abs(lightness(shown(await pixelAt(600 + dx, y))) - lightness(ground)));
+      walls.push(most > 60);
+    }
     assert.ok(walls.filter(Boolean).length >= 2, `${style}: the walls stand out: ${walls}`);
     if (style === 'retro') assert.equal(await page.locator('#pixelDotRow').getAttribute('hidden'), null, 'the retro game has a dot size too');
     if (style === 'blueprint' || style === 'neon' || style === 'retro') {

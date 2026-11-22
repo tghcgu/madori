@@ -5516,6 +5516,26 @@ function moveRoomLabel(entity: Entity, origin: Entity, dx: number, dy: number): 
   entity.labelOffsetY = (origin.labelOffsetY ?? 10) + dy;
 }
 
+// 回した家具の大きさを、家具の向きに沿って変える。つかんだ角の向かいの角は動かさない（前は回したことを無視して、
+// 間取りの縦横で大きさを変えていたので、回した家具ではつまみと違う所が伸び縮みしていた）
+function resizeRotatedFurniture(entity: Furniture, origin: Furniture, corner: string, point: Point): void {
+  const a = degreesToRadians(origin.rotation ?? 0), cos = Math.cos(a), sin = Math.sin(a);
+  const toWorld = (x: number, y: number, lx: number, ly: number): Point => ({ x: x + lx * cos - ly * sin, y: y + lx * sin + ly * cos });
+  const sx = corner.includes("e") ? 1 : -1, sy = corner.includes("s") ? 1 : -1;
+  const fixed = toWorld(origin.x + origin.w / 2, origin.y + origin.h / 2, (-sx * origin.w) / 2, (-sy * origin.h) / 2);
+  // つかんだ所を、向かいの角から見た家具の向きの長さにする
+  const dx = point.x - fixed.x, dy = point.y - fixed.y;
+  const along = dx * cos + dy * sin, across = -dx * sin + dy * cos;
+  const stepX = furnitureResizeStep(origin.w), stepY = furnitureResizeStep(origin.h);
+  const w = Math.max(MIN_FURNITURE_SIZE, Math.round((sx * along) / stepX) * stepX);
+  const h = Math.max(MIN_FURNITURE_SIZE, Math.round((sy * across) / stepY) * stepY);
+  const center = toWorld(fixed.x, fixed.y, (sx * w) / 2, (sy * h) / 2);
+  entity.x = roundTenth(center.x - w / 2);
+  entity.y = roundTenth(center.y - h / 2);
+  entity.w = w;
+  entity.h = h;
+}
+
 function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Point): void {
   if (isLocked(entity) || isLocked(origin)) return;
   if (entity.type === "room" && origin.type === "room" && corner.startsWith("regular:")) {
@@ -5568,6 +5588,10 @@ function resizeEntity(entity: Entity, origin: Entity, corner: string, point: Poi
     entity.h = Math.max(GRID * 2, Math.abs(y2 - y1));
   }
 
+  if (origin.type === "furniture" && entity.type === "furniture" && ((origin.rotation ?? 0) % 360 + 360) % 360) {
+    resizeRotatedFurniture(entity, origin, corner, point);
+    return;
+  }
   if (origin.type === "furniture" && entity.type === "furniture") {
     let x1 = origin.x;
     let y1 = origin.y;
@@ -10575,12 +10599,7 @@ function roundedRect(x: number, y: number, w: number, h: number, radius: number)
 function drawResizeHandles(entity: Room | Furniture | Roof): void {
   if (selectedEntities().length > 1) return;
   if (deferOverlay(() => drawResizeHandles(entity))) return;
-  const handles = entity.type === "room" ? floorHandles(entity) : [
-    { key: "nw", x: entity.x, y: entity.y },
-    { key: "ne", x: entity.x + entity.w, y: entity.y },
-    { key: "sw", x: entity.x, y: entity.y + entity.h },
-    { key: "se", x: entity.x + entity.w, y: entity.y + entity.h },
-  ];
+  const handles = entity.type === "room" ? floorHandles(entity) : boxCorners(entity);
   ctx.save();
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#2775d1";
@@ -13961,14 +13980,19 @@ function getCornerHit(entity: Room | Furniture | Roof, point: Point): string | n
     if (entity.id !== state.selectedId || selectedEntities().length > 1) return null;
     return floorHandles(entity).find(handle => Math.hypot(point.x - handle.x, point.y - handle.y) <= size)?.key ?? null;
   }
-  const corners = [
-    { key: "nw", x: entity.x, y: entity.y },
-    { key: "ne", x: entity.x + entity.w, y: entity.y },
-    { key: "sw", x: entity.x, y: entity.y + entity.h },
-    { key: "se", x: entity.x + entity.w, y: entity.y + entity.h },
-  ];
-  const hit = corners.find((corner) => Math.abs(point.x - corner.x) <= size && Math.abs(point.y - corner.y) <= size);
+  const hit = boxCorners(entity).find((corner) => Math.abs(point.x - corner.x) <= size && Math.abs(point.y - corner.y) <= size);
   return hit?.key ?? null;
+}
+
+// 大きさを変えるつまみの四隅。家具は回したあとの角（回したままでも、見えている角をつかめるように）
+function boxCorners(entity: Room | Furniture | Roof): { key: string; x: number; y: number }[] {
+  const a = entity.type === "furniture" ? degreesToRadians(entity.rotation ?? 0) : 0;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  const cx = entity.x + entity.w / 2, cy = entity.y + entity.h / 2;
+  return ([["nw", -1, -1], ["ne", 1, -1], ["sw", -1, 1], ["se", 1, 1]] as const).map(([key, sx, sy]) => {
+    const lx = (sx * entity.w) / 2, ly = (sy * entity.h) / 2;
+    return { key, x: cx + lx * cos - ly * sin, y: cy + lx * sin + ly * cos };
+  });
 }
 
 function isPointNearRoofEdge(point: Point, roofItem: Roof): boolean {
@@ -14581,7 +14605,14 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
   let maxX = -Infinity;
   let maxY = -Infinity;
   entities.forEach((entity) => {
-    if (entity.type === "room" || entity.type === "furniture" || entity.type === "roof") {
+    if (entity.type === "furniture") {
+      // 回した家具は、回したあとの形の範囲（全体表示・画像の書き出しで端が切れないように）
+      const box = entityBox(entity);
+      minX = Math.min(minX, box.x);
+      minY = Math.min(minY, box.y);
+      maxX = Math.max(maxX, box.x + box.w);
+      maxY = Math.max(maxY, box.y + box.h);
+    } else if (entity.type === "room" || entity.type === "roof") {
       minX = Math.min(minX, entity.x);
       minY = Math.min(minY, entity.y);
       maxX = Math.max(maxX, entity.x + entity.w);

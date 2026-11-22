@@ -8,6 +8,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-23",
+    items: [{
+      ja: "回した家具の、大きさを変えるつまみ（四隅）が回す前の位置のままで、家具のまわりの何もない所を押しても家具をつかんでいたのを直しました。つまみは回したあとの角に出て、引くと家具の向きに沿って大きさが変わります（向かいの角は動きません）。全体表示や画像の書き出しの範囲も、回したあとの形で決めます",
+      en: "Fixed the resize corners of rotated furniture staying where the unrotated box would be, so clicking empty space near a rotated piece grabbed it. The corners now sit on the rotated corners, dragging one resizes along the furniture's own axes (the opposite corner stays put), and fit to view and image export use the rotated shape",
+    }],
+  },
+  {
     date: "2026-11-18",
     items: [{
       ja: "階のタブをドラッグして並べ替えるとき、となりより幅の広いタブ（B1F や名前を付けた階など）を、いちばん端へ動かせないことがあったのを直しました",

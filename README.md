@@ -848,6 +848,10 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年11月23日
+
+- 回した家具の、大きさを変えるつまみ（四隅）が回す前の位置のままで、家具のまわりの何もない所を押しても家具をつかんでいたのを直しました。つまみは回したあとの角に出て、引くと家具の向きに沿って大きさが変わります（向かいの角は動きません）。全体表示や画像の書き出しの範囲も、回したあとの形で決めます
+
 ### 2026年11月18日
 
 - 階のタブをドラッグして並べ替えるとき、となりより幅の広いタブ（B1F や名前を付けた階など）を、いちばん端へ動かせないことがあったのを直しました
@@ -1965,6 +1969,10 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-11-23
+
+- Fixed the resize corners of rotated furniture staying where the unrotated box would be, so clicking empty space near a rotated piece grabbed it. The corners now sit on the rotated corners, dragging one resizes along the furniture's own axes (the opposite corner stays put), and fit to view and image export use the rotated shape
 
 ### 2026-11-18
 
