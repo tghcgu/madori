@@ -1328,6 +1328,7 @@ function setupUi(): void {
       requiredElement<HTMLElement>("#recoveryNotice").hidden = true;
     });
   } else offerRecoveredBackup();
+  setupSaveFailNotice();
 
   // ほかの所（一覧のボタンなど）を押したら、ダブルクリックの1回目の記録を捨てる（別の家具を選んで同じ所に置けるように）
   document.addEventListener("pointerdown", (event) => {
@@ -2890,8 +2891,12 @@ function entityBox(entity: Entity): Bounds {
   }
   if (entity.type === "room" || entity.type === "roof") return { x: entity.x, y: entity.y, w: entity.w, h: entity.h };
   if (entity.type === "text") {
+    // 回した文字も、回したあとの形の範囲
     const { w, h } = measureTextLabel(entity);
-    return { x: entity.x - w / 2, y: entity.y - h / 2, w, h };
+    const a = degreesToRadians(entity.rotation ?? 0);
+    const cos = Math.abs(Math.cos(a)), sin = Math.abs(Math.sin(a));
+    const width = w * cos + h * sin, height = w * sin + h * cos;
+    return { x: entity.x - width / 2, y: entity.y - height / 2, w: width, h: height };
   }
   if (entity.type === "shape") return { x: entity.x - entity.r, y: entity.y - shapeRadiusY(entity), w: entity.r * 2, h: shapeRadiusY(entity) * 2 };
   return { x: Math.min(entity.x1, entity.x2), y: Math.min(entity.y1, entity.y2), w: Math.abs(entity.x2 - entity.x1), h: Math.abs(entity.y2 - entity.y1) };
@@ -12766,11 +12771,36 @@ function persistState(): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch {
     saveStatus.textContent = "自動保存失敗・書き出してください";
+    showSaveFailure(true);
     return;
   }
+  showSaveFailure(false);
   saveTimer = window.setTimeout(() => {
     saveStatus.textContent = "保存済み";
   }, 320);
+}
+
+// 自動保存に失敗したお知らせ（書き出しのボタン付き）。閉じたら、次に保存できるまでは出し直さない（編集のたびに出ないように）
+let saveFailDismissed = false;
+
+function showSaveFailure(failed: boolean): void {
+  const notice = document.querySelector<HTMLElement>("#saveFailNotice");
+  if (!notice) return;
+  if (!failed) {
+    notice.hidden = true;
+    saveFailDismissed = false;
+    return;
+  }
+  if (!saveFailDismissed) notice.hidden = false;
+}
+
+function setupSaveFailNotice(): void {
+  document.querySelector<HTMLButtonElement>("#saveFailExportButton")?.addEventListener("click", exportPlan);
+  document.querySelector<HTMLButtonElement>("#saveFailCloseButton")?.addEventListener("click", () => {
+    saveFailDismissed = true;
+    const notice = document.querySelector<HTMLElement>("#saveFailNotice");
+    if (notice) notice.hidden = true;
+  });
 }
 
 // ---- 更新履歴 ----
@@ -14605,8 +14635,8 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
   let maxX = -Infinity;
   let maxY = -Infinity;
   entities.forEach((entity) => {
-    if (entity.type === "furniture") {
-      // 回した家具は、回したあとの形の範囲（全体表示・画像の書き出しで端が切れないように）
+    if (entity.type === "furniture" || entity.type === "text") {
+      // 回した家具・文字は、回したあとの形の範囲（全体表示・画像の書き出しで端が切れないように）
       const box = entityBox(entity);
       minX = Math.min(minX, box.x);
       minY = Math.min(minY, box.y);
@@ -14617,12 +14647,6 @@ function getEntitiesBounds(entities: Entity[]): Bounds | null {
       minY = Math.min(minY, entity.y);
       maxX = Math.max(maxX, entity.x + entity.w);
       maxY = Math.max(maxY, entity.y + entity.h);
-    } else if (entity.type === "text") {
-      const { w, h } = measureTextLabel(entity);
-      minX = Math.min(minX, entity.x - w / 2);
-      minY = Math.min(minY, entity.y - h / 2);
-      maxX = Math.max(maxX, entity.x + w / 2);
-      maxY = Math.max(maxY, entity.y + h / 2);
     } else if (entity.type === "shape") {
       minX = Math.min(minX, entity.x - entity.r);
       minY = Math.min(minY, entity.y - shapeRadiusY(entity));

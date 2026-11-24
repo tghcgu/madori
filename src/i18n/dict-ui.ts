@@ -83,6 +83,11 @@ export const UI: Record<string, Translations> = {
   // ---- お知らせ・保存の復旧 ----
   "元データを書き出し": ["Export original data", "원본 데이터 내보내기", "匯出原始資料"],
   "この間取りを開く": ["Open this plan", "이 평면도 열기", "開啟此平面圖"],
+  "自動保存できませんでした（このブラウザに保存できる量を超えたなど）。このままページを閉じると、いまの間取りは消えます。「書き出し」でファイルに保存してください。": [
+    "Autosave failed (for example, the browser's storage is full). If you close the page now, this plan will be lost. Use “Export” to save it to a file.",
+    "자동 저장에 실패했습니다(브라우저에 저장할 수 있는 양을 넘었을 수 있습니다). 이대로 페이지를 닫으면 지금 평면도가 사라집니다. ‘내보내기’로 파일에 저장해 주세요.",
+    "自動儲存失敗（例如超過瀏覽器可儲存的容量）。若直接關閉頁面，目前的平面圖將會遺失。請用「匯出」存成檔案。",
+  ],
   "前に開いたときに読み込めなかった間取り（{0}）を、読み込めるようになりました。「この間取りを開く」で、いまの間取りと入れ替えます（元に戻すで、いまの間取りに戻せます）。": [
     "A plan that could not be loaded last time ({0}) can now be loaded. “Open this plan” replaces the current plan with it (Undo brings the current plan back).",
     "지난번에 불러오지 못한 평면도({0})를 이제 불러올 수 있습니다. ‘이 평면도 열기’를 누르면 지금 평면도와 바뀝니다(실행 취소로 지금 평면도로 돌아갈 수 있습니다).",

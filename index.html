@@ -233,6 +233,12 @@
         <button type="button" id="recoveryExportButton"><i data-lucide="download"></i>元データを書き出し</button>
         <button type="button" id="recoveryCloseButton" title="閉じる" aria-label="閉じる"><i data-lucide="x"></i></button>
       </div>
+      <!-- 自動保存に失敗したとき（ブラウザに保存できる量を超えたなど）。上の小さな「自動保存失敗」だけでは気づきにくく、狭い画面では隠れるので出す -->
+      <div class="recovery-notice" id="saveFailNotice" role="alert" hidden>
+        <span>自動保存できませんでした（このブラウザに保存できる量を超えたなど）。このままページを閉じると、いまの間取りは消えます。「書き出し」でファイルに保存してください。</span>
+        <button type="button" id="saveFailExportButton"><i data-lucide="download"></i>書き出し</button>
+        <button type="button" id="saveFailCloseButton" title="閉じる" aria-label="閉じる"><i data-lucide="x"></i></button>
+      </div>
 
       <main class="workspace">
         <aside class="tool-panel">

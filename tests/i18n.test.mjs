@@ -46,6 +46,11 @@ test('translating: exact text, numbers, patterns with translated values, and sep
     assert.equal(t('1階建て・部材26・屋根0'), '1-story · 26 parts · 0 roofs');
     assert.equal(t('椅子（丸い座面）'), 'Chair (Round seat)', 'separated parts');
     assert.equal(t('2F（12個の要素・屋根1枚）を削除します。実行しますか？'), 'Delete 2F (12 items, 1 roofs)?');
+    // 型の最後の値は空でもよい（前は空だと型が当てはまらず、日本語の混じった文になっていた）
+    assert.equal(t('23件選択中'), '23 selected', 'an empty last value still fits the pattern');
+    assert.equal(t('23件選択中（固定 2件）'), '23 selected (2 locked)');
+    const floorHint = t('床: 2Dをクリックして点を打つと、点と点をまっすぐにつなぎます。最初の点を押すと閉じて床になります（Enter でも閉じます。Backspace で1点戻す）。');
+    assert.doesNotMatch(floorHint, /[぀-ヿ㐀-鿿]/, `the floor hint is translated: ${floorHint}`);
     assert.equal(t('利用者が書いた名前'), '利用者が書いた名前', 'unknown text stays as it is');
     assert.equal(t('Ctrl+S'), 'Ctrl+S');
     assert.ok(hasTranslation('洋室3') && !hasTranslation('見たことのない文'));

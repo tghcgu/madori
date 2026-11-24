@@ -848,6 +848,13 @@ npm.cmd run dev
 
 アプリ左の「更新履歴」と同じ内容です（新しい順）。
 
+### 2026年11月24日
+
+- 自動保存できなかったとき（ブラウザに保存できる量を超えたなど）は、画面の上にお知らせを出し、そこから間取りを書き出せるようにしました。前は上の小さな文字が変わるだけで、狭い画面では見えませんでした
+- 横幅が1180px以下で高さの低い画面（1024×768 など）で、2Dと3Dが画面からはみ出し、ページごと縦に動いて3Dの下が切れていたのを直しました。2Dと3Dを画面の高さに収めます
+- 英語・韓国語・繁体字中国語で、床ツールの案内と、まとめて選んだときの「〇件選択中」に日本語が残っていたのを直しました
+- 回した文字も、回したあとの形で囲んで選べるようにしました（全体表示や画像の書き出しの範囲も同じ）
+
 ### 2026年11月23日
 
 - 回した家具の、大きさを変えるつまみ（四隅）が回す前の位置のままで、家具のまわりの何もない所を押しても家具をつかんでいたのを直しました。つまみは回したあとの角に出て、引くと家具の向きに沿って大きさが変わります（向かいの角は動きません）。全体表示や画像の書き出しの範囲も、回したあとの形で決めます
@@ -1969,6 +1976,13 @@ Browser storage is isolated by domain. Data on `madori-5yu.pages.dev` does not a
 ## Changelog
 
 The same history as "更新履歴" in the app, newest first.
+
+### 2026-11-24
+
+- When autosave fails (for example, because the browser's storage is full), a notice now appears at the top with a button to export the plan. Before, only the small status text changed, and it was hidden on narrow screens
+- Fixed the 2D and 3D panes overflowing the screen on windows up to 1180 px wide with little height (such as 1024 × 768), where the whole page scrolled and the bottom of the 3D view was cut off. Both panes now fit the height of the screen
+- Fixed Japanese left over in the floor tool hint and the “N selected” count for multiple selections in English, Korean and Traditional Chinese
+- Rotated text is now selected with a box around its rotated shape, and fit to view and image export use the rotated shape too
 
 ### 2026-11-23
 

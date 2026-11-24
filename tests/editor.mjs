@@ -28,7 +28,7 @@ import { verifyRoomTools } from './room-tools-editor.mjs';
 import { verifyPlanExtras } from './plan-extras-editor.mjs';
 import { verifyUiExtras } from './ui-extras-editor.mjs';
 import { verifyFloorOrder } from './floor-order-editor.mjs';
-import { verifyRecoveredBackup } from './recovery-editor.mjs';
+import { verifyRecoveredBackup, verifySaveFailure } from './recovery-editor.mjs';
 import { verifyRotatedHits } from './rotation-editor.mjs';
 
 const key = 'madori-quick-3d-plan';
@@ -282,6 +282,7 @@ try {
   if (!process.argv.includes('--ui-extras-only')) {
   await verifyFloorOrder({ open });
   await verifyRecoveredBackup({ open, plan });
+  await verifySaveFailure({ open, plan });
   await verifyRotatedHits({ open });
   if (!process.argv.includes('--floor-order-only')) {
   await verifyRoomTools({ open, plan });

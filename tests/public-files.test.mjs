@@ -8,6 +8,8 @@ const REQUIRED = [
   // CLAUDE.md の「消さないファイル」（Google Search Console の確認用）
   'google6e6567f2912f5067.html',
   '_redirects',
+  // Cloudflare Pages の応答ヘッダー（/assets/ をブラウザに長く覚えさせる）
+  '_headers',
   'robots.txt',
   'sitemap.xml',
   'site.webmanifest',

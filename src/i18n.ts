@@ -74,7 +74,10 @@ export function useDictionary(source: Record<string, Translations>, next: Langua
     if (!/\{\d+\}/.test(key)) continue;
     // 型: 決まった文字の多い物から試す（型の中の値がどれも訳せたときだけ使う）
     const weight = key.replace(HOLE, "").replace(/[\s・、。（）()「」：:／/，,！？!?]/g, "").length;
-    const regex = new RegExp(`^${key.replace(/[.*+?^$|[\]\\()]/g, "\\$&").replace(HOLE, "(.+?)")}$`);
+    // 最後の値だけは空でもよい（「3件選択中」のあとの「（固定 2件）」や、案内の文のあとに足す説明は、ないことがある。
+    // 前は空だと型が当てはまらず、訳せる所だけを訳した、日本語の混じった文になっていた）
+    const body = key.replace(/[.*+?^$|[\]\\()]/g, "\\$&").replace(HOLE, "(.+?)").replace(/\(\.\+\?\)$/, "(.*)");
+    const regex = new RegExp(`^${body}$`);
     patterns.push({ regex, translation: value, weight });
   }
   patterns.sort((a, b) => b.weight - a.weight);

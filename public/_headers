@@ -1,0 +1,5 @@
+# Cloudflare Pages の応答ヘッダー（GitHub Pages では使われない）
+# /assets/ のファイルは、名前に中身の印（ハッシュ）が入っていて、中身が変わると名前も変わる。
+# なので、ブラウザに1年覚えさせ、開くたびに「変わっていないか」を問い合わせないようにする（ページそのものは毎回確かめる）
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

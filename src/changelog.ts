@@ -8,6 +8,22 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: "2026-11-24",
+    items: [{
+      ja: "自動保存できなかったとき（ブラウザに保存できる量を超えたなど）は、画面の上にお知らせを出し、そこから間取りを書き出せるようにしました。前は上の小さな文字が変わるだけで、狭い画面では見えませんでした",
+      en: "When autosave fails (for example, because the browser's storage is full), a notice now appears at the top with a button to export the plan. Before, only the small status text changed, and it was hidden on narrow screens",
+    }, {
+      ja: "横幅が1180px以下で高さの低い画面（1024×768 など）で、2Dと3Dが画面からはみ出し、ページごと縦に動いて3Dの下が切れていたのを直しました。2Dと3Dを画面の高さに収めます",
+      en: "Fixed the 2D and 3D panes overflowing the screen on windows up to 1180 px wide with little height (such as 1024 × 768), where the whole page scrolled and the bottom of the 3D view was cut off. Both panes now fit the height of the screen",
+    }, {
+      ja: "英語・韓国語・繁体字中国語で、床ツールの案内と、まとめて選んだときの「〇件選択中」に日本語が残っていたのを直しました",
+      en: "Fixed Japanese left over in the floor tool hint and the “N selected” count for multiple selections in English, Korean and Traditional Chinese",
+    }, {
+      ja: "回した文字も、回したあとの形で囲んで選べるようにしました（全体表示や画像の書き出しの範囲も同じ）",
+      en: "Rotated text is now selected with a box around its rotated shape, and fit to view and image export use the rotated shape too",
+    }],
+  },
+  {
     date: "2026-11-23",
     items: [{
       ja: "回した家具の、大きさを変えるつまみ（四隅）が回す前の位置のままで、家具のまわりの何もない所を押しても家具をつかんでいたのを直しました。つまみは回したあとの角に出て、引くと家具の向きに沿って大きさが変わります（向かいの角は動きません）。全体表示や画像の書き出しの範囲も、回したあとの形で決めます",

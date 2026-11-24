@@ -42,3 +42,49 @@ export async function verifyRecoveredBackup({ open, plan }) {
   }
   console.log('PASS: a backup of a plan that failed to load is offered again, opens with undo, and is offered only once');
 }
+
+// 自動保存に失敗したとき（ブラウザに保存できる量を超えたなど）は、目立つお知らせを出し、書き出せるようにする。
+// 閉じたら次に保存できるまでは出さず、保存できたら消える
+export async function verifySaveFailure({ open, plan }) {
+  const room = { id: 'hall', type: 'room', name: '', x: 0, y: 0, w: 400, h: 300, surface: 'plain', color: '#ffffff' };
+  const page = await open(JSON.stringify(plan([room])));
+  try {
+    const notice = page.locator('#saveFailNotice');
+    const addFloor = () => page.locator('#floorTabs button[title="上の階を追加"]').click();
+    await page.locator('button[data-view-mode="plan"]').first().click();
+    assert.equal(await notice.isVisible(), false);
+    // 間取りの保存だけ、容量いっぱいで失敗させる
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      window.__restoreStorage = () => { Storage.prototype.setItem = original; };
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'madori-quick-3d-plan') throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+    });
+    await addFloor();
+    assert.equal(await notice.isVisible(), true, 'a failed autosave shows a notice');
+    const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#saveFailExportButton').click()]);
+    assert.match(download.suggestedFilename(), /\.json$/, 'the notice exports the plan');
+    await page.locator('#saveFailCloseButton').click();
+    await addFloor();
+    assert.equal(await notice.isVisible(), false, 'a closed notice stays closed while saving keeps failing');
+    await page.evaluate(() => window.__restoreStorage());
+    await addFloor();
+    assert.equal(await notice.isVisible(), false);
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('madori-quick-3d-plan'))).floors.length, 4, 'saving works again');
+    // また失敗したら、お知らせが出る
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'madori-quick-3d-plan') throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+    });
+    await addFloor();
+    assert.equal(await notice.isVisible(), true, 'the notice comes back when saving fails again');
+  } finally {
+    await page.context().close();
+  }
+  console.log('PASS: a failed autosave shows a notice with export, stays closed once closed, and goes away when saving works');
+}

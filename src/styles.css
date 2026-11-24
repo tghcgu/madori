@@ -2554,9 +2554,11 @@ body[data-resizing="down"] {
 }
 
 @media (max-width: 1180px) {
+  /* 2Dと3Dを縦に並べる。画面の高さに収める（前は2Dを420px・3Dを360px より小さくしなかったので、高さ845pxより低い画面
+     （1024×768 や、1440×900 を125%で表示したノートPCなど）では、ページごと縦にはみ出し、3Dの下が切れていた） */
   .workspace {
     grid-template-columns: 248px minmax(360px, 1fr);
-    grid-template-rows: minmax(420px, 1fr) minmax(360px, 0.86fr);
+    grid-template-rows: minmax(240px, 1fr) minmax(200px, 0.86fr);
   }
 
   .workspace[data-view-mode="plan"],

@@ -6,7 +6,9 @@ export async function verifyRotatedHits({ open }) {
   const hall = { id: 'hall', type: 'room', name: '', x: 0, y: 0, w: 600, h: 400, surface: 'plain', color: '#ffffff' };
   // 横100・奥行200のベッドを90°回す（見た目は横200・奥行100。真ん中は (250, 200)）
   const bed = { id: 'bed', type: 'furniture', kind: 'bed', x: 200, y: 100, w: 100, h: 200, rotation: 90 };
-  const plan = { floors: [{ id: 'f1', name: '1F', entities: [hall, bed] }], activeFloor: 0, selectedId: null, roofs: [] };
+  // 縦に回した長い文字（回したあとの形は、縦に細長い）
+  const label = { id: 'label', type: 'text', text: '縦に回した長い文字のラベル', x: 500, y: 200, size: 20, rotation: 90 };
+  const plan = { floors: [{ id: 'f1', name: '1F', entities: [hall, bed, label] }], activeFloor: 0, selectedId: null, roofs: [] };
   const page = await open(JSON.stringify(plan));
   try {
     await page.locator('button[data-view-mode="plan"]').first().click();
@@ -55,6 +57,16 @@ export async function verifyRotatedHits({ open }) {
     after = await item();
     assert.equal(after.rotation, 120);
     assert.ok(Math.abs(after.w - 130) <= 10 && Math.abs(after.h - 220) <= 10, `a slanted bed grows along its own axes: ${after.w} x ${after.h}`);
+    // 回した文字も、回したあとの形で囲んで選べる（縦に細長い四角で囲む）
+    await page.keyboard.press('Escape');
+    const [from2, to2] = await page.evaluate(() => [window.__editorTest.planPoint(470, 40), window.__editorTest.planPoint(530, 360)]);
+    await page.keyboard.down('Control');
+    await page.mouse.move(from2.x, from2.y);
+    await page.mouse.down();
+    await page.mouse.move(to2.x, to2.y, { steps: 8 });
+    await page.mouse.up();
+    await page.keyboard.up('Control');
+    assert.deepEqual(await page.evaluate(() => window.__editorTest.selection()), ['label'], 'a rotated text is selected by a box around its rotated shape');
   } finally {
     await page.context().close();
   }
